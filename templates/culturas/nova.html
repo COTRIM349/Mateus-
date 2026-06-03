@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Nova Cultura — Manejo de Irrigação{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-plus-circle text-success"></i> Nova Cultura</h4>
+    <a href="{{ url_for('culturas_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="card" style="max-width:580px;">
+    <div class="card-body">
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Nome / Identificação do Talhão</label>
+                <input type="text" class="form-control" name="nome" placeholder="Ex: Milho — Talhão A" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Tipo de Cultura</label>
+                <select class="form-select" id="tipo" name="tipo" required>
+                    <option value="" disabled selected>Selecione...</option>
+                    {% for tipo in tipos %}
+                    <option value="{{ tipo }}">{{ tipo }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Área (hectares)</label>
+                <input type="number" class="form-control" name="area" step="0.01" min="0.01" placeholder="Ex: 5.5" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Fase Fenológica</label>
+                <select class="form-select" id="fase" name="fase" required>
+                    <option value="" disabled selected>Selecione...</option>
+                    {% for valor, label in fases %}
+                    <option value="{{ valor }}">{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Coeficiente de Cultura (Kc)</label>
+                <input type="number" class="form-control" id="kc" name="kc" step="0.01" min="0.05" max="2.0"
+                       placeholder="Ex: 1.20" required>
+                <div class="form-text" id="kc-hint">Selecione o tipo e a fase para sugestão automática.</div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Data de Plantio</label>
+                <input type="date" class="form-control" name="data_plantio" required>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success"><i class="bi bi-check-lg"></i> Cadastrar</button>
+                <a href="{{ url_for('culturas_index') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const KC = {{ kc_padrao | tojson }};
+function updateKc() {
+    const tipo = document.getElementById('tipo').value;
+    const fase = document.getElementById('fase').value;
+    const kcInput = document.getElementById('kc');
+    const hint = document.getElementById('kc-hint');
+    if (tipo && fase && KC[tipo] && KC[tipo][fase] !== undefined) {
+        const v = KC[tipo][fase];
+        kcInput.value = v;
+        hint.textContent = `Kc sugerido para ${tipo} na fase "${fase}": ${v}`;
+        hint.className = 'form-text text-success fw-semibold';
+    }
+}
+document.getElementById('tipo').addEventListener('change', updateKc);
+document.getElementById('fase').addEventListener('change', updateKc);
+</script>
+{% endblock %}
