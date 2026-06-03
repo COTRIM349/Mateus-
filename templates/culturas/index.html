@@ -1,0 +1,54 @@
+{% extends 'base.html' %}
+{% block title %}Culturas — Manejo de Irrigação{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-flower2 text-success"></i> Culturas</h4>
+    <a href="{{ url_for('culturas_nova') }}" class="btn btn-success">
+        <i class="bi bi-plus-circle"></i> Nova Cultura
+    </a>
+</div>
+
+{% if culturas %}
+<div class="row g-3">
+    {% for cultura in culturas %}
+    <div class="col-md-6 col-xl-4">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <h6 class="card-title fw-bold mb-0">{{ cultura.nome }}</h6>
+                    <span class="badge bg-success">{{ cultura.tipo }}</span>
+                </div>
+                <ul class="list-unstyled text-muted small mb-0">
+                    <li><i class="bi bi-map me-1"></i> {{ cultura.area }} ha</li>
+                    <li><i class="bi bi-layers me-1"></i> Fase: {{ fases_label[cultura.fase] }}</li>
+                    <li><i class="bi bi-droplet me-1"></i> Kc: {{ cultura.kc }}</li>
+                    <li><i class="bi bi-calendar me-1"></i> Plantio: {{ cultura.data_plantio.strftime('%d/%m/%Y') }}</li>
+                </ul>
+            </div>
+            <div class="card-footer bg-transparent d-flex gap-2">
+                <a href="{{ url_for('culturas_detalhe', id=cultura.id) }}" class="btn btn-sm btn-outline-primary flex-fill">
+                    <i class="bi bi-eye"></i> Detalhes
+                </a>
+                <form action="{{ url_for('culturas_excluir', id=cultura.id) }}" method="post"
+                      onsubmit="return confirm('Excluir a cultura {{ cultura.nome }}? Esta ação não pode ser desfeita.');">
+                    <button type="submit" class="btn btn-sm btn-outline-danger">
+                        <i class="bi bi-trash"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+{% else %}
+<div class="card">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-flower2 fs-1 text-muted opacity-50"></i>
+        <h5 class="mt-3 text-muted">Nenhuma cultura cadastrada</h5>
+        <a href="{{ url_for('culturas_nova') }}" class="btn btn-success mt-2">
+            <i class="bi bi-plus-circle"></i> Cadastrar Cultura
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

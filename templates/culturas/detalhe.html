@@ -1,0 +1,143 @@
+{% extends 'base.html' %}
+{% block title %}{{ cultura.nome }} — Manejo de Irrigação{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-flower2 text-success"></i> {{ cultura.nome }}</h4>
+    <a href="{{ url_for('culturas_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-5">
+        <div class="card">
+            <div class="card-header bg-success text-white">
+                <i class="bi bi-info-circle"></i> Informações
+            </div>
+            <div class="card-body">
+                <table class="table table-sm table-borderless mb-0">
+                    <tr><th class="text-muted">Tipo</th><td>{{ cultura.tipo }}</td></tr>
+                    <tr><th class="text-muted">Área</th><td>{{ cultura.area }} ha</td></tr>
+                    <tr><th class="text-muted">Fase</th><td>{{ fases_label[cultura.fase] }}</td></tr>
+                    <tr><th class="text-muted">Kc</th><td>{{ cultura.kc }}</td></tr>
+                    <tr><th class="text-muted">Plantio</th><td>{{ cultura.data_plantio.strftime('%d/%m/%Y') }}</td></tr>
+                </table>
+            </div>
+            <div class="card-footer bg-transparent d-flex gap-2 flex-wrap">
+                <a href="{{ url_for('irrigacoes_nova') }}?cultura_id={{ cultura.id }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-water"></i> Registrar Irrigação
+                </a>
+                <a href="{{ url_for('calculos_lamina') }}?cultura_id={{ cultura.id }}" class="btn btn-sm btn-outline-success">
+                    <i class="bi bi-calculator"></i> Calcular Lâmina
+                </a>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-7">
+        <div class="row g-3">
+            <div class="col-6">
+                <div class="card text-center p-3">
+                    <div class="fs-2 fw-bold text-primary">{{ irrigacoes|length }}</div>
+                    <div class="text-muted small">Irrigações realizadas</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card text-center p-3">
+                    <div class="fs-2 fw-bold text-success">
+                        {% set vol = namespace(total=0) %}
+                        {% for irr in irrigacoes %}{% set vol.total = vol.total + (irr.volume_aplicado or 0) %}{% endfor %}
+                        {{ vol.total|round(0)|int }}
+                    </div>
+                    <div class="text-muted small">m³ aplicados</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card text-center p-3">
+                    <div class="fs-2 fw-bold text-info">{{ calculos|length }}</div>
+                    <div class="text-muted small">Cálculos realizados</div>
+                </div>
+            </div>
+            <div class="col-6">
+                <div class="card text-center p-3">
+                    {% set lam = namespace(total=0) %}
+                    {% for irr in irrigacoes %}{% set lam.total = lam.total + irr.lamina_aplicada %}{% endfor %}
+                    <div class="fs-2 fw-bold text-warning">{{ '%.1f'|format(lam.total) }}</div>
+                    <div class="text-muted small">mm lâmina acumulada</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-water text-primary"></i> Histórico de Irrigações</span>
+                <a href="{{ url_for('irrigacoes_nova') }}?cultura_id={{ cultura.id }}" class="btn btn-sm btn-primary">+ Registrar</a>
+            </div>
+            <div class="card-body p-0">
+                {% if irrigacoes %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light">
+                            <tr><th>Data</th><th>Lâmina (mm)</th><th>Volume (m³)</th><th>Obs.</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for irr in irrigacoes %}
+                            <tr>
+                                <td>{{ irr.data.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ irr.lamina_aplicada }}</td>
+                                <td>{{ (irr.volume_aplicado or 0)|round(0)|int }}</td>
+                                <td><small class="text-muted">{{ irr.observacoes or '—' }}</small></td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-3 small">Nenhuma irrigação registrada ainda.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span class="fw-semibold"><i class="bi bi-calculator text-success"></i> Histórico de Cálculos</span>
+                <a href="{{ url_for('calculos_lamina') }}?cultura_id={{ cultura.id }}" class="btn btn-sm btn-outline-success">+ Calcular</a>
+            </div>
+            <div class="card-body p-0">
+                {% if calculos %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light">
+                            <tr><th>Data</th><th>ETo</th><th>Prec.</th><th>Lâmina</th><th>Status</th></tr>
+                        </thead>
+                        <tbody>
+                            {% for cal in calculos %}
+                            <tr>
+                                <td>{{ cal.data.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ cal.eto }}</td>
+                                <td>{{ cal.precipitacao }}</td>
+                                <td>{{ '%.1f'|format(cal.lamina_necessaria) }}</td>
+                                <td>
+                                    {% if cal.alerta == 'ok' %}<span class="badge bg-success">OK</span>
+                                    {% elif cal.alerta == 'baixo' %}<span class="badge bg-info">Baixo</span>
+                                    {% elif cal.alerta == 'medio' %}<span class="badge bg-warning text-dark">Médio</span>
+                                    {% else %}<span class="badge bg-danger">Alto</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-3 small">Nenhum cálculo realizado ainda.</div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% block title %}Registrar Irrigação — Manejo de Irrigação{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h4 class="fw-bold mb-0"><i class="bi bi-water text-primary"></i> Registrar Irrigação</h4>
+    <a href="{{ url_for('irrigacoes_index') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Voltar
+    </a>
+</div>
+
+<div class="card" style="max-width:580px;">
+    <div class="card-body">
+        <form method="post">
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Cultura</label>
+                <select class="form-select" id="cultura_id" name="cultura_id" required>
+                    <option value="" disabled selected>Selecione a cultura...</option>
+                    {% for c in culturas %}
+                    <option value="{{ c.id }}"
+                        {% if request.args.get('cultura_id') == c.id|string %}selected{% endif %}>
+                        {{ c.nome }} ({{ c.tipo }} — {{ c.area }} ha)
+                    </option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Data da Irrigação</label>
+                <input type="date" class="form-control" name="data" value="{{ today }}" required>
+            </div>
+            <div class="mb-3">
+                <label class="form-label fw-semibold">Lâmina Aplicada (mm)</label>
+                <input type="number" class="form-control" id="lamina" name="lamina_aplicada"
+                       step="0.1" min="0.1" placeholder="Ex: 20" required>
+                <div class="form-text" id="vol-hint">O volume será calculado automaticamente com base na área.</div>
+            </div>
+            <div class="mb-4">
+                <label class="form-label fw-semibold">Observações <small class="text-muted fw-normal">(opcional)</small></label>
+                <textarea class="form-control" name="observacoes" rows="2"
+                          placeholder="Ex: Irrigação por gotejamento, sistema funcionando normalmente..."></textarea>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg"></i> Registrar</button>
+                <a href="{{ url_for('irrigacoes_index') }}" class="btn btn-outline-secondary">Cancelar</a>
+            </div>
+        </form>
+    </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+const culturas = {{ culturas_json | safe }};
+function updateVol() {
+    const cid = document.getElementById('cultura_id').value;
+    const lam = parseFloat(document.getElementById('lamina').value) || 0;
+    const hint = document.getElementById('vol-hint');
+    if (cid && lam) {
+        const c = culturas.find(x => x.id == cid);
+        if (c) {
+            const vol = (lam * c.area * 10).toFixed(1);
+            hint.textContent = `Volume estimado: ${vol} m³ (${lam} mm × ${c.area} ha)`;
+            hint.className = 'form-text text-success fw-semibold';
+            return;
+        }
+    }
+    hint.textContent = 'O volume será calculado automaticamente com base na área.';
+    hint.className = 'form-text';
+}
+document.getElementById('cultura_id').addEventListener('change', updateVol);
+document.getElementById('lamina').addEventListener('input', updateVol);
+// trigger on load if pre-selected
+if (document.getElementById('cultura_id').value) updateVol();
+</script>
+{% endblock %}

@@ -1,0 +1,148 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Manejo de Irrigação{% endblock %}
+{% block content %}
+<h4 class="fw-bold mb-4"><i class="bi bi-speedometer2 text-success"></i> Dashboard</h4>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card border-success p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Culturas Ativas</div>
+                    <div class="fs-3 fw-bold">{{ culturas|length }}</div>
+                </div>
+                <i class="bi bi-flower2 fs-2 text-success opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card border-primary p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Área Total (ha)</div>
+                    <div class="fs-3 fw-bold">{{ '%.1f'|format(culturas|sum(attribute='area')) }}</div>
+                </div>
+                <i class="bi bi-map fs-2 text-primary opacity-50"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card border-warning p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Alertas Ativos</div>
+                    <div class="fs-3 fw-bold">{{ alertas|length }}</div>
+                </div>
+                <i class="bi bi-exclamation-triangle fs-2 text-warning opacity-75"></i>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="card stat-card border-info p-3">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <div class="text-muted small">Cálculos Recentes</div>
+                    <div class="fs-3 fw-bold">{{ calculos_recentes|length }}</div>
+                </div>
+                <i class="bi bi-calculator fs-2 text-info opacity-50"></i>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3">
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-exclamation-triangle-fill text-warning"></i> Alertas de Irrigação</span>
+                <a href="{{ url_for('calculos_lamina') }}" class="btn btn-sm btn-outline-success">Novo cálculo</a>
+            </div>
+            <div class="card-body">
+                {% if alertas %}
+                    {% for cal in alertas %}
+                    <div class="d-flex align-items-start gap-2 mb-2 p-2 border rounded">
+                        {% if cal.alerta == 'alto' %}
+                            <span class="badge bg-danger mt-1">CRÍTICO</span>
+                        {% else %}
+                            <span class="badge bg-warning text-dark mt-1">ATENÇÃO</span>
+                        {% endif %}
+                        <div>
+                            <strong>{{ cal.cultura.nome }}</strong>
+                            <span class="text-muted small"> — {{ cal.cultura.tipo }}</span><br>
+                            <small class="text-muted">
+                                {{ cal.data.strftime('%d/%m/%Y') }} &nbsp;|&nbsp;
+                                Lâmina: <strong>{{ '%.1f'|format(cal.lamina_necessaria) }} mm</strong> &nbsp;|&nbsp;
+                                Volume: <strong>{{ cal.volume_necessario|round(0)|int }} m³</strong>
+                            </small>
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-check-circle fs-2 text-success"></i>
+                        <p class="mt-2 mb-0">Nenhum alerta no momento.</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card h-100">
+            <div class="card-header bg-white d-flex justify-content-between align-items-center">
+                <span><i class="bi bi-clock-history text-primary"></i> Últimos Cálculos</span>
+            </div>
+            <div class="card-body p-0">
+                {% if calculos_recentes %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Cultura</th>
+                                <th>Data</th>
+                                <th>Lâmina (mm)</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for c in calculos_recentes %}
+                            <tr>
+                                <td>{{ c.cultura.nome }}</td>
+                                <td>{{ c.data.strftime('%d/%m/%Y') }}</td>
+                                <td>{{ '%.1f'|format(c.lamina_necessaria) }}</td>
+                                <td>
+                                    {% if c.alerta == 'ok' %}<span class="badge bg-success">OK</span>
+                                    {% elif c.alerta == 'baixo' %}<span class="badge bg-info">Baixo</span>
+                                    {% elif c.alerta == 'medio' %}<span class="badge bg-warning text-dark">Médio</span>
+                                    {% else %}<span class="badge bg-danger">Alto</span>{% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                    <div class="text-center text-muted py-4">
+                        <i class="bi bi-calculator fs-2"></i>
+                        <p class="mt-2 mb-2">Nenhum cálculo realizado ainda.</p>
+                        <a href="{{ url_for('calculos_lamina') }}" class="btn btn-sm btn-success">Calcular agora</a>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+{% if not culturas %}
+<div class="card mt-4">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-flower2 fs-1 text-success opacity-50"></i>
+        <h5 class="mt-3">Bem-vindo ao Sistema de Manejo de Irrigação!</h5>
+        <p class="text-muted">Comece cadastrando suas culturas para gerenciar a irrigação de forma eficiente.</p>
+        <a href="{{ url_for('culturas_nova') }}" class="btn btn-success">
+            <i class="bi bi-plus-circle"></i> Cadastrar Primeira Cultura
+        </a>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

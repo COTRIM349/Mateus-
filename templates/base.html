@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Manejo de Irrigação{% endblock %}</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body { background: #f4f6f8; }
+        .sidebar { min-height: 100vh; background: #1b5e20; }
+        .sidebar-brand { color: #fff; font-size: 1.1rem; font-weight: 700; padding: 1.2rem 1rem; border-bottom: 1px solid rgba(255,255,255,.2); display: flex; align-items: center; gap: .5rem; }
+        .sidebar .nav-link { color: rgba(255,255,255,.8); padding: .65rem 1rem; border-radius: .375rem; margin-bottom: .2rem; font-size: .9rem; }
+        .sidebar .nav-link:hover, .sidebar .nav-link.active { color: #fff; background: rgba(255,255,255,.18); }
+        .sidebar .nav-link i { width: 1.2rem; }
+        .main-content { min-height: 100vh; padding: 1.75rem; }
+        .card { border: none; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+        .card-header { font-weight: 600; }
+        .stat-card { border-left: 4px solid; }
+    </style>
+</head>
+<body>
+<div class="container-fluid p-0">
+    <div class="row g-0">
+        <div class="col-md-2 sidebar p-3">
+            <div class="sidebar-brand">
+                <i class="bi bi-droplet-fill fs-5"></i> Irrigação
+            </div>
+            <nav class="nav flex-column mt-2">
+                <a href="{{ url_for('index') }}" class="nav-link {% if request.endpoint == 'index' %}active{% endif %}">
+                    <i class="bi bi-speedometer2"></i> Dashboard
+                </a>
+                <a href="{{ url_for('culturas_index') }}" class="nav-link {% if 'culturas' in (request.endpoint or '') %}active{% endif %}">
+                    <i class="bi bi-flower2"></i> Culturas
+                </a>
+                <a href="{{ url_for('irrigacoes_index') }}" class="nav-link {% if 'irrigacoes' in (request.endpoint or '') %}active{% endif %}">
+                    <i class="bi bi-water"></i> Irrigações
+                </a>
+                <a href="{{ url_for('calculos_lamina') }}" class="nav-link {% if 'calculos' in (request.endpoint or '') %}active{% endif %}">
+                    <i class="bi bi-calculator"></i> Cálculo de Lâmina
+                </a>
+            </nav>
+        </div>
+        <div class="col-md-10 main-content">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                    {% for category, message in messages %}
+                        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                        </div>
+                    {% endfor %}
+                {% endif %}
+            {% endwith %}
+            {% block content %}{% endblock %}
+        </div>
+    </div>
+</div>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>
