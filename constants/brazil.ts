@@ -95,3 +95,11 @@ export const MATURITY_TYPES = [
   { value: "medio", label: "Médio" },
   { value: "tardio", label: "Tardio" },
 ] as const;
+
+export const WATER_STATUSES = [
+  { value: "saturado", label: "Saturado" },
+  { value: "ideal", label: "Ideal" },
+  { value: "atencao", label: "Atenção" },
+  { value: "deficit", label: "Déficit" },
+  { value: "deficit_critico", label: "Déficit Crítico" },
+] as const;
