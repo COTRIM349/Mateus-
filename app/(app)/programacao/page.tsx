@@ -9,7 +9,7 @@ import {
   Select,
   StatCard,
   Table,
-  Modal,
+  Input,
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -18,7 +18,6 @@ import {
   calculateDynamicCAD,
   calculateDynamicAFD,
   adjustDepletionFactor,
-  calculateETc,
   determineWaterStatus,
   WATER_STATUS_CONFIG,
   type WaterStatus,
@@ -41,6 +40,20 @@ import {
   type OperationalStatus,
   type RecommendationPriority,
 } from "@/modules/recommendation/services";
+import {
+  generateDailySchedule,
+  validateSchedule,
+  SLOT_STATUS_CONFIG,
+  SCHEDULE_STATUS_CONFIG,
+  type DailySchedule,
+  type ScheduleSlot,
+  type SchedulingConstraints,
+  type PumpHouse,
+  type PumpHousePivot,
+  type ReservoirState,
+  type EnergyTariff,
+  type ScheduleValidation,
+} from "@/modules/scheduling/services";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -50,6 +63,7 @@ interface Pivot {
   area: number;
   flow_rate: number;
   efficiency: number;
+  pump_power: number;
   status: string;
   farm_id: string;
 }
@@ -79,16 +93,10 @@ interface Soil {
 }
 
 interface BalanceRow {
-  date: string;
-  et0: number;
-  kc: number;
-  etc: number;
   soil_storage: number;
-  cad: number;
-  afd: number;
   deficit: number;
-  root_depth: number;
-  depletion_factor: number;
+  etc: number;
+  et0: number;
   water_status: WaterStatus;
 }
 
@@ -118,7 +126,8 @@ interface StoredRecommendation {
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "dashboard", label: "Dashboard" },
+  { id: "central", label: "Central Operacional" },
+  { id: "recomendacoes", label: "Recomendações" },
   { id: "simulacoes", label: "Simulações" },
   { id: "historico", label: "Histórico" },
 ];
@@ -129,14 +138,16 @@ export default function ProgramacaoPage() {
   const { activeFarmId, profile } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState("dashboard");
+  const [activeTab, setActiveTab] = useState("central");
+  const [pivots, setPivots] = useState<Pivot[]>([]);
   const [recommendations, setRecommendations] = useState<Recommendation[]>([]);
+  const [schedule, setSchedule] = useState<DailySchedule | null>(null);
+  const [scheduleValidation, setScheduleValidation] = useState<ScheduleValidation[]>([]);
   const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState("");
-  const [pivots, setPivots] = useState<Pivot[]>([]);
 
-  // Simulation state
+  // Simulation
   const [simPivotId, setSimPivotId] = useState("");
   const [scenarios, setScenarios] = useState<SimulationScenario[]>([]);
   const [simContext, setSimContext] = useState<PivotContext | null>(null);
@@ -150,7 +161,7 @@ export default function ProgramacaoPage() {
     (async () => {
       const { data } = await supabase
         .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, status, farm_id")
+        .select("id, name, area, flow_rate, efficiency, pump_power, status, farm_id")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("name");
@@ -158,7 +169,166 @@ export default function ProgramacaoPage() {
     })();
   }, [activeFarmId, supabase]);
 
-  // Generate recommendations for all pivots
+  // Build PivotContext from DB
+  const buildPivotContext = useCallback(
+    async (
+      pivot: Pivot,
+      today: string,
+      currentHour: number,
+      peakStart: number,
+      peakEnd: number
+    ): Promise<PivotContext | null> => {
+      const { data: pcaData } = await supabase
+        .from("pivot_crop_assignments")
+        .select("*")
+        .eq("pivot_id", pivot.id)
+        .eq("active", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single();
+
+      if (!pcaData) return null;
+      const pca = pcaData as CropAssignment;
+
+      const [{ data: cultureData }, { data: soilData }, { data: phasesData }] =
+        await Promise.all([
+          supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", pca.culture_id).single(),
+          supabase.from("soils").select("id, field_capacity, wilting_point, effective_depth").eq("id", pca.soil_id).single(),
+          supabase.from("culture_phases").select("*").eq("culture_id", pca.culture_id).order("phase_order"),
+        ]);
+
+      if (!cultureData || !soilData) return null;
+      const culture = cultureData as Culture;
+      const soil = soilData as Soil;
+      const phases = (phasesData ?? []) as CulturePhase[];
+
+      const dap = Math.max(
+        0,
+        Math.floor(
+          (new Date(today).getTime() - new Date(pca.planting_date).getTime()) /
+            86400000
+        )
+      );
+
+      const kc = phases.length > 0 ? interpolateKc(phases, dap) : 1.0;
+      const rootDepth = phases.length > 0 ? interpolateRootDepth(phases, dap) : culture.root_depth;
+      const phaseId = phases.length > 0 ? identifyPhase(phases, dap) : null;
+      const cropPhase = phaseId?.phase.name ?? pca.crop_stage;
+      const basePFactor = phaseId?.phase.depletion_factor ?? culture.depletion_factor;
+
+      const { data: balanceData } = await supabase
+        .from("water_balances")
+        .select("soil_storage, deficit, etc, et0, water_status")
+        .eq("pivot_crop_assignment_id", pca.id)
+        .order("date", { ascending: false })
+        .limit(1)
+        .single();
+
+      const cad = calculateDynamicCAD(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth);
+      const pAdj = adjustDepletionFactor(basePFactor, 0);
+      const afd = calculateDynamicAFD(cad, pAdj);
+
+      const bal = balanceData as BalanceRow | null;
+
+      return {
+        pivotId: pivot.id,
+        pivotName: pivot.name,
+        area: pivot.area,
+        flowRate: pivot.flow_rate,
+        efficiency: pivot.efficiency,
+        pivotStatus: pivot.status,
+        fieldCapacity: soil.field_capacity,
+        wiltingPoint: soil.wilting_point,
+        effectiveSoilDepth: soil.effective_depth,
+        storedWater: bal?.soil_storage ?? cad,
+        cad,
+        afd,
+        deficit: bal?.deficit ?? 0,
+        etc: bal?.etc ?? 0,
+        et0: bal?.et0 ?? 0,
+        kc,
+        rootDepth,
+        depletionFactor: pAdj,
+        waterStatus: (bal?.water_status as WaterStatus) ?? "ideal",
+        cropPhase,
+        daysAfterPlant: dap,
+        cycleDays: culture.cycle_days,
+        forecastPrecip: 0,
+        peakHourStart: peakStart,
+        peakHourEnd: peakEnd,
+        currentHour,
+        maintenanceBlocked: pivot.status === "manutencao",
+        reservoirAvailable: true,
+      };
+    },
+    [supabase]
+  );
+
+  // Load constraints from DB
+  const loadConstraints = useCallback(async (): Promise<SchedulingConstraints> => {
+    const [
+      { data: phData },
+      { data: phpData },
+      { data: tariffData },
+      { data: resData },
+    ] = await Promise.all([
+      supabase.from("pump_houses").select("*").eq("farm_id", activeFarmId!).eq("active", true),
+      supabase.from("pump_house_pivots").select("*"),
+      supabase.from("energy_tariffs").select("*").eq("farm_id", activeFarmId!).order("valid_from", { ascending: false }).limit(1),
+      supabase.from("reservoirs").select("*").eq("farm_id", activeFarmId!).eq("active", true),
+    ]);
+
+    const pumpHouses: PumpHouse[] = ((phData ?? []) as { id: string; name: string; max_flow_rate: number; max_simultaneous: number; power_kw: number; status: string }[]).map((p) => ({
+      id: p.id,
+      name: p.name,
+      maxFlowRate: p.max_flow_rate,
+      maxSimultaneous: p.max_simultaneous,
+      powerKw: p.power_kw,
+      status: p.status,
+    }));
+
+    const pumpHousePivots: PumpHousePivot[] = ((phpData ?? []) as { pump_house_id: string; pivot_id: string; hydraulic_line: string; priority_order: number }[]).map((pp) => ({
+      pumpHouseId: pp.pump_house_id,
+      pivotId: pp.pivot_id,
+      hydraulicLine: pp.hydraulic_line,
+      priorityOrder: pp.priority_order,
+    }));
+
+    const t = (tariffData?.[0] ?? {}) as {
+      peak_start?: number; peak_end?: number; rate_peak?: number; rate_off_peak?: number; demand_rate?: number;
+    };
+    const tariff: EnergyTariff = {
+      peakStart: t.peak_start ?? 18,
+      peakEnd: t.peak_end ?? 21,
+      ratePeak: t.rate_peak ?? 0.85,
+      rateOffPeak: t.rate_off_peak ?? 0.45,
+      demandRate: t.demand_rate ?? 0,
+    };
+
+    const reservoirs: ReservoirState[] = ((resData ?? []) as {
+      id: string; name: string; current_volume: number; max_capacity: number; min_operational_level: number; recharge_rate: number;
+    }[]).map((r) => ({
+      id: r.id,
+      name: r.name,
+      currentVolume: r.current_volume,
+      maxCapacity: r.max_capacity,
+      minOperational: r.min_operational_level,
+      rechargeRate: r.recharge_rate,
+    }));
+
+    return {
+      pumpHouses,
+      pumpHousePivots,
+      tariff,
+      contractedDemandKw: tariff.demandRate,
+      reservoirs,
+      operationalStart: 5,
+      operationalEnd: 23,
+      maxDailyHours: 18,
+    };
+  }, [activeFarmId, supabase]);
+
+  // Generate full schedule
   const generateAll = useCallback(async () => {
     if (!activeFarmId || pivots.length === 0) return;
     setGenerating(true);
@@ -167,33 +337,19 @@ export default function ProgramacaoPage() {
     try {
       const today = new Date().toISOString().slice(0, 10);
       const currentHour = new Date().getHours();
+      const constraints = await loadConstraints();
+
+      // 1. Generate recommendations
       const recs: Recommendation[] = [];
-
-      // Get energy tariff for peak hours
-      const { data: tariffData } = await supabase
-        .from("energy_tariffs")
-        .select("peak_start, peak_end")
-        .eq("farm_id", activeFarmId)
-        .order("valid_from", { ascending: false })
-        .limit(1);
-
-      const peakStart = (tariffData?.[0] as { peak_start: number } | undefined)?.peak_start ?? 18;
-      const peakEnd = (tariffData?.[0] as { peak_end: number } | undefined)?.peak_end ?? 21;
-
       for (const pivot of pivots) {
         try {
           const ctx = await buildPivotContext(
-            pivot,
-            today,
-            currentHour,
-            peakStart,
-            peakEnd
+            pivot, today, currentHour,
+            constraints.tariff.peakStart, constraints.tariff.peakEnd
           );
-          if (ctx) {
-            recs.push(generateRecommendation(ctx));
-          }
+          if (ctx) recs.push(generateRecommendation(ctx));
         } catch {
-          // Skip pivots without complete data
+          // skip
         }
       }
 
@@ -202,7 +358,7 @@ export default function ProgramacaoPage() {
 
       // Persist recommendations
       if (ranked.length > 0) {
-        const upsertData = ranked.map((r) => ({
+        const upsertRecs = ranked.map((r) => ({
           farm_id: activeFarmId,
           pivot_id: r.pivotId,
           recommendation_date: today,
@@ -229,155 +385,101 @@ export default function ProgramacaoPage() {
           reason: r.reason,
           observations: r.observations,
         }));
-
         await supabase
           .from("irrigation_recommendations")
-          .upsert(upsertData, { onConflict: "pivot_id,recommendation_date" });
+          .upsert(upsertRecs, { onConflict: "pivot_id,recommendation_date" });
+      }
+
+      // 2. Generate schedule from recommendations
+      const dailySchedule = generateDailySchedule(ranked, constraints, today);
+      setSchedule(dailySchedule);
+      setScheduleValidation(validateSchedule(dailySchedule, constraints));
+
+      // 3. Persist schedule
+      const { data: schedData } = await supabase
+        .from("daily_schedules")
+        .upsert(
+          {
+            farm_id: activeFarmId,
+            schedule_date: today,
+            status: "rascunho",
+            total_volume_m3: dailySchedule.totalVolumeM3,
+            total_energy_kwh: dailySchedule.totalEnergyKwh,
+            total_cost: dailySchedule.totalCost,
+            total_duration_h: dailySchedule.totalDurationH,
+            peak_demand_kw: dailySchedule.peakDemandKw,
+            contracted_demand_kw: dailySchedule.contractedDemandKw,
+            created_by: profile?.id,
+          } as Record<string, unknown>,
+          { onConflict: "farm_id,schedule_date" }
+        )
+        .select("id")
+        .single();
+
+      if (schedData && dailySchedule.slots.length > 0) {
+        const schedId = (schedData as { id: string }).id;
+        // Delete old slots
+        await supabase.from("schedule_slots").delete().eq("schedule_id", schedId);
+        // Insert new slots
+        const slotsInsert = dailySchedule.slots.map((s) => ({
+          schedule_id: schedId,
+          pivot_id: s.pivotId,
+          pump_house_id: s.pumpHouseId,
+          sequence_order: s.sequenceOrder,
+          start_time: s.startTime,
+          end_time: s.endTime,
+          duration_h: s.durationH,
+          net_depth: s.netDepth,
+          gross_depth: s.grossDepth,
+          volume_m3: s.volumeM3,
+          energy_kwh: s.energyKwh,
+          cost: s.cost,
+          slot_status: s.slotStatus,
+          can_simultaneous: s.canSimultaneous,
+          simultaneous_group: s.simultaneousGroup,
+          hydraulic_line: s.hydraulicLine,
+          deficit_irrigation: s.deficitIrrigation,
+          justification: s.justification,
+        }));
+        await supabase.from("schedule_slots").insert(slotsInsert);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro ao gerar recomendações");
+      setError(err instanceof Error ? err.message : "Erro ao gerar programação");
     } finally {
       setGenerating(false);
     }
-  }, [activeFarmId, pivots, supabase]);
+  }, [activeFarmId, pivots, supabase, profile, buildPivotContext, loadConstraints]);
 
-  // Build PivotContext from DB data
-  const buildPivotContext = useCallback(
-    async (
-      pivot: Pivot,
-      today: string,
-      currentHour: number,
-      peakStart: number,
-      peakEnd: number
-    ): Promise<PivotContext | null> => {
-      // Get active crop assignment
-      const { data: pcaData } = await supabase
-        .from("pivot_crop_assignments")
-        .select("*")
-        .eq("pivot_id", pivot.id)
-        .eq("active", true)
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+  // Approve schedule
+  const approveSchedule = async () => {
+    if (!schedule || !activeFarmId) return;
+    await supabase
+      .from("daily_schedules")
+      .update({
+        status: "aprovado",
+        approved_by: profile?.id,
+        approved_at: new Date().toISOString(),
+      } as Record<string, unknown>)
+      .eq("farm_id", activeFarmId)
+      .eq("schedule_date", schedule.scheduleDate);
+    setSchedule({ ...schedule, status: "aprovado" });
+  };
 
-      if (!pcaData) return null;
-      const pca = pcaData as CropAssignment;
-
-      // Get culture, soil, phases
-      const [{ data: cultureData }, { data: soilData }, { data: phasesData }] = await Promise.all([
-        supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", pca.culture_id).single(),
-        supabase.from("soils").select("id, field_capacity, wilting_point, effective_depth").eq("id", pca.soil_id).single(),
-        supabase.from("culture_phases").select("*").eq("culture_id", pca.culture_id).order("phase_order"),
-      ]);
-
-      if (!cultureData || !soilData) return null;
-      const culture = cultureData as Culture;
-      const soil = soilData as Soil;
-      const phases = (phasesData ?? []) as CulturePhase[];
-
-      // Days after planting
-      const plantingMs = new Date(pca.planting_date).getTime();
-      const todayMs = new Date(today).getTime();
-      const dap = Math.max(0, Math.floor((todayMs - plantingMs) / 86400000));
-
-      // Get Kc, root depth, phase
-      const kc = phases.length > 0 ? interpolateKc(phases, dap) : 1.0;
-      const rootDepth = phases.length > 0 ? interpolateRootDepth(phases, dap) : culture.root_depth;
-      const phaseId = phases.length > 0 ? identifyPhase(phases, dap) : null;
-      const cropPhase = phaseId?.phase.name ?? pca.crop_stage;
-      const basePFactor = phaseId?.phase.depletion_factor ?? culture.depletion_factor;
-
-      // Get latest balance
-      const { data: balanceData } = await supabase
-        .from("water_balances")
-        .select("*")
-        .eq("pivot_crop_assignment_id", pca.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .single();
-
-      const cad = calculateDynamicCAD(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth);
-      const pAdj = adjustDepletionFactor(basePFactor, 0);
-      const afd = calculateDynamicAFD(cad, pAdj);
-
-      let storedWater: number;
-      let deficit: number;
-      let etc: number;
-      let et0: number;
-      let waterStatus: WaterStatus;
-
-      if (balanceData) {
-        const bal = balanceData as BalanceRow;
-        storedWater = bal.soil_storage;
-        deficit = bal.deficit;
-        etc = bal.etc;
-        et0 = bal.et0;
-        waterStatus = bal.water_status;
-      } else {
-        storedWater = cad;
-        deficit = 0;
-        etc = 0;
-        et0 = 0;
-        waterStatus = "ideal";
-      }
-
-      return {
-        pivotId: pivot.id,
-        pivotName: pivot.name,
-        area: pivot.area,
-        flowRate: pivot.flow_rate,
-        efficiency: pivot.efficiency,
-        pivotStatus: pivot.status,
-        fieldCapacity: soil.field_capacity,
-        wiltingPoint: soil.wilting_point,
-        effectiveSoilDepth: soil.effective_depth,
-        storedWater,
-        cad,
-        afd,
-        deficit,
-        etc,
-        et0,
-        kc,
-        rootDepth,
-        depletionFactor: pAdj,
-        waterStatus,
-        cropPhase,
-        daysAfterPlant: dap,
-        cycleDays: culture.cycle_days,
-        forecastPrecip: 0,
-        peakHourStart: peakStart,
-        peakHourEnd: peakEnd,
-        currentHour,
-        maintenanceBlocked: pivot.status === "manutencao",
-        reservoirAvailable: true,
-      };
-    },
-    [supabase]
-  );
-
-  // Run simulation for a specific pivot
+  // Simulation
   const runSimulation = useCallback(async () => {
     if (!simPivotId || !activeFarmId) return;
     const pivot = pivots.find((p) => p.id === simPivotId);
     if (!pivot) return;
-
     const today = new Date().toISOString().slice(0, 10);
-    const currentHour = new Date().getHours();
-
     try {
-      const ctx = await buildPivotContext(pivot, today, currentHour, 18, 21);
-      if (!ctx) {
-        setError("Dados insuficientes para simulação deste pivô");
-        return;
-      }
+      const ctx = await buildPivotContext(pivot, today, new Date().getHours(), 18, 21);
+      if (!ctx) return;
       setSimContext(ctx);
       setScenarios(simulateScenarios(ctx));
-    } catch {
-      setError("Erro ao carregar dados para simulação");
-    }
+    } catch { /* skip */ }
   }, [simPivotId, activeFarmId, pivots, buildPivotContext]);
 
-  // Load history
+  // History
   const loadHistory = useCallback(async () => {
     if (!activeFarmId) return;
     setLoading(true);
@@ -395,40 +497,18 @@ export default function ProgramacaoPage() {
     if (activeTab === "historico") loadHistory();
   }, [activeTab, loadHistory]);
 
-  // Accept recommendation
-  const acceptRecommendation = async (rec: Recommendation) => {
-    await supabase
-      .from("irrigation_recommendations")
-      .update({
-        accepted: true,
-        accepted_at: new Date().toISOString(),
-        accepted_by: profile?.id,
-      } as Record<string, unknown>)
-      .eq("pivot_id", rec.pivotId)
-      .eq("recommendation_date", new Date().toISOString().slice(0, 10));
-
-    setRecommendations((prev) =>
-      prev.map((r) =>
-        r.pivotId === rec.pivotId ? { ...r, observations: r.observations + " [ACEITA]" } : r
-      )
-    );
-  };
-
-  // Summary stats
-  const stats = useMemo(() => {
+  // Stats
+  const recStats = useMemo(() => {
     const total = recommendations.length;
     const irrigar = recommendations.filter((r) => r.shouldIrrigate).length;
     const criticos = recommendations.filter((r) => r.priority === "critica").length;
-    const volumeTotal = recommendations.reduce((s, r) => s + r.volumeM3, 0);
-    const tempoTotal = recommendations.reduce((s, r) => s + r.irrigationTimeH, 0);
-    const riskAvg = total > 0 ? recommendations.reduce((s, r) => s + r.productiveRisk, 0) / total : 0;
-    return { total, irrigar, criticos, volumeTotal, tempoTotal, riskAvg };
+    return { total, irrigar, criticos };
   }, [recommendations]);
 
   if (!activeFarmId) {
     return (
       <div>
-        <PageHeader titulo="Programação de Irrigação" descricao="Selecione uma fazenda" />
+        <PageHeader titulo="Central de Programação" descricao="Selecione uma fazenda" />
       </div>
     );
   }
@@ -436,12 +516,19 @@ export default function ProgramacaoPage() {
   return (
     <div>
       <PageHeader
-        titulo="Programação de Irrigação"
-        descricao="Motor de decisão — Recomendação automática por pivô"
+        titulo="Central de Programação"
+        descricao="Motor operacional — Programação automática de irrigação"
         acao={
-          <Button onClick={generateAll} disabled={generating || pivots.length === 0}>
-            {generating ? "Gerando..." : "Gerar Recomendações"}
-          </Button>
+          <div className="flex gap-2">
+            <Button onClick={generateAll} disabled={generating || pivots.length === 0}>
+              {generating ? "Gerando..." : "Gerar Programação"}
+            </Button>
+            {schedule && schedule.status === "rascunho" && (
+              <Button variant="secondary" onClick={approveSchedule}>
+                Aprovar
+              </Button>
+            )}
+          </div>
         }
       />
 
@@ -454,12 +541,18 @@ export default function ProgramacaoPage() {
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
       <div className="mt-4">
-        {activeTab === "dashboard" && (
-          <DashboardTab
-            recommendations={recommendations}
-            stats={stats}
+        {activeTab === "central" && (
+          <CentralTab
+            schedule={schedule}
+            validation={scheduleValidation}
             generating={generating}
-            onAccept={acceptRecommendation}
+          />
+        )}
+        {activeTab === "recomendacoes" && (
+          <RecommendationsTab
+            recommendations={recommendations}
+            stats={recStats}
+            generating={generating}
           />
         )}
         {activeTab === "simulacoes" && (
@@ -473,58 +566,316 @@ export default function ProgramacaoPage() {
           />
         )}
         {activeTab === "historico" && (
-          <HistoryTab
-            history={history}
-            pivots={pivots}
-            loading={loading}
-          />
+          <HistoryTab history={history} pivots={pivots} loading={loading} />
         )}
       </div>
     </div>
   );
 }
 
-// ── Dashboard Tab ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Central Operacional Tab
+// ═══════════════════════════════════════════════════════════════════════
 
-function DashboardTab({
+function CentralTab({
+  schedule,
+  validation,
+  generating,
+}: {
+  schedule: DailySchedule | null;
+  validation: ScheduleValidation[];
+  generating: boolean;
+}) {
+  if (!schedule && !generating) {
+    return (
+      <Card className="py-12 text-center">
+        <p className="text-gray-500 dark:text-gray-400">
+          Clique em &quot;Gerar Programação&quot; para criar a programação operacional do dia.
+        </p>
+      </Card>
+    );
+  }
+
+  if (generating) {
+    return <Card className="py-8 text-center text-sm text-gray-500">Analisando pivôs e gerando programação...</Card>;
+  }
+
+  if (!schedule) return null;
+
+  const activeSlots = schedule.slots.filter((s) => s.slotStatus !== "bloqueado");
+  const blockedSlots = schedule.slots.filter((s) => s.slotStatus === "bloqueado");
+  const statusCfg = SCHEDULE_STATUS_CONFIG[schedule.status];
+
+  return (
+    <div className="space-y-4">
+      {/* Status & Summary */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">
+          Programação {schedule.scheduleDate}
+        </h3>
+        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusCfg.bgClass}`}>
+          {statusCfg.label}
+        </span>
+      </div>
+
+      {/* Validation alerts */}
+      {validation.length > 0 && (
+        <Card className="space-y-1">
+          {validation.map((v, i) => (
+            <p key={i} className={`text-xs ${v.level === "error" ? "text-red-600 dark:text-red-400" : v.level === "warning" ? "text-amber-600 dark:text-amber-400" : "text-blue-600 dark:text-blue-400"}`}>
+              {v.level === "error" ? "ERRO" : v.level === "warning" ? "AVISO" : "INFO"}: {v.message}
+            </p>
+          ))}
+        </Card>
+      )}
+
+      {/* KPI cards */}
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <StatCard metric={{ id: "pivots", title: "Pivôs Programados", value: `${activeSlots.length}`, description: blockedSlots.length > 0 ? `${blockedSlots.length} bloqueado(s)` : "Nenhum bloqueado" }} />
+        <StatCard metric={{ id: "volume", title: "Volume Total", value: `${schedule.totalVolumeM3.toFixed(0)} m³` }} />
+        <StatCard metric={{ id: "energy", title: "Energia Estimada", value: `${schedule.totalEnergyKwh.toFixed(0)} kWh` }} />
+        <StatCard metric={{ id: "cost", title: "Custo Estimado", value: `R$ ${schedule.totalCost.toFixed(2)}` }} />
+        <StatCard metric={{ id: "duration", title: "Janela Operacional", value: `${schedule.totalDurationH.toFixed(1)} h` }} />
+        <StatCard metric={{ id: "demand", title: "Demanda de Ponta", value: `${schedule.peakDemandKw.toFixed(0)} kW`, description: schedule.contractedDemandKw > 0 ? `Contratada: ${schedule.contractedDemandKw.toFixed(0)} kW` : undefined, trend: schedule.peakDemandKw > schedule.contractedDemandKw && schedule.contractedDemandKw > 0 ? "negative" : "positive", variation: schedule.contractedDemandKw > 0 ? `${((schedule.peakDemandKw / schedule.contractedDemandKw) * 100).toFixed(0)}%` : undefined }} />
+      </div>
+
+      {/* Timeline visual */}
+      <Card>
+        <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Linha do Tempo Operacional</h4>
+        <TimelineVisual slots={activeSlots} />
+      </Card>
+
+      {/* Slots table */}
+      <Card className="overflow-x-auto">
+        <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Sequência de Irrigação</h4>
+        <SlotsTable slots={schedule.slots} />
+      </Card>
+
+      {/* Pump & Reservoir utilization */}
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {schedule.pumpUtilization.length > 0 && (
+          <Card>
+            <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Utilização das Bombas</h4>
+            {schedule.pumpUtilization.map((pu) => (
+              <div key={pu.pumpHouseId} className="mb-2 flex items-center justify-between text-xs">
+                <span className="text-gray-600 dark:text-gray-400">{pu.pumpHouseName}</span>
+                <div className="flex items-center gap-3">
+                  <span>{pu.pivotsServed} pivô(s)</span>
+                  <span>{pu.totalHours}h</span>
+                  <span>{pu.totalVolumeM3.toFixed(0)} m³</span>
+                  <div className="w-20">
+                    <div className="h-2 rounded-full bg-gray-200 dark:bg-graphite-700">
+                      <div className="h-2 rounded-full bg-brand-500" style={{ width: `${Math.min(100, pu.utilizationPct)}%` }} />
+                    </div>
+                  </div>
+                  <span className="w-10 text-right">{pu.utilizationPct}%</span>
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
+
+        {schedule.reservoirUsage.length > 0 && (
+          <Card>
+            <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Utilização dos Reservatórios</h4>
+            {schedule.reservoirUsage.map((ru) => (
+              <div key={ru.reservoirId} className="mb-2 text-xs">
+                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                  <span>{ru.reservoirName}</span>
+                  <span>{ru.capacityPct}%</span>
+                </div>
+                <div className="mt-1 flex items-center gap-2">
+                  <span className="w-20">{ru.startVolume.toFixed(0)} m³</span>
+                  <span className="text-red-500">-{ru.consumed.toFixed(0)}</span>
+                  <span className="text-green-500">+{ru.recharged.toFixed(0)}</span>
+                  <span className="font-semibold text-graphite-900 dark:text-white">{ru.endVolume.toFixed(0)} m³</span>
+                  <div className="flex-1">
+                    <div className="h-2 rounded-full bg-gray-200 dark:bg-graphite-700">
+                      <div
+                        className={`h-2 rounded-full ${ru.capacityPct < 20 ? "bg-red-500" : ru.capacityPct < 50 ? "bg-amber-500" : "bg-blue-500"}`}
+                        style={{ width: `${Math.min(100, ru.capacityPct)}%` }}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </Card>
+        )}
+      </div>
+
+      {/* Blocked slots */}
+      {blockedSlots.length > 0 && (
+        <Card className="border-amber-200 dark:border-amber-900">
+          <h4 className="mb-3 text-sm font-semibold text-amber-700 dark:text-amber-400">Pivôs Bloqueados ({blockedSlots.length})</h4>
+          {blockedSlots.map((s) => (
+            <div key={s.pivotId} className="mb-2 flex items-center justify-between text-xs">
+              <span className="font-medium text-graphite-900 dark:text-white">{s.pivotName}</span>
+              <div className="flex items-center gap-2">
+                <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${PRIORITY_CONFIG[s.priority].bgClass}`}>{PRIORITY_CONFIG[s.priority].label}</span>
+                <span className="text-gray-500 dark:text-gray-400">{s.justification}</span>
+              </div>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+// ── Timeline visual ─────────────────────────────────────────────────────
+
+function TimelineVisual({ slots }: { slots: ScheduleSlot[] }) {
+  if (slots.length === 0) {
+    return <p className="text-xs text-gray-500">Nenhum slot ativo.</p>;
+  }
+
+  const timeToMin = (t: string) => {
+    const [h, m] = t.split(":").map(Number);
+    return h * 60 + (m || 0);
+  };
+
+  const starts = slots.map((s) => timeToMin(s.startTime));
+  const ends = slots.map((s) => timeToMin(s.endTime));
+  const minTime = Math.min(...starts);
+  const maxTime = Math.max(...ends);
+  const range = maxTime - minTime || 1;
+
+  const colors = [
+    "bg-brand-500", "bg-blue-500", "bg-green-500", "bg-purple-500",
+    "bg-orange-500", "bg-teal-500", "bg-pink-500", "bg-indigo-500",
+  ];
+
+  return (
+    <div className="space-y-1">
+      {/* Time axis */}
+      <div className="relative mb-2 h-4">
+        {Array.from({ length: Math.ceil((maxTime - minTime) / 60) + 1 }, (_, i) => {
+          const hour = Math.floor(minTime / 60) + i;
+          const pos = ((hour * 60 - minTime) / range) * 100;
+          if (pos < 0 || pos > 100) return null;
+          return (
+            <span key={hour} className="absolute text-[9px] text-gray-400" style={{ left: `${pos}%` }}>
+              {`${hour}h`}
+            </span>
+          );
+        })}
+      </div>
+      {/* Peak hour marker */}
+      <div className="relative h-2">
+        <div
+          className="absolute h-full rounded bg-red-200 opacity-40 dark:bg-red-900/30"
+          style={{
+            left: `${Math.max(0, ((18 * 60 - minTime) / range) * 100)}%`,
+            width: `${Math.min(100, ((3 * 60) / range) * 100)}%`,
+          }}
+        />
+        <span className="absolute text-[8px] text-red-400" style={{ left: `${Math.max(0, ((18 * 60 - minTime) / range) * 100)}%` }}>
+          ponta
+        </span>
+      </div>
+      {/* Slot bars */}
+      {slots.map((slot, i) => {
+        const left = ((timeToMin(slot.startTime) - minTime) / range) * 100;
+        const width = ((timeToMin(slot.endTime) - timeToMin(slot.startTime)) / range) * 100;
+        return (
+          <div key={slot.pivotId} className="relative h-6">
+            <div
+              className={`absolute h-full rounded ${colors[i % colors.length]} flex items-center overflow-hidden px-1`}
+              style={{ left: `${left}%`, width: `${Math.max(width, 2)}%` }}
+              title={`${slot.pivotName}: ${slot.startTime}–${slot.endTime} (${slot.grossDepth.toFixed(1)} mm)`}
+            >
+              <span className="truncate text-[9px] font-medium text-white">{slot.pivotName}</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Slots table ─────────────────────────────────────────────────────────
+
+function SlotsTable({ slots }: { slots: ScheduleSlot[] }) {
+  const columns: Column<ScheduleSlot>[] = [
+    { header: "#", render: (s) => s.sequenceOrder },
+    { header: "Pivô", render: (s) => <span className="font-medium">{s.pivotName}</span> },
+    {
+      header: "Status",
+      render: (s) => {
+        const cfg = SLOT_STATUS_CONFIG[s.slotStatus];
+        return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>{cfg.label}</span>;
+      },
+    },
+    {
+      header: "Prioridade",
+      render: (s) => <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[s.priority].bgClass}`}>{PRIORITY_CONFIG[s.priority].label}</span>,
+    },
+    { header: "Início", render: (s) => s.startTime },
+    { header: "Término", render: (s) => s.endTime },
+    { header: "Duração", render: (s) => s.durationH > 0 ? `${s.durationH.toFixed(1)} h` : "—" },
+    { header: "Lâmina", render: (s) => s.grossDepth > 0 ? `${s.grossDepth.toFixed(1)} mm` : "—" },
+    { header: "Volume", render: (s) => s.volumeM3 > 0 ? `${s.volumeM3.toFixed(0)} m³` : "—" },
+    { header: "Energia", render: (s) => s.energyKwh > 0 ? `${s.energyKwh.toFixed(0)} kWh` : "—" },
+    { header: "Custo", render: (s) => s.cost > 0 ? `R$ ${s.cost.toFixed(2)}` : "—" },
+    { header: "Bomba", render: (s) => <span className="text-xs">{s.pumpHouseName}</span> },
+    {
+      header: "Simult.",
+      render: (s) =>
+        s.canSimultaneous ? (
+          <span className="text-xs text-brand-600 dark:text-brand-400">Grupo {s.simultaneousGroup}</span>
+        ) : (
+          <span className="text-xs text-gray-400">—</span>
+        ),
+    },
+    {
+      header: "Justificativa",
+      render: (s) => (
+        <span className="text-xs text-gray-500 dark:text-gray-400" title={s.justification}>
+          {s.justification.length > 60 ? s.justification.slice(0, 60) + "…" : s.justification}
+        </span>
+      ),
+    },
+  ];
+
+  return <Table columns={columns} data={slots} getKey={(s) => s.pivotId} />;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Recommendations Tab
+// ═══════════════════════════════════════════════════════════════════════
+
+function RecommendationsTab({
   recommendations,
   stats,
   generating,
-  onAccept,
 }: {
   recommendations: Recommendation[];
-  stats: { total: number; irrigar: number; criticos: number; volumeTotal: number; tempoTotal: number; riskAvg: number };
+  stats: { total: number; irrigar: number; criticos: number };
   generating: boolean;
-  onAccept: (rec: Recommendation) => void;
 }) {
   if (recommendations.length === 0 && !generating) {
     return (
       <Card className="py-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400">
-          Clique em &quot;Gerar Recomendações&quot; para analisar todos os pivôs.
-        </p>
+        <p className="text-gray-500 dark:text-gray-400">Clique em &quot;Gerar Programação&quot; para analisar todos os pivôs.</p>
       </Card>
     );
   }
 
   return (
     <div className="space-y-4">
-      {/* Summary */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard metric={{ id: "total", title: "Pivôs Analisados", value: `${stats.total}` }} />
-        <StatCard metric={{ id: "irrigar", title: "Precisam Irrigar", value: `${stats.irrigar}`, trend: stats.irrigar > 0 ? "negative" : "positive", variation: stats.irrigar > 0 ? `${((stats.irrigar / Math.max(stats.total, 1)) * 100).toFixed(0)}%` : "OK" }} />
-        <StatCard metric={{ id: "criticos", title: "Prioridade Crítica", value: `${stats.criticos}`, trend: stats.criticos > 0 ? "negative" : "positive", variation: stats.criticos > 0 ? "Urgente" : "Nenhum" }} />
-        <StatCard metric={{ id: "volume", title: "Volume Total", value: `${stats.volumeTotal.toFixed(0)} m³` }} />
-        <StatCard metric={{ id: "tempo", title: "Tempo Total", value: `${stats.tempoTotal.toFixed(1)} h` }} />
-        <StatCard metric={{ id: "risco", title: "Risco Médio", value: `${stats.riskAvg.toFixed(0)}%`, trend: stats.riskAvg > 40 ? "negative" : stats.riskAvg > 20 ? "neutral" : "positive", variation: stats.riskAvg > 40 ? "Elevado" : stats.riskAvg > 20 ? "Moderado" : "Baixo" }} />
+      <div className="grid grid-cols-3 gap-3">
+        <StatCard metric={{ id: "t", title: "Analisados", value: `${stats.total}` }} />
+        <StatCard metric={{ id: "i", title: "Precisam Irrigar", value: `${stats.irrigar}`, trend: stats.irrigar > 0 ? "negative" : "positive", variation: stats.irrigar > 0 ? "Ação" : "OK" }} />
+        <StatCard metric={{ id: "c", title: "Críticos", value: `${stats.criticos}`, trend: stats.criticos > 0 ? "negative" : "positive", variation: stats.criticos > 0 ? "Urgente" : "Nenhum" }} />
       </div>
 
       {generating ? (
-        <Card className="py-8 text-center text-sm text-gray-500">Analisando pivôs...</Card>
+        <Card className="py-8 text-center text-sm text-gray-500">Analisando...</Card>
       ) : (
         <div className="space-y-3">
           {recommendations.map((rec) => (
-            <RecommendationCard key={rec.pivotId} rec={rec} onAccept={onAccept} />
+            <RecommendationCard key={rec.pivotId} rec={rec} />
           ))}
         </div>
       )}
@@ -532,117 +883,39 @@ function DashboardTab({
   );
 }
 
-// ── Recommendation Card ─────────────────────────────────────────────────
-
-function RecommendationCard({
-  rec,
-  onAccept,
-}: {
-  rec: Recommendation;
-  onAccept: (rec: Recommendation) => void;
-}) {
+function RecommendationCard({ rec }: { rec: Recommendation }) {
   const opCfg = OPERATIONAL_STATUS_CONFIG[rec.operationalStatus];
   const priCfg = PRIORITY_CONFIG[rec.priority];
   const armPct = rec.currentCad > 0 ? ((rec.currentArm / rec.currentCad) * 100).toFixed(0) : "0";
 
   return (
-    <Card className="space-y-3">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-3">
-          <h3 className="text-base font-semibold text-graphite-900 dark:text-white">
-            {rec.pivotName}
-          </h3>
-          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium ${opCfg.bgClass}`}>
-            {opCfg.label}
-          </span>
-          <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${priCfg.bgClass}`}>
-            {priCfg.label}
-          </span>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-gray-500 dark:text-gray-400">
-            Score: <strong>{rec.priorityScore.toFixed(0)}</strong>/100
-          </span>
-          {rec.shouldIrrigate && (
-            <Button size="sm" onClick={() => onAccept(rec)}>
-              Aceitar
-            </Button>
-          )}
-        </div>
+    <Card className="space-y-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{rec.pivotName}</h3>
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${opCfg.bgClass}`}>{opCfg.label}</span>
+        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${priCfg.bgClass}`}>{priCfg.label}</span>
+        <span className="ml-auto text-xs text-gray-500">Score: {rec.priorityScore.toFixed(0)}/100</span>
       </div>
-
-      {/* Reason */}
-      <p className="text-sm text-gray-600 dark:text-gray-300">{rec.reason}</p>
-
-      {/* Metrics grid */}
-      <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-xs sm:grid-cols-4 lg:grid-cols-7">
-        <MetricItem label="ARM" value={`${rec.currentArm.toFixed(1)} mm`} sub={`${armPct}% do CAD`} />
-        <MetricItem label="ETc" value={`${rec.currentEtc.toFixed(1)} mm/dia`} />
-        <MetricItem label="Kc" value={rec.currentKc.toFixed(2)} />
-        <MetricItem label="Fase" value={rec.cropPhase} />
-        <MetricItem
-          label="Risco Produtivo"
-          value={`${rec.productiveRisk.toFixed(0)}%`}
-          highlight={rec.productiveRisk > 50}
-        />
+      <p className="text-xs text-gray-600 dark:text-gray-300">{rec.reason}</p>
+      <div className="flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
+        <span>ARM: <strong className="text-graphite-900 dark:text-white">{rec.currentArm.toFixed(1)} mm ({armPct}%)</strong></span>
+        <span>ETc: <strong>{rec.currentEtc.toFixed(1)} mm</strong></span>
+        <span>Risco: <strong className={rec.productiveRisk > 50 ? "text-red-600 dark:text-red-400" : ""}>{rec.productiveRisk.toFixed(0)}%</strong></span>
         {rec.shouldIrrigate && (
           <>
-            <MetricItem label="Lâmina Bruta" value={`${rec.grossDepth.toFixed(1)} mm`} />
-            <MetricItem label="Volume" value={`${rec.volumeM3.toFixed(0)} m³`} />
+            <span>Lâmina: <strong>{rec.grossDepth.toFixed(1)} mm</strong></span>
+            <span>Volume: <strong>{rec.volumeM3.toFixed(0)} m³</strong></span>
+            <span>Tempo: <strong>{rec.irrigationTimeH.toFixed(1)} h</strong></span>
           </>
         )}
       </div>
-
-      {/* Irrigation details */}
-      {rec.shouldIrrigate && (
-        <div className="rounded-lg bg-gray-50 p-3 dark:bg-graphite-800">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
-            <span className="text-gray-500 dark:text-gray-400">Lâmina líquida: <strong className="text-graphite-900 dark:text-white">{rec.netDepth.toFixed(1)} mm</strong></span>
-            <span className="text-gray-500 dark:text-gray-400">Lâmina bruta: <strong className="text-graphite-900 dark:text-white">{rec.grossDepth.toFixed(1)} mm</strong></span>
-            <span className="text-gray-500 dark:text-gray-400">Volume: <strong className="text-graphite-900 dark:text-white">{rec.volumeM3.toFixed(0)} m³</strong></span>
-            <span className="text-gray-500 dark:text-gray-400">Tempo: <strong className="text-graphite-900 dark:text-white">{rec.irrigationTimeH.toFixed(1)} h</strong></span>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
-            <span>Início: <strong className="text-graphite-900 dark:text-white">{rec.recommendedStart}</strong></span>
-            {rec.peakRestricted && (
-              <span className="text-amber-600 dark:text-amber-400">Restrição de horário de ponta</span>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Observations */}
-      {rec.observations && (
-        <p className="text-xs text-gray-400 dark:text-gray-500">{rec.observations}</p>
-      )}
     </Card>
   );
 }
 
-function MetricItem({
-  label,
-  value,
-  sub,
-  highlight,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-  highlight?: boolean;
-}) {
-  return (
-    <div>
-      <span className="text-gray-500 dark:text-gray-400">{label}</span>
-      <div className={`font-semibold ${highlight ? "text-red-600 dark:text-red-400" : "text-graphite-900 dark:text-white"}`}>
-        {value}
-      </div>
-      {sub && <span className="text-gray-400 dark:text-gray-500">{sub}</span>}
-    </div>
-  );
-}
-
-// ── Simulation Tab ──────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Simulation Tab
+// ═══════════════════════════════════════════════════════════════════════
 
 function SimulationTab({
   pivots,
@@ -663,19 +936,11 @@ function SimulationTab({
     <div className="space-y-4">
       <Card>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Select
-            label="Pivô"
-            value={selectedPivotId}
-            onChange={(e) => onPivotChange(e.target.value)}
-            options={pivots.map((p) => ({ value: p.id, label: p.name }))}
-          />
+          <Select label="Pivô" value={selectedPivotId} onChange={(e) => onPivotChange(e.target.value)} options={pivots.map((p) => ({ value: p.id, label: p.name }))} />
           <div className="flex items-end">
-            <Button onClick={onSimulate} disabled={!selectedPivotId}>
-              Simular Cenários
-            </Button>
+            <Button onClick={onSimulate} disabled={!selectedPivotId}>Simular Cenários</Button>
           </div>
         </div>
-
         {context && (
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
             <span>ARM: <strong className="text-graphite-900 dark:text-white">{context.storedWater.toFixed(1)} mm</strong></span>
@@ -689,9 +954,7 @@ function SimulationTab({
 
       {scenarios.length === 0 ? (
         <Card className="py-12 text-center">
-          <p className="text-gray-500 dark:text-gray-400">
-            Selecione um pivô e clique em &quot;Simular Cenários&quot; para comparar opções.
-          </p>
+          <p className="text-gray-500 dark:text-gray-400">Selecione um pivô e clique em &quot;Simular Cenários&quot;.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -714,64 +977,38 @@ function ScenarioCard({ scenario }: { scenario: SimulationScenario }) {
         <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">{scenario.name}</h4>
         <p className="text-xs text-gray-500 dark:text-gray-400">{scenario.description}</p>
       </div>
-
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <span className="text-gray-500 dark:text-gray-400">Lâmina</span>
-          <div className="font-semibold text-graphite-900 dark:text-white">
-            {scenario.irrigationDepth > 0 ? `${scenario.irrigationDepth.toFixed(1)} mm` : "—"}
-          </div>
+          <span className="text-gray-500">Lâmina</span>
+          <div className="font-semibold text-graphite-900 dark:text-white">{scenario.irrigationDepth > 0 ? `${scenario.irrigationDepth.toFixed(1)} mm` : "—"}</div>
         </div>
         <div>
-          <span className="text-gray-500 dark:text-gray-400">ARM Projetado</span>
-          <div className="font-semibold text-graphite-900 dark:text-white">
-            {scenario.projectedArm.toFixed(1)} mm ({armPct}%)
-          </div>
+          <span className="text-gray-500">ARM Projetado</span>
+          <div className="font-semibold text-graphite-900 dark:text-white">{scenario.projectedArm.toFixed(1)} mm ({armPct}%)</div>
         </div>
         <div>
-          <span className="text-gray-500 dark:text-gray-400">Status Projetado</span>
+          <span className="text-gray-500">Status</span>
           <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusCfg.bgClass}`}>
-            <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {statusCfg.label}
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />{statusCfg.label}
           </span>
         </div>
         <div>
-          <span className="text-gray-500 dark:text-gray-400">Dias até Estresse</span>
-          <div className={`font-semibold ${scenario.daysUntilStress <= 1 ? "text-red-600 dark:text-red-400" : scenario.daysUntilStress <= 3 ? "text-amber-600 dark:text-amber-400" : "text-graphite-900 dark:text-white"}`}>
-            {scenario.daysUntilStress > 90 ? ">90" : scenario.daysUntilStress}
-          </div>
-        </div>
-        <div>
-          <span className="text-gray-500 dark:text-gray-400">Risco Produtivo</span>
-          <div className={`font-semibold ${scenario.projectedRisk > 50 ? "text-red-600 dark:text-red-400" : scenario.projectedRisk > 20 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}`}>
-            {scenario.projectedRisk.toFixed(0)}%
-          </div>
-        </div>
-        <div>
-          <span className="text-gray-500 dark:text-gray-400">Déficit Projetado</span>
-          <div className="font-semibold text-graphite-900 dark:text-white">
-            {scenario.projectedDeficit > 0 ? `${scenario.projectedDeficit.toFixed(1)} mm` : "0.0 mm"}
-          </div>
+          <span className="text-gray-500">Risco</span>
+          <div className={`font-semibold ${scenario.projectedRisk > 50 ? "text-red-600" : scenario.projectedRisk > 20 ? "text-amber-600" : "text-green-600"}`}>{scenario.projectedRisk.toFixed(0)}%</div>
         </div>
       </div>
-
-      {/* ARM bar visualization */}
       <div className="mt-auto">
         <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
-          <div
-            className="h-full rounded-full transition-all"
-            style={{
-              width: `${Math.min(100, parseFloat(armPct))}%`,
-              backgroundColor: statusCfg.color,
-            }}
-          />
+          <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, parseFloat(armPct))}%`, backgroundColor: statusCfg.color }} />
         </div>
       </div>
     </Card>
   );
 }
 
-// ── History Tab ─────────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// History Tab
+// ═══════════════════════════════════════════════════════════════════════
 
 function HistoryTab({
   history,
@@ -783,9 +1020,9 @@ function HistoryTab({
   loading: boolean;
 }) {
   const pivotNames = useMemo(() => {
-    const map: Record<string, string> = {};
-    for (const p of pivots) map[p.id] = p.name;
-    return map;
+    const m: Record<string, string> = {};
+    for (const p of pivots) m[p.id] = p.name;
+    return m;
   }, [pivots]);
 
   const columns: Column<StoredRecommendation>[] = [
@@ -809,32 +1046,19 @@ function HistoryTab({
     { header: "Risco", render: (r) => `${r.productive_risk.toFixed(0)}%` },
     { header: "Lâmina", render: (r) => r.gross_depth > 0 ? `${r.gross_depth.toFixed(1)} mm` : "—" },
     { header: "Volume", render: (r) => r.volume_m3 > 0 ? `${r.volume_m3.toFixed(0)} m³` : "—" },
-    { header: "Tempo", render: (r) => r.irrigation_time_h > 0 ? `${r.irrigation_time_h.toFixed(1)} h` : "—" },
     {
       header: "Aceita",
       render: (r) =>
-        r.accepted === true ? (
-          <span className="text-green-600 dark:text-green-400">Sim</span>
-        ) : r.accepted === false ? (
-          <span className="text-red-600 dark:text-red-400">Não</span>
-        ) : (
-          <span className="text-gray-400">—</span>
-        ),
+        r.accepted === true ? <span className="text-green-600">Sim</span> :
+        r.accepted === false ? <span className="text-red-600">Não</span> :
+        <span className="text-gray-400">—</span>,
     },
   ];
 
-  if (loading) {
-    return <Card className="py-8 text-center text-sm text-gray-500">Carregando...</Card>;
-  }
+  if (loading) return <Card className="py-8 text-center text-sm text-gray-500">Carregando...</Card>;
 
   if (history.length === 0) {
-    return (
-      <Card className="py-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400">
-          Nenhuma recomendação registrada ainda.
-        </p>
-      </Card>
-    );
+    return <Card className="py-12 text-center"><p className="text-gray-500 dark:text-gray-400">Nenhuma recomendação registrada.</p></Card>;
   }
 
   return (
