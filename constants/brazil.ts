@@ -52,3 +52,24 @@ export const CROP_STAGES = [
   { value: "maturacao", label: "Maturação" },
   { value: "colheita", label: "Colheita" },
 ] as const;
+
+export const STATION_TYPES = [
+  { value: "automatica", label: "Automática" },
+  { value: "manual", label: "Manual" },
+  { value: "virtual", label: "Virtual" },
+] as const;
+
+export const DATA_SOURCES = [
+  { value: "manual", label: "Entrada manual" },
+  { value: "api_inmet", label: "API INMET" },
+  { value: "api_nasa_power", label: "NASA POWER" },
+  { value: "davis_link", label: "Davis WeatherLink" },
+  { value: "campo_station", label: "Estação de campo" },
+  { value: "outro", label: "Outro" },
+] as const;
+
+export const STATION_STATUSES = [
+  { value: "ativa", label: "Ativa" },
+  { value: "inativa", label: "Inativa" },
+  { value: "manutencao", label: "Manutenção" },
+] as const;
