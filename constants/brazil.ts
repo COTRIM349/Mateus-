@@ -73,3 +73,25 @@ export const STATION_STATUSES = [
   { value: "inativa", label: "Inativa" },
   { value: "manutencao", label: "Manutenção" },
 ] as const;
+
+export const CULTURE_GROUPS = [
+  { value: "graos", label: "Grãos" },
+  { value: "fibras", label: "Fibras" },
+  { value: "frutas", label: "Frutas" },
+  { value: "hortalicas", label: "Hortaliças" },
+  { value: "forrageiras", label: "Forrageiras" },
+  { value: "perenes", label: "Perenes" },
+  { value: "outro", label: "Outro" },
+] as const;
+
+export const CULTURE_STATUSES = [
+  { value: "ativo", label: "Ativo" },
+  { value: "inativo", label: "Inativo" },
+  { value: "em_teste", label: "Em teste" },
+] as const;
+
+export const MATURITY_TYPES = [
+  { value: "precoce", label: "Precoce" },
+  { value: "medio", label: "Médio" },
+  { value: "tardio", label: "Tardio" },
+] as const;
