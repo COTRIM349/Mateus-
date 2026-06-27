@@ -1,18 +1,12 @@
-/**
- * Barra superior fixa.
- * Exibe busca, ações rápidas e o perfil do usuário (estático nesta etapa).
- */
 export function Topbar() {
   return (
     <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-200 bg-white px-4 sm:px-6 lg:px-8">
-      {/* Espaço à esquerda (compensa o botão hambúrguer no mobile) */}
       <div className="flex items-center gap-3 pl-12 lg:pl-0">
         <div className="hidden text-sm text-gray-500 sm:block">
           Safra 2025/2026 · Fazenda Santa Helena
         </div>
       </div>
 
-      {/* Busca */}
       <div className="mx-4 hidden max-w-md flex-1 md:block">
         <div className="relative">
           <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-gray-400">
@@ -28,9 +22,7 @@ export function Topbar() {
         </div>
       </div>
 
-      {/* Ações + perfil */}
       <div className="flex items-center gap-3">
-        {/* Notificações */}
         <button
           type="button"
           aria-label="Notificações"
@@ -42,7 +34,6 @@ export function Topbar() {
           <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500" />
         </button>
 
-        {/* Perfil */}
         <div className="flex items-center gap-2">
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500 text-sm font-semibold text-white">
             CI

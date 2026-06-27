@@ -1,32 +1,23 @@
 import { Card } from "./Card";
-import { cn } from "@/lib/format";
-import type { MetricaDashboard } from "@/lib/types";
+import { cn } from "@/utils/cn";
+import type { DashboardMetric } from "@/modules/dashboard/services";
 
-/** Cores do indicador de variação conforme a tendência. */
-const tendenciaClasse: Record<NonNullable<MetricaDashboard["tendencia"]>, string> = {
-  positiva: "text-brand-600",
-  negativa: "text-red-600",
-  neutra: "text-gray-500",
+const trendClass: Record<NonNullable<DashboardMetric["trend"]>, string> = {
+  positive: "text-brand-600",
+  negative: "text-red-600",
+  neutral: "text-gray-500",
 };
 
-/**
- * Card de métrica do dashboard (ex.: Pivôs ativos, Déficit médio).
- */
-export function StatCard({ metrica }: { metrica: MetricaDashboard }) {
+export function StatCard({ metric }: { metric: DashboardMetric }) {
   return (
     <Card className="flex flex-col gap-2">
-      <p className="text-sm font-medium text-gray-500">{metrica.titulo}</p>
-      <p className="text-2xl font-bold text-graphite-900">{metrica.valor}</p>
+      <p className="text-sm font-medium text-gray-500">{metric.title}</p>
+      <p className="text-2xl font-bold text-graphite-900">{metric.value}</p>
       <div className="mt-auto flex items-center justify-between">
-        <span className="text-xs text-gray-400">{metrica.descricao}</span>
-        {metrica.variacao && (
-          <span
-            className={cn(
-              "text-xs font-semibold",
-              tendenciaClasse[metrica.tendencia ?? "neutra"],
-            )}
-          >
-            {metrica.variacao}
+        <span className="text-xs text-gray-400">{metric.description}</span>
+        {metric.variation && (
+          <span className={cn("text-xs font-semibold", trendClass[metric.trend ?? "neutral"])}>
+            {metric.variation}
           </span>
         )}
       </div>

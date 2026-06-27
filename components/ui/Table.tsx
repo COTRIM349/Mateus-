@@ -1,66 +1,50 @@
-import { cn } from "@/lib/format";
+import { cn } from "@/utils/cn";
 
-/** Definição de uma coluna da tabela genérica. */
-export interface Coluna<T> {
-  /** Cabeçalho exibido. */
+export interface Column<T> {
   header: string;
-  /** Função que renderiza a célula a partir da linha. */
-  render: (linha: T) => React.ReactNode;
-  /** Alinhamento opcional do conteúdo. */
+  render: (row: T) => React.ReactNode;
   align?: "left" | "right" | "center";
 }
 
-/**
- * Tabela genérica e tipada, reutilizável em todo o sistema.
- */
+const alignClass = {
+  left: "text-left",
+  right: "text-right",
+  center: "text-center",
+};
+
 export function Table<T>({
-  colunas,
-  dados,
+  columns,
+  data,
   getKey,
 }: {
-  colunas: Coluna<T>[];
-  dados: T[];
-  getKey: (linha: T) => string;
+  columns: Column<T>[];
+  data: T[];
+  getKey: (row: T) => string;
 }) {
-  const alinhamento = {
-    left: "text-left",
-    right: "text-right",
-    center: "text-center",
-  };
-
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead>
           <tr className="border-b border-gray-200">
-            {colunas.map((coluna, i) => (
+            {columns.map((col, i) => (
               <th
                 key={i}
                 className={cn(
                   "px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500",
-                  alinhamento[coluna.align ?? "left"],
+                  alignClass[col.align ?? "left"],
                 )}
               >
-                {coluna.header}
+                {col.header}
               </th>
             ))}
           </tr>
         </thead>
         <tbody>
-          {dados.map((linha) => (
-            <tr
-              key={getKey(linha)}
-              className="border-b border-gray-100 transition-colors hover:bg-gray-50"
-            >
-              {colunas.map((coluna, i) => (
-                <td
-                  key={i}
-                  className={cn(
-                    "px-3 py-3 text-graphite-900",
-                    alinhamento[coluna.align ?? "left"],
-                  )}
-                >
-                  {coluna.render(linha)}
+          {data.map((row) => (
+            <tr key={getKey(row)} className="border-b border-gray-100 transition-colors hover:bg-gray-50">
+              {columns.map((col, i) => (
+                <td key={i} className={cn("px-3 py-3 text-graphite-900", alignClass[col.align ?? "left"])}>
+                  {col.render(row)}
                 </td>
               ))}
             </tr>
