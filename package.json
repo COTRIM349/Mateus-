@@ -1,6 +1,6 @@
 {
   "name": "cotrim-irrigacao-pro",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "description": "Cotrim Irrigação Pro - Sistema operacional para gestão de irrigação agrícola",
   "scripts": {
