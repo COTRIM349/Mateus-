@@ -103,3 +103,19 @@ export const WATER_STATUSES = [
   { value: "deficit", label: "Déficit" },
   { value: "deficit_critico", label: "Déficit Crítico" },
 ] as const;
+
+export const RECOMMENDATION_PRIORITIES = [
+  { value: "critica", label: "Crítica" },
+  { value: "alta", label: "Alta" },
+  { value: "media", label: "Média" },
+  { value: "baixa", label: "Baixa" },
+  { value: "sem_necessidade", label: "Sem Necessidade" },
+] as const;
+
+export const OPERATIONAL_STATUSES = [
+  { value: "irrigar_imediatamente", label: "Irrigar Imediatamente" },
+  { value: "irrigar_hoje", label: "Irrigar Hoje" },
+  { value: "irrigar_amanha", label: "Irrigar Amanhã" },
+  { value: "monitorar", label: "Monitorar" },
+  { value: "nao_irrigar", label: "Não Irrigar" },
+] as const;
