@@ -119,3 +119,25 @@ export const OPERATIONAL_STATUSES = [
   { value: "monitorar", label: "Monitorar" },
   { value: "nao_irrigar", label: "Não Irrigar" },
 ] as const;
+
+export const TARIFF_TYPES = [
+  { value: "verde", label: "Verde" },
+  { value: "azul", label: "Azul" },
+  { value: "convencional", label: "Convencional" },
+] as const;
+
+export const APPORTIONMENT_METHODS = [
+  { value: "volume", label: "Por Volume" },
+  { value: "area", label: "Por Área" },
+  { value: "hours", label: "Por Horas" },
+  { value: "equal", label: "Igualitário" },
+  { value: "custom", label: "Personalizado" },
+] as const;
+
+export const DEMAND_RISK_LEVELS = [
+  { value: "critico", label: "Crítico" },
+  { value: "alto", label: "Alto" },
+  { value: "moderado", label: "Moderado" },
+  { value: "baixo", label: "Baixo" },
+  { value: "confortavel", label: "Confortável" },
+] as const;
