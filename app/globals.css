@@ -1,0 +1,37 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply rounded-full bg-graphite-300/40;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-graphite-400/60;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  @apply bg-graphite-600/40;
+}
+
+.dark ::-webkit-scrollbar-thumb:hover {
+  @apply bg-graphite-500/60;
+}
