@@ -2,16 +2,16 @@ import { cn } from "@/utils/cn";
 import type { OperationalStatus, Priority } from "@/types/domain/pivot";
 
 const statusConfig: Record<OperationalStatus, { label: string; className: string }> = {
-  irrigando:  { label: "Irrigando",  className: "bg-brand-100 text-brand-700" },
-  parado:     { label: "Parado",     className: "bg-gray-100 text-gray-600" },
-  manutencao: { label: "Manutenção", className: "bg-amber-100 text-amber-700" },
-  alerta:     { label: "Alerta",     className: "bg-red-100 text-red-700" },
+  irrigando:  { label: "Irrigando",  className: "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400" },
+  parado:     { label: "Parado",     className: "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400" },
+  manutencao: { label: "Manutenção", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" },
+  alerta:     { label: "Alerta",     className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
 };
 
 const priorityConfig: Record<Priority, { label: string; className: string }> = {
-  alta:  { label: "Alta",  className: "bg-red-100 text-red-700" },
-  media: { label: "Média", className: "bg-amber-100 text-amber-700" },
-  baixa: { label: "Baixa", className: "bg-gray-100 text-gray-600" },
+  alta:  { label: "Alta",  className: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  media: { label: "Média", className: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" },
+  baixa: { label: "Baixa", className: "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400" },
 };
 
 export function StatusBadge({ status }: { status: OperationalStatus }) {

@@ -9,15 +9,15 @@ export function EmptyState({
 }) {
   return (
     <Card className="flex flex-col items-center justify-center py-16 text-center">
-      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-500">
+      <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-brand-50 text-brand-500 dark:bg-brand-900/20 dark:text-brand-400">
         <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2M12 22a10 10 0 100-20 10 10 0 000 20z" />
         </svg>
       </div>
-      <h3 className="text-base font-semibold text-graphite-900">{title}</h3>
-      <p className="mt-1 max-w-md text-sm text-gray-500">{description}</p>
-      <span className="mt-4 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500">
-        Em desenvolvimento · dados fictícios
+      <h3 className="text-base font-semibold text-graphite-900 dark:text-white">{title}</h3>
+      <p className="mt-1 max-w-md text-sm text-gray-500 dark:text-gray-400">{description}</p>
+      <span className="mt-4 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-500 dark:bg-graphite-800 dark:text-gray-400">
+        Em desenvolvimento
       </span>
     </Card>
   );

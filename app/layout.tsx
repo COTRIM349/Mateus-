@@ -1,8 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { Sidebar } from "@/components/layout/Sidebar";
-import { Topbar } from "@/components/layout/Topbar";
 import { APP_NAME, APP_DESCRIPTION } from "@/constants/app";
+import { Providers } from "./providers";
 
 export const metadata: Metadata = {
   title: APP_NAME,
@@ -11,15 +10,9 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR">
-      <body>
-        <div className="flex min-h-screen">
-          <Sidebar />
-          <div className="flex flex-1 flex-col lg:pl-64">
-            <Topbar />
-            <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
-          </div>
-        </div>
+    <html lang="pt-BR" suppressHydrationWarning>
+      <body className="bg-gray-50 text-graphite-900 antialiased dark:bg-graphite-950 dark:text-gray-100">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

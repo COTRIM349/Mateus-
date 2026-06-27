@@ -5,11 +5,15 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { navItems } from "@/config/navigation";
 import { cn } from "@/utils/cn";
-import { APP_NAME, APP_VERSION } from "@/constants/app";
+import { useAuth } from "@/components/providers";
+import { APP_VERSION } from "@/constants/app";
 
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const { farms, activeFarmId, setActiveFarm } = useAuth();
+
+  const activeFarm = farms.find((f) => f.id === activeFarmId);
 
   return (
     <>
@@ -51,6 +55,29 @@ export function Sidebar() {
           </div>
         </div>
 
+        {farms.length > 1 && (
+          <div className="border-b border-white/5 px-4 py-3">
+            <select
+              value={activeFarmId ?? ""}
+              onChange={(e) => setActiveFarm(e.target.value)}
+              className="w-full rounded-lg border border-white/10 bg-graphite-800 px-3 py-2 text-xs text-gray-300 outline-none focus:border-brand-500"
+            >
+              {farms.map((farm) => (
+                <option key={farm.id} value={farm.id}>
+                  {farm.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        {farms.length === 1 && activeFarm && (
+          <div className="border-b border-white/5 px-5 py-3">
+            <p className="text-xs text-gray-500">Fazenda ativa</p>
+            <p className="text-sm font-medium text-gray-300">{activeFarm.name}</p>
+          </div>
+        )}
+
         <nav className="flex-1 space-y-1 overflow-y-auto px-3 py-4">
           {navItems.map((item) => {
             const active =
@@ -77,7 +104,7 @@ export function Sidebar() {
         </nav>
 
         <div className="border-t border-white/5 px-5 py-4 text-xs text-gray-500">
-          v{APP_VERSION} · Dados fictícios
+          v{APP_VERSION}
         </div>
       </aside>
     </>
