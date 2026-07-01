@@ -44,6 +44,23 @@ export const PIVOT_STATUSES = [
   { value: "alerta", label: "Alerta" },
 ] as const;
 
+export const PIVOT_TYPES = [
+  { value: "central", label: "Pivô Central" },
+  { value: "linear", label: "Linear" },
+  { value: "rebocavel", label: "Rebocável" },
+] as const;
+
+export const PIVOT_MANUFACTURERS = [
+  { value: "valley", label: "Valley" },
+  { value: "reinke", label: "Reinke" },
+  { value: "lindsay", label: "Lindsay / Zimmatic" },
+  { value: "bauer", label: "Bauer" },
+  { value: "fockink", label: "Fockink" },
+  { value: "krebs", label: "Krebs" },
+  { value: "carborundum", label: "Carborundum" },
+  { value: "outro", label: "Outro" },
+] as const;
+
 export const CROP_STAGES = [
   { value: "germinacao", label: "Germinação" },
   { value: "vegetativo", label: "Vegetativo" },
