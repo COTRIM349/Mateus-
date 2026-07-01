@@ -122,6 +122,8 @@ function buildMockBalanceRows(): DailyBalanceRow[] {
       rows.push({
         date: dateStr,
         phase: PHASES[p % PHASES.length],
+        pivotId: `p${p + 1}`,
+        pivotName: PIVOT_NAMES[p],
         et0: roundTo(et0, 2),
         kc: roundTo(kc, 3),
         etc,
@@ -169,7 +171,7 @@ function buildMockEnergyResults(): ConsumptionResult[] {
       const depthMm = roundTo(volumeM3 / (area * 10), 1);
 
       results.push({
-        pivotId: `pivot-${p + 1}`,
+        pivotId: `p${p + 1}`,
         pivotName: PIVOT_NAMES[p],
         pumpHouseId: `pump-${(p % 2) + 1}`,
         pumpHouseName: `CB ${(p % 2) + 1}`,
@@ -208,7 +210,7 @@ function buildMockRecommendations(): Recommendation[] {
     const priority = score >= 80 ? "critica" as const : score >= 60 ? "alta" as const : score >= 40 ? "media" as const : score >= 20 ? "baixa" as const : "sem_necessidade" as const;
     const status = score >= 80 ? "irrigar_imediatamente" as const : score >= 60 ? "irrigar_hoje" as const : score >= 40 ? "irrigar_amanha" as const : score >= 20 ? "monitorar" as const : "nao_irrigar" as const;
     return {
-      pivotId: `pivot-${i + 1}`,
+      pivotId: `p${i + 1}`,
       pivotName: name,
       shouldIrrigate: score >= 40,
       operationalStatus: status,
@@ -812,9 +814,9 @@ function HistoricoIrrigacao({ balanceRows }: { balanceRows: DailyBalanceRow[] })
     return balanceRows
       .filter((b) => b.irrigationApplied > 0)
       .slice(0, 50)
-      .map((b, i) => ({
+      .map((b) => ({
         date: b.date,
-        pivot: PIVOT_NAMES[i % PIVOT_NAMES.length],
+        pivot: b.pivotName ?? "—",
         phase: b.phase,
         depth: b.irrigationApplied,
         armPct: b.cad > 0 ? roundTo((b.storedWater / b.cad) * 100, 1) : 0,
@@ -870,9 +872,9 @@ interface WaterRow { date: string; pivot: string; et0: number; etc: number; prec
 
 function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
   const waterData = useMemo(() => {
-    return balanceRows.slice(0, 50).map((b, i) => ({
+    return balanceRows.slice(0, 50).map((b) => ({
       date: b.date,
-      pivot: PIVOT_NAMES[i % PIVOT_NAMES.length],
+      pivot: b.pivotName ?? "—",
       et0: b.et0,
       etc: b.etc,
       precip: b.precipitation,
@@ -1018,10 +1020,10 @@ function TabComparativos({
     switch (dimension) {
       case "pivo":
         items = PIVOT_NAMES.map((name, i) => ({
-          key: `pivot-${i + 1}`,
+          key: `p${i + 1}`,
           label: name,
-          balanceRows: balanceRows.filter((_, idx) => idx % PIVOT_NAMES.length === i),
-          energyResults: energyResults.filter((r) => r.pivotId === `pivot-${i + 1}`),
+          balanceRows: balanceRows.filter((b) => b.pivotId === `p${i + 1}`),
+          energyResults: energyResults.filter((r) => r.pivotId === `p${i + 1}`),
           areaHa: 50 + i * 10,
         }));
         break;

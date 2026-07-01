@@ -50,6 +50,8 @@ export interface WaterBalanceResult {
 export interface DailyBalanceRow extends WaterBalanceResult {
   date: string;
   phase: string;
+  pivotId?: string;
+  pivotName?: string;
 }
 
 export interface BalanceSummary {
