@@ -93,7 +93,7 @@ export function calculateET0(input: ET0Input): number {
  * Resultado em mm/dia.
  */
 export function calculateETc(et0: number, kc: number): number {
-  return roundTo(et0 * kc, 2);
+  return roundTo(Math.max(et0 * kc, 0), 2);
 }
 
 /* ========================================================================== */

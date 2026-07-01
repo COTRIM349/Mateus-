@@ -390,12 +390,12 @@ export function generateDailyReport(
   const irrigatedSlots = scheduleSlots.filter((s) => s.slotStatus !== "bloqueado" && s.slotStatus !== "cancelado");
 
   const pivotDetails: PivotReportRow[] = todayBalance.map((b) => {
-    const rec = recommendations.find((r) => r.pivotId === b.date);
-    const slot = irrigatedSlots.find((s) => s.pivotName === b.phase);
-    const energy = todayEnergy.find((e) => e.date === date);
+    const rec = recommendations.find((r) => r.pivotId === b.pivotId);
+    const slot = irrigatedSlots.find((s) => s.pivotId === b.pivotId);
+    const energy = todayEnergy.find((e) => e.pivotId === b.pivotId);
 
     return {
-      pivotName: b.phase,
+      pivotName: b.pivotName ?? "—",
       cultureName: rec?.cropPhase ?? "—",
       cropPhase: b.phase,
       armPct: b.cad > 0 ? roundTo((b.storedWater / b.cad) * 100, 1) : 0,
