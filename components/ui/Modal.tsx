@@ -14,7 +14,7 @@ export function Modal({
   onClose: () => void;
   title: string;
   children: React.ReactNode;
-  size?: "sm" | "md" | "lg";
+  size?: "sm" | "md" | "lg" | "xl";
 }) {
   const overlayRef = useRef<HTMLDivElement>(null);
 
@@ -37,6 +37,7 @@ export function Modal({
     sm: "max-w-md",
     md: "max-w-xl",
     lg: "max-w-3xl",
+    xl: "max-w-5xl",
   }[size];
 
   return (

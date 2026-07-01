@@ -198,27 +198,45 @@ CREATE INDEX idx_soils_farm ON soils(farm_id);
 -- 9. PIVOTS (pivos centrais)
 -- --------------------------------------------------------------------------
 CREATE TABLE pivots (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  farm_id           UUID NOT NULL REFERENCES farms(id) ON DELETE CASCADE,
-  module_id         UUID REFERENCES production_modules(id) ON DELETE SET NULL,
-  name              TEXT NOT NULL,
-  area              DOUBLE PRECISION NOT NULL,
-  radius            DOUBLE PRECISION NOT NULL,
-  flow_rate         DOUBLE PRECISION NOT NULL,
-  pump_power        DOUBLE PRECISION NOT NULL,
-  motor_efficiency  DOUBLE PRECISION NOT NULL DEFAULT 0.88,
-  efficiency        DOUBLE PRECISION NOT NULL CHECK (efficiency BETWEEN 0 AND 1),
-  latitude          DOUBLE PRECISION NOT NULL,
-  longitude         DOUBLE PRECISION NOT NULL,
-  status            TEXT NOT NULL DEFAULT 'parado'
-                    CHECK (status IN ('irrigando','parado','manutencao','alerta')),
-  active            BOOLEAN NOT NULL DEFAULT true,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  farm_id               UUID NOT NULL REFERENCES farms(id) ON DELETE CASCADE,
+  module_id             UUID REFERENCES production_modules(id) ON DELETE SET NULL,
+  culture_id            UUID REFERENCES cultures(id) ON DELETE SET NULL,
+  name                  TEXT NOT NULL,
+  code                  TEXT,
+  area                  DOUBLE PRECISION NOT NULL,
+  radius                DOUBLE PRECISION NOT NULL,
+  flow_rate             DOUBLE PRECISION NOT NULL,
+  pump_power            DOUBLE PRECISION NOT NULL,
+  motor_efficiency      DOUBLE PRECISION NOT NULL DEFAULT 0.88,
+  efficiency            DOUBLE PRECISION NOT NULL CHECK (efficiency BETWEEN 0 AND 1),
+  latitude              DOUBLE PRECISION NOT NULL,
+  longitude             DOUBLE PRECISION NOT NULL,
+  status                TEXT NOT NULL DEFAULT 'parado'
+                        CHECK (status IN ('irrigando','parado','manutencao','alerta')),
+  manufacturer          TEXT,
+  model                 TEXT,
+  pivot_type            TEXT DEFAULT 'central'
+                        CHECK (pivot_type IN ('central','linear','rebocavel')),
+  last_tower_radius     DOUBLE PRECISION,
+  service_pressure      DOUBLE PRECISION,
+  speed_100_pct         DOUBLE PRECISION,
+  full_turn_time        DOUBLE PRECISION,
+  depth_100_pct         DOUBLE PRECISION,
+  max_operating_time    DOUBLE PRECISION DEFAULT 24,
+  installed_power_kw    DOUBLE PRECISION,
+  specific_consumption  DOUBLE PRECISION,
+  energy_cost           DOUBLE PRECISION,
+  cost_per_mm           DOUBLE PRECISION,
+  cost_per_hectare      DOUBLE PRECISION,
+  active                BOOLEAN NOT NULL DEFAULT true,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 CREATE INDEX idx_pivots_farm ON pivots(farm_id);
 CREATE INDEX idx_pivots_module ON pivots(module_id);
+CREATE INDEX idx_pivots_culture ON pivots(culture_id);
 CREATE INDEX idx_pivots_status ON pivots(status);
 
 -- --------------------------------------------------------------------------
