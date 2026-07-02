@@ -251,7 +251,16 @@ CREATE TABLE pivot_crop_assignments (
   crop_stage              TEXT NOT NULL DEFAULT 'germinacao'
                           CHECK (crop_stage IN ('germinacao','vegetativo','floracao','enchimento','maturacao','colheita')),
   planting_date           DATE NOT NULL,
+  emergence_date          DATE,
   expected_harvest_date   DATE,
+  culture_variety_id      UUID,  -- FK adicionada via ALTER após culture_varieties (ver abaixo)
+  parameter_mode          TEXT NOT NULL DEFAULT 'padrao'
+                          CHECK (parameter_mode IN ('padrao','personalizado')),
+  initial_root_depth      DOUBLE PRECISION CHECK (initial_root_depth IS NULL OR initial_root_depth > 0),
+  max_root_depth          DOUBLE PRECISION CHECK (max_root_depth IS NULL OR (max_root_depth > 0 AND max_root_depth <= 5)),
+  irrigation_efficiency   DOUBLE PRECISION CHECK (irrigation_efficiency IS NULL OR (irrigation_efficiency > 0 AND irrigation_efficiency <= 1)),
+  depletion_factor        DOUBLE PRECISION CHECK (depletion_factor IS NULL OR (depletion_factor > 0 AND depletion_factor <= 1)),
+  notes                   TEXT,
   active                  BOOLEAN NOT NULL DEFAULT true,
   created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -261,6 +270,7 @@ CREATE TABLE pivot_crop_assignments (
 CREATE INDEX idx_pca_pivot ON pivot_crop_assignments(pivot_id);
 CREATE INDEX idx_pca_season ON pivot_crop_assignments(season_id);
 CREATE INDEX idx_pca_culture ON pivot_crop_assignments(culture_id);
+CREATE INDEX idx_pca_variety ON pivot_crop_assignments(culture_variety_id);
 
 -- --------------------------------------------------------------------------
 -- 11. WEATHER_STATIONS (estacoes meteorologicas — inclui campos Sprint 3)
@@ -617,6 +627,11 @@ CREATE TABLE culture_varieties (
 );
 
 CREATE INDEX idx_culture_varieties_culture ON culture_varieties(culture_id);
+
+-- FK adiantada de pivot_crop_assignments.culture_variety_id -> culture_varieties
+ALTER TABLE pivot_crop_assignments
+  ADD CONSTRAINT fk_pca_variety
+  FOREIGN KEY (culture_variety_id) REFERENCES culture_varieties(id) ON DELETE SET NULL;
 
 -- --------------------------------------------------------------------------
 -- 26. CULTURE_PHASES (fases fenologicas — Sprint 5)
