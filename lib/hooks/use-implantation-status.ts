@@ -75,6 +75,7 @@ export function useImplantationStatus(): ImplantationStatus {
       culture: 0,
       season: 0,
       pivot: 0,
+      assignment: 0,
     };
 
     if (companyId) {
@@ -85,7 +86,24 @@ export function useImplantationStatus(): ImplantationStatus {
     if (activeFarmId) {
       result.soil = await countTable("soils", "farm_id", activeFarmId);
       result.season = await countTable("seasons", "farm_id", activeFarmId);
-      result.pivot = await countTable("pivots", "farm_id", activeFarmId);
+
+      // pivôs da fazenda ativa — ids reutilizados para contar as vinculações
+      const { data: pivotRows } = await supabase
+        .from("pivots")
+        .select("id")
+        .eq("farm_id", activeFarmId)
+        .eq("active", true);
+      const pivotIds = (pivotRows ?? []).map((r) => r.id as string);
+      result.pivot = pivotIds.length;
+
+      if (pivotIds.length > 0) {
+        const { count } = await supabase
+          .from("pivot_crop_assignments")
+          .select("id", { count: "exact", head: true })
+          .in("pivot_id", pivotIds)
+          .eq("active", true);
+        result.assignment = count ?? 0;
+      }
     }
 
     setCounts(result);
@@ -147,6 +165,16 @@ export function useImplantationStatus(): ImplantationStatus {
       done: (counts.pivot ?? 0) > 0,
       count: counts.pivot ?? 0,
       foundation: true,
+    },
+    {
+      key: "assignment",
+      order: 6,
+      label: "Vinculação",
+      description: "Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico.",
+      href: "/vinculacao",
+      done: (counts.assignment ?? 0) > 0,
+      count: counts.assignment ?? 0,
+      foundation: false,
     },
   ];
 
