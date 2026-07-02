@@ -2,7 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, StatCard, Tabs, Table, type Column, ChartCard } from "@/components/ui";
+import { Card, StatCard, Tabs, Table, type Column, ChartCard, EmptyState } from "@/components/ui";
+import { useAuth } from "@/components/providers";
+import { useCrud } from "@/lib/hooks";
 import {
   type ConsumptionResult,
   type TariffConfig,
@@ -12,7 +14,6 @@ import {
   type EnergySuggestion,
   type HourlyCostProfile,
   type FarmEnergyTotals,
-  calculateConsumption,
   calculateFarmTotals,
   aggregateByPivot,
   aggregateByPumpHouse,
@@ -25,7 +26,6 @@ import {
   generateEnergySuggestions,
   buildHourlyCostProfile,
   DEMAND_RISK_CONFIG,
-  TARIFF_TYPE_CONFIG,
 } from "@/modules/energy/services";
 import {
   ResponsiveContainer,
@@ -45,79 +45,45 @@ import {
   ReferenceLine,
 } from "recharts";
 
-// ── Demo Data ──────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────
 
-const DEMO_TARIFF: TariffConfig = {
-  tariffType: "verde",
-  ratePeak: 1.2845,
-  rateOffPeak: 0.4523,
-  rateReserved: 0.32,
-  demandRate: 42.5,
-  peakStart: 18,
-  peakEnd: 21,
-  contractedDemandKw: 500,
-};
-
-function generateDemoConsumption(): ConsumptionResult[] {
-  const pivots = [
-    { id: "p1", name: "Pivô Central 1", pump: "ph1", pumpName: "CB-01", culture: "Soja", cultureId: "c1", module: "Módulo A", area: 120, power: 150 },
-    { id: "p2", name: "Pivô Central 2", pump: "ph1", pumpName: "CB-01", culture: "Soja", cultureId: "c1", module: "Módulo A", area: 95, power: 120 },
-    { id: "p3", name: "Pivô Leste 1", pump: "ph2", pumpName: "CB-02", culture: "Milho", cultureId: "c2", module: "Módulo B", area: 80, power: 100 },
-    { id: "p4", name: "Pivô Leste 2", pump: "ph2", pumpName: "CB-02", culture: "Milho", cultureId: "c2", module: "Módulo B", area: 110, power: 130 },
-    { id: "p5", name: "Pivô Norte 1", pump: "ph3", pumpName: "CB-03", culture: "Feijão", cultureId: "c3", module: "Módulo C", area: 65, power: 85 },
-    { id: "p6", name: "Pivô Sul 1", pump: "ph1", pumpName: "CB-01", culture: "Algodão", cultureId: "c4", module: "Módulo A", area: 140, power: 160 },
-  ];
-
-  const results: ConsumptionResult[] = [];
-  const baseDate = new Date("2025-06-01");
-
-  for (let day = 0; day < 30; day++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() + day);
-    const dateStr = date.toISOString().split("T")[0];
-
-    for (const p of pivots) {
-      if (Math.random() < 0.35) continue;
-
-      const hours = 3 + Math.random() * 8;
-      const vol = p.area * (2 + Math.random() * 4) * 10;
-      const depth = (vol / (p.area * 10));
-      const startH = Math.random() < 0.7 ? 5 + Math.floor(Math.random() * 10) : 18 + Math.floor(Math.random() * 3);
-      const endH = Math.min(23, startH + Math.ceil(hours));
-
-      results.push(
-        calculateConsumption(
-          {
-            pivotId: p.id,
-            pivotName: p.name,
-            pumpHouseId: p.pump,
-            pumpHouseName: p.pumpName,
-            cultureName: p.culture,
-            cultureId: p.cultureId,
-            seasonId: "s1",
-            moduleName: p.module,
-            area: p.area,
-            pumpPowerCv: p.power,
-            pumpPowerKw: 0,
-            motorEfficiency: 0.85,
-            operatingHours: roundTo2(hours),
-            volumeM3: roundTo2(vol),
-            depthMm: roundTo2(depth),
-            startTime: `${String(startH).padStart(2, "0")}:00`,
-            endTime: `${String(endH).padStart(2, "0")}:00`,
-            date: dateStr,
-          },
-          DEMO_TARIFF
-        )
-      );
-    }
-  }
-
-  return results;
+interface EnergyConsumption {
+  id: string;
+  farm_id: string;
+  pivot_id: string;
+  pivot_name: string | null;
+  pump_house_id: string | null;
+  pump_house_name: string | null;
+  culture_name: string | null;
+  culture_id: string | null;
+  season_id: string | null;
+  module_name: string | null;
+  area: number;
+  date: string;
+  operating_hours: number;
+  power_kw: number;
+  total_kwh: number;
+  peak_kwh: number;
+  off_peak_kwh: number;
+  cost_peak: number;
+  cost_off_peak: number;
+  cost_total: number;
+  demand_kw: number;
+  volume_m3: number;
+  depth_mm: number;
 }
 
-function roundTo2(v: number): number {
-  return Math.round(v * 100) / 100;
+interface EnergyTariff {
+  id: string;
+  farm_id: string;
+  tariff_type: string;
+  rate_peak: number;
+  rate_off_peak: number;
+  rate_reserved: number;
+  demand_rate: number;
+  peak_start: number;
+  peak_end: number;
+  contracted_demand_kw: number;
 }
 
 // ── Tabs ────────────────────────────────────────────────────────────────
@@ -132,48 +98,149 @@ const TABS = [
 
 const PIE_COLORS = ["#22c55e", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6", "#06b6d4"];
 
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function toConsumptionResult(row: EnergyConsumption): ConsumptionResult {
+  const kwhPerM3 = row.volume_m3 > 0 ? row.total_kwh / row.volume_m3 : 0;
+  const kwhPerMm = row.depth_mm > 0 ? row.total_kwh / row.depth_mm : 0;
+  const kwhPerHa = row.area > 0 ? row.total_kwh / row.area : 0;
+  const costPerM3 = row.volume_m3 > 0 ? row.cost_total / row.volume_m3 : 0;
+  const costPerMm = row.depth_mm > 0 ? row.cost_total / row.depth_mm : 0;
+  const costPerHa = row.area > 0 ? row.cost_total / row.area : 0;
+
+  return {
+    pivotId: row.pivot_id,
+    pivotName: row.pivot_name ?? "—",
+    pumpHouseId: row.pump_house_id ?? "",
+    pumpHouseName: row.pump_house_name ?? "",
+    cultureName: row.culture_name ?? "",
+    cultureId: row.culture_id ?? "",
+    seasonId: row.season_id ?? "",
+    moduleName: row.module_name ?? "",
+    area: row.area,
+    date: row.date,
+    operatingHours: row.operating_hours,
+    powerKw: row.power_kw,
+    totalKwh: row.total_kwh,
+    peakKwh: row.peak_kwh,
+    offPeakKwh: row.off_peak_kwh,
+    costPeak: row.cost_peak,
+    costOffPeak: row.cost_off_peak,
+    costTotal: row.cost_total,
+    demandKw: row.demand_kw,
+    volumeM3: row.volume_m3,
+    depthMm: row.depth_mm,
+    kwhPerM3,
+    kwhPerMm,
+    kwhPerHa,
+    costPerM3,
+    costPerMm,
+    costPerHa,
+  };
+}
+
+function toTariffConfig(row: EnergyTariff): TariffConfig {
+  return {
+    tariffType: row.tariff_type as TariffConfig["tariffType"],
+    ratePeak: row.rate_peak,
+    rateOffPeak: row.rate_off_peak,
+    rateReserved: row.rate_reserved,
+    demandRate: row.demand_rate,
+    peakStart: row.peak_start,
+    peakEnd: row.peak_end,
+    contractedDemandKw: row.contracted_demand_kw,
+  };
+}
+
 // ── Page ────────────────────────────────────────────────────────────────
 
 export default function EnergiaPage() {
+  const { activeFarmId } = useAuth();
   const [activeTab, setActiveTab] = useState("centro");
   const [viewMode, setViewMode] = useState<"pivot" | "pump" | "culture" | "module">("pivot");
 
-  const consumption = useMemo(() => generateDemoConsumption(), []);
+  const { data: rawConsumption, loading: loadingConsumption } = useCrud<EnergyConsumption>({
+    table: "energy_consumption",
+    orderBy: "date",
+    ascending: false,
+    filters: { farm_id: activeFarmId ?? null },
+  });
 
-  const farmTotals = useMemo(
-    () => calculateFarmTotals(consumption, DEMO_TARIFF.contractedDemandKw, DEMO_TARIFF.demandRate, 30),
-    [consumption]
-  );
+  const { data: rawTariffs, loading: loadingTariffs } = useCrud<EnergyTariff>({
+    table: "energy_tariffs",
+    filters: { farm_id: activeFarmId ?? null },
+  });
 
-  const demand = useMemo(
-    () => analyzeDemand(consumption, DEMO_TARIFF, [420, 435, 460, 480]),
-    [consumption]
-  );
+  const consumption = useMemo(() => rawConsumption.map(toConsumptionResult), [rawConsumption]);
+  const tariff = useMemo<TariffConfig | null>(() => rawTariffs.length > 0 ? toTariffConfig(rawTariffs[0]) : null, [rawTariffs]);
 
-  const simulations = useMemo(
-    () => simulateEnergyScenarios(consumption, DEMO_TARIFF),
-    [consumption]
-  );
+  const loading = loadingConsumption || loadingTariffs;
+  const hasData = consumption.length > 0 && tariff !== null;
 
-  const suggestions = useMemo(
-    () => generateEnergySuggestions(consumption, DEMO_TARIFF, demand),
-    [consumption, demand]
-  );
+  const farmTotals = useMemo(() => {
+    if (!hasData || !tariff) return null;
+    const days = new Set(consumption.map((c) => c.date)).size || 1;
+    return calculateFarmTotals(consumption, tariff.contractedDemandKw, tariff.demandRate, days);
+  }, [consumption, tariff, hasData]);
 
-  const hourlyCost = useMemo(() => buildHourlyCostProfile(DEMO_TARIFF), []);
+  const demand = useMemo(() => {
+    if (!hasData || !tariff) return null;
+    return analyzeDemand(consumption, tariff, []);
+  }, [consumption, tariff, hasData]);
+
+  const simulations = useMemo(() => {
+    if (!hasData || !tariff) return [];
+    return simulateEnergyScenarios(consumption, tariff);
+  }, [consumption, tariff, hasData]);
+
+  const suggestions = useMemo(() => {
+    if (!hasData || !tariff || !demand) return [];
+    return generateEnergySuggestions(consumption, tariff, demand);
+  }, [consumption, tariff, demand, hasData]);
+
+  const hourlyCost = useMemo(() => {
+    if (!tariff) return [];
+    return buildHourlyCostProfile(tariff);
+  }, [tariff]);
 
   const aggregated = useMemo(() => {
+    if (!hasData) return [];
     switch (viewMode) {
       case "pivot": return aggregateByPivot(consumption);
       case "pump": return aggregateByPumpHouse(consumption);
       case "culture": return aggregateByCulture(consumption);
       case "module": return aggregateByModule(consumption);
     }
-  }, [consumption, viewMode]);
+  }, [consumption, viewMode, hasData]);
 
-  const dailyAgg = useMemo(() => aggregateByDate(consumption), [consumption]);
-  const monthlyAgg = useMemo(() => aggregateByMonth(consumption), [consumption]);
-  const cultureAgg = useMemo(() => aggregateByCulture(consumption), [consumption]);
+  const dailyAgg = useMemo(() => hasData ? aggregateByDate(consumption) : [], [consumption, hasData]);
+  const monthlyAgg = useMemo(() => hasData ? aggregateByMonth(consumption) : [], [consumption, hasData]);
+  const cultureAgg = useMemo(() => hasData ? aggregateByCulture(consumption) : [], [consumption, hasData]);
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader titulo="Centro de Energia" descricao="Gestão energética completa para irrigação" />
+        <div className="mt-8 flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasData) {
+    return (
+      <div>
+        <PageHeader titulo="Centro de Energia" descricao="Gestão energética completa para irrigação" />
+        <div className="mt-6">
+          <EmptyState
+            title="Nenhum dado energético registrado"
+            description="Os dados de consumo energético serão exibidos aqui conforme a operação dos pivôs for registrada. Cadastre uma tarifa energética e registre o consumo dos pivôs para acompanhar custos, demanda e eficiência."
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -182,7 +249,7 @@ export default function EnergiaPage() {
       <div className="mt-6 space-y-6">
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-        {activeTab === "centro" && (
+        {activeTab === "centro" && farmTotals && demand && (
           <CentroTab
             totals={farmTotals}
             demand={demand}
@@ -201,7 +268,7 @@ export default function EnergiaPage() {
           />
         )}
 
-        {activeTab === "demanda" && (
+        {activeTab === "demanda" && demand && (
           <DemandaTab demand={demand} dailyAgg={dailyAgg} />
         )}
 
@@ -384,6 +451,10 @@ function ConsumoTab({
     { value: "module", label: "Por Módulo" },
   ];
 
+  if (aggregated.length === 0) {
+    return <EmptyState title="Sem dados de consumo" description="Nenhum registro de consumo encontrado para a visualização selecionada." />;
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-2">
@@ -468,7 +539,7 @@ function DemandaTab({
 
   const demandChart = dailyAgg.map((d) => ({
     ...d,
-    estimatedDemandKw: d.totalHours > 0 ? roundTo2(d.totalKwh / d.totalHours) : 0,
+    estimatedDemandKw: d.totalHours > 0 ? Math.round((d.totalKwh / d.totalHours) * 100) / 100 : 0,
   }));
 
   return (
@@ -490,10 +561,6 @@ function DemandaTab({
             <span>0 kW</span>
             <span>{demand.contractedDemandKw.toFixed(0)} kW (contratada)</span>
           </div>
-        </div>
-        <div className="mt-2 flex justify-between text-xs text-gray-500 dark:text-gray-400">
-          <span>Pico: {demand.peakDemandKw.toFixed(0)} kW</span>
-          <span>Utilização: {demand.contractedDemandKw > 0 ? ((demand.peakDemandKw / demand.contractedDemandKw) * 100).toFixed(0) : 0}%</span>
         </div>
       </Card>
 
@@ -517,7 +584,9 @@ function DemandaTab({
 // ── Simulações Tab ─────────────────────────────────────────────────────
 
 function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
-  const base = simulations[0];
+  if (simulations.length === 0) {
+    return <EmptyState title="Sem dados para simulação" description="Registre consumo energético para visualizar cenários de otimização." />;
+  }
 
   return (
     <div className="space-y-6">
@@ -547,9 +616,7 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
                   </span>
                 )}
               </div>
-
               <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{sim.description}</p>
-
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
                   <span className="text-gray-500 dark:text-gray-400">Consumo:</span>
@@ -560,17 +627,12 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
                   <span className="font-medium text-graphite-900 dark:text-white">R$ {sim.totalCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Ponta/Fora:</span>
-                  <span className="font-medium text-graphite-900 dark:text-white">{sim.peakKwh.toFixed(0)} / {sim.offPeakKwh.toFixed(0)} kWh</span>
-                </div>
-                <div className="flex justify-between text-xs">
                   <span className="text-gray-500 dark:text-gray-400">Demanda:</span>
                   <span className={`font-medium ${sim.exceedsContracted ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                     {sim.demandKw.toFixed(0)} kW {sim.exceedsContracted ? "(EXCEDE)" : ""}
                   </span>
                 </div>
               </div>
-
               {sim.savingsCost > 0 && (
                 <div className="mt-3 rounded-lg bg-green-100 p-2 text-center dark:bg-green-900/30">
                   <span className="text-xs font-semibold text-green-700 dark:text-green-400">
@@ -603,6 +665,10 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
 // ── Inteligência Tab ───────────────────────────────────────────────────
 
 function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
+  if (suggestions.length === 0) {
+    return <EmptyState title="Sem sugestões disponíveis" description="Registre dados de consumo energético para receber recomendações de otimização." />;
+  }
+
   const impactColors = {
     alto: "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20",
     medio: "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20",
@@ -625,13 +691,6 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
 
   return (
     <div className="space-y-6">
-      <Card>
-        <h3 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">Sugestões Inteligentes</h3>
-        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
-          Recomendações automáticas para otimizar o custo energético da sua irrigação.
-        </p>
-      </Card>
-
       <div className="grid gap-4 md:grid-cols-2">
         {suggestions.map((sug, i) => (
           <div key={i} className={`rounded-xl border p-4 ${impactColors[sug.impact]}`}>
@@ -648,10 +707,8 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
                 <span className="text-xs font-medium text-brand-600 dark:text-brand-400">Acionável</span>
               )}
             </div>
-
             <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">{sug.title}</h4>
             <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">{sug.description}</p>
-
             {sug.estimatedSavings > 0 && (
               <div className="flex items-center gap-3 rounded-lg bg-white/60 p-2 dark:bg-graphite-800/60">
                 <div>
