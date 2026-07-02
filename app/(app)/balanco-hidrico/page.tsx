@@ -30,11 +30,18 @@ import {
 } from "@/modules/water-balance/services";
 import { interpolateKc, identifyPhase, type CulturePhase } from "@/modules/culture/services";
 import {
-  resolveDaeReferenceDate,
-  computeRootDepth,
-  resolveDepletionFactor,
-} from "@/modules/assignment/services";
+  computePivotBalanceSeries,
+  type HydricStatus,
+} from "@/modules/water-balance/services";
 import { calculateEffectivePrecipitation } from "@/modules/weather/services";
+
+// mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
+const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
+  verde: "ideal",
+  amarelo: "atencao",
+  vermelho: "deficit_critico",
+  cinza: "ideal",
+};
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -90,6 +97,7 @@ interface Soil {
   name: string;
   field_capacity: number;
   wilting_point: number;
+  bulk_density: number;
   effective_depth: number;
 }
 
@@ -211,7 +219,7 @@ export default function BalancoHidricoPage() {
 
       const [{ data: cultureData }, { data: soilData }, { data: phaseData }] = await Promise.all([
         supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", a.culture_id).single(),
-        supabase.from("soils").select("id, name, field_capacity, wilting_point, effective_depth").eq("id", a.soil_id).single(),
+        supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", a.soil_id).single(),
         supabase.from("culture_phases").select("*").eq("culture_id", a.culture_id).order("phase_order"),
       ]);
 
@@ -300,101 +308,93 @@ export default function BalancoHidricoPage() {
         }
       }
 
-      // 5. Generate day sequence
-      const startMs = new Date(dateStart).getTime();
-      const endMs = new Date(dateEnd).getTime();
-      // DAE usa a data de emergência quando informada; senão, o plantio
-      const daeReferenceMs = new Date(resolveDaeReferenceDate(assignment)).getTime();
-
-      // Parâmetros de manejo conforme o modo do vínculo (padrão ou personalizado)
-      const custom = assignment.parameter_mode === "personalizado";
-      const effectiveEfficiency =
-        custom && assignment.irrigation_efficiency != null
-          ? assignment.irrigation_efficiency
-          : pivot.efficiency;
-
-      const initialStorage = calculateInitialStorage(
-        soil.field_capacity,
-        soil.wilting_point,
-        culture.root_depth,
-        soil.effective_depth,
-        1.0
-      );
-
-      let previousStored = initialStorage;
-      const rows: DailyBalanceRow[] = [];
-
-      for (let ms = startMs; ms <= endMs; ms += 86400000) {
-        const dateStr = new Date(ms).toISOString().slice(0, 10);
-        const dap = Math.max(0, Math.floor((ms - daeReferenceMs) / 86400000));
-
-        // Kc a partir das fases (fallback para 1.0 sem fases cadastradas)
-        const kc = phases.length > 0 ? interpolateKc(phases, dap) : 1.0;
-        // Crescimento radicular calculado automaticamente, limitado pelos
-        // valores de profundidade inicial/máxima quando personalizado
-        const rootDepth = computeRootDepth({
-          phases,
-          dae: dap,
-          cultureRootDepth: culture.root_depth,
-          initialRootDepth: custom ? assignment.initial_root_depth : null,
-          maxRootDepth: custom ? assignment.max_root_depth : null,
-        });
-        const phaseId = phases.length > 0 ? identifyPhase(phases, dap) : null;
-        const phaseName = phaseId?.phase.name ?? "—";
-        const basePFactor = resolveDepletionFactor(
-          assignment,
-          phaseId?.phase.depletion_factor,
-          culture.depletion_factor,
-        );
-
-        const weather = weatherByDate[dateStr] ?? { et0: 0, precip: 0 };
-        const irrigation = irrigationByDate[dateStr] ?? 0;
-
-        const result = calculateDailyBalance({
-          et0: weather.et0,
-          precipitation: weather.precip,
-          irrigationApplied: irrigation,
-          previousStoredWater: previousStored,
-          fieldCapacity: soil.field_capacity,
-          wiltingPoint: soil.wilting_point,
-          rootDepth,
-          effectiveSoilDepth: soil.effective_depth,
-          kc,
-          depletionFactor: basePFactor,
-          pivotEfficiency: effectiveEfficiency,
-          pivotArea: pivot.area,
-          pivotFlowRate: pivot.flow_rate,
-        });
-
-        rows.push({ ...result, date: dateStr, phase: phaseName });
-        previousStored = result.storedWater;
+      // 5. Motor central do balanço hídrico (fonte única de cálculo)
+      const engineWeatherByDate: Record<string, { et0: number; precipitation: number }> = {};
+      for (const [d, w] of Object.entries(weatherByDate)) {
+        engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precip };
       }
+
+      const series = computePivotBalanceSeries({
+        assignment: {
+          id: assignment.id,
+          planting_date: assignment.planting_date,
+          emergence_date: assignment.emergence_date,
+          parameter_mode: assignment.parameter_mode,
+          initial_root_depth: assignment.initial_root_depth,
+          max_root_depth: assignment.max_root_depth,
+          irrigation_efficiency: assignment.irrigation_efficiency,
+          depletion_factor: assignment.depletion_factor,
+        },
+        culture: { root_depth: culture.root_depth, depletion_factor: culture.depletion_factor },
+        phases,
+        soil: {
+          field_capacity: soil.field_capacity,
+          wilting_point: soil.wilting_point,
+          bulk_density: soil.bulk_density,
+          effective_depth: soil.effective_depth,
+        },
+        pivot: { efficiency: pivot.efficiency, area: pivot.area, flow_rate: pivot.flow_rate },
+        weatherByDate: engineWeatherByDate,
+        irrigationByDate,
+        dateStart,
+        dateEnd,
+      });
+
+      // adapta a saída do motor ao formato de exibição da tela
+      const rows: DailyBalanceRow[] = series.map((d) => ({
+        date: d.date,
+        phase: d.phase,
+        et0: d.et0,
+        kc: d.kc,
+        etc: d.etc,
+        precipitation: d.precipitation,
+        effectivePrecipitation: d.effectivePrecipitation,
+        irrigationApplied: d.irrigation,
+        rootDepth: d.rootDepth,
+        cad: d.adt,
+        afd: d.afd,
+        storedWater: d.storage,
+        depletionFactor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
+        deficit: d.deficit,
+        surplus: 0,
+        netDepth: d.recommendedNetDepth,
+        grossDepth: d.recommendedGrossDepth,
+        volumeNeeded: d.recommendedVolume,
+        irrigationTime: d.estimatedIrrigationTime,
+        waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
+      }));
 
       setBalanceRows(rows);
 
-      // 6. Persist to water_balances table
-      if (rows.length > 0) {
-        const upsertData = rows.map((r) => ({
+      // 6. Persiste o resultado do motor em water_balances (item 14)
+      if (series.length > 0) {
+        const upsertData = series.map((d) => ({
           pivot_crop_assignment_id: assignment.id,
-          date: r.date,
-          et0: r.et0,
-          kc: r.kc,
-          etc: r.etc,
-          precipitation: r.precipitation,
-          effective_precipitation: r.effectivePrecipitation,
-          applied_depth: r.irrigationApplied,
-          root_depth: r.rootDepth,
-          cad: r.cad,
-          afd: r.afd,
-          soil_storage: r.storedWater,
-          depletion_factor: r.depletionFactor,
-          deficit: r.deficit,
-          surplus: r.surplus,
-          net_depth: r.netDepth,
-          gross_depth: r.grossDepth,
-          volume_needed: r.volumeNeeded,
-          irrigation_time: r.irrigationTime,
-          water_status: r.waterStatus,
+          date: d.date,
+          dae: d.dae,
+          phase: d.phase,
+          et0: d.et0,
+          kc: d.kc,
+          etc: d.etc,
+          precipitation: d.precipitation,
+          effective_precipitation: d.effectivePrecipitation,
+          applied_depth: d.irrigation,
+          effective_irrigation: d.effectiveIrrigation,
+          root_depth: d.rootDepth,
+          cad: d.adt,
+          afd: d.afd,
+          soil_storage: d.storage,
+          depletion_factor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
+          deficit: d.deficit,
+          depletion: d.depletion,
+          net_depth: d.recommendedNetDepth,
+          gross_depth: d.recommendedGrossDepth,
+          volume_needed: d.recommendedVolume,
+          irrigation_time: d.estimatedIrrigationTime,
+          should_irrigate: d.shouldIrrigate,
+          recommendation_reason: d.recommendationReason,
+          hydric_status: d.status,
+          water_status: HYDRIC_TO_WATER_STATUS[d.status],
         }));
 
         await supabase
