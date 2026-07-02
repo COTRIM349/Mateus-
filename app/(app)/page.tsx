@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
 import { useCrud } from "@/lib/hooks/use-crud";
+import { useImplantationStatus } from "@/lib/hooks";
+import { ImplantationGuide } from "@/components/onboarding";
 import { radiusFromArea } from "@/utils/geo";
 
 const PivotMap = dynamic(
@@ -121,11 +123,13 @@ export default function DashboardPage() {
     ascending: true,
   });
 
+  const implantation = useImplantationStatus();
+
   const activePivots = useMemo(() => pivots.filter((p) => p.active), [pivots]);
   const activeReservoirs = useMemo(() => reservoirs.filter((r) => r.active), [reservoirs]);
   const activePumpHouses = useMemo(() => pumpHouses.filter((ph) => ph.active), [pumpHouses]);
 
-  const loading = loadingPivots || loadingReservoirs || loadingPumpHouses;
+  const loading = loadingPivots || loadingReservoirs || loadingPumpHouses || implantation.loading;
 
   const totalArea = useMemo(() => activePivots.reduce((s, p) => s + p.area, 0), [activePivots]);
   const irrigatingPivots = useMemo(() => activePivots.filter((p) => p.status === "irrigando"), [activePivots]);
@@ -155,7 +159,7 @@ export default function DashboardPage() {
         descricao={activeFarm ? `${activeFarm.name} · Controle em tempo real` : "Controle em tempo real da operação"}
       />
 
-      {profile && activePivots.length > 0 && (
+      {profile && implantation.foundationComplete && (
         <Card className="border-brand-200 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white">
@@ -175,17 +179,11 @@ export default function DashboardPage() {
         </Card>
       )}
 
-      {activePivots.length === 0 ? (
-        <EmptyState
-          title="Nenhum pivô cadastrado"
-          description="Cadastre seus pivôs para visualizar o painel de controle operacional com dados reais da sua fazenda."
-          icon={
-            <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6l4 2m6-2a10 10 0 11-20 0 10 10 0 0120 0z" />
-            </svg>
-          }
-          actionLabel="Ir para Pivôs"
-          onAction={() => { window.location.href = "/pivos"; }}
+      {!implantation.foundationComplete ? (
+        <ImplantationGuide
+          steps={implantation.foundationSteps}
+          progress={implantation.progress}
+          nextStep={implantation.nextStep}
         />
       ) : (
         <>
