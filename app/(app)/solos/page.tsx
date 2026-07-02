@@ -16,6 +16,7 @@ import {
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
 import { useCrud } from "@/lib/hooks";
+import { PrerequisiteNotice } from "@/components/onboarding";
 import { SOIL_TEXTURES } from "@/constants/brazil";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -102,11 +103,12 @@ export default function SolosPage() {
     return (
       <div className="space-y-6">
         <PageHeader titulo="Solos" descricao="Motor de dados de solo para balanço hídrico" />
-        <Card>
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
-            Selecione uma fazenda ativa para gerenciar solos.
-          </p>
-        </Card>
+        <PrerequisiteNotice
+          title="Cadastre uma fazenda primeiro"
+          description="Os perfis de solo pertencem a uma fazenda. Cadastre e selecione uma fazenda ativa para registrar os solos."
+          actionLabel="Ir para Fazendas"
+          actionHref="/fazendas"
+        />
       </div>
     );
   }
