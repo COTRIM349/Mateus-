@@ -2,7 +2,9 @@
 
 import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, StatCard, Tabs, Table, type Column, ChartCard } from "@/components/ui";
+import { Card, StatCard, Tabs, Table, type Column, ChartCard, EmptyState } from "@/components/ui";
+import { useAuth } from "@/components/providers";
+import { useCrud } from "@/lib/hooks";
 import {
   type ApportionmentResult,
   type ApportionmentInput,
@@ -26,19 +28,29 @@ import {
   Cell,
 } from "recharts";
 
-// ── Demo Data ──────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────
 
-const DEMO_ITEMS: ApportionmentInput[] = [
-  { pivotId: "p1", pivotName: "Pivô Central 1", cultureId: "c1", cultureName: "Soja", seasonId: "s1", moduleName: "Módulo A", pumpHouseId: "ph1", costCenter: "CC-Irrigação", area: 120, volumeM3: 48000, hours: 180 },
-  { pivotId: "p2", pivotName: "Pivô Central 2", cultureId: "c1", cultureName: "Soja", seasonId: "s1", moduleName: "Módulo A", pumpHouseId: "ph1", costCenter: "CC-Irrigação", area: 95, volumeM3: 38500, hours: 155 },
-  { pivotId: "p3", pivotName: "Pivô Leste 1", cultureId: "c2", cultureName: "Milho", seasonId: "s1", moduleName: "Módulo B", pumpHouseId: "ph2", costCenter: "CC-Irrigação", area: 80, volumeM3: 35200, hours: 140 },
-  { pivotId: "p4", pivotName: "Pivô Leste 2", cultureId: "c2", cultureName: "Milho", seasonId: "s1", moduleName: "Módulo B", pumpHouseId: "ph2", costCenter: "CC-Irrigação", area: 110, volumeM3: 44000, hours: 165 },
-  { pivotId: "p5", pivotName: "Pivô Norte 1", cultureId: "c3", cultureName: "Feijão", seasonId: "s1", moduleName: "Módulo C", pumpHouseId: "ph3", costCenter: "CC-Irrigação", area: 65, volumeM3: 22750, hours: 110 },
-  { pivotId: "p6", pivotName: "Pivô Sul 1", cultureId: "c4", cultureName: "Algodão", seasonId: "s1", moduleName: "Módulo A", pumpHouseId: "ph1", costCenter: "CC-Irrigação", area: 140, volumeM3: 56000, hours: 200 },
-];
+interface EnergyApportionment {
+  id: string;
+  farm_id: string;
+  pivot_id: string;
+  pivot_name: string | null;
+  culture_id: string | null;
+  culture_name: string | null;
+  season_id: string | null;
+  module_name: string | null;
+  pump_house_id: string | null;
+  cost_center: string | null;
+  area: number;
+  volume_m3: number;
+  hours: number;
+  total_kwh: number;
+  total_cost: number;
+  period_start: string;
+  period_end: string;
+}
 
-const DEMO_TOTAL_KWH = 42850;
-const DEMO_TOTAL_COST = 19825.40;
+// ── Constants ──────────────────────────────────────────────────────────
 
 const PIE_COLORS = ["#22c55e", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6", "#06b6d4"];
 
@@ -49,29 +61,82 @@ const TABS = [
   { id: "comparativo", label: "Comparativo" },
 ];
 
+// ── Helpers ─────────────────────────────────────────────────────────────
+
+function toApportionmentInput(row: EnergyApportionment): ApportionmentInput {
+  return {
+    pivotId: row.pivot_id,
+    pivotName: row.pivot_name ?? "—",
+    cultureId: row.culture_id ?? "",
+    cultureName: row.culture_name ?? "",
+    seasonId: row.season_id ?? "",
+    moduleName: row.module_name ?? "",
+    pumpHouseId: row.pump_house_id ?? "",
+    costCenter: row.cost_center ?? "",
+    area: row.area,
+    volumeM3: row.volume_m3,
+    hours: row.hours,
+  };
+}
+
 // ── Page ────────────────────────────────────────────────────────────────
 
 export default function RateioPage() {
+  const { activeFarmId } = useAuth();
   const [activeTab, setActiveTab] = useState("pivot");
   const [method, setMethod] = useState<ApportionmentMethod>("volume");
 
-  const results = useMemo(
-    () => calculateApportionment(DEMO_TOTAL_KWH, DEMO_TOTAL_COST, DEMO_ITEMS, method),
-    [method]
-  );
+  const { data: rawData, loading } = useCrud<EnergyApportionment>({
+    table: "energy_apportionment",
+    filters: { farm_id: activeFarmId ?? null },
+  });
 
-  const byCulture = useMemo(() => aggregateApportionmentByCulture(results), [results]);
-  const byModule = useMemo(() => aggregateApportionmentByModule(results), [results]);
+  const items = useMemo(() => rawData.map(toApportionmentInput), [rawData]);
+  const totalKwh = useMemo(() => rawData.reduce((s, r) => s + r.total_kwh, 0), [rawData]);
+  const totalCost = useMemo(() => rawData.reduce((s, r) => s + r.total_cost, 0), [rawData]);
 
-  const totalArea = DEMO_ITEMS.reduce((s, i) => s + i.area, 0);
-  const totalVolume = DEMO_ITEMS.reduce((s, i) => s + i.volumeM3, 0);
+  const results = useMemo(() => {
+    if (items.length === 0) return [];
+    return calculateApportionment(totalKwh, totalCost, items, method);
+  }, [items, totalKwh, totalCost, method]);
+
+  const byCulture = useMemo(() => results.length > 0 ? aggregateApportionmentByCulture(results) : [], [results]);
+  const byModule = useMemo(() => results.length > 0 ? aggregateApportionmentByModule(results) : [], [results]);
+
+  if (loading) {
+    return (
+      <div>
+        <PageHeader titulo="Rateio de Custos" descricao="Rateio automático de energia por pivô, cultura, safra e módulo" />
+        <div className="mt-8 flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+        </div>
+      </div>
+    );
+  }
+
+  if (items.length === 0) {
+    return (
+      <div>
+        <PageHeader titulo="Rateio de Custos" descricao="Rateio automático de energia por pivô, cultura, safra e módulo" />
+        <div className="mt-6">
+          <EmptyState
+            title="Nenhum dado para rateio"
+            description="O rateio de custos energéticos será calculado automaticamente a partir dos registros de consumo dos pivôs. Registre o consumo energético na seção de Energia para visualizar o rateio."
+          />
+        </div>
+      </div>
+    );
+  }
+
+  const totalArea = items.reduce((s, i) => s + i.area, 0);
+  const totalVolume = items.reduce((s, i) => s + i.volumeM3, 0);
 
   const metrics = [
-    { id: "kwh", title: "Energia Total", value: `${DEMO_TOTAL_KWH.toLocaleString("pt-BR")} kWh`, description: "Período selecionado" },
-    { id: "cost", title: "Custo Total", value: `R$ ${DEMO_TOTAL_COST.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, description: "A ser rateado" },
-    { id: "pivots", title: "Pivôs", value: String(DEMO_ITEMS.length), description: `${totalArea.toFixed(0)} ha total` },
+    { id: "kwh", title: "Energia Total", value: `${totalKwh.toLocaleString("pt-BR")} kWh`, description: "Período selecionado" },
+    { id: "cost", title: "Custo Total", value: `R$ ${totalCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, description: "A ser rateado" },
+    { id: "pivots", title: "Pivôs", value: String(items.length), description: `${totalArea.toFixed(0)} ha total` },
     { id: "area", title: "Área Irrigada", value: `${totalArea.toFixed(0)} ha`, description: `${totalVolume.toLocaleString("pt-BR")} m³ total` },
-    { id: "kwhha", title: "kWh/ha (médio)", value: (DEMO_TOTAL_KWH / totalArea).toFixed(1), description: `R$ ${(DEMO_TOTAL_COST / totalArea).toFixed(2)}/ha` },
+    { id: "kwhha", title: "kWh/ha (médio)", value: totalArea > 0 ? (totalKwh / totalArea).toFixed(1) : "0", description: totalArea > 0 ? `R$ ${(totalCost / totalArea).toFixed(2)}/ha` : "—" },
     { id: "method", title: "Método de Rateio", value: APPORTIONMENT_METHOD_CONFIG[method].label, description: APPORTIONMENT_METHOD_CONFIG[method].description },
   ];
 
@@ -171,6 +236,10 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
 // ── Cultura Tab ────────────────────────────────────────────────────────
 
 function CulturaTab({ results }: { results: ApportionmentResult[] }) {
+  if (results.length === 0) {
+    return <EmptyState title="Sem dados por cultura" description="Nenhum rateio por cultura disponível." />;
+  }
+
   const columns: Column<ApportionmentResult>[] = [
     { header: "Cultura", render: (r) => <span className="font-medium">{r.cultureName}</span> },
     { header: "Área (ha)", render: (r) => r.area.toFixed(1), align: "right" },
@@ -180,7 +249,6 @@ function CulturaTab({ results }: { results: ApportionmentResult[] }) {
     { header: "Custo (R$)", render: (r) => r.apportionedCost.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }), align: "right" },
     { header: "kWh/ha", render: (r) => r.kwhPerHa.toFixed(1), align: "right" },
     { header: "R$/ha", render: (r) => r.costPerHa.toFixed(2), align: "right" },
-    { header: "kWh/m³", render: (r) => r.kwhPerM3.toFixed(3), align: "right" },
     { header: "R$/m³", render: (r) => r.costPerM3.toFixed(3), align: "right" },
   ];
 
@@ -234,6 +302,10 @@ function CulturaTab({ results }: { results: ApportionmentResult[] }) {
 // ── Módulo Tab ─────────────────────────────────────────────────────────
 
 function ModuloTab({ results }: { results: ApportionmentResult[] }) {
+  if (results.length === 0) {
+    return <EmptyState title="Sem dados por módulo" description="Nenhum rateio por módulo disponível." />;
+  }
+
   const columns: Column<ApportionmentResult>[] = [
     { header: "Módulo", render: (r) => <span className="font-medium">{r.moduleName}</span> },
     { header: "Área (ha)", render: (r) => r.area.toFixed(1), align: "right" },
@@ -287,7 +359,7 @@ function ComparativoTab({
         <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Análise Comparativa de Eficiência</h3>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {results.map((r, i) => (
+          {results.map((r) => (
             <div key={r.pivotId} className="rounded-xl border border-gray-200 p-4 dark:border-graphite-700">
               <h4 className="mb-1 text-sm font-semibold text-graphite-900 dark:text-white">{r.pivotName}</h4>
               <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{r.cultureName} — {r.moduleName}</p>
@@ -316,10 +388,7 @@ function ComparativoTab({
               <div className="mt-3">
                 <div className="text-xs text-gray-500 dark:text-gray-400">Participação</div>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
-                  <div
-                    className="h-full rounded-full bg-brand-500"
-                    style={{ width: `${r.sharePct}%` }}
-                  />
+                  <div className="h-full rounded-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
                 </div>
               </div>
             </div>

@@ -2,44 +2,37 @@
 
 import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Card, StatCard, Tabs, Table, type Column } from "@/components/ui";
+import { Card, StatCard, Tabs, Table, type Column, EmptyState } from "@/components/ui";
 import { formatBRL, formatNumber, formatPercent, formatDate } from "@/utils/format";
-import { roundTo, sum, average } from "@/utils/math";
+import { roundTo, sum } from "@/utils/math";
+import { useAuth } from "@/components/providers";
+import { useCrud } from "@/lib/hooks";
 import {
   type DailyBalanceRow,
-  calculateDailyBalance,
   calculateSummary,
   WATER_STATUS_CONFIG,
 } from "@/modules/water-balance/services";
 import {
   type Recommendation,
-  type PivotContext,
-  generateRecommendation,
   rankRecommendations,
   OPERATIONAL_STATUS_CONFIG,
   PRIORITY_CONFIG,
 } from "@/modules/recommendation/services";
 import {
   type ConsumptionResult,
-  type TariffConfig,
-  calculateConsumption,
   calculateFarmTotals,
   aggregateByPivot,
   aggregateByCulture,
   aggregateByModule,
   aggregateByDate,
-  analyzeDemand,
 } from "@/modules/energy/services";
 import {
   type ReportType,
   type ExportFormat,
   type HistoryDimension,
-  type ComparativeDimension,
   type AuditAction,
   type AuditLogEntry,
-  type ComparativeRow,
   type ReportKPIs,
-  type PeriodSummary,
   REPORT_TYPE_CONFIG,
   EXPORT_FORMAT_CONFIG,
   AUDIT_ACTION_CONFIG,
@@ -47,15 +40,10 @@ import {
   REPORT_STATUS_CONFIG,
   calculateReportKPIs,
   calculatePeriodSummary,
-  generateComparative,
-  exportToCSV,
-  generateReportFileName,
 } from "@/modules/reports/services";
 import {
   BarChart,
   Bar,
-  LineChart,
-  Line,
   PieChart,
   Pie,
   Cell,
@@ -72,205 +60,185 @@ import {
   PolarRadiusAxis,
 } from "recharts";
 
-// ── Mock data ─────────────────────────────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────
 
-const MOCK_TARIFF: TariffConfig = {
-  tariffType: "verde",
-  ratePeak: 0.95,
-  rateOffPeak: 0.42,
-  rateReserved: 0.35,
-  demandRate: 45.0,
-  peakStart: 18,
-  peakEnd: 21,
-  contractedDemandKw: 350,
-};
-
-const PIVOT_NAMES = [
-  "Pivô Central 1", "Pivô Central 2", "Pivô Central 3", "Pivô Central 4",
-  "Pivô Central 5", "Pivô Central 6", "Pivô Central 7", "Pivô Central 8",
-];
-
-const CULTURE_NAMES = ["Soja", "Milho", "Algodão", "Feijão"];
-const PHASES = ["Vegetativo", "Floração", "Enchimento", "Maturação"];
-const MODULE_NAMES = ["Módulo Norte", "Módulo Sul", "Módulo Leste", "Módulo Oeste"];
-
-function buildMockBalanceRows(): DailyBalanceRow[] {
-  const rows: DailyBalanceRow[] = [];
-  const baseDate = new Date(2026, 5, 1);
-  for (let d = 0; d < 30; d++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() + d);
-    const dateStr = date.toISOString().split("T")[0];
-    for (let p = 0; p < PIVOT_NAMES.length; p++) {
-      const et0 = 4 + Math.random() * 3;
-      const kc = 0.6 + Math.random() * 0.6;
-      const etc = roundTo(et0 * kc, 2);
-      const precip = Math.random() > 0.7 ? Math.random() * 20 : 0;
-      const irrig = d % 3 === p % 3 ? 8 + Math.random() * 10 : 0;
-      const cad = 60 + p * 5;
-      const storedWater = roundTo(Math.max(5, cad * (0.4 + Math.random() * 0.5) + irrig - etc), 2);
-      const afd = roundTo(cad * 0.55, 2);
-      const stressThreshold = cad - afd;
-      const deficit = storedWater < stressThreshold ? roundTo(stressThreshold - storedWater, 2) : 0;
-      const waterStatus =
-        storedWater >= cad ? "saturado" as const :
-        storedWater >= stressThreshold ? "ideal" as const :
-        storedWater / cad >= 0.3 ? "atencao" as const :
-        storedWater / cad >= 0.1 ? "deficit" as const :
-        "deficit_critico" as const;
-
-      rows.push({
-        date: dateStr,
-        phase: PHASES[p % PHASES.length],
-        pivotId: `p${p + 1}`,
-        pivotName: PIVOT_NAMES[p],
-        et0: roundTo(et0, 2),
-        kc: roundTo(kc, 3),
-        etc,
-        precipitation: roundTo(precip, 1),
-        effectivePrecipitation: roundTo(precip * 0.8, 1),
-        irrigationApplied: roundTo(irrig, 1),
-        rootDepth: 0.4 + p * 0.05,
-        cad,
-        afd,
-        storedWater,
-        depletionFactor: 0.55,
-        deficit,
-        surplus: storedWater > cad ? roundTo(storedWater - cad, 2) : 0,
-        netDepth: roundTo(Math.max(0, cad - storedWater), 2),
-        grossDepth: roundTo(Math.max(0, (cad - storedWater) / 0.85), 2),
-        volumeNeeded: roundTo(Math.max(0, (cad - storedWater) / 0.85 * (50 + p * 10) * 10), 0),
-        irrigationTime: roundTo(Math.max(0, (cad - storedWater) / 0.85 * (50 + p * 10) * 10 / 150), 2),
-        waterStatus,
-      });
-    }
-  }
-  return rows;
+interface WaterBalanceRecord {
+  id: string;
+  farm_id: string;
+  pivot_id: string;
+  date: string;
+  phase: string;
+  et0: number;
+  kc: number;
+  etc: number;
+  precipitation: number;
+  effective_precipitation: number;
+  irrigation_applied: number;
+  root_depth: number;
+  cad: number;
+  afd: number;
+  stored_water: number;
+  depletion_factor: number;
+  deficit: number;
+  surplus: number;
+  net_depth: number;
+  gross_depth: number;
+  volume_needed: number;
+  irrigation_time: number;
+  water_status: string;
 }
 
-function buildMockEnergyResults(): ConsumptionResult[] {
-  const results: ConsumptionResult[] = [];
-  const baseDate = new Date(2026, 5, 1);
-  for (let d = 0; d < 30; d++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() + d);
-    const dateStr = date.toISOString().split("T")[0];
-    for (let p = 0; p < PIVOT_NAMES.length; p++) {
-      if (d % 3 !== p % 3) continue;
-      const area = 50 + p * 10;
-      const hours = 4 + Math.random() * 6;
-      const powerKw = 75 + p * 15;
-      const totalKwh = roundTo(powerKw * hours, 2);
-      const peakRatio = Math.random() * 0.3;
-      const peakKwh = roundTo(totalKwh * peakRatio, 2);
-      const offPeakKwh = roundTo(totalKwh * (1 - peakRatio), 2);
-      const costPeak = roundTo(peakKwh * MOCK_TARIFF.ratePeak, 2);
-      const costOffPeak = roundTo(offPeakKwh * MOCK_TARIFF.rateOffPeak, 2);
-      const costTotal = roundTo(costPeak + costOffPeak, 2);
-      const volumeM3 = roundTo(area * 10 * (8 + Math.random() * 10) / 0.85, 0);
-      const depthMm = roundTo(volumeM3 / (area * 10), 1);
-
-      results.push({
-        pivotId: `p${p + 1}`,
-        pivotName: PIVOT_NAMES[p],
-        pumpHouseId: `pump-${(p % 2) + 1}`,
-        pumpHouseName: `CB ${(p % 2) + 1}`,
-        cultureName: CULTURE_NAMES[p % CULTURE_NAMES.length],
-        cultureId: `culture-${(p % CULTURE_NAMES.length) + 1}`,
-        seasonId: "safra-2026",
-        moduleName: MODULE_NAMES[p % MODULE_NAMES.length],
-        area,
-        date: dateStr,
-        operatingHours: roundTo(hours, 1),
-        powerKw,
-        totalKwh,
-        peakKwh,
-        offPeakKwh,
-        costPeak,
-        costOffPeak,
-        costTotal,
-        demandKw: powerKw,
-        volumeM3,
-        depthMm,
-        kwhPerM3: volumeM3 > 0 ? roundTo(totalKwh / volumeM3, 4) : 0,
-        kwhPerMm: depthMm > 0 ? roundTo(totalKwh / depthMm, 2) : 0,
-        kwhPerHa: area > 0 ? roundTo(totalKwh / area, 2) : 0,
-        costPerM3: volumeM3 > 0 ? roundTo(costTotal / volumeM3, 4) : 0,
-        costPerMm: depthMm > 0 ? roundTo(costTotal / depthMm, 2) : 0,
-        costPerHa: area > 0 ? roundTo(costTotal / area, 2) : 0,
-      });
-    }
-  }
-  return results;
+interface EnergyConsumptionRecord {
+  id: string;
+  farm_id: string;
+  pivot_id: string;
+  pivot_name: string | null;
+  pump_house_id: string | null;
+  pump_house_name: string | null;
+  culture_name: string | null;
+  culture_id: string | null;
+  season_id: string | null;
+  module_name: string | null;
+  area: number;
+  date: string;
+  operating_hours: number;
+  power_kw: number;
+  total_kwh: number;
+  peak_kwh: number;
+  off_peak_kwh: number;
+  cost_peak: number;
+  cost_off_peak: number;
+  cost_total: number;
+  demand_kw: number;
+  volume_m3: number;
+  depth_mm: number;
 }
 
-function buildMockRecommendations(): Recommendation[] {
-  return PIVOT_NAMES.map((name, i) => {
-    const score = 20 + Math.random() * 70;
-    const priority = score >= 80 ? "critica" as const : score >= 60 ? "alta" as const : score >= 40 ? "media" as const : score >= 20 ? "baixa" as const : "sem_necessidade" as const;
-    const status = score >= 80 ? "irrigar_imediatamente" as const : score >= 60 ? "irrigar_hoje" as const : score >= 40 ? "irrigar_amanha" as const : score >= 20 ? "monitorar" as const : "nao_irrigar" as const;
-    return {
-      pivotId: `p${i + 1}`,
-      pivotName: name,
-      shouldIrrigate: score >= 40,
-      operationalStatus: status,
-      priority,
-      priorityScore: roundTo(score, 1),
-      productiveRisk: roundTo(score * 0.7, 1),
-      netDepth: roundTo(5 + Math.random() * 15, 1),
-      grossDepth: roundTo(8 + Math.random() * 18, 1),
-      volumeM3: roundTo(500 + Math.random() * 2000, 0),
-      irrigationTimeH: roundTo(3 + Math.random() * 8, 1),
-      currentArm: roundTo(20 + Math.random() * 50, 1),
-      currentCad: roundTo(60 + i * 5, 1),
-      currentAfd: roundTo(33 + i * 3, 1),
-      currentDeficit: roundTo(Math.random() * 15, 1),
-      currentEtc: roundTo(3 + Math.random() * 4, 1),
-      currentKc: roundTo(0.6 + Math.random() * 0.6, 2),
-      rootDepth: roundTo(0.3 + Math.random() * 0.4, 2),
-      cropPhase: PHASES[i % PHASES.length],
-      depletionFactor: 0.55,
-      peakRestricted: Math.random() > 0.7,
-      recommendedStart: score >= 60 ? "06:00" : "—",
-      reason: `ARM em ${(40 + Math.random() * 40).toFixed(0)}% do CAD.`,
-      observations: "",
-    };
-  });
+interface RecommendationRecord {
+  id: string;
+  farm_id: string;
+  pivot_id: string;
+  pivot_name: string | null;
+  should_irrigate: boolean;
+  operational_status: string;
+  priority: string;
+  priority_score: number;
+  productive_risk: number;
+  net_depth: number;
+  gross_depth: number;
+  volume_m3: number;
+  irrigation_time_h: number;
+  current_arm: number;
+  current_cad: number;
+  current_afd: number;
+  current_deficit: number;
+  current_etc: number;
+  current_kc: number;
+  root_depth: number;
+  crop_phase: string;
+  depletion_factor: number;
+  peak_restricted: boolean;
+  recommended_start: string | null;
+  reason: string;
+  observations: string | null;
 }
 
-function buildMockAuditLog(): AuditLogEntry[] {
-  const actions: AuditAction[] = ["create", "update", "delete", "export", "generate", "approve"];
-  const entities = ["Pivô Central 1", "Safra 2026", "Estação Automática", "Cultura Soja", "Programação Diária", "Relatório Mensal", "Tarifa Verde", "Solo Módulo Norte"];
-  const entityTypes = ["pivot", "season", "station", "culture", "schedule", "report", "tariff", "soil"];
-  const users = ["João Silva", "Maria Souza", "Carlos Oliveira", "Ana Costa"];
+interface PivotRecord {
+  id: string;
+  farm_id: string;
+  name: string;
+  area: number;
+  status: string;
+}
 
-  const entries: AuditLogEntry[] = [];
-  const baseDate = new Date(2026, 5, 20);
+// ── Converters ─────────────────────────────────────────────────────────
 
-  for (let i = 0; i < 30; i++) {
-    const date = new Date(baseDate);
-    date.setDate(date.getDate() - Math.floor(i / 3));
-    date.setHours(8 + Math.floor(Math.random() * 10), Math.floor(Math.random() * 60));
+function toBalanceRow(r: WaterBalanceRecord, pivotName: string): DailyBalanceRow {
+  return {
+    date: r.date,
+    phase: r.phase,
+    pivotId: r.pivot_id,
+    pivotName,
+    et0: r.et0,
+    kc: r.kc,
+    etc: r.etc,
+    precipitation: r.precipitation,
+    effectivePrecipitation: r.effective_precipitation,
+    irrigationApplied: r.irrigation_applied,
+    rootDepth: r.root_depth,
+    cad: r.cad,
+    afd: r.afd,
+    storedWater: r.stored_water,
+    depletionFactor: r.depletion_factor,
+    deficit: r.deficit,
+    surplus: r.surplus,
+    netDepth: r.net_depth,
+    grossDepth: r.gross_depth,
+    volumeNeeded: r.volume_needed,
+    irrigationTime: r.irrigation_time,
+    waterStatus: r.water_status as DailyBalanceRow["waterStatus"],
+  };
+}
 
-    const action = actions[i % actions.length];
-    const entityIdx = i % entities.length;
+function toConsumptionResult(r: EnergyConsumptionRecord): ConsumptionResult {
+  return {
+    pivotId: r.pivot_id,
+    pivotName: r.pivot_name ?? "—",
+    pumpHouseId: r.pump_house_id ?? "",
+    pumpHouseName: r.pump_house_name ?? "",
+    cultureName: r.culture_name ?? "",
+    cultureId: r.culture_id ?? "",
+    seasonId: r.season_id ?? "",
+    moduleName: r.module_name ?? "",
+    area: r.area,
+    date: r.date,
+    operatingHours: r.operating_hours,
+    powerKw: r.power_kw,
+    totalKwh: r.total_kwh,
+    peakKwh: r.peak_kwh,
+    offPeakKwh: r.off_peak_kwh,
+    costPeak: r.cost_peak,
+    costOffPeak: r.cost_off_peak,
+    costTotal: r.cost_total,
+    demandKw: r.demand_kw,
+    volumeM3: r.volume_m3,
+    depthMm: r.depth_mm,
+    kwhPerM3: r.volume_m3 > 0 ? r.total_kwh / r.volume_m3 : 0,
+    kwhPerMm: r.depth_mm > 0 ? r.total_kwh / r.depth_mm : 0,
+    kwhPerHa: r.area > 0 ? r.total_kwh / r.area : 0,
+    costPerM3: r.volume_m3 > 0 ? r.cost_total / r.volume_m3 : 0,
+    costPerMm: r.depth_mm > 0 ? r.cost_total / r.depth_mm : 0,
+    costPerHa: r.area > 0 ? r.cost_total / r.area : 0,
+  };
+}
 
-    entries.push({
-      id: `audit-${i + 1}`,
-      farmId: "farm-1",
-      userId: `user-${(i % users.length) + 1}`,
-      userName: users[i % users.length],
-      action,
-      entityType: entityTypes[entityIdx],
-      entityId: `entity-${entityIdx + 1}`,
-      entityName: entities[entityIdx],
-      changes: action === "update" ? { campo: { from: "valor antigo", to: "valor novo" } } : {},
-      metadata: {},
-      ipAddress: `192.168.1.${10 + i}`,
-      createdAt: date.toISOString(),
-    });
-  }
-  return entries;
+function toRecommendation(r: RecommendationRecord): Recommendation {
+  return {
+    pivotId: r.pivot_id,
+    pivotName: r.pivot_name ?? "—",
+    shouldIrrigate: r.should_irrigate,
+    operationalStatus: r.operational_status as Recommendation["operationalStatus"],
+    priority: r.priority as Recommendation["priority"],
+    priorityScore: r.priority_score,
+    productiveRisk: r.productive_risk,
+    netDepth: r.net_depth,
+    grossDepth: r.gross_depth,
+    volumeM3: r.volume_m3,
+    irrigationTimeH: r.irrigation_time_h,
+    currentArm: r.current_arm,
+    currentCad: r.current_cad,
+    currentAfd: r.current_afd,
+    currentDeficit: r.current_deficit,
+    currentEtc: r.current_etc,
+    currentKc: r.current_kc,
+    rootDepth: r.root_depth,
+    cropPhase: r.crop_phase,
+    depletionFactor: r.depletion_factor,
+    peakRestricted: r.peak_restricted,
+    recommendedStart: r.recommended_start ?? "—",
+    reason: r.reason,
+    observations: r.observations ?? "",
+  };
 }
 
 // ── Chart colors ──────────────────────────────────────────────────────
@@ -282,52 +250,115 @@ const CHART_COLORS = ["#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#8b5cf6", "#0
 const TABS = [
   { id: "relatorios", label: "Relatórios" },
   { id: "historico", label: "Histórico" },
-  { id: "comparativos", label: "Comparativos" },
   { id: "indicadores", label: "Indicadores" },
   { id: "auditoria", label: "Auditoria" },
 ];
 
 export default function RelatoriosPage() {
+  const { activeFarmId } = useAuth();
   const [activeTab, setActiveTab] = useState("relatorios");
   const [selectedReportType, setSelectedReportType] = useState<ReportType>("diario");
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>("pdf");
   const [historyDimension, setHistoryDimension] = useState<HistoryDimension>("irrigacao");
-  const [comparativeDimension, setComparativeDimension] = useState<ComparativeDimension>("pivo");
 
-  const balanceRows = useMemo(() => buildMockBalanceRows(), []);
-  const energyResults = useMemo(() => buildMockEnergyResults(), []);
-  const recommendations = useMemo(() => buildMockRecommendations(), []);
-  const auditLog = useMemo(() => buildMockAuditLog(), []);
+  const { data: rawBalances, loading: loadingBalances } = useCrud<WaterBalanceRecord>({
+    table: "water_balances",
+    orderBy: "date",
+    ascending: false,
+    filters: { farm_id: activeFarmId ?? null },
+  });
+
+  const { data: rawEnergy, loading: loadingEnergy } = useCrud<EnergyConsumptionRecord>({
+    table: "energy_consumption",
+    orderBy: "date",
+    ascending: false,
+    filters: { farm_id: activeFarmId ?? null },
+  });
+
+  const { data: rawRecommendations, loading: loadingRecs } = useCrud<RecommendationRecord>({
+    table: "irrigation_recommendations",
+    orderBy: "created_at",
+    ascending: false,
+    filters: { farm_id: activeFarmId ?? null },
+  });
+
+  const { data: rawAuditLog, loading: loadingAudit } = useCrud<AuditLogEntry>({
+    table: "audit_log",
+    orderBy: "created_at",
+    ascending: false,
+    filters: { farm_id: activeFarmId ?? null },
+  });
+
+  const { data: pivots, loading: loadingPivots } = useCrud<PivotRecord>({
+    table: "pivots",
+    filters: { farm_id: activeFarmId ?? null },
+  });
+
+  const pivotNameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of pivots) map[p.id] = p.name;
+    return map;
+  }, [pivots]);
+
+  const balanceRows = useMemo(() => rawBalances.map((r) => toBalanceRow(r, pivotNameMap[r.pivot_id] ?? "—")), [rawBalances, pivotNameMap]);
+  const energyResults = useMemo(() => rawEnergy.map(toConsumptionResult), [rawEnergy]);
+  const recommendations = useMemo(() => rawRecommendations.map(toRecommendation), [rawRecommendations]);
+
+  const loading = loadingBalances || loadingEnergy || loadingRecs || loadingAudit || loadingPivots;
+  const hasAnyData = balanceRows.length > 0 || energyResults.length > 0 || recommendations.length > 0;
 
   const totalArea = useMemo(() => {
     const pivotAreas: Record<string, number> = {};
     for (const r of energyResults) pivotAreas[r.pivotId] = r.area;
+    if (Object.keys(pivotAreas).length === 0) {
+      for (const p of pivots) pivotAreas[p.id] = p.area;
+    }
     return sum(Object.values(pivotAreas));
-  }, [energyResults]);
+  }, [energyResults, pivots]);
 
   const kpis = useMemo(
-    () => calculateReportKPIs(balanceRows, energyResults, totalArea),
-    [balanceRows, energyResults, totalArea]
+    () => hasAnyData ? calculateReportKPIs(balanceRows, energyResults, totalArea) : null,
+    [balanceRows, energyResults, totalArea, hasAnyData]
   );
 
-  const farmTotals = useMemo(
-    () => calculateFarmTotals(energyResults, MOCK_TARIFF.contractedDemandKw, MOCK_TARIFF.demandRate, 30),
-    [energyResults]
-  );
+  const farmTotals = useMemo(() => {
+    if (energyResults.length === 0) return null;
+    const days = new Set(energyResults.map((r) => r.date)).size || 1;
+    return calculateFarmTotals(energyResults, 0, 0, days);
+  }, [energyResults]);
 
-  const byPivot = useMemo(() => aggregateByPivot(energyResults), [energyResults]);
-  const byCulture = useMemo(() => aggregateByCulture(energyResults), [energyResults]);
-  const byModule = useMemo(() => aggregateByModule(energyResults), [energyResults]);
-  const byDate = useMemo(() => aggregateByDate(energyResults), [energyResults]);
+  const byPivot = useMemo(() => energyResults.length > 0 ? aggregateByPivot(energyResults) : [], [energyResults]);
+  const byCulture = useMemo(() => energyResults.length > 0 ? aggregateByCulture(energyResults) : [], [energyResults]);
+  const balanceSummary = useMemo(() => balanceRows.length > 0 ? calculateSummary(balanceRows) : null, [balanceRows]);
 
-  const balanceSummary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
+  if (loading) {
+    return (
+      <div>
+        <PageHeader titulo="Relatórios Inteligentes" descricao="Relatórios, histórico, indicadores e auditoria" />
+        <div className="mt-8 flex items-center justify-center py-20">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+        </div>
+      </div>
+    );
+  }
+
+  if (!hasAnyData && rawAuditLog.length === 0) {
+    return (
+      <div>
+        <PageHeader titulo="Relatórios Inteligentes" descricao="Relatórios, histórico, indicadores e auditoria" />
+        <div className="mt-6">
+          <EmptyState
+            title="Nenhum dado disponível para relatórios"
+            description="Os relatórios serão gerados automaticamente a partir dos registros operacionais. Cadastre pivôs e registre dados de irrigação, balanço hídrico e consumo energético para gerar relatórios completos."
+          />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
-      <PageHeader
-        titulo="Relatórios Inteligentes"
-        descricao="Relatórios, histórico, comparativos, indicadores e auditoria"
-      />
+      <PageHeader titulo="Relatórios Inteligentes" descricao="Relatórios, histórico, indicadores e auditoria" />
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
         {activeTab === "relatorios" && (
@@ -353,18 +384,10 @@ export default function RelatoriosPage() {
             recommendations={recommendations}
           />
         )}
-        {activeTab === "comparativos" && (
-          <TabComparativos
-            dimension={comparativeDimension}
-            onChangeDimension={setComparativeDimension}
-            balanceRows={balanceRows}
-            energyResults={energyResults}
-          />
-        )}
         {activeTab === "indicadores" && (
           <TabIndicadores kpis={kpis} farmTotals={farmTotals} balanceSummary={balanceSummary} byPivot={byPivot} byCulture={byCulture} />
         )}
-        {activeTab === "auditoria" && <TabAuditoria auditLog={auditLog} />}
+        {activeTab === "auditoria" && <TabAuditoria auditLog={rawAuditLog} />}
       </div>
     </div>
   );
@@ -380,9 +403,9 @@ function TabRelatorios({
   onSelectType: (t: ReportType) => void;
   selectedFormat: ExportFormat;
   onSelectFormat: (f: ExportFormat) => void;
-  farmTotals: ReturnType<typeof calculateFarmTotals>;
-  kpis: ReportKPIs;
-  balanceSummary: ReturnType<typeof calculateSummary>;
+  farmTotals: ReturnType<typeof calculateFarmTotals> | null;
+  kpis: ReportKPIs | null;
+  balanceSummary: ReturnType<typeof calculateSummary> | null;
   byPivot: ReturnType<typeof aggregateByPivot>;
   byCulture: ReturnType<typeof aggregateByCulture>;
   recommendations: Recommendation[];
@@ -391,9 +414,10 @@ function TabRelatorios({
   const formats = Object.entries(EXPORT_FORMAT_CONFIG) as Array<[ExportFormat, typeof EXPORT_FORMAT_CONFIG[ExportFormat]]>;
   const config = REPORT_TYPE_CONFIG[selectedType];
 
+  const hasData = (farmTotals !== null || balanceSummary !== null || recommendations.length > 0);
+
   return (
     <div className="space-y-6">
-      {/* Report type selector */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {reportTypes.map(([key, cfg]) => (
           <button
@@ -420,7 +444,6 @@ function TabRelatorios({
         ))}
       </div>
 
-      {/* Format selector + Generate */}
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
@@ -443,36 +466,37 @@ function TabRelatorios({
                 </button>
               ))}
             </div>
-            <button className="rounded-lg bg-brand-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700">
+            <button
+              disabled={!hasData}
+              className="rounded-lg bg-brand-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
               Gerar Relatório
             </button>
           </div>
         </div>
       </Card>
 
-      {/* Report preview */}
-      <Card>
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Pré-visualização — {config.label}
-        </h3>
-        <ReportPreview
-          type={selectedType}
-          farmTotals={farmTotals}
-          kpis={kpis}
-          balanceSummary={balanceSummary}
-          byPivot={byPivot}
-          byCulture={byCulture}
-          recommendations={recommendations}
+      {hasData ? (
+        <Card>
+          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+            Pré-visualização — {config.label}
+          </h3>
+          <ReportPreview
+            type={selectedType}
+            farmTotals={farmTotals}
+            kpis={kpis}
+            balanceSummary={balanceSummary}
+            byPivot={byPivot}
+            byCulture={byCulture}
+            recommendations={recommendations}
+          />
+        </Card>
+      ) : (
+        <EmptyState
+          title="Sem dados para pré-visualização"
+          description="Registre dados operacionais (balanço hídrico, consumo energético, recomendações) para visualizar relatórios."
         />
-      </Card>
-
-      {/* Recent reports */}
-      <Card>
-        <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Relatórios Recentes
-        </h3>
-        <RecentReportsTable />
-      </Card>
+      )}
     </div>
   );
 }
@@ -481,22 +505,30 @@ function ReportPreview({
   type, farmTotals, kpis, balanceSummary, byPivot, byCulture, recommendations,
 }: {
   type: ReportType;
-  farmTotals: ReturnType<typeof calculateFarmTotals>;
-  kpis: ReportKPIs;
-  balanceSummary: ReturnType<typeof calculateSummary>;
+  farmTotals: ReturnType<typeof calculateFarmTotals> | null;
+  kpis: ReportKPIs | null;
+  balanceSummary: ReturnType<typeof calculateSummary> | null;
   byPivot: ReturnType<typeof aggregateByPivot>;
   byCulture: ReturnType<typeof aggregateByCulture>;
   recommendations: Recommendation[];
 }) {
+  if (!farmTotals && !balanceSummary && recommendations.length === 0) {
+    return <p className="py-8 text-center text-sm text-gray-400">Sem dados disponíveis para este tipo de relatório.</p>;
+  }
+
   switch (type) {
     case "diario":
+    case "por_pivo":
+      if (!farmTotals || byPivot.length === 0) {
+        return <p className="py-8 text-center text-sm text-gray-400">Sem dados de consumo energético por pivô.</p>;
+      }
       return (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MiniKPI label="Pivôs irrigados" value={`${byPivot.length}`} />
+            <MiniKPI label="Pivôs operando" value={`${byPivot.length}`} />
             <MiniKPI label="Volume total" value={`${formatNumber(farmTotals.totalVolumeM3)} m³`} />
             <MiniKPI label="Energia" value={`${formatNumber(farmTotals.totalKwh)} kWh`} />
-            <MiniKPI label="Custo dia" value={formatBRL(farmTotals.avgDailyCost)} />
+            <MiniKPI label="Custo total" value={formatBRL(farmTotals.totalCost)} />
           </div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-sm">
@@ -510,7 +542,7 @@ function ReportPreview({
                 </tr>
               </thead>
               <tbody>
-                {byPivot.slice(0, 5).map((p) => (
+                {byPivot.slice(0, 10).map((p) => (
                   <tr key={p.groupKey} className="border-b border-gray-100 dark:border-graphite-800">
                     <td className="px-3 py-2 font-medium text-graphite-900 dark:text-white">{p.groupLabel}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{formatNumber(p.totalKwh)}</td>
@@ -530,55 +562,37 @@ function ReportPreview({
       return (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
-            <MiniKPI label="Total irrigações" value={`${balanceSummary.daysInDeficit > 0 ? balanceSummary.days - balanceSummary.daysInDeficit : balanceSummary.days}`} />
-            <MiniKPI label="Precipitação" value={`${formatNumber(balanceSummary.totalPrecipitation, 1)} mm`} />
-            <MiniKPI label="ETc total" value={`${formatNumber(balanceSummary.totalETc, 1)} mm`} />
-            <MiniKPI label="Dias em déficit" value={`${balanceSummary.daysInDeficit}`} />
-            <MiniKPI label="Custo total" value={formatBRL(farmTotals.totalCost)} />
+            <MiniKPI label="Registros" value={`${balanceSummary?.days ?? 0}`} />
+            <MiniKPI label="Precipitação" value={`${formatNumber(balanceSummary?.totalPrecipitation ?? 0, 1)} mm`} />
+            <MiniKPI label="ETc total" value={`${formatNumber(balanceSummary?.totalETc ?? 0, 1)} mm`} />
+            <MiniKPI label="Dias em déficit" value={`${balanceSummary?.daysInDeficit ?? 0}`} />
+            <MiniKPI label="Custo total" value={formatBRL(farmTotals?.totalCost ?? 0)} />
           </div>
-          <div style={{ height: 256 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byCulture}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="groupLabel" tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <Tooltip />
-                <Bar dataKey="totalCost" name="Custo (R$)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="totalKwh" name="Energia (kWh)" fill="#22c55e" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      );
-
-    case "por_pivo":
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MiniKPI label="Total pivôs" value={`${byPivot.length}`} />
-            <MiniKPI label="Energia total" value={`${formatNumber(farmTotals.totalKwh)} kWh`} />
-            <MiniKPI label="Custo total" value={formatBRL(farmTotals.totalCost)} />
-            <MiniKPI label="kWh/ha médio" value={formatNumber(farmTotals.kwhPerHa, 1)} />
-          </div>
-          <div style={{ height: 256 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byPivot} layout="vertical">
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis type="number" tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <YAxis dataKey="groupLabel" type="category" tick={{ fontSize: 10 }} width={120} stroke="#9ca3af" />
-                <Tooltip />
-                <Bar dataKey="costPerHa" name="R$/ha" fill="#f59e0b" radius={[0, 4, 4, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
+          {byCulture.length > 0 && (
+            <div style={{ height: 256 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byCulture}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis dataKey="groupLabel" tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <Tooltip />
+                  <Bar dataKey="totalCost" name="Custo (R$)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="totalKwh" name="Energia (kWh)" fill="#22c55e" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       );
 
     case "por_cultura":
+      if (byCulture.length === 0) {
+        return <p className="py-8 text-center text-sm text-gray-400">Sem dados de consumo por cultura.</p>;
+      }
       return (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            {byCulture.map((c, i) => (
+            {byCulture.map((c) => (
               <MiniKPI key={c.groupKey} label={c.groupLabel} value={formatBRL(c.totalCost)} />
             ))}
           </div>
@@ -598,6 +612,10 @@ function ReportPreview({
       );
 
     case "energetico":
+    case "financeiro":
+      if (!farmTotals) {
+        return <p className="py-8 text-center text-sm text-gray-400">Sem dados energéticos/financeiros.</p>;
+      }
       return (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
@@ -605,49 +623,22 @@ function ReportPreview({
             <MiniKPI label="Ponta" value={`${formatPercent(farmTotals.peakPct)}`} />
             <MiniKPI label="Custo total" value={formatBRL(farmTotals.totalCost)} />
             <MiniKPI label="kWh/m³" value={formatNumber(farmTotals.kwhPerM3, 4)} />
-            <MiniKPI label="R$/mm" value={formatNumber(farmTotals.costPerMm, 2)} />
-          </div>
-          <div style={{ height: 256 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={byPivot}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="groupLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <Tooltip />
-                <Bar dataKey="peakKwh" name="Ponta (kWh)" fill="#ef4444" stackId="a" />
-                <Bar dataKey="offPeakKwh" name="Fora ponta (kWh)" fill="#22c55e" stackId="a" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      );
-
-    case "financeiro":
-      const costBreakdown = [
-        { name: "Energia fora ponta", value: farmTotals.offPeakCost },
-        { name: "Energia ponta", value: farmTotals.peakCost },
-        { name: "Demanda", value: farmTotals.demandCost },
-      ];
-      return (
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MiniKPI label="Custo total" value={formatBRL(farmTotals.totalCost + farmTotals.demandCost)} />
-            <MiniKPI label="Custo diário médio" value={formatBRL(farmTotals.avgDailyCost)} />
-            <MiniKPI label="Projeção mensal" value={formatBRL(farmTotals.projectedMonthlyCost)} />
             <MiniKPI label="R$/ha" value={formatNumber(farmTotals.costPerHa, 2)} />
           </div>
-          <div style={{ height: 256 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie data={costBreakdown} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}>
-                  <Cell fill="#22c55e" />
-                  <Cell fill="#ef4444" />
-                  <Cell fill="#f59e0b" />
-                </Pie>
-                <Tooltip formatter={(v: number) => formatBRL(v)} />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {byPivot.length > 0 && (
+            <div style={{ height: 256 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={byPivot}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                  <XAxis dataKey="groupLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                  <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                  <Tooltip />
+                  <Bar dataKey="peakKwh" name="Ponta (kWh)" fill="#ef4444" stackId="a" />
+                  <Bar dataKey="offPeakKwh" name="Fora ponta (kWh)" fill="#22c55e" stackId="a" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          )}
         </div>
       );
 
@@ -655,12 +646,12 @@ function ReportPreview({
       return (
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <MiniKPI label="Efic. irrigação" value={formatPercent(kpis.irrigationEfficiency)} />
-            <MiniKPI label="ARM médio" value={formatPercent(kpis.avgArm)} />
-            <MiniKPI label="Custo/ha" value={`R$ ${formatNumber(kpis.costPerHa, 2)}`} />
-            <MiniKPI label="Prod. estimada" value={`${formatNumber(kpis.estimatedYield)} sc`} />
+            <MiniKPI label="Efic. irrigação" value={kpis ? formatPercent(kpis.irrigationEfficiency) : "—"} />
+            <MiniKPI label="ARM médio" value={kpis ? formatPercent(kpis.avgArm) : "—"} />
+            <MiniKPI label="Custo/ha" value={kpis ? `R$ ${formatNumber(kpis.costPerHa, 2)}` : "—"} />
+            <MiniKPI label="Prod. estimada" value={kpis ? `${formatNumber(kpis.estimatedYield)} sc` : "—"} />
           </div>
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {recommendations.length > 0 && (
             <div>
               <p className="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Top 5 — Prioridade</p>
               {rankRecommendations(recommendations).slice(0, 5).map((r) => (
@@ -672,16 +663,7 @@ function ReportPreview({
                 </div>
               ))}
             </div>
-            <div>
-              <p className="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Custo por Cultura</p>
-              {byCulture.map((c) => (
-                <div key={c.groupKey} className="flex items-center justify-between border-b border-gray-100 py-2 dark:border-graphite-800">
-                  <span className="text-sm text-graphite-900 dark:text-white">{c.groupLabel}</span>
-                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">{formatBRL(c.totalCost)}</span>
-                </div>
-              ))}
-            </div>
-          </div>
+          )}
         </div>
       );
 
@@ -699,56 +681,6 @@ function MiniKPI({ label, value }: { label: string; value: string }) {
   );
 }
 
-interface RecentReport {
-  id: string;
-  type: ReportType;
-  name: string;
-  format: ExportFormat;
-  date: string;
-  status: string;
-  sizeKb: number;
-}
-
-function RecentReportsTable() {
-  const recent: RecentReport[] = [
-    { id: "1", type: "diario", name: "Relatório Diário — 26/06/2026", format: "pdf", date: "2026-06-26", status: "gerado", sizeKb: 245 },
-    { id: "2", type: "semanal", name: "Relatório Semanal — Sem. 25", format: "xlsx", date: "2026-06-22", status: "gerado", sizeKb: 512 },
-    { id: "3", type: "energetico", name: "Relatório Energético — Jun/2026", format: "pdf", date: "2026-06-20", status: "gerado", sizeKb: 380 },
-    { id: "4", type: "executivo", name: "Relatório Executivo — Jun/2026", format: "pdf", date: "2026-06-15", status: "gerado", sizeKb: 890 },
-    { id: "5", type: "mensal", name: "Relatório Mensal — Mai/2026", format: "csv", date: "2026-06-01", status: "gerado", sizeKb: 128 },
-  ];
-
-  const columns: Column<RecentReport>[] = [
-    { header: "Relatório", render: (r) => (
-      <div className="flex items-center gap-2">
-        <span className="flex h-7 w-7 items-center justify-center rounded bg-brand-100 text-xs font-bold text-brand-700 dark:bg-brand-900/30 dark:text-brand-400">
-          {REPORT_TYPE_CONFIG[r.type].icon}
-        </span>
-        <span className="font-medium text-graphite-900 dark:text-white">{r.name}</span>
-      </div>
-    )},
-    { header: "Formato", render: (r) => (
-      <span className="rounded bg-gray-100 px-2 py-0.5 text-xs font-medium uppercase text-gray-600 dark:bg-graphite-700 dark:text-gray-400">
-        {EXPORT_FORMAT_CONFIG[r.format].label}
-      </span>
-    ), align: "center" as const },
-    { header: "Data", render: (r) => <span className="text-sm text-gray-600 dark:text-gray-400">{formatDate(new Date(r.date))}</span> },
-    { header: "Status", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${REPORT_STATUS_CONFIG[r.status]?.bgClass ?? ""}`}>
-        {REPORT_STATUS_CONFIG[r.status]?.label ?? r.status}
-      </span>
-    ), align: "center" as const },
-    { header: "Tamanho", render: (r) => <span className="text-sm text-gray-600 dark:text-gray-400">{r.sizeKb} KB</span>, align: "right" as const },
-    { header: "Ações", render: () => (
-      <button className="rounded border border-brand-500 px-3 py-1 text-xs font-medium text-brand-600 transition-colors hover:bg-brand-50 dark:border-brand-400 dark:text-brand-400 dark:hover:bg-brand-900/20">
-        Baixar
-      </button>
-    ), align: "center" as const },
-  ];
-
-  return <Table columns={columns} data={recent} getKey={(r) => r.id} />;
-}
-
 // ── Tab: Histórico ────────────────────────────────────────────────────
 
 function TabHistorico({
@@ -764,7 +696,6 @@ function TabHistorico({
 
   return (
     <div className="space-y-6">
-      {/* Dimension selector */}
       <div className="flex flex-wrap gap-2">
         {dimensions.map(([key, cfg]) => (
           <button
@@ -782,18 +713,13 @@ function TabHistorico({
       </div>
 
       <Card>
-        <div className="mb-4 flex items-center justify-between">
-          <div>
-            <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">
-              {HISTORY_DIMENSION_CONFIG[dimension].label}
-            </h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
-              {HISTORY_DIMENSION_CONFIG[dimension].description}
-            </p>
-          </div>
-          <button className="rounded-lg border border-gray-300 px-4 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 dark:border-graphite-600 dark:text-gray-400 dark:hover:bg-graphite-800">
-            Exportar CSV
-          </button>
+        <div className="mb-4">
+          <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">
+            {HISTORY_DIMENSION_CONFIG[dimension].label}
+          </h3>
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            {HISTORY_DIMENSION_CONFIG[dimension].description}
+          </p>
         </div>
 
         {dimension === "irrigacao" && <HistoricoIrrigacao balanceRows={balanceRows} />}
@@ -801,7 +727,9 @@ function TabHistorico({
         {dimension === "agua" && <HistoricoAgua balanceRows={balanceRows} />}
         {dimension === "energia" && <HistoricoEnergia energyResults={energyResults} />}
         {dimension === "custo" && <HistoricoCusto energyResults={energyResults} />}
-        {dimension === "clima" && <HistoricoClima />}
+        {dimension === "clima" && (
+          <EmptyState title="Sem dados climáticos" description="Os dados climáticos serão exibidos a partir dos registros das estações meteorológicas cadastradas." />
+        )}
       </Card>
     </div>
   );
@@ -826,6 +754,10 @@ function HistoricoIrrigacao({ balanceRows }: { balanceRows: DailyBalanceRow[] })
       }));
   }, [balanceRows]);
 
+  if (irrigated.length === 0) {
+    return <EmptyState title="Sem registros de irrigação" description="Nenhum registro de irrigação encontrado. Os dados aparecerão aqui conforme as irrigações forem registradas." />;
+  }
+
   const columns: Column<IrrigRow>[] = [
     { header: "Data", render: (r) => r.date },
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivot}</span> },
@@ -845,6 +777,10 @@ function HistoricoIrrigacao({ balanceRows }: { balanceRows: DailyBalanceRow[] })
 }
 
 function HistoricoRecomendacoes({ recommendations }: { recommendations: Recommendation[] }) {
+  if (recommendations.length === 0) {
+    return <EmptyState title="Sem recomendações" description="As recomendações de irrigação serão listadas aqui conforme forem geradas pelo sistema." />;
+  }
+
   const ranked = useMemo(() => rankRecommendations(recommendations), [recommendations]);
 
   const columns: Column<Recommendation>[] = [
@@ -871,6 +807,10 @@ function HistoricoRecomendacoes({ recommendations }: { recommendations: Recommen
 interface WaterRow { date: string; pivot: string; et0: number; etc: number; precip: number; irrig: number; arm: number; cad: number; armPct: number; deficit: number; status: string }
 
 function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
+  if (balanceRows.length === 0) {
+    return <EmptyState title="Sem dados de balanço hídrico" description="Os dados do balanço hídrico serão exibidos conforme forem registrados." />;
+  }
+
   const waterData = useMemo(() => {
     return balanceRows.slice(0, 50).map((b) => ({
       date: b.date,
@@ -907,6 +847,10 @@ function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
 }
 
 function HistoricoEnergia({ energyResults }: { energyResults: ConsumptionResult[] }) {
+  if (energyResults.length === 0) {
+    return <EmptyState title="Sem dados energéticos" description="Os registros de consumo energético serão exibidos aqui conforme forem registrados." />;
+  }
+
   const data = useMemo(() => energyResults.slice(0, 50), [energyResults]);
 
   const columns: Column<ConsumptionResult>[] = [
@@ -927,6 +871,10 @@ function HistoricoEnergia({ energyResults }: { energyResults: ConsumptionResult[
 interface CostRow { date: string; pivot: string; total: number; peak: number; offPeak: number; perMm: number; perHa: number; perM3: number }
 
 function HistoricoCusto({ energyResults }: { energyResults: ConsumptionResult[] }) {
+  if (energyResults.length === 0) {
+    return <EmptyState title="Sem dados de custo" description="Os registros de custo serão exibidos aqui conforme forem registrados." />;
+  }
+
   const data = useMemo<CostRow[]>(() =>
     energyResults.slice(0, 50).map((r) => ({
       date: r.date,
@@ -955,299 +903,40 @@ function HistoricoCusto({ energyResults }: { energyResults: ConsumptionResult[] 
   return <Table columns={columns} data={data} getKey={(r) => `${r.date}-${r.pivot}`} />;
 }
 
-interface ClimaRow { date: string; tempMax: number; tempMin: number; tempMean: number; humidity: number; wind: number; radiation: number; precip: number; et0: number }
-
-function HistoricoClima() {
-  const data = useMemo<ClimaRow[]>(() => {
-    const rows: ClimaRow[] = [];
-    const base = new Date(2026, 5, 1);
-    for (let d = 0; d < 30; d++) {
-      const date = new Date(base);
-      date.setDate(date.getDate() + d);
-      rows.push({
-        date: date.toISOString().split("T")[0],
-        tempMax: roundTo(30 + Math.random() * 8, 1),
-        tempMin: roundTo(18 + Math.random() * 5, 1),
-        tempMean: roundTo(24 + Math.random() * 5, 1),
-        humidity: roundTo(40 + Math.random() * 30, 0),
-        wind: roundTo(1 + Math.random() * 4, 1),
-        radiation: roundTo(15 + Math.random() * 10, 1),
-        precip: Math.random() > 0.7 ? roundTo(Math.random() * 25, 1) : 0,
-        et0: roundTo(3.5 + Math.random() * 4, 2),
-      });
-    }
-    return rows;
-  }, []);
-
-  const columns: Column<ClimaRow>[] = [
-    { header: "Data", render: (r) => r.date },
-    { header: "T.Máx (°C)", render: (r) => formatNumber(r.tempMax, 1), align: "right" },
-    { header: "T.Mín (°C)", render: (r) => formatNumber(r.tempMin, 1), align: "right" },
-    { header: "T.Méd (°C)", render: (r) => formatNumber(r.tempMean, 1), align: "right" },
-    { header: "UR (%)", render: (r) => formatNumber(r.humidity, 0), align: "right" },
-    { header: "Vento (m/s)", render: (r) => formatNumber(r.wind, 1), align: "right" },
-    { header: "Rad. (MJ)", render: (r) => formatNumber(r.radiation, 1), align: "right" },
-    { header: "Chuva (mm)", render: (r) => formatNumber(r.precip, 1), align: "right" },
-    { header: "ET₀ (mm)", render: (r) => formatNumber(r.et0, 2), align: "right" },
-  ];
-
-  return <Table columns={columns} data={data} getKey={(r) => r.date} />;
-}
-
-// ── Tab: Comparativos ─────────────────────────────────────────────────
-
-const COMPARATIVE_DIMENSIONS: Array<{ id: ComparativeDimension; label: string }> = [
-  { id: "pivo", label: "Pivôs" },
-  { id: "cultura", label: "Culturas" },
-  { id: "modulo", label: "Módulos" },
-  { id: "periodo", label: "Períodos" },
-  { id: "safra", label: "Safras" },
-  { id: "casa_bomba", label: "Casas de Bomba" },
-  { id: "fazenda", label: "Fazendas" },
-];
-
-function TabComparativos({
-  dimension, onChangeDimension, balanceRows, energyResults,
-}: {
-  dimension: ComparativeDimension;
-  onChangeDimension: (d: ComparativeDimension) => void;
-  balanceRows: DailyBalanceRow[];
-  energyResults: ConsumptionResult[];
-}) {
-  const comparativeData = useMemo<ComparativeRow[]>(() => {
-    let items: Array<{ key: string; label: string; balanceRows: DailyBalanceRow[]; energyResults: ConsumptionResult[]; areaHa: number }>;
-
-    switch (dimension) {
-      case "pivo":
-        items = PIVOT_NAMES.map((name, i) => ({
-          key: `p${i + 1}`,
-          label: name,
-          balanceRows: balanceRows.filter((b) => b.pivotId === `p${i + 1}`),
-          energyResults: energyResults.filter((r) => r.pivotId === `p${i + 1}`),
-          areaHa: 50 + i * 10,
-        }));
-        break;
-      case "cultura":
-        items = CULTURE_NAMES.map((name, i) => ({
-          key: `culture-${i + 1}`,
-          label: name,
-          balanceRows: balanceRows.filter((_, idx) => idx % CULTURE_NAMES.length === i),
-          energyResults: energyResults.filter((r) => r.cultureId === `culture-${i + 1}`),
-          areaHa: 100 + i * 30,
-        }));
-        break;
-      case "modulo":
-        items = MODULE_NAMES.map((name, i) => ({
-          key: name,
-          label: name,
-          balanceRows: balanceRows.filter((_, idx) => idx % MODULE_NAMES.length === i),
-          energyResults: energyResults.filter((r) => r.moduleName === name),
-          areaHa: 150 + i * 20,
-        }));
-        break;
-      case "periodo":
-        items = [
-          { key: "sem1", label: "Semana 1 (01-07)", balanceRows: balanceRows.filter((b) => parseInt(b.date.slice(8, 10)) <= 7), energyResults: energyResults.filter((r) => parseInt(r.date.slice(8, 10)) <= 7), areaHa: 620 },
-          { key: "sem2", label: "Semana 2 (08-14)", balanceRows: balanceRows.filter((b) => { const d = parseInt(b.date.slice(8, 10)); return d >= 8 && d <= 14; }), energyResults: energyResults.filter((r) => { const d = parseInt(r.date.slice(8, 10)); return d >= 8 && d <= 14; }), areaHa: 620 },
-          { key: "sem3", label: "Semana 3 (15-21)", balanceRows: balanceRows.filter((b) => { const d = parseInt(b.date.slice(8, 10)); return d >= 15 && d <= 21; }), energyResults: energyResults.filter((r) => { const d = parseInt(r.date.slice(8, 10)); return d >= 15 && d <= 21; }), areaHa: 620 },
-          { key: "sem4", label: "Semana 4 (22-30)", balanceRows: balanceRows.filter((b) => parseInt(b.date.slice(8, 10)) >= 22), energyResults: energyResults.filter((r) => parseInt(r.date.slice(8, 10)) >= 22), areaHa: 620 },
-        ];
-        break;
-      case "safra":
-        items = [
-          { key: "2025", label: "Safra 2024/2025", balanceRows: balanceRows.slice(0, Math.floor(balanceRows.length / 2)), energyResults: energyResults.slice(0, Math.floor(energyResults.length / 2)), areaHa: 600 },
-          { key: "2026", label: "Safra 2025/2026", balanceRows: balanceRows.slice(Math.floor(balanceRows.length / 2)), energyResults: energyResults.slice(Math.floor(energyResults.length / 2)), areaHa: 620 },
-        ];
-        break;
-      case "casa_bomba":
-        items = [
-          { key: "cb1", label: "CB 1", balanceRows: balanceRows.filter((_, i) => i % 2 === 0), energyResults: energyResults.filter((r) => r.pumpHouseId === "pump-1"), areaHa: 310 },
-          { key: "cb2", label: "CB 2", balanceRows: balanceRows.filter((_, i) => i % 2 === 1), energyResults: energyResults.filter((r) => r.pumpHouseId === "pump-2"), areaHa: 310 },
-        ];
-        break;
-      case "fazenda":
-        items = [
-          { key: "faz1", label: "Fazenda Principal", balanceRows, energyResults, areaHa: 620 },
-        ];
-        break;
-      default:
-        items = [];
-    }
-
-    return generateComparative(items);
-  }, [dimension, balanceRows, energyResults]);
-
-  return (
-    <div className="space-y-6">
-      {/* Dimension selector */}
-      <div className="flex flex-wrap gap-2">
-        {COMPARATIVE_DIMENSIONS.map((d) => (
-          <button
-            key={d.id}
-            onClick={() => onChangeDimension(d.id)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
-              dimension === d.id
-                ? "bg-brand-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-400 dark:hover:bg-graphite-600"
-            }`}
-          >
-            {d.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Comparative table */}
-      <Card>
-        <h3 className="mb-4 text-lg font-semibold text-graphite-900 dark:text-white">
-          Comparativo por {COMPARATIVE_DIMENSIONS.find((d) => d.id === dimension)?.label}
-        </h3>
-        <ComparativeTable data={comparativeData} />
-      </Card>
-
-      {/* Charts */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Custo Total</h4>
-          <div style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparativeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="dimensionLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <Tooltip formatter={(v: number) => formatBRL(v)} />
-                <Bar dataKey="totalCost" name="Custo (R$)" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Eficiência</h4>
-          <div style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparativeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="dimensionLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <Tooltip />
-                <Bar dataKey="irrigationEfficiency" name="Efic. Irrigação (%)" fill="#22c55e" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="avgArmPct" name="ARM médio (%)" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">R$/mm e R$/ha</h4>
-          <div style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparativeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="dimensionLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <Tooltip />
-                <Bar dataKey="costPerMm" name="R$/mm" fill="#ef4444" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="costPerHa" name="R$/ha" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
-        <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Energia e Volume</h4>
-          <div style={{ height: 280 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={comparativeData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-                <XAxis dataKey="dimensionLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-                <Tooltip />
-                <Bar dataKey="totalEnergyKwh" name="Energia (kWh)" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-      </div>
-    </div>
-  );
-}
-
-function ComparativeTable({ data }: { data: ComparativeRow[] }) {
-  const columns: Column<ComparativeRow>[] = [
-    { header: "Dimensão", render: (r) => <span className="font-medium text-graphite-900 dark:text-white">{r.dimensionLabel}</span> },
-    { header: "Volume (m³)", render: (r) => formatNumber(r.totalVolumeM3), align: "right" },
-    { header: "Energia (kWh)", render: (r) => formatNumber(r.totalEnergyKwh), align: "right" },
-    { header: "Custo (R$)", render: (r) => formatBRL(r.totalCost), align: "right" },
-    { header: "ARM%", render: (r) => formatPercent(r.avgArmPct), align: "right" },
-    { header: "Efic. Irrig.", render: (r) => formatPercent(r.irrigationEfficiency), align: "right" },
-    { header: "R$/mm", render: (r) => formatNumber(r.costPerMm, 2), align: "right" },
-    { header: "R$/ha", render: (r) => formatNumber(r.costPerHa, 2), align: "right" },
-    { header: "kWh/mm", render: (r) => formatNumber(r.kwhPerMm, 2), align: "right" },
-    { header: "Dias", render: (r) => `${r.days}`, align: "right" },
-  ];
-
-  return <Table columns={columns} data={data} getKey={(r) => r.dimensionKey} />;
-}
-
 // ── Tab: Indicadores ──────────────────────────────────────────────────
 
 function TabIndicadores({
   kpis, farmTotals, balanceSummary, byPivot, byCulture,
 }: {
-  kpis: ReportKPIs;
-  farmTotals: ReturnType<typeof calculateFarmTotals>;
-  balanceSummary: ReturnType<typeof calculateSummary>;
+  kpis: ReportKPIs | null;
+  farmTotals: ReturnType<typeof calculateFarmTotals> | null;
+  balanceSummary: ReturnType<typeof calculateSummary> | null;
   byPivot: ReturnType<typeof aggregateByPivot>;
   byCulture: ReturnType<typeof aggregateByCulture>;
 }) {
+  if (!kpis || (!farmTotals && !balanceSummary)) {
+    return <EmptyState title="Sem indicadores disponíveis" description="Registre dados operacionais para visualizar indicadores de desempenho." />;
+  }
+
   const kpiCards = [
     { id: "irrig_eff", title: "Eficiência de Irrigação", value: formatPercent(kpis.irrigationEfficiency), description: "ETc / Irrigação aplicada", trend: kpis.irrigationEfficiency > 75 ? "positive" as const : "negative" as const },
-    { id: "energy_eff", title: "Eficiência Energética", value: `${formatNumber(kpis.energyEfficiency, 4)} kWh/m³`, description: "Consumo por volume aplicado", trend: kpis.energyEfficiency < 0.5 ? "positive" as const : "negative" as const },
+    { id: "energy_eff", title: "Eficiência Energética", value: `${formatNumber(kpis.energyEfficiency, 4)} kWh/m³`, description: "Consumo por volume aplicado" },
     { id: "water_applied", title: "Água Aplicada", value: `${formatNumber(kpis.totalWaterApplied, 1)} mm`, description: "Total de irrigação no período" },
     { id: "etc_total", title: "ETc Total", value: `${formatNumber(kpis.totalETc, 1)} mm`, description: "Evapotranspiração da cultura" },
     { id: "arm_avg", title: "ARM Médio", value: formatPercent(kpis.avgArm), description: "Armazenamento médio", trend: kpis.avgArm > 60 ? "positive" as const : "negative" as const },
-    { id: "deficit_avg", title: "Déficit Médio", value: `${formatNumber(kpis.avgDeficit, 1)} mm`, description: "Déficit hídrico médio", trend: kpis.avgDeficit < 5 ? "positive" as const : "negative" as const },
-    { id: "energy_mm", title: "Energia por mm", value: `${formatNumber(kpis.energyPerMm, 2)} kWh`, description: "Consumo energético por mm aplicado" },
-    { id: "energy_ha", title: "Energia por ha", value: `${formatNumber(kpis.energyPerHa, 2)} kWh`, description: "Consumo energético por hectare" },
-    { id: "cost_mm", title: "Custo por mm", value: `R$ ${formatNumber(kpis.costPerMm, 2)}`, description: "Custo por mm de irrigação" },
+    { id: "deficit_avg", title: "Déficit Médio", value: `${formatNumber(kpis.avgDeficit, 1)} mm`, description: "Déficit hídrico médio" },
     { id: "cost_ha", title: "Custo por ha", value: `R$ ${formatNumber(kpis.costPerHa, 2)}`, description: "Custo por hectare irrigado" },
-    { id: "yield", title: "Produtividade Estimada", value: `${formatNumber(kpis.estimatedYield)} sc`, description: "Estimativa baseada no ARM médio", trend: "positive" as const },
-  ];
-
-  const radarData = [
-    { indicator: "Efic. Irrigação", value: Math.min(100, kpis.irrigationEfficiency) },
-    { indicator: "ARM Médio", value: Math.min(100, kpis.avgArm) },
-    { indicator: "Cobertura Hídrica", value: Math.min(100, balanceSummary.days > 0 ? ((balanceSummary.days - balanceSummary.daysInDeficit) / balanceSummary.days) * 100 : 0) },
-    { indicator: "Efic. Energética", value: Math.min(100, kpis.energyEfficiency < 1 ? (1 - kpis.energyEfficiency) * 100 : 20) },
-    { indicator: "Custo Otimizado", value: Math.min(100, farmTotals.peakPct < 20 ? 90 : 100 - farmTotals.peakPct) },
-    { indicator: "Produtividade", value: Math.min(100, kpis.estimatedYield > 0 ? 75 : 30) },
   ];
 
   return (
     <div className="space-y-6">
-      {/* KPI Grid */}
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {kpiCards.map((m) => (
           <StatCard key={m.id} metric={m} />
         ))}
       </div>
 
-      {/* Radar + Breakdown */}
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Índice de Desempenho</h4>
-          <div style={{ height: 320 }}>
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart data={radarData}>
-                <PolarGrid stroke="#4b5563" />
-                <PolarAngleAxis dataKey="indicator" tick={{ fontSize: 10, fill: "#9ca3af" }} />
-                <PolarRadiusAxis domain={[0, 100]} tick={{ fontSize: 10 }} stroke="#6b7280" />
-                <Radar name="Desempenho" dataKey="value" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-
+      {balanceSummary && (
         <Card>
           <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Resumo do Período</h4>
           <div className="space-y-3">
@@ -1260,50 +949,35 @@ function TabIndicadores({
             <SummaryRow label="Déficit máximo" value={`${formatNumber(balanceSummary.maxDeficit, 1)} mm`} />
             <SummaryRow label="Dias em déficit" value={`${balanceSummary.daysInDeficit}`} highlight={balanceSummary.daysInDeficit > 5} />
             <SummaryRow label="Dias em déficit crítico" value={`${balanceSummary.daysInCritical}`} highlight={balanceSummary.daysInCritical > 0} />
-            <SummaryRow label="Energia total" value={`${formatNumber(farmTotals.totalKwh)} kWh`} />
-            <SummaryRow label="Custo total" value={formatBRL(farmTotals.totalCost)} />
-            <SummaryRow label="Custo projetado/mês" value={formatBRL(farmTotals.projectedMonthlyCost)} />
+            {farmTotals && (
+              <>
+                <SummaryRow label="Energia total" value={`${formatNumber(farmTotals.totalKwh)} kWh`} />
+                <SummaryRow label="Custo total" value={formatBRL(farmTotals.totalCost)} />
+              </>
+            )}
           </div>
         </Card>
-      </div>
+      )}
 
-      {/* Efficiency by pivot */}
-      <Card>
-        <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Indicadores por Pivô</h4>
-        <div style={{ height: 300 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={byPivot}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="groupLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="kwhPerMm" name="kWh/mm" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="costPerMm" name="R$/mm" fill="#ef4444" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="costPerHa" name="R$/ha" fill="#22c55e" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
-
-      {/* Efficiency by culture */}
-      <Card>
-        <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Indicadores por Cultura</h4>
-        <div style={{ height: 300 }}>
-          <ResponsiveContainer width="100%" height="100%">
-            <BarChart data={byCulture}>
-              <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
-              <XAxis dataKey="groupLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
-              <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
-              <Tooltip />
-              <Legend />
-              <Bar dataKey="kwhPerMm" name="kWh/mm" fill="#8b5cf6" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="costPerMm" name="R$/mm" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-              <Bar dataKey="costPerHa" name="R$/ha" fill="#06b6d4" radius={[4, 4, 0, 0]} />
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-      </Card>
+      {byPivot.length > 0 && (
+        <Card>
+          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Indicadores por Pivô</h4>
+          <div style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={byPivot}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.2} />
+                <XAxis dataKey="groupLabel" tick={{ fontSize: 10 }} stroke="#9ca3af" />
+                <YAxis tick={{ fontSize: 11 }} stroke="#9ca3af" />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="kwhPerMm" name="kWh/mm" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="costPerMm" name="R$/mm" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="costPerHa" name="R$/ha" fill="#22c55e" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </Card>
+      )}
     </div>
   );
 }
@@ -1341,6 +1015,10 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
 
   const actions = Object.entries(AUDIT_ACTION_CONFIG) as Array<[AuditAction, typeof AUDIT_ACTION_CONFIG[AuditAction]]>;
 
+  if (auditLog.length === 0) {
+    return <EmptyState title="Sem registros de auditoria" description="Os registros de auditoria aparecerão aqui conforme as ações forem realizadas na plataforma." />;
+  }
+
   const columns: Column<AuditLogEntry>[] = [
     { header: "Data/Hora", render: (r) => (
       <span className="text-xs text-gray-600 dark:text-gray-400">
@@ -1373,12 +1051,10 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
         </div>
       );
     }},
-    { header: "IP", render: (r) => <span className="text-xs text-gray-400">{r.ipAddress}</span> },
   ];
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {actions.slice(0, 6).map(([key, cfg]) => (
           <button
@@ -1396,7 +1072,6 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
         ))}
       </div>
 
-      {/* Filters */}
       <Card>
         <div className="mb-4 flex items-center justify-between">
           <div>
@@ -1415,31 +1090,6 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
           )}
         </div>
         <Table columns={columns} data={filtered} getKey={(r) => r.id} />
-      </Card>
-
-      {/* Timeline */}
-      <Card>
-        <h3 className="mb-4 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Atividade Recente</h3>
-        <div className="space-y-3">
-          {auditLog.slice(0, 10).map((entry) => (
-            <div key={entry.id} className="flex items-start gap-3 border-b border-gray-100 pb-3 dark:border-graphite-800">
-              <div className={`mt-0.5 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full text-xs font-bold ${AUDIT_ACTION_CONFIG[entry.action].bgClass}`}>
-                {entry.action.charAt(0).toUpperCase()}
-              </div>
-              <div className="min-w-0 flex-1">
-                <p className="text-sm text-graphite-900 dark:text-white">
-                  <span className="font-medium">{entry.userName}</span>
-                  {" "}{AUDIT_ACTION_CONFIG[entry.action].label.toLowerCase()}{" "}
-                  <span className="font-medium">{entry.entityName}</span>
-                  {" "}({entry.entityType})
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-400">
-                  {new Date(entry.createdAt).toLocaleString("pt-BR")} — IP: {entry.ipAddress}
-                </p>
-              </div>
-            </div>
-          ))}
-        </div>
       </Card>
     </div>
   );
