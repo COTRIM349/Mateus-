@@ -33,20 +33,20 @@ export const HYDRIC_STATUS_CONFIG: Record<
 // ── Núcleo dos cálculos (fórmulas da Fase 3) ─────────────────────────────
 
 /**
- * Água Disponível Total (mm).
- * ADT = (CC − PMP) × Ds × Z × 10, com Z (profundidade radicular) em cm.
- * field_capacity/wilting_point são frações (cm³/cm³ ou g/g) e Ds em g/cm³.
- * Em unidades consistentes: (CC − PMP) × Ds × Zₘ × 1000.
+ * Água Disponível Total (mm) — FAO-56 eq. 82 (forma volumétrica).
+ * ADT = (θCC − θPMP) × Z × 1000, com CC/PMP em base volumétrica (cm³/cm³) e
+ * Z (profundidade radicular efetiva) em metros. A densidade do solo NÃO entra:
+ * o teor volumétrico já expressa volume de água por volume de solo. (Densidade
+ * só seria aplicada se CC/PMP fossem gravimétricos; a plataforma é volumétrica.)
  */
 export function calculateADT(
   fieldCapacity: number,
   wiltingPoint: number,
-  bulkDensity: number,
   rootDepthMeters: number,
   effectiveSoilDepthMeters: number,
 ): number {
   const z = Math.max(0, Math.min(rootDepthMeters, effectiveSoilDepthMeters));
-  const adt = (fieldCapacity - wiltingPoint) * bulkDensity * z * 1000;
+  const adt = (fieldCapacity - wiltingPoint) * z * 1000;
   return roundTo(Math.max(adt, 0), 2);
 }
 
@@ -58,13 +58,14 @@ export function calculateAFD(adt: number, depletionFactor: number): number {
 
 /**
  * Classificação do status hídrico pelo déficit relativo à AFD (item 11):
- * verde < 70% AFD · amarelo 70–100% AFD · vermelho > AFD · cinza sem dados.
+ * verde < 70% AFD · amarelo 70–<100% AFD · vermelho ≥ 100% AFD · cinza sem dados.
+ * O gatilho de irrigação (déficit ≥ AFD) coincide com o vermelho.
  */
 export function classifyHydricStatus(deficit: number, afd: number): HydricStatus {
   if (afd <= 0) return "cinza";
   const ratio = deficit / afd;
   if (ratio < 0.7) return "verde";
-  if (ratio <= 1) return "amarelo";
+  if (ratio < 1) return "amarelo";
   return "vermelho";
 }
 
@@ -133,6 +134,7 @@ export interface BalanceDay {
   adt: number;
   afd: number;
   storage: number;
+  surplus: number;
   deficit: number;
   depletion: number;
   status: HydricStatus;
@@ -161,19 +163,41 @@ function buildRecommendation(
   time: number;
   reason: string;
 } {
+  // sem dados suficientes → não há recomendação
+  if (status === "cinza") {
+    return {
+      shouldIrrigate: false,
+      netDepth: 0,
+      grossDepth: 0,
+      volume: 0,
+      time: 0,
+      reason: "Dados insuficientes para cálculo (solo, clima ou fases ausentes).",
+    };
+  }
+
+  // eficiência inválida (≤ 0) impede o cálculo da lâmina bruta → não recomenda
+  if (efficiency <= 0) {
+    return {
+      shouldIrrigate: false,
+      netDepth: roundTo(Math.max(deficit, 0), 2),
+      grossDepth: 0,
+      volume: 0,
+      time: 0,
+      reason: "Eficiência de irrigação inválida (0). Ajuste o cadastro do pivô ou do vínculo.",
+    };
+  }
+
   // lâmina líquida = déficit para retornar à capacidade segura (ADT cheia)
   const netDepth = roundTo(Math.max(deficit, 0), 2);
-  const grossDepth = efficiency > 0 ? roundTo(netDepth / efficiency, 2) : 0;
+  const grossDepth = roundTo(netDepth / efficiency, 2);
   const volume = roundTo(grossDepth * area * 10, 2); // m³ = mm × ha × 10
   const time = flowRate > 0 ? roundTo(volume / flowRate, 2) : 0;
 
-  // irrigar hoje quando o déficit atingiu a água facilmente disponível
+  // irrigar hoje quando o déficit atingiu a água facilmente disponível (= vermelho)
   const shouldIrrigate = afd > 0 && deficit >= afd;
 
   let reason: string;
-  if (status === "cinza") {
-    reason = "Dados insuficientes para cálculo (solo, fases ou clima ausentes).";
-  } else if (shouldIrrigate) {
+  if (shouldIrrigate) {
     reason = `Déficit de ${netDepth.toFixed(1)} mm atingiu a água facilmente disponível (AFD ${afd.toFixed(1)} mm). Irrigar ${grossDepth.toFixed(1)} mm (bruta).`;
   } else if (status === "amarelo") {
     reason = `Déficit próximo ao limite (${afd > 0 ? Math.round((deficit / afd) * 100) : 0}% da AFD). Monitorar e preparar irrigação.`;
@@ -197,7 +221,11 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
   const efficiency =
     custom && assignment.irrigation_efficiency != null ? assignment.irrigation_efficiency : pivot.efficiency;
 
-  const hasSoil = soil.field_capacity > soil.wilting_point && soil.bulk_density > 0;
+  // solo válido (base volumétrica; densidade não é exigida para o cálculo)
+  const hasSoil = soil.field_capacity > soil.wilting_point && soil.effective_depth > 0;
+  // clima válido: ao menos uma leitura de ET0 > 0 no período (senão não há cálculo)
+  const hasWeather = Object.values(weatherByDate).some((w) => w.et0 > 0);
+  const dataOk = hasSoil && hasWeather;
 
   // armazenamento inicial: começa na capacidade (ADT cheia) com a raiz do dia inicial
   const rows: BalanceDay[] = [];
@@ -220,7 +248,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const pFactor = resolveDepletionFactor(assignment, phaseId?.phase.depletion_factor, culture.depletion_factor);
 
     const adt = hasSoil
-      ? calculateADT(soil.field_capacity, soil.wilting_point, soil.bulk_density, rootDepth, soil.effective_depth)
+      ? calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth)
       : 0;
     const afd = calculateAFD(adt, pFactor);
 
@@ -230,19 +258,26 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const irrigation = irrigationByDate[date] ?? 0;
     const effectiveIrrigation = roundTo(irrigation * efficiency, 2);
 
-    // chuva efetiva = chuva registrada (limitada pela capacidade do solo via cap em ADT)
-    const effectivePrecipitation = roundTo(Math.max(weather.precipitation, 0), 2);
+    const registeredRain = Math.max(weather.precipitation, 0);
 
-    // armazenamento anterior: na ausência (primeiro dia) parte da capacidade
+    // balanço: armazenamento anterior (1º dia parte da capacidade) + entradas − ETc
     const prev: number = previousStorage ?? adt;
-    let storage = prev + effectivePrecipitation + effectiveIrrigation - etc;
-    if (adt > 0 && storage > adt) storage = adt; // não ultrapassa ADT
-    if (storage < 0) storage = 0;                 // não fica negativo
+    const preCap = prev + registeredRain + effectiveIrrigation - etc;
+    let storage = preCap;
+    let surplus = 0;
+    if (adt > 0 && preCap > adt) {
+      surplus = roundTo(preCap - adt, 2); // excedente acima da capacidade do solo
+      storage = adt;                       // não ultrapassa ADT
+    }
+    if (storage < 0) storage = 0;          // não fica negativo
     storage = roundTo(storage, 2);
+
+    // chuva efetiva = parte retida (excedente atribuído primeiro à chuva)
+    const effectivePrecipitation = roundTo(Math.max(registeredRain - surplus, 0), 2);
 
     const deficit = adt > 0 ? roundTo(Math.max(adt - storage, 0), 2) : 0;
     const depletion = adt > 0 ? roundTo(deficit / adt, 3) : 0;
-    const status: HydricStatus = hasSoil ? classifyHydricStatus(deficit, afd) : "cinza";
+    const status: HydricStatus = dataOk ? classifyHydricStatus(deficit, afd) : "cinza";
 
     const rec = buildRecommendation(deficit, afd, status, efficiency, pivot.area, pivot.flow_rate);
 
@@ -261,6 +296,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       adt,
       afd,
       storage,
+      surplus,
       deficit,
       depletion,
       status,

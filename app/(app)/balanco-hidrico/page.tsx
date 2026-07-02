@@ -16,24 +16,14 @@ import {
 import { useAuth } from "@/components/providers";
 import { createClient } from "@/lib/supabase/client";
 import {
-  calculateDailyBalance,
   calculateSummary,
-  calculateInitialStorage,
-  calculateDynamicCAD,
-  calculateDynamicAFD,
-  adjustDepletionFactor,
-  calculateETc,
-  determineWaterStatus,
+  computePivotBalanceSeries,
   WATER_STATUS_CONFIG,
   type DailyBalanceRow,
   type WaterStatus,
-} from "@/modules/water-balance/services";
-import { interpolateKc, identifyPhase, type CulturePhase } from "@/modules/culture/services";
-import {
-  computePivotBalanceSeries,
   type HydricStatus,
 } from "@/modules/water-balance/services";
-import { calculateEffectivePrecipitation } from "@/modules/weather/services";
+import { type CulturePhase } from "@/modules/culture/services";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -356,7 +346,7 @@ export default function BalancoHidricoPage() {
         storedWater: d.storage,
         depletionFactor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
         deficit: d.deficit,
-        surplus: 0,
+        surplus: d.surplus,
         netDepth: d.recommendedNetDepth,
         grossDepth: d.recommendedGrossDepth,
         volumeNeeded: d.recommendedVolume,
@@ -384,6 +374,7 @@ export default function BalancoHidricoPage() {
           cad: d.adt,
           afd: d.afd,
           soil_storage: d.storage,
+          surplus: d.surplus,
           depletion_factor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
           deficit: d.deficit,
           depletion: d.depletion,
