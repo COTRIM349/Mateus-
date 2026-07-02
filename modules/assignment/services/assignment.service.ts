@@ -122,7 +122,7 @@ export function resolveManagementParams(
  * em último caso, o p padrão da cultura.
  */
 export function resolveDepletionFactor(
-  a: OperationalAssignment,
+  a: Pick<OperationalAssignment, "parameter_mode" | "depletion_factor">,
   phaseDepletionFactor: number | null | undefined,
   cultureDepletionFactor: number,
 ): number {

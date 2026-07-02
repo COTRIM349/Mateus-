@@ -28,7 +28,12 @@ import {
   type DailyBalanceRow,
   type WaterStatus,
 } from "@/modules/water-balance/services";
-import { interpolateKc, interpolateRootDepth, identifyPhase, type CulturePhase } from "@/modules/culture/services";
+import { interpolateKc, identifyPhase, type CulturePhase } from "@/modules/culture/services";
+import {
+  resolveDaeReferenceDate,
+  computeRootDepth,
+  resolveDepletionFactor,
+} from "@/modules/assignment/services";
 import { calculateEffectivePrecipitation } from "@/modules/weather/services";
 import {
   ResponsiveContainer,
@@ -62,7 +67,13 @@ interface CropAssignment {
   culture_id: string;
   soil_id: string;
   planting_date: string;
+  emergence_date: string | null;
   crop_stage: string;
+  parameter_mode: "padrao" | "personalizado";
+  initial_root_depth: number | null;
+  max_root_depth: number | null;
+  irrigation_efficiency: number | null;
+  depletion_factor: number | null;
   active: boolean;
 }
 
@@ -292,7 +303,15 @@ export default function BalancoHidricoPage() {
       // 5. Generate day sequence
       const startMs = new Date(dateStart).getTime();
       const endMs = new Date(dateEnd).getTime();
-      const plantingMs = new Date(assignment.planting_date).getTime();
+      // DAE usa a data de emergência quando informada; senão, o plantio
+      const daeReferenceMs = new Date(resolveDaeReferenceDate(assignment)).getTime();
+
+      // Parâmetros de manejo conforme o modo do vínculo (padrão ou personalizado)
+      const custom = assignment.parameter_mode === "personalizado";
+      const effectiveEfficiency =
+        custom && assignment.irrigation_efficiency != null
+          ? assignment.irrigation_efficiency
+          : pivot.efficiency;
 
       const initialStorage = calculateInitialStorage(
         soil.field_capacity,
@@ -307,18 +326,26 @@ export default function BalancoHidricoPage() {
 
       for (let ms = startMs; ms <= endMs; ms += 86400000) {
         const dateStr = new Date(ms).toISOString().slice(0, 10);
-        const dap = Math.max(0, Math.floor((ms - plantingMs) / 86400000));
+        const dap = Math.max(0, Math.floor((ms - daeReferenceMs) / 86400000));
 
-        // Kc and root depth from phases (or fallback to culture defaults)
-        const kc = phases.length > 0
-          ? interpolateKc(phases, dap)
-          : (culture.depletion_factor > 0 ? 1.0 : 1.0);
-        const rootDepth = phases.length > 0
-          ? interpolateRootDepth(phases, dap)
-          : culture.root_depth;
+        // Kc a partir das fases (fallback para 1.0 sem fases cadastradas)
+        const kc = phases.length > 0 ? interpolateKc(phases, dap) : 1.0;
+        // Crescimento radicular calculado automaticamente, limitado pelos
+        // valores de profundidade inicial/máxima quando personalizado
+        const rootDepth = computeRootDepth({
+          phases,
+          dae: dap,
+          cultureRootDepth: culture.root_depth,
+          initialRootDepth: custom ? assignment.initial_root_depth : null,
+          maxRootDepth: custom ? assignment.max_root_depth : null,
+        });
         const phaseId = phases.length > 0 ? identifyPhase(phases, dap) : null;
         const phaseName = phaseId?.phase.name ?? "—";
-        const basePFactor = phaseId?.phase.depletion_factor ?? culture.depletion_factor;
+        const basePFactor = resolveDepletionFactor(
+          assignment,
+          phaseId?.phase.depletion_factor,
+          culture.depletion_factor,
+        );
 
         const weather = weatherByDate[dateStr] ?? { et0: 0, precip: 0 };
         const irrigation = irrigationByDate[dateStr] ?? 0;
@@ -334,7 +361,7 @@ export default function BalancoHidricoPage() {
           effectiveSoilDepth: soil.effective_depth,
           kc,
           depletionFactor: basePFactor,
-          pivotEfficiency: pivot.efficiency,
+          pivotEfficiency: effectiveEfficiency,
           pivotArea: pivot.area,
           pivotFlowRate: pivot.flow_rate,
         });
