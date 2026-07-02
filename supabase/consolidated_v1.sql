@@ -353,6 +353,14 @@ CREATE TABLE water_balances (
   irrigation_time             DOUBLE PRECISION NOT NULL DEFAULT 0,
   water_status                TEXT NOT NULL DEFAULT 'ideal'
                               CHECK (water_status IN ('saturado','ideal','atencao','deficit','deficit_critico')),
+  -- Motor central do balanço hídrico (Fase 3)
+  dae                         INTEGER,
+  phase                       TEXT,
+  effective_irrigation        DOUBLE PRECISION NOT NULL DEFAULT 0,
+  depletion                   DOUBLE PRECISION,
+  should_irrigate             BOOLEAN NOT NULL DEFAULT false,
+  recommendation_reason       TEXT,
+  hydric_status               TEXT CHECK (hydric_status IS NULL OR hydric_status IN ('verde','amarelo','vermelho','cinza')),
   created_at                  TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE(pivot_crop_assignment_id, date)
 );
