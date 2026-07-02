@@ -11,6 +11,8 @@ interface PivotMarker {
   longitude: number;
   radiusMeters: number;
   active?: boolean;
+  /** cor do círculo (status hídrico); default verde */
+  color?: string;
 }
 
 interface PivotMapProps {
@@ -18,6 +20,7 @@ interface PivotMapProps {
   highlightId?: string;
   center?: { lat: number; lng: number };
   className?: string;
+  onSelect?: (id: string) => void;
 }
 
 const SATELLITE_URL =
@@ -25,7 +28,7 @@ const SATELLITE_URL =
 const LABELS_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
 
-export function PivotMap({ pivots, highlightId, center, className }: PivotMapProps) {
+export function PivotMap({ pivots, highlightId, center, className, onSelect }: PivotMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -71,13 +74,14 @@ export function PivotMap({ pivots, highlightId, center, className }: PivotMapPro
       if (!pivot.latitude || !pivot.longitude) continue;
       const latlng: L.LatLngExpression = [pivot.latitude, pivot.longitude];
       const isHighlighted = pivot.id === highlightId;
+      const baseColor = pivot.color ?? "#22c55e";
 
-      L.circle(latlng, {
+      const circle = L.circle(latlng, {
         radius: pivot.radiusMeters || 300,
-        color: isHighlighted ? "#2563eb" : "#22c55e",
-        fillColor: isHighlighted ? "#3b82f6" : "#4ade80",
-        fillOpacity: isHighlighted ? 0.25 : 0.15,
-        weight: isHighlighted ? 3 : 2,
+        color: isHighlighted ? "#2563eb" : baseColor,
+        fillColor: baseColor,
+        fillOpacity: isHighlighted ? 0.4 : 0.25,
+        weight: isHighlighted ? 4 : 2,
       })
         .addTo(map)
         .bindTooltip(pivot.name, {
@@ -86,9 +90,14 @@ export function PivotMap({ pivots, highlightId, center, className }: PivotMapPro
           className: "leaflet-pivot-label",
         });
 
+      if (onSelect) {
+        circle.on("click", () => onSelect(pivot.id));
+        circle.getElement()?.setAttribute("style", "cursor:pointer");
+      }
+
       const icon = L.divIcon({
         className: "pivot-center-icon",
-        html: `<div style="width:8px;height:8px;border-radius:50%;background:${isHighlighted ? "#2563eb" : "#16a34a"};border:2px solid white;"></div>`,
+        html: `<div style="width:8px;height:8px;border-radius:50%;background:${isHighlighted ? "#2563eb" : baseColor};border:2px solid white;"></div>`,
         iconSize: [12, 12],
         iconAnchor: [6, 6],
       });
@@ -100,7 +109,7 @@ export function PivotMap({ pivots, highlightId, center, className }: PivotMapPro
     if (bounds.isValid()) {
       map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
     }
-  }, [pivots, highlightId]);
+  }, [pivots, highlightId, onSelect]);
 
   useEffect(() => {
     const map = mapRef.current;

@@ -52,7 +52,7 @@ export function useFarmHydricState(): FarmHydricState {
     // 1. pivôs da fazenda
     const { data: pivotRows } = await supabase
       .from("pivots")
-      .select("id, name, area, flow_rate, efficiency")
+      .select("id, name, area, flow_rate, efficiency, latitude, longitude")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name");
@@ -160,6 +160,8 @@ export function useFarmHydricState(): FarmHydricState {
           varietyName: null,
           seasonName: null,
           area: (pivot.area as number) ?? 0,
+          latitude: (pivot.latitude as number) ?? 0,
+          longitude: (pivot.longitude as number) ?? 0,
           current: null,
           history: [],
         });
@@ -174,6 +176,8 @@ export function useFarmHydricState(): FarmHydricState {
           varietyName: assignment.culture_variety_id ? varietyMap.get(assignment.culture_variety_id as string) ?? null : null,
           seasonName: assignment.season_id ? seasonMap.get(assignment.season_id as string) ?? null : null,
           area: (pivot.area as number) ?? 0,
+          latitude: (pivot.latitude as number) ?? 0,
+          longitude: (pivot.longitude as number) ?? 0,
         },
         {
           assignment: {

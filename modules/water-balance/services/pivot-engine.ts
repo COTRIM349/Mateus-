@@ -287,13 +287,26 @@ export interface PivotHydricState {
   varietyName: string | null;
   seasonName: string | null;
   area: number;
+  latitude: number;
+  longitude: number;
   current: BalanceDay | null;
   history: BalanceDay[];
 }
 
+export interface PivotIdentity {
+  pivotId: string;
+  pivotName: string;
+  cultureName: string;
+  varietyName: string | null;
+  seasonName: string | null;
+  area: number;
+  latitude: number;
+  longitude: number;
+}
+
 /** Estado atual = último dia da série calculada (ou null se sem série). */
 export function computePivotCurrentState(
-  identity: { pivotId: string; pivotName: string; cultureName: string; varietyName: string | null; seasonName: string | null; area: number },
+  identity: PivotIdentity,
   input: PivotEngineInput,
 ): PivotHydricState {
   const history = computePivotBalanceSeries(input);

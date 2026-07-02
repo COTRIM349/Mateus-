@@ -5,146 +5,36 @@ import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
-import { useCrud } from "@/lib/hooks/use-crud";
-import { useImplantationStatus } from "@/lib/hooks";
+import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
 import { radiusFromArea } from "@/utils/geo";
+import {
+  HYDRIC_STATUS_CONFIG,
+  type PivotHydricState,
+  type FarmHydricSummary,
+} from "@/modules/water-balance/services";
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
   { ssr: false, loading: () => <div className="flex h-[400px] items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-graphite-700 dark:bg-graphite-800"><p className="text-sm text-gray-400">Carregando mapa...</p></div> }
 );
 
-// ── DB interfaces (snake_case) ────────────────────────────────────────
-
-interface PivotRecord {
-  id: string;
-  farm_id: string;
-  module_id: string | null;
-  culture_id: string | null;
-  name: string;
-  code: string | null;
-  area: number;
-  radius: number;
-  flow_rate: number;
-  pump_power: number;
-  motor_efficiency: number;
-  efficiency: number;
-  latitude: number;
-  longitude: number;
-  status: string;
-  manufacturer: string | null;
-  model: string | null;
-  pivot_type: string | null;
-  active: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-interface ReservoirRecord {
-  id: string;
-  farm_id: string;
-  name: string;
-  type: string;
-  max_capacity: number;
-  current_volume: number;
-  min_operational_level: number;
-  active: boolean;
-}
-
-interface PumpHouseRecord {
-  id: string;
-  farm_id: string;
-  name: string;
-  max_flow_rate: number;
-  max_simultaneous: number;
-  power_kw: number;
-  status: string;
-  active: boolean;
-}
-
-interface PumpHousePivotRecord {
-  id: string;
-  pump_house_id: string;
-  pivot_id: string;
-  hydraulic_line: string;
-  priority_order: number;
-}
-
-// ── Tabs ──────────────────────────────────────────────────────────────
-
 const TABS = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "mapa", label: "Mapa Operacional" },
-  { id: "operacoes", label: "Centro de Operações" },
-  { id: "indicadores", label: "Indicadores" },
+  { id: "painel", label: "Dashboard Operacional" },
+  { id: "mapa", label: "Mapa Hídrico" },
 ];
-
-const STATUS_COLORS: Record<string, { bg: string; text: string; label: string }> = {
-  irrigando:   { bg: "bg-green-500",  text: "text-green-700 dark:text-green-400", label: "Irrigando" },
-  alerta:      { bg: "bg-red-500",    text: "text-red-700 dark:text-red-400", label: "Alerta" },
-  parado:      { bg: "bg-gray-400",   text: "text-gray-600 dark:text-gray-400", label: "Parado" },
-  manutencao:  { bg: "bg-orange-500", text: "text-orange-700 dark:text-orange-400", label: "Manutenção" },
-};
-
-const PIE_COLORS = ["#22c55e", "#f59e0b", "#3b82f6", "#ef4444", "#8b5cf6", "#06b6d4"];
 
 // ── Page ──────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
   const { profile, farms, activeFarmId } = useAuth();
   const activeFarm = farms.find((f) => f.id === activeFarmId);
-  const [activeTab, setActiveTab] = useState("dashboard");
-
-  const { data: pivots, loading: loadingPivots } = useCrud<PivotRecord>({
-    table: "pivots",
-    orderBy: "name",
-    ascending: true,
-    filters: { farm_id: activeFarmId ?? null },
-  });
-
-  const { data: reservoirs, loading: loadingReservoirs } = useCrud<ReservoirRecord>({
-    table: "reservoirs",
-    orderBy: "name",
-    ascending: true,
-    filters: { farm_id: activeFarmId ?? null },
-  });
-
-  const { data: pumpHouses, loading: loadingPumpHouses } = useCrud<PumpHouseRecord>({
-    table: "pump_houses",
-    orderBy: "name",
-    ascending: true,
-    filters: { farm_id: activeFarmId ?? null },
-  });
-
-  const { data: pumpHousePivots } = useCrud<PumpHousePivotRecord>({
-    table: "pump_house_pivots",
-    orderBy: "priority_order",
-    ascending: true,
-  });
+  const [activeTab, setActiveTab] = useState("painel");
 
   const implantation = useImplantationStatus();
+  const { states, summary, loading } = useFarmHydricState();
 
-  const activePivots = useMemo(() => pivots.filter((p) => p.active), [pivots]);
-  const activeReservoirs = useMemo(() => reservoirs.filter((r) => r.active), [reservoirs]);
-  const activePumpHouses = useMemo(() => pumpHouses.filter((ph) => ph.active), [pumpHouses]);
-
-  const loading = loadingPivots || loadingReservoirs || loadingPumpHouses || implantation.loading;
-
-  const totalArea = useMemo(() => activePivots.reduce((s, p) => s + p.area, 0), [activePivots]);
-  const irrigatingPivots = useMemo(() => activePivots.filter((p) => p.status === "irrigando"), [activePivots]);
-  const irrigatingArea = useMemo(() => irrigatingPivots.reduce((s, p) => s + p.area, 0), [irrigatingPivots]);
-  const alertCount = useMemo(() => activePivots.filter((p) => p.status === "alerta").length, [activePivots]);
-  const maintenanceCount = useMemo(() => activePivots.filter((p) => p.status === "manutencao").length, [activePivots]);
-
-  const statusCounts = useMemo(() => {
-    return activePivots.reduce<Record<string, number>>((acc, p) => {
-      acc[p.status] = (acc[p.status] || 0) + 1;
-      return acc;
-    }, {});
-  }, [activePivots]);
-
-  if (loading) {
+  if (implantation.loading || loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
@@ -156,10 +46,10 @@ export default function DashboardPage() {
     <div className="space-y-6">
       <PageHeader
         titulo="Centro de Controle Operacional"
-        descricao={activeFarm ? `${activeFarm.name} · Controle em tempo real` : "Controle em tempo real da operação"}
+        descricao={activeFarm ? `${activeFarm.name} · Balanço hídrico em tempo real` : "Balanço hídrico da operação"}
       />
 
-      {profile && implantation.foundationComplete && (
+      {profile && implantation.foundationComplete && summary && (
         <Card className="border-brand-200 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20">
           <div className="flex items-start gap-4">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white">
@@ -172,7 +62,7 @@ export default function DashboardPage() {
                 Bom dia, {profile.name.split(" ")[0]}!
               </p>
               <p className="mt-0.5 text-sm text-brand-700 dark:text-brand-400">
-                {irrigatingPivots.length} pivô(s) irrigando · {alertCount > 0 ? `${alertCount} alerta(s) · ` : ""}{activePivots.length} pivôs cadastrados
+                {summary.needIrrigationToday} pivô(s) para irrigar hoje · {summary.attention} em atenção · {summary.adequate} adequado(s)
               </p>
             </div>
           </div>
@@ -185,556 +75,307 @@ export default function DashboardPage() {
           progress={implantation.progress}
           nextStep={implantation.nextStep}
         />
+      ) : !summary || summary.totalPivots === 0 ? (
+        <EmptyState
+          title="Nenhum pivô para calcular"
+          description="Cadastre pivôs e suas vinculações operacionais para visualizar o balanço hídrico."
+          actionLabel="Ir para Vinculação"
+          onAction={() => { window.location.href = "/vinculacao"; }}
+        />
       ) : (
         <>
+          {summary.noData > 0 && (
+            <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20">
+              <p className="text-sm text-amber-800 dark:text-amber-300">
+                {summary.noData} pivô(s) sem dados suficientes para cálculo (vínculo, fases da cultura ou clima ausentes). Complete os cadastros para incluí-los no balanço.
+              </p>
+            </Card>
+          )}
+
           <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-          {activeTab === "dashboard" && (
-            <DashboardTab
-              pivots={activePivots}
-              irrigatingCount={irrigatingPivots.length}
-              totalArea={totalArea}
-              irrigatingArea={irrigatingArea}
-              alertCount={alertCount}
-              maintenanceCount={maintenanceCount}
-              statusCounts={statusCounts}
-              reservoirs={activeReservoirs}
-              pumpHouses={activePumpHouses}
-              pumpHousePivots={pumpHousePivots}
-            />
-          )}
-
-          {activeTab === "mapa" && (
-            <MapaTab pivots={activePivots} statusCounts={statusCounts} />
-          )}
-
-          {activeTab === "operacoes" && (
-            <OperacoesTab
-              pivots={activePivots}
-              irrigatingCount={irrigatingPivots.length}
-              alertCount={alertCount}
-              maintenanceCount={maintenanceCount}
-            />
-          )}
-
-          {activeTab === "indicadores" && (
-            <IndicadoresTab
-              pivots={activePivots}
-              totalArea={totalArea}
-              irrigatingArea={irrigatingArea}
-              irrigatingCount={irrigatingPivots.length}
-              reservoirs={activeReservoirs}
-              pumpHouses={activePumpHouses}
-            />
-          )}
+          {activeTab === "painel" && <PainelTab summary={summary} />}
+          {activeTab === "mapa" && <MapaHidricoTab states={states} />}
         </>
       )}
     </div>
   );
 }
 
-// ── SmartCard Component ───────────────────────────────────────────────
+// ── Dashboard Operacional (item 16) ───────────────────────────────────
 
-function SmartCard({
-  title,
-  color,
-  items,
-  emptyText,
-}: {
-  title: string;
-  color: "red" | "green" | "amber" | "blue";
-  items: { label: string; value: string; sub: string }[];
-  emptyText: string;
-}) {
-  const borderColors = {
-    red: "border-red-200 dark:border-red-900",
-    green: "border-green-200 dark:border-green-900",
-    amber: "border-amber-200 dark:border-amber-900",
-    blue: "border-blue-200 dark:border-blue-900",
-  };
-  const headerColors = {
-    red: "text-red-700 dark:text-red-400",
-    green: "text-green-700 dark:text-green-400",
-    amber: "text-amber-700 dark:text-amber-400",
-    blue: "text-blue-700 dark:text-blue-400",
-  };
-
-  return (
-    <div className={`rounded-xl border bg-white p-3 dark:bg-graphite-900 ${borderColors[color]}`}>
-      <h4 className={`mb-2 text-xs font-semibold ${headerColors[color]}`}>{title}</h4>
-      {items.length > 0 ? (
-        <div className="space-y-1.5">
-          {items.map((item, i) => (
-            <div key={i} className="flex items-center justify-between text-xs">
-              <div>
-                <span className="font-medium text-graphite-900 dark:text-white">{item.label}</span>
-                <span className="ml-1 text-gray-400 dark:text-gray-500">{item.sub}</span>
-              </div>
-              <span className="font-semibold text-graphite-900 dark:text-white">{item.value}</span>
-            </div>
-          ))}
-        </div>
-      ) : (
-        <p className="text-xs text-gray-400 dark:text-gray-500">{emptyText}</p>
-      )}
-    </div>
-  );
-}
-
-// ── Dashboard Tab ─────────────────────────────────────────────────────
-
-function DashboardTab({
-  pivots,
-  irrigatingCount,
-  totalArea,
-  irrigatingArea,
-  alertCount,
-  maintenanceCount,
-  statusCounts,
-  reservoirs,
-  pumpHouses,
-  pumpHousePivots,
-}: {
-  pivots: PivotRecord[];
-  irrigatingCount: number;
-  totalArea: number;
-  irrigatingArea: number;
-  alertCount: number;
-  maintenanceCount: number;
-  statusCounts: Record<string, number>;
-  reservoirs: ReservoirRecord[];
-  pumpHouses: PumpHouseRecord[];
-  pumpHousePivots: PumpHousePivotRecord[];
-}) {
-  const pendingArea = totalArea - irrigatingArea;
-  const irrigationPct = totalArea > 0 ? Math.round((irrigatingArea / totalArea) * 100) : 0;
-
-  const kpiMetrics = [
-    { id: "total", title: "Total de Pivôs", value: String(pivots.length), description: `${totalArea.toFixed(0)} ha total` },
-    { id: "irrigando", title: "Irrigando", value: String(irrigatingCount), description: `${irrigatingArea.toFixed(0)} ha`, variation: `${irrigationPct}%`, trend: "positive" as const },
-    { id: "parados", title: "Parados", value: String(statusCounts["parado"] || 0), description: `${pendingArea.toFixed(0)} ha pendente`, trend: "neutral" as const },
-    { id: "alerta", title: "Alertas", value: String(alertCount), description: "Pivôs em alerta", trend: alertCount > 0 ? "negative" as const : "positive" as const },
-    { id: "manutencao", title: "Manutenção", value: String(maintenanceCount), description: "Em manutenção", trend: maintenanceCount > 0 ? "negative" as const : "positive" as const },
-    { id: "reserv", title: "Reservatórios", value: String(reservoirs.length), description: reservoirs.length > 0 ? "Cadastrados" : "Nenhum cadastrado" },
-    { id: "casas", title: "Casas de Bomba", value: String(pumpHouses.length), description: pumpHouses.length > 0 ? "Cadastradas" : "Nenhuma cadastrada" },
-    { id: "area", title: "Área Total", value: `${totalArea.toFixed(0)} ha`, description: "Área sob irrigação" },
+function PainelTab({ summary }: { summary: FarmHydricSummary }) {
+  const kpis = [
+    { id: "total", title: "Total de Pivôs", value: String(summary.totalPivots), description: "Com cálculo de balanço" },
+    { id: "irrigar", title: "Irrigar Hoje", value: String(summary.needIrrigationToday), description: "Déficit ≥ AFD", trend: summary.needIrrigationToday > 0 ? "negative" as const : "positive" as const },
+    { id: "atencao", title: "Em Atenção", value: String(summary.attention), description: "70–100% da AFD", trend: summary.attention > 0 ? "neutral" as const : "positive" as const },
+    { id: "adequado", title: "Sem Necessidade", value: String(summary.adequate), description: "Armazenamento adequado", trend: "positive" as const },
+    { id: "area_irrig", title: "Área Total", value: `${summary.totalIrrigatedArea.toFixed(0)} ha`, description: "Sob balanço hídrico" },
+    { id: "area_def", title: "Área em Déficit", value: `${summary.areaInDeficit.toFixed(0)} ha`, description: "Fora da condição adequada" },
+    { id: "lamina", title: "Lâmina Média", value: `${summary.avgRecommendedDepth.toFixed(1)} mm`, description: "Recomendada (bruta)" },
+    { id: "deficit", title: "Déficit Médio", value: `${summary.avgDeficit.toFixed(1)} mm`, description: "Média da fazenda" },
+    { id: "volume", title: "Volume Total", value: `${summary.totalRecommendedVolume.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³`, description: "Água recomendada hoje" },
   ];
-
-  const statusPieData = Object.entries(statusCounts).map(([status, count]) => ({
-    name: STATUS_COLORS[status]?.label ?? status,
-    value: count,
-  }));
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4 lg:grid-cols-8">
-        {kpiMetrics.map((m) => (
-          <StatCard key={m.id} metric={m} />
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+        {kpis.map((k) => (
+          <StatCard key={k.id} metric={k} />
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-        <SmartCard
-          title="Pivôs Irrigando"
-          color="green"
-          items={pivots
-            .filter((p) => p.status === "irrigando")
-            .slice(0, 5)
-            .map((p) => ({
-              label: p.name,
-              value: `${p.area.toFixed(0)} ha`,
-              sub: `${p.flow_rate} m³/h`,
-            }))}
-          emptyText="Nenhum pivô irrigando"
-        />
-        <SmartCard
-          title="Alertas Ativos"
-          color="red"
-          items={pivots
-            .filter((p) => p.status === "alerta")
-            .map((p) => ({
-              label: p.name,
-              value: "Alerta",
-              sub: `${p.area.toFixed(0)} ha`,
-            }))}
-          emptyText="Sem alertas ativos"
-        />
-        <SmartCard
-          title="Reservatórios"
-          color="blue"
-          items={reservoirs.map((r) => {
-            const pct = r.max_capacity > 0 ? Math.round((r.current_volume / r.max_capacity) * 100) : 0;
-            return {
-              label: r.name,
-              value: `${pct}%`,
-              sub: `${r.current_volume.toLocaleString("pt-BR")} m³`,
-            };
-          })}
-          emptyText="Nenhum reservatório cadastrado"
-        />
-        <SmartCard
-          title="Casas de Bomba"
-          color="green"
-          items={pumpHouses.map((ph) => {
-            const linkedCount = pumpHousePivots.filter((php) => php.pump_house_id === ph.id).length;
-            return {
-              label: ph.name,
-              value: `${linkedCount} pivô(s)`,
-              sub: ph.status === "ativa" ? "Operando" : ph.status === "manutencao" ? "Manutenção" : "Inativa",
-            };
-          })}
-          emptyText="Nenhuma casa de bomba cadastrada"
-        />
-      </div>
-
-      {statusPieData.length > 0 && (
+      <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Distribuição de Status</h3>
-          <div className="flex flex-wrap gap-6">
-            {statusPieData.map((item, i) => (
-              <div key={item.name} className="flex items-center gap-2">
-                <div className="h-3 w-3 rounded-full" style={{ backgroundColor: PIE_COLORS[i % PIE_COLORS.length] }} />
-                <span className="text-sm text-gray-600 dark:text-gray-400">{item.name}: <strong className="text-graphite-900 dark:text-white">{item.value}</strong></span>
-              </div>
-            ))}
-          </div>
+          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Pivôs mais críticos</h3>
+          {summary.ranking.length > 0 ? (
+            <div className="space-y-2">
+              {summary.ranking.slice(0, 8).map((s, i) => (
+                <RankRow key={s.pivotId} rank={i + 1} state={s} />
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-gray-500">Sem pivôs com dados de balanço.</p>
+          )}
         </Card>
-      )}
+
+        <Card>
+          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Prioridade de irrigação</h3>
+          {summary.priorityList.length > 0 ? (
+            <div className="space-y-2">
+              {summary.priorityList.map((s, i) => (
+                <div key={s.pivotId} className="flex items-center justify-between rounded-lg bg-red-50 p-3 dark:bg-red-900/20">
+                  <div className="flex items-center gap-3">
+                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                      {i + 1}
+                    </span>
+                    <div>
+                      <span className="text-sm font-medium text-graphite-900 dark:text-white">{s.pivotName}</span>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">{s.cultureName} · {s.current!.phase}</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-graphite-900 dark:text-white">{s.current!.recommendedGrossDepth.toFixed(1)} mm</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">déficit {s.current!.deficit.toFixed(1)} mm</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 dark:text-gray-500">Nenhum pivô precisa de irrigação hoje.</p>
+          )}
+        </Card>
+      </div>
     </div>
   );
 }
 
-// ── Mapa Tab ──────────────────────────────────────────────────────────
+function RankRow({ rank, state }: { rank: number; state: PivotHydricState }) {
+  const c = state.current!;
+  const conf = HYDRIC_STATUS_CONFIG[c.status];
+  return (
+    <div className="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-graphite-800">
+      <div className="flex items-center gap-3">
+        <span className="w-5 text-center text-xs font-bold text-gray-400">{rank}</span>
+        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: conf.color }} />
+        <div>
+          <span className="text-sm font-medium text-graphite-900 dark:text-white">{state.pivotName}</span>
+          <p className="text-xs text-gray-500 dark:text-gray-400">{state.cultureName} · {c.phase}</p>
+        </div>
+      </div>
+      <div className="text-right">
+        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${conf.bgClass}`}>{conf.label}</span>
+        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">depleção {(c.depletion * 100).toFixed(0)}%</p>
+      </div>
+    </div>
+  );
+}
 
-function MapaTab({
-  pivots,
-  statusCounts,
-}: {
-  pivots: PivotRecord[];
-  statusCounts: Record<string, number>;
-}) {
+// ── Mapa Hídrico (item 17) ────────────────────────────────────────────
+
+function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  const selected = states.find((s) => s.pivotId === selectedId) ?? null;
+
   const mapPivots = useMemo(
     () =>
-      pivots
-        .filter((p) => p.latitude && p.longitude)
-        .map((p) => ({
-          id: p.id,
-          name: p.name,
-          latitude: p.latitude,
-          longitude: p.longitude,
-          radiusMeters: radiusFromArea(p.area),
-        })),
-    [pivots]
+      states.map((s) => ({
+        id: s.pivotId,
+        name: s.pivotName,
+        latitude: s.latitude,
+        longitude: s.longitude,
+        radiusMeters: radiusFromArea(s.area),
+        color: HYDRIC_STATUS_CONFIG[s.current?.status ?? "cinza"].color,
+      })),
+    [states],
   );
 
-  const pivotsWithCoordinates = pivots.filter((p) => p.latitude && p.longitude);
+  // contagem por status para a legenda
+  const counts = states.reduce<Record<string, number>>((acc, s) => {
+    const st = s.current?.status ?? "cinza";
+    acc[st] = (acc[st] || 0) + 1;
+    return acc;
+  }, {});
 
-  if (pivotsWithCoordinates.length === 0) {
-    return (
-      <EmptyState
-        title="Sem coordenadas de pivôs"
-        description="Os pivôs cadastrados não possuem coordenadas geográficas. Edite os pivôs para adicionar latitude e longitude."
-        icon={
-          <svg className="h-7 w-7" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7" />
-          </svg>
-        }
-      />
-    );
-  }
+  const hasCoords = mapPivots.some((p) => p.latitude && p.longitude);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap gap-4">
-        {Object.entries(STATUS_COLORS).map(([key, conf]) => (
-          <div key={key} className="flex items-center gap-2">
-            <div className={`h-3 w-3 rounded-full ${conf.bg}`} />
-            <span className="text-xs text-gray-600 dark:text-gray-400">
-              {conf.label}: {statusCounts[key] || 0}
-            </span>
+        {(["verde", "amarelo", "vermelho", "cinza"] as const).map((k) => (
+          <div key={k} className="flex items-center gap-2">
+            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: HYDRIC_STATUS_CONFIG[k].color }} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">{HYDRIC_STATUS_CONFIG[k].label}: {counts[k] || 0}</span>
           </div>
         ))}
       </div>
 
-      <PivotMap pivots={mapPivots} className="h-[500px] w-full rounded-lg border border-gray-200 dark:border-graphite-700" />
+      <div className="grid gap-6 lg:grid-cols-3">
+        <div className="lg:col-span-2">
+          {hasCoords ? (
+            <PivotMap
+              pivots={mapPivots.filter((p) => p.latitude && p.longitude)}
+              highlightId={selectedId ?? undefined}
+              onSelect={setSelectedId}
+              className="h-[520px] w-full rounded-lg border border-gray-200 dark:border-graphite-700"
+            />
+          ) : (
+            <EmptyState
+              title="Pivôs sem coordenadas"
+              description="Cadastre latitude e longitude nos pivôs para exibi-los no mapa hídrico."
+            />
+          )}
+          {/* seleção também pela lista, caso o pivô não tenha coordenada */}
+          <div className="mt-4 flex flex-wrap gap-2">
+            {states.map((s) => {
+              const conf = HYDRIC_STATUS_CONFIG[s.current?.status ?? "cinza"];
+              return (
+                <button
+                  key={s.pivotId}
+                  type="button"
+                  onClick={() => setSelectedId(s.pivotId)}
+                  className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
+                    selectedId === s.pivotId ? "border-brand-400 bg-brand-50 dark:border-brand-600 dark:bg-brand-900/20" : "border-gray-200 dark:border-graphite-700"
+                  }`}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ backgroundColor: conf.color }} />
+                  {s.pivotName}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
-        {pivots.map((p) => {
-          const conf = STATUS_COLORS[p.status] || STATUS_COLORS.parado;
-          return (
-            <Card key={p.id} className="relative overflow-hidden">
-              <div className={`absolute left-0 top-0 h-full w-1 ${conf.bg}`} />
-              <div className="pl-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">{p.name}</h4>
-                  <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${conf.bg} text-white`}>
-                    {conf.label}
-                  </span>
-                </div>
-                <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">{p.area.toFixed(0)} ha · {p.flow_rate} m³/h</p>
-                {p.manufacturer && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500">{p.manufacturer}{p.model ? ` ${p.model}` : ""}</p>
-                )}
-              </div>
+        <div>
+          {selected ? (
+            <PivotDetail state={selected} />
+          ) : (
+            <Card className="flex h-full items-center justify-center py-16 text-center">
+              <p className="text-sm text-gray-400 dark:text-gray-500">Selecione um pivô no mapa para ver o balanço hídrico detalhado.</p>
             </Card>
-          );
-        })}
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
-// ── Operações Tab ─────────────────────────────────────────────────────
+// ── Detalhe do pivô (itens 15 e 17) ───────────────────────────────────
 
-function OperacoesTab({
-  pivots,
-  irrigatingCount,
-  alertCount,
-  maintenanceCount,
-}: {
-  pivots: PivotRecord[];
-  irrigatingCount: number;
-  alertCount: number;
-  maintenanceCount: number;
-}) {
-  const stoppedCount = pivots.filter((p) => p.status === "parado").length;
+function PivotDetail({ state }: { state: PivotHydricState }) {
+  const c = state.current;
+  if (!c) {
+    return (
+      <Card>
+        <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{state.pivotName}</h3>
+        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+          Sem dados suficientes para cálculo. Verifique o vínculo operacional, as fases da cultura e as leituras de clima.
+        </p>
+      </Card>
+    );
+  }
+  const conf = HYDRIC_STATUS_CONFIG[c.status];
 
-  const irrigating = pivots.filter((p) => p.status === "irrigando");
-  const alerts = pivots.filter((p) => p.status === "alerta");
-  const maintenance = pivots.filter((p) => p.status === "manutencao");
-  const stopped = pivots.filter((p) => p.status === "parado");
-
-  return (
-    <div className="space-y-6">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-        <StatCard metric={{ id: "running", title: "Irrigando", value: String(irrigatingCount), description: "Em operação agora" }} />
-        <StatCard metric={{ id: "stopped", title: "Parados", value: String(stoppedCount), description: "Aguardando" }} />
-        <StatCard metric={{ id: "alerts", title: "Alertas", value: String(alertCount), description: "Requerem atenção", trend: alertCount > 0 ? "negative" : "positive" }} />
-        <StatCard metric={{ id: "maint", title: "Manutenção", value: String(maintenanceCount), description: "Em manutenção", trend: maintenanceCount > 0 ? "negative" : "positive" }} />
-      </div>
-
-      {alerts.length > 0 && (
-        <Card className="border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/20">
-          <h3 className="mb-3 text-sm font-semibold text-red-700 dark:text-red-400">Pivôs em Alerta</h3>
-          <div className="space-y-2">
-            {alerts.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded-lg bg-white/60 p-3 dark:bg-graphite-800/60">
-                <div>
-                  <span className="text-sm font-medium text-graphite-900 dark:text-white">{p.name}</span>
-                  <p className="text-xs text-red-600 dark:text-red-400">{p.area.toFixed(0)} ha · {p.flow_rate} m³/h</p>
-                </div>
-                <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700 dark:bg-red-900/40 dark:text-red-400">
-                  Alerta
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Card>
-          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Irrigações em Andamento</h3>
-          {irrigating.length > 0 ? (
-            <div className="space-y-2">
-              {irrigating.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-                  <div>
-                    <span className="text-sm font-medium text-graphite-900 dark:text-white">{p.name}</span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {p.area.toFixed(0)} ha · {p.flow_rate} m³/h · {p.pump_power} CV
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-700 dark:bg-green-900/40 dark:text-green-400">
-                    Irrigando
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 dark:text-gray-500">Nenhum pivô irrigando no momento</p>
-          )}
-        </Card>
-
-        <Card>
-          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Pivôs Parados</h3>
-          {stopped.length > 0 ? (
-            <div className="space-y-2">
-              {stopped.map((p) => (
-                <div key={p.id} className="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-graphite-800">
-                  <div>
-                    <span className="text-sm font-medium text-graphite-900 dark:text-white">{p.name}</span>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">
-                      {p.area.toFixed(0)} ha · {p.flow_rate} m³/h
-                    </p>
-                  </div>
-                  <span className="rounded-full bg-gray-100 px-2 py-0.5 text-xs font-semibold text-gray-600 dark:bg-graphite-700 dark:text-gray-400">
-                    Parado
-                  </span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-gray-400 dark:text-gray-500">Todos os pivôs estão em operação</p>
-          )}
-        </Card>
-      </div>
-
-      {maintenance.length > 0 && (
-        <Card>
-          <h3 className="mb-3 text-sm font-semibold text-orange-700 dark:text-orange-400">Em Manutenção</h3>
-          <div className="space-y-2">
-            {maintenance.map((p) => (
-              <div key={p.id} className="flex items-center justify-between rounded-lg bg-orange-50 p-3 dark:bg-orange-900/20">
-                <div>
-                  <span className="text-sm font-medium text-graphite-900 dark:text-white">{p.name}</span>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
-                    {p.area.toFixed(0)} ha · {p.manufacturer ?? ""}
-                  </p>
-                </div>
-                <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-semibold text-orange-700 dark:bg-orange-900/40 dark:text-orange-400">
-                  Manutenção
-                </span>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-    </div>
-  );
-}
-
-// ── Indicadores Tab ───────────────────────────────────────────────────
-
-function IndicadoresTab({
-  pivots,
-  totalArea,
-  irrigatingArea,
-  irrigatingCount,
-  reservoirs,
-  pumpHouses,
-}: {
-  pivots: PivotRecord[];
-  totalArea: number;
-  irrigatingArea: number;
-  irrigatingCount: number;
-  reservoirs: ReservoirRecord[];
-  pumpHouses: PumpHouseRecord[];
-}) {
-  const irrigationPct = totalArea > 0 ? Math.round((irrigatingArea / totalArea) * 100) : 0;
-  const avgArea = pivots.length > 0 ? (totalArea / pivots.length).toFixed(1) : "0";
-  const avgFlowRate = pivots.length > 0 ? (pivots.reduce((s, p) => s + p.flow_rate, 0) / pivots.length).toFixed(1) : "0";
-  const totalPower = pivots.reduce((s, p) => s + p.pump_power, 0);
-  const avgEfficiency = pivots.length > 0 ? (pivots.reduce((s, p) => s + p.efficiency, 0) / pivots.length * 100).toFixed(1) : "0";
-
-  const totalReservoirCapacity = reservoirs.reduce((s, r) => s + r.max_capacity, 0);
-  const totalReservoirVolume = reservoirs.reduce((s, r) => s + r.current_volume, 0);
-  const reservoirPct = totalReservoirCapacity > 0 ? Math.round((totalReservoirVolume / totalReservoirCapacity) * 100) : 0;
-
-  const totalPumpPower = pumpHouses.reduce((s, ph) => s + ph.power_kw, 0);
-
-  const indicators = [
-    {
-      group: "Pivôs",
-      items: [
-        { label: "Total", value: String(pivots.length) },
-        { label: "Irrigando", value: `${irrigatingCount} (${irrigationPct}%)` },
-        { label: "Área Média", value: `${avgArea} ha` },
-        { label: "Vazão Média", value: `${avgFlowRate} m³/h` },
-      ],
-    },
-    {
-      group: "Potência",
-      items: [
-        { label: "Total Pivôs (CV)", value: totalPower.toFixed(0) },
-        { label: "Eficiência Média", value: `${avgEfficiency}%` },
-        { label: "Casas de Bomba (kW)", value: totalPumpPower.toFixed(0) },
-      ],
-    },
-    {
-      group: "Área",
-      items: [
-        { label: "Área Total", value: `${totalArea.toFixed(0)} ha` },
-        { label: "Irrigando", value: `${irrigatingArea.toFixed(0)} ha` },
-        { label: "Pendente", value: `${(totalArea - irrigatingArea).toFixed(0)} ha` },
-      ],
-    },
-    {
-      group: "Reservatórios",
-      items: reservoirs.length > 0
-        ? [
-            { label: "Total", value: String(reservoirs.length) },
-            { label: "Capacidade", value: `${totalReservoirCapacity.toLocaleString("pt-BR")} m³` },
-            { label: "Volume Atual", value: `${totalReservoirVolume.toLocaleString("pt-BR")} m³ (${reservoirPct}%)` },
-          ]
-        : [{ label: "Status", value: "Nenhum cadastrado" }],
-    },
-    {
-      group: "Casas de Bomba",
-      items: pumpHouses.length > 0
-        ? [
-            { label: "Total", value: String(pumpHouses.length) },
-            { label: "Potência Total", value: `${totalPumpPower.toFixed(0)} kW` },
-            { label: "Ativas", value: String(pumpHouses.filter((ph) => ph.status === "ativa").length) },
-          ]
-        : [{ label: "Status", value: "Nenhuma cadastrada" }],
-    },
+  const rows: [string, string][] = [
+    ["Cultura", state.cultureName + (state.varietyName ? ` (${state.varietyName})` : "")],
+    ["Safra", state.seasonName ?? "—"],
+    ["DAE", `${c.dae} dias`],
+    ["Fase fenológica", c.phase],
+    ["Kc atual", c.kc.toFixed(2)],
+    ["ETo", `${c.et0.toFixed(1)} mm`],
+    ["ETc", `${c.etc.toFixed(1)} mm`],
+    ["Prof. radicular", `${c.rootDepth.toFixed(2)} m`],
+    ["ADT", `${c.adt.toFixed(1)} mm`],
+    ["AFD", `${c.afd.toFixed(1)} mm`],
+    ["Água armazenada", `${c.storage.toFixed(1)} mm`],
+    ["Déficit", `${c.deficit.toFixed(1)} mm`],
+    ["Depleção", `${(c.depletion * 100).toFixed(0)}%`],
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        {indicators.map((group) => (
-          <Card key={group.group}>
-            <h4 className="mb-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">{group.group}</h4>
-            <div className="space-y-2">
-              {group.items.map((item) => (
-                <div key={item.label} className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{item.label}</span>
-                  <span className="text-sm font-semibold text-graphite-900 dark:text-white">{item.value}</span>
-                </div>
-              ))}
-            </div>
-          </Card>
+    <Card>
+      <div className="mb-3 flex items-center justify-between">
+        <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{state.pivotName}</h3>
+        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${conf.bgClass}`}>{conf.label}</span>
+      </div>
+
+      <div className="space-y-1.5">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex items-center justify-between text-xs">
+            <span className="text-gray-500 dark:text-gray-400">{label}</span>
+            <span className="font-medium text-graphite-900 dark:text-white">{value}</span>
+          </div>
         ))}
       </div>
 
-      <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Detalhamento por Pivô</h3>
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-xs">
-            <thead>
-              <tr className="border-b border-gray-200 dark:border-graphite-700">
-                <th className="pb-2 pr-4 font-semibold text-gray-500 dark:text-gray-400">Pivô</th>
-                <th className="pb-2 pr-4 text-right font-semibold text-gray-500 dark:text-gray-400">Área (ha)</th>
-                <th className="pb-2 pr-4 text-right font-semibold text-gray-500 dark:text-gray-400">Vazão (m³/h)</th>
-                <th className="pb-2 pr-4 text-right font-semibold text-gray-500 dark:text-gray-400">Potência (CV)</th>
-                <th className="pb-2 pr-4 text-right font-semibold text-gray-500 dark:text-gray-400">Eficiência</th>
-                <th className="pb-2 font-semibold text-gray-500 dark:text-gray-400">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pivots.map((p) => {
-                const conf = STATUS_COLORS[p.status] || STATUS_COLORS.parado;
-                return (
-                  <tr key={p.id} className="border-b border-gray-100 dark:border-graphite-800">
-                    <td className="py-2 pr-4 font-medium text-graphite-900 dark:text-white">{p.name}</td>
-                    <td className="py-2 pr-4 text-right text-gray-600 dark:text-gray-300">{p.area.toFixed(1)}</td>
-                    <td className="py-2 pr-4 text-right text-gray-600 dark:text-gray-300">{p.flow_rate.toFixed(1)}</td>
-                    <td className="py-2 pr-4 text-right text-gray-600 dark:text-gray-300">{p.pump_power.toFixed(0)}</td>
-                    <td className="py-2 pr-4 text-right text-gray-600 dark:text-gray-300">{(p.efficiency * 100).toFixed(0)}%</td>
-                    <td className="py-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${conf.bg} text-white`}>
-                        {conf.label}
-                      </span>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+      <div className={`mt-4 rounded-lg p-3 ${c.shouldIrrigate ? "bg-red-50 dark:bg-red-900/20" : "bg-green-50 dark:bg-green-900/20"}`}>
+        <p className={`text-xs font-semibold ${c.shouldIrrigate ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
+          {c.shouldIrrigate ? "Irrigar hoje" : "Sem necessidade de irrigação hoje"}
+        </p>
+        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{c.recommendationReason}</p>
+        {c.shouldIrrigate && (
+          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
+            <div><span className="text-gray-400">Lâmina líquida:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedNetDepth.toFixed(1)} mm</strong></div>
+            <div><span className="text-gray-400">Lâmina bruta:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedGrossDepth.toFixed(1)} mm</strong></div>
+            <div><span className="text-gray-400">Volume:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedVolume.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³</strong></div>
+            <div><span className="text-gray-400">Tempo estimado:</span> <strong className="text-graphite-900 dark:text-white">{c.estimatedIrrigationTime.toFixed(1)} h</strong></div>
+          </div>
+        )}
+      </div>
+
+      {state.history.length > 1 && (
+        <div className="mt-4">
+          <h4 className="mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Histórico diário (últimos dias)</h4>
+          <div className="max-h-48 overflow-y-auto">
+            <table className="w-full text-left text-[11px]">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-graphite-700 text-gray-400">
+                  <th className="pb-1 pr-2">Data</th>
+                  <th className="pb-1 pr-2 text-right">ETc</th>
+                  <th className="pb-1 pr-2 text-right">Arm.</th>
+                  <th className="pb-1 pr-2 text-right">Déf.</th>
+                  <th className="pb-1">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {state.history.slice(-10).reverse().map((d) => {
+                  const dc = HYDRIC_STATUS_CONFIG[d.status];
+                  return (
+                    <tr key={d.date} className="border-b border-gray-100 dark:border-graphite-800">
+                      <td className="py-1 pr-2 text-gray-600 dark:text-gray-300">{d.date.slice(5)}</td>
+                      <td className="py-1 pr-2 text-right text-gray-600 dark:text-gray-300">{d.etc.toFixed(1)}</td>
+                      <td className="py-1 pr-2 text-right text-gray-600 dark:text-gray-300">{d.storage.toFixed(0)}</td>
+                      <td className="py-1 pr-2 text-right text-gray-600 dark:text-gray-300">{d.deficit.toFixed(0)}</td>
+                      <td className="py-1"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: dc.color }} /></td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </Card>
-    </div>
+      )}
+    </Card>
   );
 }
