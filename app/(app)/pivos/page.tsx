@@ -21,15 +21,6 @@ import { PIVOT_STATUSES, PIVOT_TYPES, PIVOT_MANUFACTURERS } from "@/constants/br
 import { createClient } from "@/lib/supabase/client";
 import { radiusFromArea } from "@/utils/geo";
 
-const PivotMap = dynamic(() => import("@/components/maps/PivotMap").then((mod) => mod.PivotMap), {
-  ssr: false,
-  loading: () => (
-    <div className="flex h-[400px] items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-graphite-700 dark:bg-graphite-800">
-      <p className="text-sm text-gray-400">Carregando mapa...</p>
-    </div>
-  ),
-});
-
 const MapPicker = dynamic(() => import("@/components/maps/MapPicker").then((mod) => mod.MapPicker), {
   ssr: false,
   loading: () => (
@@ -304,21 +295,6 @@ export default function PivosPage() {
   return (
     <div className="space-y-6">
       <PageHeader titulo="Pivôs" descricao="Cadastro e monitoramento de pivôs centrais" />
-
-      {/* Map Overview */}
-      {activePivots.length > 0 && (
-        <Card>
-          <PivotMap
-            pivots={activePivots.map((p) => ({
-              id: p.id,
-              name: p.name,
-              latitude: p.latitude,
-              longitude: p.longitude,
-              radiusMeters: p.radius,
-            }))}
-          />
-        </Card>
-      )}
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-gray-500 dark:text-gray-400">
