@@ -1,5 +1,55 @@
 # Roadmap - Cotrim Irrigacao Pro
 
+## Metodologia por Fases — Status Atual
+
+Desenvolvimento incremental, uma fase por vez, validando completamente antes de avancar.
+Esta versao trabalha **exclusivamente com dados reais** (Supabase); sem dados ficticios.
+
+### ✅ Fase 1 — Fundacao de Dados (concluida)
+- Fluxo guiado de implantacao (Fazenda → Solo → Cultura → Safra → Pivo)
+- Validacao de pre-requisitos por tela (empty states orientados)
+
+### ✅ Fase 2 — Vinculacao Operacional (concluida)
+- Vinculo pivo × safra × cultura × cultivar × solo (`pivot_crop_assignments`)
+- Datas de plantio/emergencia; parametros de manejo (padrao ou personalizado)
+
+### ✅ Fase 3 — Motor do Balanco Hidrico (concluida e validada)
+- DAE, fase fenologica, Kc diario, crescimento radicular automatico
+- ADT = (CC−PMP)×Z×1000 (FAO-56 eq.82, base volumetrica); AFD = ADT×p
+- ETc = ETo×Kc; saldo diario; deficit; deplecao
+- Status hidrico: verde (<70% AFD) · amarelo (70–<100%) · vermelho (≥100%) · cinza (sem dados)
+- Recomendacao: irrigar hoje, lamina liquida/bruta, volume, tempo, justificativa
+- Persistencia diaria em `water_balances`
+- Fonte unica de calculo: Dashboard Operacional, Mapa Hidrico e Tela de Balanco
+- **Auditoria tecnica aprovada** (bloqueantes corrigidos: densidade na ADT; clima ausente → cinza)
+
+### ⏳ Fase 4 — Modelo Operacional (escopo definido — nao implementada nesta versao)
+- Conceito de safra ativa por fazenda
+- Area plantada por vinculo (pode diferir da area total do pivo; alimenta o volume no motor)
+- Tela consolidada do modelo operacional da safra ativa, com indicador de "modelo completo"
+
+### ⏳ Fase 5 — Programacao da Irrigacao (planejada)
+- Recomendacao diaria
+- Lamina
+- Tempo de irrigacao
+- Volume
+- Fila e prioridade dos pivos
+- Agenda operacional
+
+### ⏳ Fase 6 — Energia e Rateio (planejada)
+- Consumo por pivo
+- Consumo por cultura
+- Consumo por fazenda
+- Custo por mm
+- Custo por hectare
+- Custo por m³
+- Rateio mensal e por safra
+
+> **Encerramento desta versao:** a plataforma fecha na **Fase 3 validada**. Proximo passo antes de
+> avancar para a Fase 4: **testar a plataforma com dados reais**.
+
+---
+
 ## Versao 1.0 (Atual) - Funcionalidades Implementadas
 
 ### Infraestrutura
