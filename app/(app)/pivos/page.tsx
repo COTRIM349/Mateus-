@@ -30,6 +30,15 @@ const PivotMap = dynamic(() => import("@/components/maps/PivotMap").then((mod) =
   ),
 });
 
+const MapPicker = dynamic(() => import("@/components/maps/MapPicker").then((mod) => mod.MapPicker), {
+  ssr: false,
+  loading: () => (
+    <div className="flex h-[60vh] items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-graphite-700 dark:bg-graphite-800">
+      <p className="text-sm text-gray-400">Carregando mapa...</p>
+    </div>
+  ),
+});
+
 // ── Types ──────────────────────────────────────────────────────────────
 
 interface Pivot {
@@ -660,44 +669,40 @@ function TabLocalizacao({
 }) {
   const [lat, setLat] = useState(editing?.latitude ?? 0);
   const [lng, setLng] = useState(editing?.longitude ?? 0);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [draft, setDraft] = useState<{ lat: number; lng: number } | null>(null);
 
   const computedRadius = useMemo(() => {
     if (areaValue <= 0) return 0;
     return Math.round(radiusFromArea(areaValue));
   }, [areaValue]);
 
-  const mapPivots = useMemo(() => {
-    const others = allPivots
-      .filter((p) => p.id !== editing?.id && p.latitude && p.longitude)
-      .map((p) => ({
-        id: p.id,
-        name: p.name,
-        latitude: p.latitude,
-        longitude: p.longitude,
-        radiusMeters: p.radius,
-      }));
+  const otherPivots = useMemo(
+    () =>
+      allPivots
+        .filter((p) => p.id !== editing?.id && p.latitude && p.longitude)
+        .map((p) => ({
+          id: p.id,
+          name: p.name,
+          latitude: p.latitude,
+          longitude: p.longitude,
+          radiusMeters: p.radius,
+        })),
+    [allPivots, editing],
+  );
 
-    if (lat && lng) {
-      others.push({
-        id: editing?.id ?? "new",
-        name: editing?.name ?? "Novo pivô",
-        latitude: lat,
-        longitude: lng,
-        radiusMeters: computedRadius,
-      });
+  const openPicker = () => {
+    setDraft(lat && lng ? { lat, lng } : null);
+    setPickerOpen(true);
+  };
+
+  const confirmPicker = () => {
+    if (draft) {
+      setLat(draft.lat);
+      setLng(draft.lng);
     }
-
-    return others;
-  }, [allPivots, editing, lat, lng, computedRadius]);
-
-  const mapCenter = useMemo(() => {
-    if (lat && lng) return { lat, lng };
-    if (allPivots.length > 0) {
-      const first = allPivots.find((p) => p.latitude && p.longitude);
-      if (first) return { lat: first.latitude, lng: first.longitude };
-    }
-    return undefined;
-  }, [lat, lng, allPivots]);
+    setPickerOpen(false);
+  };
 
   return (
     <div className="space-y-4">
@@ -734,15 +739,45 @@ function TabLocalizacao({
         </div>
       </div>
 
-      <PivotMap
-        pivots={mapPivots}
-        highlightId={editing?.id ?? "new"}
-        center={mapCenter}
-      />
+      <div>
+        <Button type="button" variant="secondary" onClick={openPicker}>
+          <span className="inline-flex items-center gap-2">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M17.657 16.657L13.414 20.9a2 2 0 01-2.828 0l-4.243-4.243a8 8 0 1111.314 0z" />
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+            </svg>
+            Localizar no mapa
+          </span>
+        </Button>
+        <p className="mt-2 text-xs text-gray-400 dark:text-gray-500">
+          Use “Localizar no mapa” para marcar o centro do pivô, ou informe as coordenadas manualmente.
+        </p>
+      </div>
 
-      <p className="text-xs text-gray-400 dark:text-gray-500">
-        O círculo irrigado é desenhado automaticamente com base na latitude, longitude e área informadas.
-      </p>
+      <Modal open={pickerOpen} onClose={() => setPickerOpen(false)} title="Localizar pivô no mapa" size="xl">
+        <div className="space-y-4">
+          {pickerOpen && (
+            <MapPicker
+              value={draft}
+              onChange={(la, lo) => setDraft({ lat: la, lng: lo })}
+              radiusMeters={computedRadius}
+              otherPivots={otherPivots}
+              className="h-[60vh] w-full rounded-lg border border-gray-200 dark:border-graphite-700"
+            />
+          )}
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              {draft
+                ? `Centro: ${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}`
+                : "Clique no mapa para marcar o centro do pivô."}
+            </p>
+            <div className="flex justify-end gap-3">
+              <Button type="button" variant="secondary" onClick={() => setPickerOpen(false)}>Cancelar</Button>
+              <Button type="button" onClick={confirmPicker} disabled={!draft}>Confirmar localização</Button>
+            </div>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
