@@ -188,9 +188,17 @@ export default function PivosPage() {
       return;
     }
 
+    const name = ((fd.get("name") as string) ?? "").trim();
+    if (!name) {
+      setFormError("Informe o nome do pivô (aba Geral).");
+      setActiveTab("geral");
+      setSaving(false);
+      return;
+    }
+
     const payload = {
       farm_id: activeFarmId!,
-      name: fd.get("name") as string,
+      name,
       code: (fd.get("code") as string) || null,
       module_id: (fd.get("module_id") as string) || null,
       culture_id: (fd.get("culture_id") as string) || null,
@@ -320,25 +328,29 @@ export default function PivosPage() {
         title={editing ? `Editar: ${editing.name}` : "Novo pivô"}
         size="xl"
       >
-        <form onSubmit={handleSubmit}>
+        {/* noValidate: validação feita em JS; evita que campos required em abas
+            ocultas (todas montadas) bloqueiem o envio de forma não focável. */}
+        <form onSubmit={handleSubmit} noValidate>
           <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+          {/* Todas as abas permanecem montadas (apenas a ativa visível) para que
+              todos os campos entrem no FormData, independente da aba selecionada. */}
           <div className="mt-4">
-            {activeTab === "geral" && (
+            <div className={activeTab === "geral" ? "" : "hidden"}>
               <TabGeral
                 editing={editing}
                 modules={modules}
                 cultures={cultures}
               />
-            )}
-            {activeTab === "caracteristicas" && (
+            </div>
+            <div className={activeTab === "caracteristicas" ? "" : "hidden"}>
               <TabCaracteristicas editing={editing} areaValue={areaValue} onAreaChange={setAreaValue} />
-            )}
-            {activeTab === "localizacao" && (
+            </div>
+            <div className={activeTab === "localizacao" ? "" : "hidden"}>
               <TabLocalizacao editing={editing} allPivots={activePivots} areaValue={areaValue} />
-            )}
-            {activeTab === "custos" && (
+            </div>
+            <div className={activeTab === "custos" ? "" : "hidden"}>
               <TabCustos editing={editing} />
-            )}
+            </div>
           </div>
 
           {formError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{formError}</p>}
