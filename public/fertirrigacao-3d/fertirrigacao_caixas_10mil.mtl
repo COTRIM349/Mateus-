@@ -1,0 +1,165 @@
+# Fertirrigacao em caixas - Material Library
+# Escala: metros | Projeto agrícola pivô central
+
+newmtl concrete
+Ka 0.1 0.1 0.1
+Kd 0.650 0.630 0.600
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Concreto cinza
+
+newmtl tank_white
+Ka 0.1 0.1 0.1
+Kd 0.920 0.900 0.850
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Caixa d'água branca/bege
+
+newmtl tank_lid
+Ka 0.1 0.1 0.1
+Kd 0.800 0.780 0.740
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Tampa da caixa
+
+newmtl pipe_gray
+Ka 0.1 0.1 0.1
+Kd 0.500 0.500 0.520
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Tubulação cinza PVC
+
+newmtl pipe_green
+Ka 0.1 0.1 0.1
+Kd 0.180 0.550 0.220
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Calda/fertilizante verde
+
+newmtl pipe_blue
+Ka 0.1 0.1 0.1
+Kd 0.200 0.450 0.780
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Água limpa azul
+
+newmtl valve_red
+Ka 0.1 0.1 0.1
+Kd 0.780 0.150 0.120
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Válvula retenção/segurança
+
+newmtl valve_gray
+Ka 0.1 0.1 0.1
+Kd 0.400 0.400 0.420
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Registro cinza
+
+newmtl attention_yellow
+Ka 0.1 0.1 0.1
+Kd 0.900 0.780 0.150
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Ponto atenção amarelo
+
+newmtl pump_body
+Ka 0.1 0.1 0.1
+Kd 0.300 0.320 0.350
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Bomba dosadora
+
+newmtl filter_body
+Ka 0.1 0.1 0.1
+Kd 0.350 0.380 0.420
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Filtro
+
+newmtl shelter_roof
+Ka 0.1 0.1 0.1
+Kd 0.550 0.350 0.200
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Cobertura abrigo
+
+newmtl shelter_post
+Ka 0.1 0.1 0.1
+Kd 0.450 0.450 0.470
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Pilar abrigo
+
+newmtl panel_body
+Ka 0.1 0.1 0.1
+Kd 0.850 0.830 0.780
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Painel de controle
+
+newmtl gauge_body
+Ka 0.1 0.1 0.1
+Kd 0.700 0.700 0.720
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Manômetro/medidor
+
+newmtl main_pipe
+Ka 0.1 0.1 0.1
+Kd 0.350 0.370 0.400
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Adutora/linha pivô
+
+newmtl label_plate
+Ka 0.1 0.1 0.1
+Kd 0.950 0.920 0.800
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Placa identificação
+
+newmtl level_indicator
+Ka 0.1 0.1 0.1
+Kd 0.100 0.600 0.850
+Ks 0.2 0.2 0.2
+Ns 30.0
+d 1.0
+illum 2
+# Indicador nível
+
