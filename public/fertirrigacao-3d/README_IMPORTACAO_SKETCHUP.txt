@@ -1,175 +1,135 @@
 ================================================================================
-  PROJETO FERTIRRIGACAO EM CAIXAS - SISTEMA PARA PIVO CENTRAL
-  Modelo 3D para importacao no SketchUp
+  PROJETO FERTIRRIGACAO EM CAIXAS - PIVO CENTRAL
+  Modelo 3D para SketchUp
 ================================================================================
 
-ARQUIVOS INCLUIDOS:
+ARQUIVOS:
 
-  fertirrigacao_caixas_10mil.dae  - *** ARQUIVO PRINCIPAL (COLLADA) ***
-  fertirrigacao_caixas_10mil.obj  - Alternativa (Wavefront OBJ)
-  fertirrigacao_caixas_10mil.mtl  - Materiais do OBJ (manter junto do .obj)
-  fertirrigacao_caixas_10mil.stl  - Alternativa (STL binario, sem cores)
-  README_IMPORTACAO_SKETCHUP.txt  - Este arquivo
-
-================================================================================
-ESPECIFICACOES DO PROJETO
-================================================================================
-
-  Configuracao: 2 caixas de 10.000 L em paralelo
-  Capacidade total: 20.000 L
-  Autonomia de referencia: ~7 horas
-  Vazao media (2 caixas): 2.857 L/h = 47,6 L/min = 0,79 L/s
-  Vazao media (1 caixa):  1.428 L/h = 23,8 L/min = 0,39 L/s
-  Unidade do modelo: METROS
-  Escala: 1:1 (tamanho real)
+  fertirrigacao_caixas_10mil.rb   - *** METODO 1: SCRIPT RUBY (mais confiavel)
+  fertirrigacao_caixas_10mil.dae  - *** METODO 2: COLLADA (importar arquivo)
+  fertirrigacao_caixas_10mil.stl  -     METODO 3: STL (sem cores, universal)
+  README_IMPORTACAO_SKETCHUP.txt  -     Este arquivo
 
 ================================================================================
-***  COMO IMPORTAR NO SKETCHUP - ARQUIVO .DAE (RECOMENDADO)  ***
+METODO 1 - SCRIPT RUBY (MAIS CONFIAVEL - RECOMENDADO)
 ================================================================================
 
-  O formato COLLADA (.dae) e o formato nativo de importacao do SketchUp.
-  Funciona em TODAS as versoes: Free (web), Make, Pro e Studio.
+  Este metodo cria o modelo DIRETO dentro do SketchUp usando a API nativa.
+  Funciona no SketchUp Make e SketchUp Pro (versoes desktop).
 
-  --- SketchUp Pro / Make (desktop) ---
+  PASSO A PASSO:
+
+  1. Abra o SketchUp (versao desktop - Make ou Pro)
+
+  2. Va em:
+     Janela > Console Ruby
+     (ou Window > Ruby Console)
+
+  3. No console que abrir, digite:
+
+     load "C:/caminho/da/pasta/fertirrigacao_caixas_10mil.rb"
+
+     Troque "C:/caminho/da/pasta/" pelo caminho real onde voce salvou o arquivo.
+     Exemplo: load "C:/Users/Mateus/Desktop/fertirrigacao_caixas_10mil.rb"
+
+     DICA: Use barras normais (/) e nao barras invertidas (\)
+
+  4. Pressione Enter e aguarde.
+     O modelo sera construido automaticamente com todas as cores.
+
+  5. Pronto! Salve como .skp
+
+  ALTERNATIVA mais facil:
+  - Copie o arquivo .rb para a pasta de Plugins do SketchUp:
+    C:\Users\SEU_USUARIO\AppData\Roaming\SketchUp\SketchUp 20XX\SketchUp\Plugins\
+  - Reinicie o SketchUp
+  - No Console Ruby, digite apenas:
+    load "fertirrigacao_caixas_10mil.rb"
+
+================================================================================
+METODO 2 - IMPORTAR COLLADA (.DAE)
+================================================================================
+
+  Funciona no SketchUp Free (web), Make e Pro.
+
+  --- SketchUp desktop (Make / Pro) ---
 
   1. Abra o SketchUp
-  2. Va em: Arquivo > Importar  (File > Import)
-  3. No campo "Tipo de arquivo", selecione:
-     "COLLADA Files (*.dae)"
-  4. Navegue ate a pasta e selecione:
-     fertirrigacao_caixas_10mil.dae
-  5. Clique em "Importar"
-  6. O modelo aparecera na cena com cores e materiais
-  7. Use "Zoom Extents" (Ctrl+Shift+E) para enquadrar
-
-  --- SketchUp Free (web / app.sketchup.com) ---
-
-  1. Abra o SketchUp Free no navegador
-  2. Crie um novo projeto ou abra um existente
-  3. Clique no icone de pasta (Open/Insert)
-     ou arraste o arquivo .dae direto para a tela
+  2. Arquivo > Importar (File > Import)
+  3. Tipo: "COLLADA Files (*.dae)"
   4. Selecione: fertirrigacao_caixas_10mil.dae
-  5. O modelo sera importado com cores
-
-  IMPORTANTE:
-  - O arquivo .dae ja contem os materiais embutidos
-  - Nao precisa de arquivo extra (diferente do OBJ)
-  - O modelo esta em metros, escala 1:1
-
-================================================================================
-COMO IMPORTAR - ARQUIVO .OBJ (ALTERNATIVA)
-================================================================================
-
-  O formato OBJ funciona no SketchUp Pro e Studio.
-  NAO funciona no SketchUp Free (web).
-
-  1. Coloque o .obj E o .mtl na MESMA PASTA
-  2. Arquivo > Importar > selecione "OBJ Files (*.obj)"
-  3. Em "Opcoes", defina Unidade = Metros
-  4. Selecione: fertirrigacao_caixas_10mil.obj
   5. Clique em Importar
 
-  Se as cores nao aparecerem:
-  - Verifique se o .mtl esta na mesma pasta que o .obj
-  - O nome do .mtl nao pode ser alterado
+  --- SketchUp Free (web: app.sketchup.com) ---
+
+  1. Abra o SketchUp Free no navegador
+  2. Clique no icone de pasta/hamburguer no canto superior esquerdo
+  3. Selecione "Inserir" ou "Insert"
+  4. Arraste o .dae para a janela ou clique para selecionar
+  5. Se pedir escala/unidade, escolha METROS
+
+  Se nao abrir: tente o Metodo 1 (Script Ruby)
 
 ================================================================================
-COMO IMPORTAR - ARQUIVO .STL (ALTERNATIVA BASICA)
+METODO 3 - IMPORTAR STL (SEM CORES)
 ================================================================================
 
-  O STL funciona em todas as versoes do SketchUp.
-  Porem NAO CARREGA CORES - tudo fica em uma cor so.
+  O STL funciona em todas as versoes, mas NAO tem cores.
 
   1. Arquivo > Importar > "STL Files (*.stl)"
-  2. Em Opcoes: Unidade = Metros
-  3. Selecione: fertirrigacao_caixas_10mil.stl
-  4. Clique em Importar
-  5. Aplique cores manualmente se necessario
+  2. Unidade = Metros
+  3. Selecione o arquivo .stl
+  4. Aplique cores manualmente depois
 
 ================================================================================
-RESUMO - QUAL FORMATO USAR?
+QUAL METODO USAR?
 ================================================================================
 
-  SketchUp Free (web)  -->  Use o .DAE (COLLADA)
-  SketchUp Make        -->  Use o .DAE (COLLADA)
-  SketchUp Pro         -->  Use o .DAE ou .OBJ
-  SketchUp Studio      -->  Use o .DAE ou .OBJ
-  Outros programas     -->  Use o .OBJ ou .STL
+  SketchUp Pro (desktop)  --> Metodo 1 (Ruby) = GARANTIDO
+  SketchUp Make (desktop) --> Metodo 1 (Ruby) = GARANTIDO
+  SketchUp Free (web)     --> Metodo 2 (DAE)
+  Outros programas 3D     --> Metodo 2 (DAE) ou Metodo 3 (STL)
 
-  Na duvida: USE SEMPRE O .DAE
-
-================================================================================
-CENAS SUGERIDAS NO SKETCHUP
-================================================================================
-
-  Apos importar, crie cenas (Pages) para apresentacao:
-
-  Cena 1 - VISTA GERAL 3D
-    Camera em perspectiva, angulo ~45 graus.
-
-  Cena 2 - VISTA SUPERIOR (PLANTA)
-    Camera de cima (Top View).
-
-  Cena 3 - DETALHE DAS CAIXAS
-    Zoom nas duas caixas, tampas, nivel, saida, drenos.
-
-  Cena 4 - DETALHE BOMBA / FILTRO
-    Zoom no conjunto de injecao.
-
-  Cena 5 - PONTO DE INJECAO
-    Zoom no ponto de entrada na adutora.
-
-  Cena 6 - RECIRCULACAO
-    Mostrar a linha verde de recirculacao.
+  Se nenhum funcionar, use o Metodo 3 (STL) que e o mais universal.
 
 ================================================================================
-COMPONENTES DO MODELO (69 objetos)
+ESPECIFICACOES
 ================================================================================
 
-  ESTRUTURA:
-    - Base de concreto (8,0 x 5,0 x 0,15 m)
-    - Abrigo tecnico (4 pilares + cobertura)
-    - Painel de controle
-
-  CAIXAS (2 unidades):
-    - Corpo cilindrico (D=2,30m / H=2,40m / 10.000L cada)
-    - Tampa superior
-    - Indicador de nivel
-    - Placa de identificacao
-    - Saida inferior com registro
-    - Dreno inferior
-
-  TUBULACAO VERDE (calda/fertilizante):
-    - Descidas de cada caixa
-    - Coletor principal
-    - Recirculacao com risers e retornos
-    - Linha ate filtro, bomba, medidor, valvulas
-    - Linha de injecao ate adutora
-
-  TUBULACAO AZUL (agua limpa):
-    - Abastecimento de cada caixa
-    - Linha de lavagem
-
-  CONJUNTO DE INJECAO:
-    - Filtro, bomba dosadora, medidor de vazao
-    - Manometro, valvula de retencao, registro
-
-  ADUTORA:
-    - Linha principal (~300mm)
-    - Ponto de injecao (tee amarelo)
-    - Valvula de retencao
+  2 caixas de 10.000 L em paralelo = 20.000 L total
+  Autonomia: ~7 horas
+  Vazao (2 caixas): 2.857 L/h
+  Vazao (1 caixa): 1.428 L/h
+  Escala: 1:1 em METROS
 
 ================================================================================
-CODIGO DE CORES
+COMPONENTES
+================================================================================
+
+  - Base de concreto (8 x 5 x 0,15 m)
+  - 2 caixas cilindricas (D=2,30m / H=2,40m)
+  - Tampas, indicadores de nivel, placas de ID
+  - Saidas inferiores com registros individuais
+  - Drenos de limpeza
+  - Coletor em paralelo
+  - Recirculacao (risers + retorno ao topo)
+  - Filtro + bomba dosadora + medidor de vazao
+  - Manometro + valvula de retencao + registro
+  - Adutora do pivo (~300mm)
+  - Ponto de injecao com valvula
+  - Linha de agua limpa (abastecimento + lavagem)
+  - Abrigo tecnico com cobertura
+  - Painel de controle
+
+================================================================================
+CORES
 ================================================================================
 
   VERDE ........... Calda / fertilizante
   AZUL ............ Agua limpa / lavagem
-  CINZA ........... Estrutura / concreto / tubulacao
-  VERMELHO ........ Valvulas de retencao e seguranca
+  CINZA ........... Estrutura / concreto
+  VERMELHO ........ Valvulas de retencao
   AMARELO ......... Pontos de atencao
   BRANCO/BEGE ..... Caixas d'agua
 
-================================================================================
-  Escala: 1:1 (metros) | 69 objetos | 1.298 vertices | 2.320 triangulos
 ================================================================================
