@@ -777,11 +777,11 @@ function HistoricoIrrigacao({ balanceRows }: { balanceRows: DailyBalanceRow[] })
 }
 
 function HistoricoRecomendacoes({ recommendations }: { recommendations: Recommendation[] }) {
+  const ranked = useMemo(() => rankRecommendations(recommendations), [recommendations]);
+
   if (recommendations.length === 0) {
     return <EmptyState title="Sem recomendações" description="As recomendações de irrigação serão listadas aqui conforme forem geradas pelo sistema." />;
   }
-
-  const ranked = useMemo(() => rankRecommendations(recommendations), [recommendations]);
 
   const columns: Column<Recommendation>[] = [
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivotName}</span> },
@@ -807,10 +807,6 @@ function HistoricoRecomendacoes({ recommendations }: { recommendations: Recommen
 interface WaterRow { date: string; pivot: string; et0: number; etc: number; precip: number; irrig: number; arm: number; cad: number; armPct: number; deficit: number; status: string }
 
 function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
-  if (balanceRows.length === 0) {
-    return <EmptyState title="Sem dados de balanço hídrico" description="Os dados do balanço hídrico serão exibidos conforme forem registrados." />;
-  }
-
   const waterData = useMemo(() => {
     return balanceRows.slice(0, 50).map((b) => ({
       date: b.date,
@@ -826,6 +822,10 @@ function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
       status: b.waterStatus,
     }));
   }, [balanceRows]);
+
+  if (balanceRows.length === 0) {
+    return <EmptyState title="Sem dados de balanço hídrico" description="Os dados do balanço hídrico serão exibidos conforme forem registrados." />;
+  }
 
   const columns: Column<WaterRow>[] = [
     { header: "Data", render: (r) => r.date },
@@ -847,11 +847,11 @@ function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
 }
 
 function HistoricoEnergia({ energyResults }: { energyResults: ConsumptionResult[] }) {
+  const data = useMemo(() => energyResults.slice(0, 50), [energyResults]);
+
   if (energyResults.length === 0) {
     return <EmptyState title="Sem dados energéticos" description="Os registros de consumo energético serão exibidos aqui conforme forem registrados." />;
   }
-
-  const data = useMemo(() => energyResults.slice(0, 50), [energyResults]);
 
   const columns: Column<ConsumptionResult>[] = [
     { header: "Data", render: (r) => r.date },
@@ -871,10 +871,6 @@ function HistoricoEnergia({ energyResults }: { energyResults: ConsumptionResult[
 interface CostRow { date: string; pivot: string; total: number; peak: number; offPeak: number; perMm: number; perHa: number; perM3: number }
 
 function HistoricoCusto({ energyResults }: { energyResults: ConsumptionResult[] }) {
-  if (energyResults.length === 0) {
-    return <EmptyState title="Sem dados de custo" description="Os registros de custo serão exibidos aqui conforme forem registrados." />;
-  }
-
   const data = useMemo<CostRow[]>(() =>
     energyResults.slice(0, 50).map((r) => ({
       date: r.date,
@@ -888,6 +884,10 @@ function HistoricoCusto({ energyResults }: { energyResults: ConsumptionResult[] 
     })),
     [energyResults]
   );
+
+  if (energyResults.length === 0) {
+    return <EmptyState title="Sem dados de custo" description="Os registros de custo serão exibidos aqui conforme forem registrados." />;
+  }
 
   const columns: Column<CostRow>[] = [
     { header: "Data", render: (r) => r.date },
