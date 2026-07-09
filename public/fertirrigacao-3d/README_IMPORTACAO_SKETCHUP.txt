@@ -5,9 +5,10 @@
 
 ARQUIVOS INCLUIDOS:
 
-  fertirrigacao_caixas_10mil.obj  - Modelo 3D principal (Wavefront OBJ)
-  fertirrigacao_caixas_10mil.mtl  - Biblioteca de materiais/cores (MTL)
-  fertirrigacao_caixas_10mil.stl  - Modelo alternativo (STL binario)
+  fertirrigacao_caixas_10mil.dae  - *** ARQUIVO PRINCIPAL (COLLADA) ***
+  fertirrigacao_caixas_10mil.obj  - Alternativa (Wavefront OBJ)
+  fertirrigacao_caixas_10mil.mtl  - Materiais do OBJ (manter junto do .obj)
+  fertirrigacao_caixas_10mil.stl  - Alternativa (STL binario, sem cores)
   README_IMPORTACAO_SKETCHUP.txt  - Este arquivo
 
 ================================================================================
@@ -23,133 +24,140 @@ ESPECIFICACOES DO PROJETO
   Escala: 1:1 (tamanho real)
 
 ================================================================================
-COMO IMPORTAR NO SKETCHUP - ARQUIVO OBJ (RECOMENDADO)
+***  COMO IMPORTAR NO SKETCHUP - ARQUIVO .DAE (RECOMENDADO)  ***
 ================================================================================
 
-  1. Abra o SketchUp.
+  O formato COLLADA (.dae) e o formato nativo de importacao do SketchUp.
+  Funciona em TODAS as versoes: Free (web), Make, Pro e Studio.
 
-  2. Va em: Arquivo > Importar  (ou File > Import)
+  --- SketchUp Pro / Make (desktop) ---
 
+  1. Abra o SketchUp
+  2. Va em: Arquivo > Importar  (File > Import)
   3. No campo "Tipo de arquivo", selecione:
-     "OBJ Files (*.obj)"
-     (Se nao aparecer, pode ser necessario instalar o plugin de importacao OBJ
-      ou usar o SketchUp Pro/Studio que suporta nativamente)
+     "COLLADA Files (*.dae)"
+  4. Navegue ate a pasta e selecione:
+     fertirrigacao_caixas_10mil.dae
+  5. Clique em "Importar"
+  6. O modelo aparecera na cena com cores e materiais
+  7. Use "Zoom Extents" (Ctrl+Shift+E) para enquadrar
 
-  4. Navegue ate a pasta onde estao os arquivos e selecione:
-     fertirrigacao_caixas_10mil.obj
+  --- SketchUp Free (web / app.sketchup.com) ---
 
-  5. IMPORTANTE: Antes de clicar "Importar", clique em "Opcoes" e verifique:
-     - Unidade: Metros (Model Units = Meters)
-     - Preservar orientacao das normais: SIM
+  1. Abra o SketchUp Free no navegador
+  2. Crie um novo projeto ou abra um existente
+  3. Clique no icone de pasta (Open/Insert)
+     ou arraste o arquivo .dae direto para a tela
+  4. Selecione: fertirrigacao_caixas_10mil.dae
+  5. O modelo sera importado com cores
 
-  6. Clique em "Importar".
-
-  7. O modelo sera inserido na cena. Posicione conforme necessario.
-
-  ATENCAO:
-  - O arquivo .MTL DEVE estar na MESMA PASTA que o .OBJ
-  - Se o MTL nao estiver junto, as cores/materiais nao serao carregados
-  - Mantenha os dois arquivos sempre juntos
+  IMPORTANTE:
+  - O arquivo .dae ja contem os materiais embutidos
+  - Nao precisa de arquivo extra (diferente do OBJ)
+  - O modelo esta em metros, escala 1:1
 
 ================================================================================
-COMO IMPORTAR - ARQUIVO STL (ALTERNATIVA)
+COMO IMPORTAR - ARQUIVO .OBJ (ALTERNATIVA)
 ================================================================================
 
-  1. Abra o SketchUp.
+  O formato OBJ funciona no SketchUp Pro e Studio.
+  NAO funciona no SketchUp Free (web).
 
-  2. Va em: Arquivo > Importar
+  1. Coloque o .obj E o .mtl na MESMA PASTA
+  2. Arquivo > Importar > selecione "OBJ Files (*.obj)"
+  3. Em "Opcoes", defina Unidade = Metros
+  4. Selecione: fertirrigacao_caixas_10mil.obj
+  5. Clique em Importar
 
-  3. Selecione "STL Files (*.stl)" no tipo de arquivo.
+  Se as cores nao aparecerem:
+  - Verifique se o .mtl esta na mesma pasta que o .obj
+  - O nome do .mtl nao pode ser alterado
 
-  4. Selecione: fertirrigacao_caixas_10mil.stl
+================================================================================
+COMO IMPORTAR - ARQUIVO .STL (ALTERNATIVA BASICA)
+================================================================================
 
-  5. Em Opcoes, defina:
-     - Unidade: Metros
-     - Mesclar faces coplanares: SIM (recomendado)
+  O STL funciona em todas as versoes do SketchUp.
+  Porem NAO CARREGA CORES - tudo fica em uma cor so.
 
-  6. Clique em Importar.
+  1. Arquivo > Importar > "STL Files (*.stl)"
+  2. Em Opcoes: Unidade = Metros
+  3. Selecione: fertirrigacao_caixas_10mil.stl
+  4. Clique em Importar
+  5. Aplique cores manualmente se necessario
 
-  NOTA: O formato STL nao suporta cores/materiais.
-  O modelo sera importado em uma unica cor.
-  Voce pode aplicar materiais manualmente no SketchUp depois.
+================================================================================
+RESUMO - QUAL FORMATO USAR?
+================================================================================
+
+  SketchUp Free (web)  -->  Use o .DAE (COLLADA)
+  SketchUp Make        -->  Use o .DAE (COLLADA)
+  SketchUp Pro         -->  Use o .DAE ou .OBJ
+  SketchUp Studio      -->  Use o .DAE ou .OBJ
+  Outros programas     -->  Use o .OBJ ou .STL
+
+  Na duvida: USE SEMPRE O .DAE
 
 ================================================================================
 CENAS SUGERIDAS NO SKETCHUP
 ================================================================================
 
-  Apos importar, crie as seguintes cenas (Pages) para apresentacao:
+  Apos importar, crie cenas (Pages) para apresentacao:
 
   Cena 1 - VISTA GERAL 3D
-    Camera em perspectiva, angulo ~45 graus, mostrando todo o sistema.
-    Ideal para visao de conjunto.
+    Camera em perspectiva, angulo ~45 graus.
 
   Cena 2 - VISTA SUPERIOR (PLANTA)
-    Camera de cima (Top View), mostrando layout em planta.
-    Util para dimensionamento e posicionamento.
+    Camera de cima (Top View).
 
   Cena 3 - DETALHE DAS CAIXAS
-    Zoom nas duas caixas, mostrando:
-    - Tampas, nivel, saida inferior, drenos
-    - Registros individuais
-    - Ligacao em paralelo
+    Zoom nas duas caixas, tampas, nivel, saida, drenos.
 
   Cena 4 - DETALHE BOMBA / FILTRO
-    Zoom no conjunto de injecao:
-    - Filtro, bomba dosadora, medidor de vazao
-    - Manometro, valvula de retencao
-    - Registro de bloqueio
+    Zoom no conjunto de injecao.
 
   Cena 5 - PONTO DE INJECAO
-    Zoom no ponto onde a calda entra na adutora do pivo.
-    Mostrar valvula de retencao e registro.
+    Zoom no ponto de entrada na adutora.
 
   Cena 6 - RECIRCULACAO
-    Mostrar a linha verde de recirculacao:
-    - Saida do coletor inferior
-    - Retorno pela parte superior das caixas
-    - Registros de controle
+    Mostrar a linha verde de recirculacao.
 
 ================================================================================
-COMPONENTES DO MODELO
+COMPONENTES DO MODELO (69 objetos)
 ================================================================================
 
   ESTRUTURA:
     - Base de concreto (8,0 x 5,0 x 0,15 m)
-    - Abrigo tecnico com cobertura (4 pilares + telhado)
+    - Abrigo tecnico (4 pilares + cobertura)
     - Painel de controle
 
   CAIXAS (2 unidades):
-    - Corpo cilindrico (D = 2,30 m / H = 2,40 m / 10.000 L cada)
-    - Tampa superior de inspecao
-    - Indicador de nivel (faixa lateral)
+    - Corpo cilindrico (D=2,30m / H=2,40m / 10.000L cada)
+    - Tampa superior
+    - Indicador de nivel
     - Placa de identificacao
-    - Saida inferior com registro individual
-    - Dreno inferior para limpeza
+    - Saida inferior com registro
+    - Dreno inferior
 
   TUBULACAO VERDE (calda/fertilizante):
-    - Descidas individuais de cada caixa
-    - Coletor principal (manifold)
-    - Linha de recirculacao com risers e retornos
-    - Tubulacao ate filtro, bomba, medidor, valvulas
+    - Descidas de cada caixa
+    - Coletor principal
+    - Recirculacao com risers e retornos
+    - Linha ate filtro, bomba, medidor, valvulas
     - Linha de injecao ate adutora
 
   TUBULACAO AZUL (agua limpa):
-    - Linha principal de abastecimento
-    - Descidas para cada caixa
-    - Linha de lavagem ate adutora
+    - Abastecimento de cada caixa
+    - Linha de lavagem
 
   CONJUNTO DE INJECAO:
-    - Filtro
-    - Bomba dosadora / injetora
-    - Medidor de vazao
-    - Manometro
-    - Valvula de retencao (vermelha)
-    - Registro de bloqueio
+    - Filtro, bomba dosadora, medidor de vazao
+    - Manometro, valvula de retencao, registro
 
-  ADUTORA / LINHA DO PIVO:
-    - Tubulacao principal (D ~300 mm)
+  ADUTORA:
+    - Linha principal (~300mm)
     - Ponto de injecao (tee amarelo)
-    - Valvula de retencao no ponto de injecao
+    - Valvula de retencao
 
 ================================================================================
 CODIGO DE CORES
@@ -157,49 +165,11 @@ CODIGO DE CORES
 
   VERDE ........... Calda / fertilizante
   AZUL ............ Agua limpa / lavagem
-  CINZA ........... Estrutura, concreto, tubulacao geral
+  CINZA ........... Estrutura / concreto / tubulacao
   VERMELHO ........ Valvulas de retencao e seguranca
   AMARELO ......... Pontos de atencao
   BRANCO/BEGE ..... Caixas d'agua
 
 ================================================================================
-SEQUENCIA OPERACIONAL
-================================================================================
-
-  1. Abastecer a caixa com parte da agua
-  2. Adicionar o fertilizante aos poucos
-  3. Completar o volume de agua
-  4. Acionar a recirculacao para misturar bem
-  5. Ligar o pivo apenas com agua limpa
-  6. Apos pressurizar, iniciar a injecao da calda
-  7. Regular a bomba para ~7 horas de aplicacao
-  8. Apos acabar a calda, continuar com agua limpa para lavagem
-  9. Lavar caixa, filtro, bomba e tubulacoes
-
-================================================================================
-OPERACAO EM PARALELO
-================================================================================
-
-  Com registros individuais em cada caixa, o sistema permite:
-
-  - Somente Caixa 1 (registro 1 aberto, registro 2 fechado)
-  - Somente Caixa 2 (registro 2 aberto, registro 1 fechado)
-  - Ambas as caixas (ambos abertos)
-  - Uma em operacao, outra sendo preparada ou limpa
-
-================================================================================
-DICAS PARA O SKETCHUP
-================================================================================
-
-  - Apos importar, use "Zoom Extents" para enquadrar todo o modelo
-  - Use a ferramenta "Section Plane" para criar cortes
-  - Exporte cenas como imagens em alta resolucao para apresentacoes
-  - Use o plugin "V-Ray" ou "Enscape" para renderizacao realista
-  - Para editar componentes, clique duas vezes para entrar no grupo
-  - Salve como .skp para trabalhar nativamente no SketchUp
-
-================================================================================
-  Projeto: Sistema de Fertirrigacao em Caixas para Pivo Central
-  Escala: 1:1 (metros)
-  Modelo gerado para uso tecnico e operacional em fazenda
+  Escala: 1:1 (metros) | 69 objetos | 1.298 vertices | 2.320 triangulos
 ================================================================================
