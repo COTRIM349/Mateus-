@@ -1,562 +1,364 @@
-<!doctype html>
-<html lang="pt-BR">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Projeto 3D de sistema de fertirrigacao em caixas de 10.000 L para pivo central.">
-<style>*{margin:0;padding:0}html,body{background:#e9edf1}@media(prefers-color-scheme:dark){html,body{background:#0e141b}}</style>
-</head>
-<body>
-<title>Fertirrigação em Caixas — Pivô Central</title>
+<title>Projeto Fertirrigação 3D — Pivô Central</title>
 <style>
-  :root{
-    --paper:#e9edf1; --panel:#f5f7f9; --ink:#16202b; --ink-soft:#4a5866;
-    --line:#c3ccd4; --line-soft:#d8dfe5; --chrome:#1f6f8b;
-    --grid:rgba(31,111,139,.09);
-    /* código funcional de cores (fixo nos dois temas) */
-    --agua:#2f80d6; --calda:#2e9e5b; --cinza:#828b95; --cinza-esc:#5c6670;
-    --retencao:#d6413f; --atencao:#e0a615;
-    --concreto:#b7bcc2; --concreto-esc:#9aa0a7;
-    --shadow:0 1px 2px rgba(16,32,43,.06),0 8px 26px rgba(16,32,43,.08);
-    --radius:14px;
-    --f-body:ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-    --f-mono:ui-monospace,"SF Mono","Cascadia Code",Menlo,Consolas,monospace;
-  }
-  @media (prefers-color-scheme:dark){
-    :root{
-      --paper:#0e141b; --panel:#161f28; --ink:#e7edf2; --ink-soft:#9aa8b4;
-      --line:#2a3742; --line-soft:#212c35; --chrome:#4bb8d8;
-      --grid:rgba(75,184,216,.10);
-      --concreto:#4a525b; --concreto-esc:#3a424b;
-      --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
-    }
-  }
-  :root[data-theme="light"]{
-    --paper:#e9edf1; --panel:#f5f7f9; --ink:#16202b; --ink-soft:#4a5866;
-    --line:#c3ccd4; --line-soft:#d8dfe5; --chrome:#1f6f8b; --grid:rgba(31,111,139,.09);
-    --concreto:#b7bcc2; --concreto-esc:#9aa0a7;
-    --shadow:0 1px 2px rgba(16,32,43,.06),0 8px 26px rgba(16,32,43,.08);
-  }
-  :root[data-theme="dark"]{
-    --paper:#0e141b; --panel:#161f28; --ink:#e7edf2; --ink-soft:#9aa8b4;
-    --line:#2a3742; --line-soft:#212c35; --chrome:#4bb8d8; --grid:rgba(75,184,216,.10);
-    --concreto:#4a525b; --concreto-esc:#3a424b;
-    --shadow:0 1px 2px rgba(0,0,0,.4),0 10px 30px rgba(0,0,0,.45);
-  }
-
-  *{box-sizing:border-box}
-  .sheet{
-    font-family:var(--f-body); color:var(--ink); background:var(--paper);
-    -webkit-font-smoothing:antialiased; line-height:1.5;
-    padding:clamp(14px,3vw,34px);
-    max-width:1360px; margin:0 auto;
-  }
-  .sheet :is(h1,h2,h3){text-wrap:balance; margin:0}
-
-  /* ---------- Cartucho / título ---------- */
-  .cartouche{
-    display:grid; grid-template-columns:1fr auto; gap:18px; align-items:end;
-    border:1px solid var(--line); background:var(--panel);
-    border-radius:var(--radius); padding:clamp(16px,2.4vw,26px);
-    box-shadow:var(--shadow); position:relative; overflow:hidden;
-  }
-  .cartouche::before{
-    content:""; position:absolute; inset:0; pointer-events:none;
-    background:
-      linear-gradient(var(--grid) 1px,transparent 1px) 0 0/22px 22px,
-      linear-gradient(90deg,var(--grid) 1px,transparent 1px) 0 0/22px 22px;
-    mask:linear-gradient(90deg,transparent,#000 40%);
-    opacity:.7;
-  }
-  .cartouche>*{position:relative}
-  .eyebrow{
-    font-family:var(--f-mono); font-size:11px; letter-spacing:.22em;
-    text-transform:uppercase; color:var(--chrome); font-weight:600;
-  }
-  .cartouche h1{
-    font-size:clamp(22px,3.4vw,38px); font-weight:800; letter-spacing:-.01em;
-    margin-top:8px; line-height:1.08;
-  }
-  .cartouche p.sub{color:var(--ink-soft); margin-top:8px; max-width:60ch; font-size:14.5px}
-  .stamp{
-    font-family:var(--f-mono); font-size:11px; color:var(--ink-soft);
-    border:1px solid var(--line); border-radius:10px; padding:12px 14px;
-    display:grid; gap:5px; min-width:190px; background:var(--paper);
-  }
-  .stamp b{color:var(--ink); font-weight:700}
-  .stamp .row{display:flex; justify-content:space-between; gap:14px}
-
-  /* ---------- Toggle de opção ---------- */
-  .controls{display:flex; flex-wrap:wrap; gap:10px; align-items:center; margin:18px 0 4px}
-  .seg{display:inline-flex; background:var(--panel); border:1px solid var(--line);
-    border-radius:11px; padding:4px; gap:4px}
-  .seg button{
-    font-family:var(--f-body); font-weight:650; font-size:13.5px; color:var(--ink-soft);
-    background:transparent; border:0; border-radius:8px; padding:9px 15px; cursor:pointer;
-    transition:background .15s,color .15s;
-  }
-  .seg button[aria-pressed="true"]{background:var(--chrome); color:#fff; box-shadow:var(--shadow)}
-  .seg button:focus-visible{outline:2px solid var(--chrome); outline-offset:2px}
-  .hint{font-size:12.5px; color:var(--ink-soft); font-family:var(--f-mono)}
-
-  /* ---------- Grid geral ---------- */
-  .layout{display:grid; grid-template-columns:1fr; gap:18px; margin-top:14px}
-  @media(min-width:1040px){ .layout{grid-template-columns:minmax(0,2.25fr) minmax(260px,1fr)} }
-
-  .panel{
-    border:1px solid var(--line); background:var(--panel);
-    border-radius:var(--radius); box-shadow:var(--shadow); overflow:hidden;
-  }
-  .panel-h{
-    display:flex; align-items:baseline; justify-content:space-between; gap:12px;
-    padding:14px 18px; border-bottom:1px solid var(--line-soft);
-  }
-  .panel-h h2{font-size:15px; font-weight:750; letter-spacing:-.01em}
-  .panel-h .tag{font-family:var(--f-mono); font-size:11px; color:var(--ink-soft); letter-spacing:.05em}
-
-  .drawing{padding:6px 6px 0}
-  .drawing svg{display:block; width:100%; height:auto}
-  .draw-foot{
-    display:flex; flex-wrap:wrap; gap:14px 22px; padding:12px 18px 16px;
-    font-size:12px; color:var(--ink-soft); font-family:var(--f-mono);
-  }
-
-  /* ---------- Legenda de cores ---------- */
-  .legend{display:grid; gap:10px; padding:16px 18px}
-  .legend .li{display:flex; gap:11px; align-items:flex-start; font-size:13px}
-  .swatch{width:26px; height:14px; border-radius:4px; flex:0 0 auto; margin-top:2px; border:1px solid rgba(0,0,0,.15)}
-  .legend .li b{font-weight:700}
-  .legend .li span{color:var(--ink-soft)}
-
-  /* ---------- Callouts numerados ---------- */
-  .items{columns:2; column-gap:26px; padding:14px 18px}
-  @media(max-width:520px){ .items{columns:1} }
-  .items .it{break-inside:avoid; display:flex; gap:9px; align-items:baseline; font-size:12.8px; margin-bottom:8px}
-  .num{
-    font-family:var(--f-mono); font-size:11px; font-weight:700; color:#fff;
-    background:var(--chrome); width:19px; height:19px; border-radius:50%;
-    display:inline-grid; place-items:center; flex:0 0 auto; margin-top:1px;
-  }
-  .it b{font-weight:650} .it span{color:var(--ink-soft)}
-
-  /* ---------- Cartões de cálculo ---------- */
-  .calc{display:grid; gap:12px; padding:16px 18px}
-  .calc .card{
-    border:1px solid var(--line-soft); border-radius:11px; padding:13px 15px;
-    background:var(--paper); position:relative;
-  }
-  .calc .card.active{border-color:var(--calda); box-shadow:0 0 0 1px var(--calda) inset}
-  .calc .card .cap{font-family:var(--f-mono); font-size:10.5px; letter-spacing:.14em;
-    text-transform:uppercase; color:var(--ink-soft)}
-  .calc .card .big{font-size:26px; font-weight:800; font-variant-numeric:tabular-nums; margin-top:2px}
-  .calc .card .big small{font-size:13px; font-weight:600; color:var(--ink-soft)}
-  .calc .card .eq{display:flex; gap:16px; margin-top:8px; flex-wrap:wrap;
-    font-family:var(--f-mono); font-size:12px; color:var(--ink-soft); font-variant-numeric:tabular-nums}
-  .calc .card .eq b{color:var(--ink); font-weight:700}
-  .calc .card .liveflag{position:absolute; top:11px; right:12px; font-family:var(--f-mono);
-    font-size:9.5px; letter-spacing:.12em; text-transform:uppercase; color:var(--calda); font-weight:700; opacity:0}
-  .calc .card.active .liveflag{opacity:1}
-
-  /* ---------- Sequência operacional ---------- */
-  .seq{margin-top:18px}
-  .seq-grid{display:grid; grid-template-columns:repeat(auto-fill,minmax(220px,1fr)); gap:12px; padding:16px 18px}
-  .step{display:flex; gap:12px; align-items:flex-start; background:var(--paper);
-    border:1px solid var(--line-soft); border-radius:11px; padding:12px 13px}
-  .step .sn{font-family:var(--f-mono); font-weight:800; font-size:15px; color:var(--chrome);
-    min-width:26px; font-variant-numeric:tabular-nums}
-  .step p{margin:0; font-size:12.8px}
-  .step p b{font-weight:700}
-  .step small{color:var(--ink-soft); display:block; margin-top:3px; font-size:11.5px}
-
-  /* ---------- Tabela de especificação ---------- */
-  .specwrap{overflow-x:auto; padding:6px 6px 14px}
-  table.spec{border-collapse:collapse; width:100%; min-width:520px; font-size:12.8px}
-  table.spec th,table.spec td{text-align:left; padding:9px 14px; border-bottom:1px solid var(--line-soft)}
-  table.spec thead th{font-family:var(--f-mono); font-size:10.5px; letter-spacing:.1em;
-    text-transform:uppercase; color:var(--ink-soft); font-weight:600}
-  table.spec tbody td:first-child{font-weight:650}
-  table.spec td.n{font-family:var(--f-mono); font-variant-numeric:tabular-nums; color:var(--ink-soft)}
-
-  .note{display:flex; gap:10px; align-items:flex-start; margin:14px 18px 18px;
-    padding:12px 14px; border-radius:11px; font-size:12.8px;
-    background:color-mix(in srgb,var(--atencao) 14%,var(--paper)); border:1px solid color-mix(in srgb,var(--atencao) 45%,var(--line))}
-  .note .ic{flex:0 0 auto; font-weight:800; color:var(--atencao)}
-
-  footer.foot{margin-top:22px; padding-top:14px; border-top:1px solid var(--line);
-    display:flex; justify-content:space-between; flex-wrap:wrap; gap:8px;
-    font-family:var(--f-mono); font-size:11px; color:var(--ink-soft)}
-
-  .hidden{display:none !important}
-  @media (prefers-reduced-motion:reduce){ *{transition:none !important} }
+:root {
+  --bg:#111318; --panel:#1a1d25; --border:#2a2d35;
+  --t1:#f0f0f0; --t2:#9a9da6; --t3:#6b6e77;
+  --accent:#2e8c38; --blue:#3373cc; --red:#c42a24;
+}
+@media(prefers-color-scheme:light){:root{
+  --bg:#e4e6ea; --panel:#fff; --border:#d0d2d6;
+  --t1:#1a1d25; --t2:#555860; --t3:#888b94;
+}}
+:root[data-theme="dark"]{--bg:#111318;--panel:#1a1d25;--border:#2a2d35;--t1:#f0f0f0;--t2:#9a9da6;--t3:#6b6e77}
+:root[data-theme="light"]{--bg:#e4e6ea;--panel:#fff;--border:#d0d2d6;--t1:#1a1d25;--t2:#555860;--t3:#888b94}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--t1);overflow:hidden;height:100vh;display:flex}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas:active{cursor:grabbing}
+#sidebar{width:320px;min-width:320px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;z-index:10}
+#sidebar::-webkit-scrollbar{width:4px}
+#sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+#main{flex:1;position:relative;display:flex;flex-direction:column}
+.logo{padding:20px 20px 16px;border-bottom:1px solid var(--border)}
+.logo h1{font-size:15px;font-weight:700;letter-spacing:.3px}
+.logo p{font-size:11px;color:var(--t2);margin-top:4px;line-height:1.5}
+.section{padding:14px 20px;border-bottom:1px solid var(--border)}
+.section h2{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--t3);margin-bottom:10px}
+.legend-item{display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;color:var(--t2)}
+.legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.spec{display:flex;justify-content:space-between;padding:3px 0;font-size:12px}
+.spec-label{color:var(--t3)}
+.spec-value{color:var(--t1);font-weight:600;font-variant-numeric:tabular-nums;font-family:'SF Mono',Consolas,monospace}
+.btn-row{display:flex;gap:6px;flex-wrap:wrap}
+.btn{padding:6px 12px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--t2);cursor:pointer;transition:all .15s}
+.btn:hover{border-color:var(--accent);color:var(--accent)}
+.btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
+.cfg-toggle{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
+.cfg-toggle .btn{border:0;border-radius:0;flex:1;text-align:center}
+.cfg-toggle .btn+.btn{border-left:1px solid var(--border)}
+.steps{counter-reset:step}
+.step{counter-increment:step;display:flex;gap:8px;padding:4px 0;font-size:11px;color:var(--t2);line-height:1.5}
+.step::before{content:counter(step);font-size:9px;font-weight:700;color:var(--accent);background:rgba(46,140,56,.12);width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.label3d{position:absolute;pointer-events:none;font-size:10px;font-weight:600;color:#fff;background:rgba(0,0,0,.7);padding:2px 7px;border-radius:3px;white-space:nowrap;transform:translate(-50%,-100%);opacity:0;transition:opacity .15s}
+.label3d.show{opacity:1}
+.label3d::after{content:'';position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:rgba(0,0,0,.7)}
+.hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);font-size:11px;color:var(--t3);background:var(--panel);padding:6px 14px;border-radius:20px;border:1px solid var(--border);pointer-events:none;opacity:.7}
+@media(max-width:800px){
+  body{flex-direction:column-reverse}
+  #sidebar{width:100%;min-width:0;max-height:40vh;border-right:0;border-top:1px solid var(--border)}
+  #main{flex:1;min-height:60vh}
+}
 </style>
 
-<div class="sheet">
-
-  <!-- ============ CARTUCHO ============ -->
-  <header class="cartouche">
-    <div>
-      <div class="eyebrow">Prancha técnica · Irrigação &amp; fertirrigação</div>
-      <h1>Sistema de Fertirrigação em Caixas para Pivô Central</h1>
-      <p class="sub">Preparo, diluição, recirculação e injeção de calda com autonomia de ~7 horas.
-        Projeto simples, seguro e de fácil limpeza — para operação contínua em fazenda.</p>
-    </div>
-    <div class="stamp">
-      <div class="row"><span>Documento</span><b>FR‑PIV‑01</b></div>
-      <div class="row"><span>Rev.</span><b>00</b></div>
-      <div class="row"><span>Autonomia</span><b>≈ 7 h</b></div>
-      <div class="row"><span>Caixa</span><b>10.000 L</b></div>
-      <div class="row"><span>Escala</span><b>Esquemático</b></div>
-    </div>
-  </header>
-
-  <!-- ============ CONTROLE DE OPÇÃO ============ -->
-  <div class="controls">
-    <div class="seg" role="group" aria-label="Opção de montagem">
-      <button id="opt1" aria-pressed="true" onclick="setOpt(1)">Opção 1 — 1 caixa (10.000 L)</button>
-      <button id="opt2" aria-pressed="false" onclick="setOpt(2)">Opção 2 — 2 caixas (20.000 L)</button>
-    </div>
-    <span class="hint" id="volLabel">Volume total: 10.000 L · vazão média 1.428 L/h</span>
+<div id="sidebar">
+  <div class="logo">
+    <h1>Projeto Fertirrigação</h1>
+    <p>Sistema de fertirrigação em caixas para pivô central — Vista 3D interativa</p>
   </div>
-
-  <!-- ============ CORPO ============ -->
-  <div class="layout">
-
-    <!-- ---- Desenho 3D ---- -->
-    <section class="panel">
-      <div class="panel-h">
-        <h2>Vista 3D geral do sistema</h2>
-        <span class="tag" id="modeTag">MODO: 1 CAIXA</span>
-      </div>
-      <div class="drawing">
-        <svg viewBox="0 0 1240 720" role="img"
-             aria-label="Vista isométrica do sistema de fertirrigação: caixas de 10.000 litros sobre base de concreto, coletor de sucção, filtro, bomba dosadora, recirculação e ponto de injeção na linha do pivô">
-          <defs>
-            <!-- grade blueprint -->
-            <pattern id="bp" width="26" height="26" patternUnits="userSpaceOnUse">
-              <path d="M26 0H0V26" fill="none" stroke="var(--grid)" stroke-width="1"/>
-            </pattern>
-            <!-- gradientes -->
-            <linearGradient id="gTank" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stop-color="#f7faf8"/><stop offset=".5" stop-color="#eef4f0"/>
-              <stop offset="1" stop-color="#d7e0da"/>
-            </linearGradient>
-            <linearGradient id="gCalda" x1="0" y1="0" x2="1" y2="0">
-              <stop offset="0" stop-color="#48b877"/><stop offset=".5" stop-color="#2e9e5b"/>
-              <stop offset="1" stop-color="#1f7f47"/>
-            </linearGradient>
-            <linearGradient id="gConc" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="var(--concreto)"/><stop offset="1" stop-color="var(--concreto-esc)"/>
-            </linearGradient>
-            <!-- marcadores de seta -->
-            <marker id="aCalda" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0 0L10 5L0 10z" fill="var(--calda)"/></marker>
-            <marker id="aAgua" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-              <path d="M0 0L10 5L0 10z" fill="var(--agua)"/></marker>
-          </defs>
-
-          <!-- fundo -->
-          <rect x="0" y="0" width="1240" height="720" fill="url(#bp)"/>
-
-          <!-- ===================== BASE DE CONCRETO ===================== -->
-          <g stroke="var(--cinza-esc)" stroke-width="1.4" stroke-linejoin="round">
-            <!-- face frontal -->
-            <path d="M150 588 L1080 588 L1080 620 L150 620 Z" fill="var(--concreto-esc)"/>
-            <!-- face lateral direita -->
-            <path d="M1080 588 L1158 546 L1158 578 L1080 620 Z" fill="var(--concreto-esc)"/>
-            <!-- topo -->
-            <path d="M150 588 L228 546 L1158 546 L1080 588 Z" fill="url(#gConc)"/>
-          </g>
-          <!-- leve caída p/ limpeza -->
-          <text x="188" y="608" font-family="var(--f-mono)" font-size="10" fill="var(--ink-soft)">piso c/ leve caída → dreno</text>
-
-          <!-- ===================== ÁGUA LIMPA (linha superior) ===================== -->
-          <g fill="none" stroke="var(--agua)" stroke-width="6" stroke-linecap="round">
-            <!-- coletor de água limpa no topo -->
-            <path d="M96 96 L96 150 M96 122 L1080 122" marker-start="url(#aAgua)"/>
-            <!-- descida para caixa 1 -->
-            <path d="M430 122 L430 214" marker-end="url(#aAgua)"/>
-            <!-- descida para caixa 2 -->
-            <path class="t2" d="M800 122 L800 214" marker-end="url(#aAgua)"/>
-            <!-- ramal de lavagem até a sucção/coletor -->
-            <path d="M1015 122 L1015 470 L960 470 L960 636" marker-end="url(#aAgua)" stroke-dasharray="1 0"/>
-          </g>
-          <circle cx="96" cy="96" r="4" fill="var(--agua)"/>
-          <text x="108" y="92" font-size="12" font-weight="700" fill="var(--agua)" font-family="var(--f-body)">Ponto de água limpa</text>
-          <text x="1024" y="300" font-size="11" fill="var(--agua)" font-family="var(--f-mono)">lavagem</text>
-
-          <!-- ===================== RECIRCULAÇÃO (verde, atrás) ===================== -->
-          <g fill="none" stroke="var(--calda)" stroke-width="5" stroke-linecap="round" stroke-dasharray="10 6">
-            <!-- da descarga da bomba subindo -->
-            <path d="M690 636 L690 250" />
-            <!-- barramento superior de retorno -->
-            <path d="M690 250 L340 250" class="rec2start"/>
-            <!-- retorno na caixa 1 -->
-            <path d="M340 250 L340 268 L360 300" marker-end="url(#aCalda)"/>
-            <!-- retorno na caixa 2 -->
-            <path class="t2" d="M690 250 L720 300" marker-end="url(#aCalda)"/>
-          </g>
-          <!-- registro de recirculação -->
-          <g transform="translate(690,430)"><use href="#valve"/></g>
-
-          <!-- símbolo de registro reutilizável -->
-          <defs>
-            <g id="valve">
-              <path d="M-9 -9 L9 9 M9 -9 L-9 9 M-9 -9 L-9 9 L9 -9 L9 9 Z" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            </g>
-            <g id="valveRed">
-              <path d="M-9 -9 L9 9 M9 -9 L-9 9 M-9 -9 L-9 9 L9 -9 L9 9 Z" fill="color-mix(in srgb,var(--retencao) 20%, var(--panel))" stroke="var(--retencao)" stroke-width="1.8"/>
-            </g>
-          </defs>
-
-          <!-- ===================== CAIXAS ===================== -->
-          <!-- ---- CAIXA 1 ---- -->
-          <g>
-            <!-- corpo -->
-            <clipPath id="clip1"><path d="M330 300 L330 540 A100 26 0 0 0 530 540 L530 300 A100 26 0 0 1 330 300 Z"/></clipPath>
-            <path d="M330 300 L330 540 A100 26 0 0 0 530 540 L530 300 A100 26 0 0 1 330 300 Z" fill="url(#gTank)" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            <!-- calda dentro -->
-            <rect x="330" y="392" width="200" height="180" fill="url(#gCalda)" opacity=".85" clip-path="url(#clip1)"/>
-            <ellipse cx="430" cy="392" rx="100" ry="26" fill="#37a869" clip-path="url(#clip1)"/>
-            <!-- tampa/topo -->
-            <ellipse cx="430" cy="300" rx="100" ry="26" fill="#fbfdfc" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            <!-- tampa de inspeção -->
-            <ellipse cx="430" cy="296" rx="34" ry="10" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1.4"/>
-            <!-- respiro -->
-            <path d="M482 294 L482 274 L494 274" fill="none" stroke="var(--cinza-esc)" stroke-width="3" stroke-linecap="round"/>
-            <!-- escala de nível -->
-            <rect x="334" y="330" width="9" height="200" rx="3" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1"/>
-            <g stroke="var(--cinza-esc)" stroke-width="1">
-              <path d="M334 360h9M334 400h9M334 440h9M334 480h9"/>
-            </g>
-            <rect x="332" y="390" width="13" height="5" fill="var(--atencao)"/>
-            <!-- saída inferior + registro -->
-            <path d="M430 566 L430 636" fill="none" stroke="var(--cinza)" stroke-width="9" stroke-linecap="round"/>
-            <g transform="translate(430,600)"><use href="#valve"/></g>
-            <!-- dreno -->
-            <path d="M400 560 L372 588" fill="none" stroke="var(--cinza)" stroke-width="6" stroke-linecap="round"/>
-            <g transform="translate(372,590) scale(.8)"><use href="#valveRed"/></g>
-            <!-- identificação -->
-            <rect x="392" y="452" width="76" height="26" rx="5" fill="rgba(255,255,255,.9)" stroke="var(--cinza-esc)"/>
-            <text x="430" y="470" text-anchor="middle" font-size="14" font-weight="800" fill="#1f7f47" font-family="var(--f-body)">CAIXA 1</text>
-          </g>
-
-          <!-- ---- CAIXA 2 ---- -->
-          <g class="t2">
-            <clipPath id="clip2"><path d="M700 300 L700 540 A100 26 0 0 0 900 540 L900 300 A100 26 0 0 1 700 300 Z"/></clipPath>
-            <path d="M700 300 L700 540 A100 26 0 0 0 900 540 L900 300 A100 26 0 0 1 700 300 Z" fill="url(#gTank)" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            <rect x="700" y="392" width="200" height="180" fill="url(#gCalda)" opacity=".85" clip-path="url(#clip2)"/>
-            <ellipse cx="800" cy="392" rx="100" ry="26" fill="#37a869" clip-path="url(#clip2)"/>
-            <ellipse cx="800" cy="300" rx="100" ry="26" fill="#fbfdfc" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            <ellipse cx="800" cy="296" rx="34" ry="10" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1.4"/>
-            <path d="M852 294 L852 274 L864 274" fill="none" stroke="var(--cinza-esc)" stroke-width="3" stroke-linecap="round"/>
-            <rect x="704" y="330" width="9" height="200" rx="3" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1"/>
-            <g stroke="var(--cinza-esc)" stroke-width="1"><path d="M704 360h9M704 400h9M704 440h9M704 480h9"/></g>
-            <rect x="702" y="390" width="13" height="5" fill="var(--atencao)"/>
-            <path d="M800 566 L800 636" fill="none" stroke="var(--cinza)" stroke-width="9" stroke-linecap="round"/>
-            <g transform="translate(800,600)"><use href="#valve"/></g>
-            <path d="M770 560 L742 588" fill="none" stroke="var(--cinza)" stroke-width="6" stroke-linecap="round"/>
-            <g transform="translate(742,590) scale(.8)"><use href="#valveRed"/></g>
-            <rect x="762" y="452" width="76" height="26" rx="5" fill="rgba(255,255,255,.9)" stroke="var(--cinza-esc)"/>
-            <text x="800" y="470" text-anchor="middle" font-size="14" font-weight="800" fill="#1f7f47" font-family="var(--f-body)">CAIXA 2</text>
-          </g>
-
-          <!-- ===================== COLETOR + LINHA DE CALDA (verde) ===================== -->
-          <!-- coletor de sucção cinza -->
-          <path d="M430 636 L960 636" fill="none" stroke="var(--cinza)" stroke-width="10" stroke-linecap="round"/>
-          <path class="t2" d="M800 636 L800 636" fill="none" stroke="var(--cinza)" stroke-width="10"/>
-          <!-- linha de calda pressurizada (após a bomba) em verde -->
-          <g fill="none" stroke="var(--calda)" stroke-width="7" stroke-linecap="round">
-            <path d="M720 636 L1015 636" marker-end="url(#aCalda)"/>
-            <path d="M1015 636 L1015 200" />
-            <path d="M1015 200 L1120 200" marker-end="url(#aCalda)"/>
-          </g>
-
-          <!-- ---- Trem de equipamentos sobre o coletor ---- -->
-          <!-- Registro (antes do filtro) -->
-          <g transform="translate(505,636)"><use href="#valve"/></g>
-          <!-- Filtro -->
-          <g transform="translate(560,636)">
-            <rect x="-13" y="-22" width="26" height="44" rx="6" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            <path d="M-8 -14 L8 -14 M-8 -6 L8 -6 M-8 2 L8 2 M-8 10 L8 10" stroke="var(--cinza-esc)" stroke-width="1.3"/>
-          </g>
-          <!-- Bomba dosadora -->
-          <g transform="translate(650,636)">
-            <circle r="24" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1.8"/>
-            <path d="M-24 0 A24 24 0 0 1 0 -24 L0 0 Z" fill="var(--calda)" opacity=".28"/>
-            <path d="M0 0 L14 -8" stroke="var(--cinza-esc)" stroke-width="2.4" stroke-linecap="round"/>
-            <circle r="4.5" fill="var(--cinza-esc)"/>
-          </g>
-          <!-- Medidor de vazão -->
-          <g transform="translate(760,636)">
-            <rect x="-16" y="-16" width="32" height="32" rx="6" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            <text x="0" y="5" text-anchor="middle" font-size="13" font-weight="800" fill="var(--chrome)" font-family="var(--f-mono)">Q</text>
-          </g>
-          <!-- Manômetro -->
-          <g transform="translate(840,590)">
-            <path d="M0 46 L0 16" stroke="var(--cinza)" stroke-width="4"/>
-            <circle r="15" fill="var(--panel)" stroke="var(--cinza-esc)" stroke-width="1.6"/>
-            <path d="M0 0 L7 -8" stroke="var(--retencao)" stroke-width="2" stroke-linecap="round"/>
-            <circle r="2.5" fill="var(--cinza-esc)"/>
-          </g>
-          <!-- Válvula de retenção (vermelha) -->
-          <g transform="translate(900,636)"><use href="#valveRed"/></g>
-          <!-- Registro de bloqueio (saída) -->
-          <g transform="translate(960,636)"><use href="#valve"/></g>
-          <!-- Ponto de injeção -->
-          <g transform="translate(1015,636)">
-            <circle r="8" fill="var(--atencao)" stroke="var(--cinza-esc)" stroke-width="1.4"/>
-          </g>
-
-          <!-- ===================== LINHA PRINCIPAL DO PIVÔ (adutora) ===================== -->
-          <path d="M1015 200 L1170 200" fill="none" stroke="var(--cinza)" stroke-width="14" stroke-linecap="round"/>
-          <path d="M1015 200 L1170 200" fill="none" stroke="var(--agua)" stroke-width="5" stroke-linecap="round" opacity=".85" marker-end="url(#aAgua)"/>
-          <!-- torre do pivô -->
-          <g stroke="var(--cinza-esc)" stroke-width="2.4" fill="none">
-            <path d="M1150 200 L1150 150 M1140 168 L1160 158 M1140 158 L1160 168"/>
-          </g>
-          <text x="1088" y="184" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)" font-family="var(--f-body)">Linha do pivô</text>
-
-          <!-- ===================== ABRIGO / COBERTURA ===================== -->
-          <g stroke="var(--cinza-esc)" stroke-width="1.6" fill="none" stroke-linejoin="round">
-            <path d="M560 690 L560 596 M960 690 L960 596" opacity=".0"/>
-            <path d="M528 598 L700 598 L676 566 L552 566 Z" fill="rgba(255,255,255,.06)"/>
-          </g>
-          <text x="614" y="588" text-anchor="middle" font-size="10.5" fill="var(--ink-soft)" font-family="var(--f-mono)">abrigo bomba/painel</text>
-
-          <!-- ===================== CALLOUTS NUMERADOS ===================== -->
-          <g font-family="var(--f-mono)" font-size="12" font-weight="700">
-            <g class="cal"><circle cx="430" cy="500" r="12" fill="var(--chrome)"/><text x="430" y="504" text-anchor="middle" fill="#fff">1</text></g>
-            <g class="cal"><circle cx="360" cy="620" r="12" fill="var(--chrome)"/><text x="360" y="624" text-anchor="middle" fill="#fff">2</text></g>
-            <g class="cal"><circle cx="505" cy="612" r="12" fill="var(--chrome)"/><text x="505" y="616" text-anchor="middle" fill="#fff">3</text></g>
-            <g class="cal"><circle cx="560" cy="600" r="12" fill="var(--chrome)"/><text x="560" y="604" text-anchor="middle" fill="#fff">4</text></g>
-            <g class="cal"><circle cx="650" cy="676" r="12" fill="var(--chrome)"/><text x="650" y="680" text-anchor="middle" fill="#fff">5</text></g>
-            <g class="cal"><circle cx="760" cy="676" r="12" fill="var(--chrome)"/><text x="760" y="680" text-anchor="middle" fill="#fff">6</text></g>
-            <g class="cal"><circle cx="840" cy="560" r="12" fill="var(--chrome)"/><text x="840" y="564" text-anchor="middle" fill="#fff">7</text></g>
-            <g class="cal"><circle cx="900" cy="676" r="12" fill="var(--retencao)"/><text x="900" y="680" text-anchor="middle" fill="#fff">8</text></g>
-            <g class="cal"><circle cx="960" cy="676" r="12" fill="var(--chrome)"/><text x="960" y="680" text-anchor="middle" fill="#fff">9</text></g>
-            <g class="cal"><circle cx="1015" cy="662" r="12" fill="var(--atencao)"/><text x="1015" y="666" text-anchor="middle" fill="#16202b">10</text></g>
-            <g class="cal"><circle cx="690" cy="410" r="12" fill="var(--calda)"/><text x="690" y="414" text-anchor="middle" fill="#fff">11</text></g>
-            <g class="cal"><circle cx="1120" cy="122" r="12" fill="var(--agua)"/><text x="1120" y="126" text-anchor="middle" fill="#fff">12</text></g>
-          </g>
-        </svg>
-      </div>
-      <div class="draw-foot">
-        <span>→ <b style="color:var(--calda)">verde</b> = calda / fertilizante</span>
-        <span>→ <b style="color:var(--agua)">azul</b> = água limpa</span>
-        <span>✕ <b style="color:var(--retencao)">vermelho</b> = retenção / segurança</span>
-        <span>◆ <b style="color:var(--atencao)">amarelo</b> = ponto de atenção</span>
-      </div>
-    </section>
-
-    <!-- ---- Coluna lateral ---- -->
-    <aside style="display:grid; gap:18px; align-content:start">
-
-      <section class="panel">
-        <div class="panel-h"><h2>Legenda de cores</h2><span class="tag">CÓDIGO</span></div>
-        <div class="legend">
-          <div class="li"><span class="swatch" style="background:var(--agua)"></span><div><b>Água limpa</b> <span>— abastecimento, pressurização e lavagem da linha.</span></div></div>
-          <div class="li"><span class="swatch" style="background:var(--calda)"></span><div><b>Calda / fertilizante</b> <span>— sucção, injeção e recirculação.</span></div></div>
-          <div class="li"><span class="swatch" style="background:var(--cinza)"></span><div><b>Tubulação e concreto</b> <span>— estrutura e coletores.</span></div></div>
-          <div class="li"><span class="swatch" style="background:var(--retencao)"></span><div><b>Válvula de retenção / segurança</b> <span>— impede refluxo para a caixa.</span></div></div>
-          <div class="li"><span class="swatch" style="background:var(--atencao)"></span><div><b>Ponto de atenção</b> <span>— injeção, nível e dreno.</span></div></div>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-h"><h2>Vazão &amp; autonomia</h2><span class="tag">≈ 7 h</span></div>
-        <div class="calc">
-          <div class="card active" id="card1">
-            <div class="liveflag">● Ativa</div>
-            <div class="cap">Opção 1 — 1 caixa · 10.000 L</div>
-            <div class="big">1.428 <small>L/h</small></div>
-            <div class="eq"><span><b>23,8</b> L/min</span><span><b>0,39</b> L/s</span><span>10.000 ÷ 7 h</span></div>
-          </div>
-          <div class="card" id="card2">
-            <div class="liveflag">● Ativa</div>
-            <div class="cap">Opção 2 — 2 caixas · 20.000 L</div>
-            <div class="big">2.857 <small>L/h</small></div>
-            <div class="eq"><span><b>47,6</b> L/min</span><span><b>0,79</b> L/s</span><span>20.000 ÷ 7 h</span></div>
-          </div>
-        </div>
-        <div class="note"><span class="ic">!</span><div>Vazão <b>regulável</b>: ajuste a bomba conforme dose do produto, área do pivô, tempo de aplicação e volume de calda. Os valores acima são a <b>referência média</b> para esvaziar o volume em ~7 h.</div></div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-h"><h2>Componentes (callouts)</h2><span class="tag">1–12</span></div>
-        <div class="items">
-          <div class="it"><span class="num">1</span><div><b>Caixa 10.000 L</b> <span>c/ tampa, entrada, escala, respiro e ID.</span></div></div>
-          <div class="it"><span class="num">2</span><div><b>Dreno inferior</b> <span>p/ limpeza da caixa.</span></div></div>
-          <div class="it"><span class="num">3</span><div><b>Registro</b> <span>antes do filtro.</span></div></div>
-          <div class="it"><span class="num">4</span><div><b>Filtro</b> <span>antes da bomba.</span></div></div>
-          <div class="it"><span class="num">5</span><div><b>Bomba dosadora</b> <span>/ injeção.</span></div></div>
-          <div class="it"><span class="num">6</span><div><b>Medidor de vazão</b> <span>quanto se injeta.</span></div></div>
-          <div class="it"><span class="num">7</span><div><b>Manômetro</b> <span>pressão da linha.</span></div></div>
-          <div class="it"><span class="num">8</span><div><b>Válvula de retenção</b> <span>anti‑refluxo.</span></div></div>
-          <div class="it"><span class="num">9</span><div><b>Registro de bloqueio</b> <span>na saída.</span></div></div>
-          <div class="it"><span class="num">10</span><div><b>Ponto de injeção</b> <span>na adutora.</span></div></div>
-          <div class="it"><span class="num">11</span><div><b>Recirculação</b> <span>c/ registro próprio.</span></div></div>
-          <div class="it"><span class="num">12</span><div><b>Linha do pivô</b> <span>água pressurizada.</span></div></div>
-        </div>
-      </section>
-    </aside>
+  <div class="section">
+    <h2>Configuração</h2>
+    <div class="cfg-toggle" id="cfgToggle">
+      <button class="btn" data-cfg="1">1 Caixa · 10.000 L</button>
+      <button class="btn active" data-cfg="2">2 Caixas · 20.000 L</button>
+    </div>
   </div>
-
-  <!-- ============ SEQUÊNCIA OPERACIONAL ============ -->
-  <section class="panel seq">
-    <div class="panel-h"><h2>Sequência operacional</h2><span class="tag">PASSO A PASSO</span></div>
-    <div class="seq-grid">
-      <div class="step"><span class="sn">1</span><p><b>Abastecer parte da água</b><small>Encha a caixa com parte do volume antes do produto.</small></p></div>
-      <div class="step"><span class="sn">2</span><p><b>Adicionar fertilizante aos poucos</b><small>Nunca concentrado direto na linha.</small></p></div>
-      <div class="step"><span class="sn">3</span><p><b>Completar o volume de água</b><small>Diluição adequada da calda.</small></p></div>
-      <div class="step"><span class="sn">4</span><p><b>Acionar a recirculação</b><small>Homogeneíza e evita decantação.</small></p></div>
-      <div class="step"><span class="sn">5</span><p><b>Ligar o pivô só com água</b><small>Pressurize a linha primeiro.</small></p></div>
-      <div class="step"><span class="sn">6</span><p><b>Iniciar a injeção da calda</b><small>Somente após pressurizado.</small></p></div>
-      <div class="step"><span class="sn">7</span><p><b>Regular a bomba p/ ~7 h</b><small>Ajuste a vazão ao tempo de aplicação.</small></p></div>
-      <div class="step"><span class="sn">8</span><p><b>Lavar a linha com água limpa</b><small>Continue irrigando após a calda acabar.</small></p></div>
-      <div class="step"><span class="sn">9</span><p><b>Lavar caixa, filtro, bomba e tubos</b><small>Encerra o ciclo sem resíduo.</small></p></div>
+  <div class="section">
+    <h2>Dados Técnicos</h2>
+    <div class="spec"><span class="spec-label">Volume total</span><span class="spec-value" id="sVol">20.000 L</span></div>
+    <div class="spec"><span class="spec-label">Autonomia</span><span class="spec-value">~7 h</span></div>
+    <div class="spec"><span class="spec-label">Vazão</span><span class="spec-value" id="sFlow">2.857 L/h</span></div>
+    <div class="spec"><span class="spec-label">Vazão (L/min)</span><span class="spec-value" id="sMin">47,6 L/min</span></div>
+    <div class="spec"><span class="spec-label">Base concreto</span><span class="spec-value">8,0 × 5,0 m</span></div>
+    <div class="spec"><span class="spec-label">Caixa (D × H)</span><span class="spec-value">2,30 × 2,40 m</span></div>
+  </div>
+  <div class="section">
+    <h2>Legenda de Cores</h2>
+    <div class="legend-item"><div class="legend-dot" style="background:#3a9944"></div>Calda / Fertilizante</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3b7ad9"></div>Água limpa / Lavagem</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#888"></div>Estrutura / Concreto</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#cc3328"></div>Válvula de retenção</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#d9b820"></div>Ponto de atenção</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#ddd8cc"></div>Caixas d'água</div>
+  </div>
+  <div class="section">
+    <h2>Vistas</h2>
+    <div class="btn-row">
+      <button class="btn active" data-view="geral">Geral</button>
+      <button class="btn" data-view="topo">Superior</button>
+      <button class="btn" data-view="caixas">Caixas</button>
+      <button class="btn" data-view="bomba">Bomba</button>
+      <button class="btn" data-view="injecao">Injeção</button>
+      <button class="btn" data-view="recirc">Recirculação</button>
     </div>
-  </section>
-
-  <!-- ============ ESPECIFICAÇÃO ============ -->
-  <section class="panel seq">
-    <div class="panel-h"><h2>Resumo técnico das duas opções</h2><span class="tag">DIMENSIONAMENTO</span></div>
-    <div class="specwrap">
-      <table class="spec">
-        <thead><tr><th>Item</th><th>Opção 1 — 1 caixa</th><th>Opção 2 — 2 caixas (paralelo)</th></tr></thead>
-        <tbody>
-          <tr><td>Volume de calda</td><td class="n">10.000 L</td><td class="n">20.000 L</td></tr>
-          <tr><td>Autonomia alvo</td><td class="n">≈ 7 h</td><td class="n">≈ 7 h</td></tr>
-          <tr><td>Vazão média (L/h)</td><td class="n">1.428</td><td class="n">2.857</td></tr>
-          <tr><td>Vazão média (L/min)</td><td class="n">23,8</td><td class="n">47,6</td></tr>
-          <tr><td>Vazão média (L/s)</td><td class="n">0,39</td><td class="n">0,79</td></tr>
-          <tr><td>Operação flexível</td><td class="n">—</td><td class="n">Só Cx1 · Só Cx2 · ambas · 1 opera / 1 limpa</td></tr>
-          <tr><td>Registros individuais</td><td class="n">1 conjunto</td><td class="n">1 por caixa (paralelo)</td></tr>
-        </tbody>
-      </table>
+  </div>
+  <div class="section">
+    <h2>Sequência Operacional</h2>
+    <div class="steps">
+      <div class="step">Abastecer caixa com parte da água</div>
+      <div class="step">Adicionar fertilizante aos poucos</div>
+      <div class="step">Completar volume de água</div>
+      <div class="step">Acionar recirculação para mistura</div>
+      <div class="step">Ligar pivô apenas com água</div>
+      <div class="step">Iniciar injeção da calda</div>
+      <div class="step">Regular bomba para ~7 horas</div>
+      <div class="step">Lavar linha com água limpa ao final</div>
+      <div class="step">Limpar caixa, filtro e bomba</div>
     </div>
-    <div class="note"><span class="ic">!</span><div><b>Boa diluição &amp; anti‑entupimento:</b> pré‑diluir na caixa, manter a calda em movimento pela recirculação, filtrar antes da bomba, evitar aplicação concentrada no início/fim e lavar a tubulação com água limpa ao final.</div></div>
-  </section>
+  </div>
+</div>
 
-  <footer class="foot">
-    <span>FR‑PIV‑01 · Rev.00 · Sistema de fertirrigação em caixas p/ pivô central</span>
-    <span>Cores: azul=água · verde=calda · cinza=tubo/concreto · vermelho=retenção · amarelo=atenção</span>
-  </footer>
+<div id="main">
+  <canvas id="gl"></canvas>
+  <div class="hint">Arraste para girar · Scroll para zoom</div>
 </div>
 
 <script>
-  function setOpt(n){
-    var two = n===2;
-    document.getElementById('opt1').setAttribute('aria-pressed', String(!two));
-    document.getElementById('opt2').setAttribute('aria-pressed', String(two));
-    document.getElementById('card1').classList.toggle('active', !two);
-    document.getElementById('card2').classList.toggle('active', two);
-    document.getElementById('modeTag').textContent = two ? 'MODO: 2 CAIXAS' : 'MODO: 1 CAIXA';
-    document.getElementById('volLabel').textContent = two
-      ? 'Volume total: 20.000 L · vazão média 2.857 L/h'
-      : 'Volume total: 10.000 L · vazão média 1.428 L/h';
-    document.querySelectorAll('.t2').forEach(function(el){ el.classList.toggle('hidden', !two); });
+const canvas=document.getElementById('gl');
+const gl=canvas.getContext('webgl',{antialias:true,alpha:false});
+if(!gl){document.body.innerHTML='<p style="padding:40px">WebGL indisponível.</p>';}
+
+const VS=`
+attribute vec3 aP,aN,aC;
+uniform mat4 uMVP;
+uniform vec3 uL;
+varying vec3 vC;
+void main(){
+  gl_Position=uMVP*vec4(aP,1);
+  float d=max(dot(aN,uL),0.0);
+  vC=aC*(0.38+(1.0-0.38)*d);
+}`;
+const FS=`precision mediump float;varying vec3 vC;void main(){gl_FragColor=vec4(vC,1);}`;
+
+function mkS(s,t){const o=gl.createShader(t);gl.shaderSource(o,s);gl.compileShader(o);return o}
+const prg=gl.createProgram();
+gl.attachShader(prg,mkS(VS,gl.VERTEX_SHADER));
+gl.attachShader(prg,mkS(FS,gl.FRAGMENT_SHADER));
+gl.linkProgram(prg);gl.useProgram(prg);
+
+const _aP=gl.getAttribLocation(prg,'aP');
+const _aN=gl.getAttribLocation(prg,'aN');
+const _aC=gl.getAttribLocation(prg,'aC');
+const _uMVP=gl.getUniformLocation(prg,'uMVP');
+const _uL=gl.getUniformLocation(prg,'uL');
+gl.enable(gl.DEPTH_TEST);
+
+// Matrix
+function persp(f,a,n,r){const t=1/Math.tan(f/2),d=1/(n-r);return[t/a,0,0,0,0,t,0,0,0,0,(r+n)*d,-1,0,0,2*r*n*d,0]}
+function look(e,c,u){
+  let zx=e[0]-c[0],zy=e[1]-c[1],zz=e[2]-c[2],l=Math.sqrt(zx*zx+zy*zy+zz*zz);
+  zx/=l;zy/=l;zz/=l;
+  let xx=u[1]*zz-u[2]*zy,xy=u[2]*zx-u[0]*zz,xz=u[0]*zy-u[1]*zx;
+  l=Math.sqrt(xx*xx+xy*xy+xz*xz);xx/=l;xy/=l;xz/=l;
+  let yx=zy*xz-zz*xy,yy=zz*xx-zx*xz,yz=zx*xy-zy*xx;
+  return[xx,yx,zx,0,xy,yy,zy,0,xz,yz,zz,0,
+    -(xx*e[0]+xy*e[1]+xz*e[2]),-(yx*e[0]+yy*e[1]+yz*e[2]),-(zx*e[0]+zy*e[1]+zz*e[2]),1]
+}
+function mul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)o[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return o}
+
+// Geometry accumulator
+let P=[],N=[],Co=[];
+function fn(a,b,c){const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const l=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;return[nx/l,ny/l,nz/l]}
+function tri(a,b,c,n,r,g,bl){P.push(...a,...b,...c);N.push(...n,...n,...n);Co.push(r,g,bl,r,g,bl,r,g,bl)}
+function quad(a,b,c,d,n,r,g,bl){tri(a,b,c,n,r,g,bl);tri(a,c,d,n,r,g,bl)}
+
+function BOX(x,y,z,sx,sy,sz,r,g,b){
+  const v=[[x,y,z],[x+sx,y,z],[x,y+sy,z],[x+sx,y+sy,z],[x,y,z+sz],[x+sx,y,z+sz],[x,y+sy,z+sz],[x+sx,y+sy,z+sz]];
+  quad(v[0],v[2],v[3],v[1],[0,0,-1],r,g,b);quad(v[4],v[5],v[7],v[6],[0,0,1],r,g,b);
+  quad(v[0],v[1],v[5],v[4],[0,-1,0],r,g,b);quad(v[2],v[6],v[7],v[3],[0,1,0],r,g,b);
+  quad(v[0],v[4],v[6],v[2],[-1,0,0],r,g,b);quad(v[1],v[3],v[7],v[5],[1,0,0],r,g,b);
+}
+function CYL(cx,cy,cz,R,H,s,r,g,b){
+  const bo=[],to=[];
+  for(let i=0;i<s;i++){const a=2*Math.PI*i/s;bo.push([cx+R*Math.cos(a),cy+R*Math.sin(a),cz]);to.push([cx+R*Math.cos(a),cy+R*Math.sin(a),cz+H])}
+  const bc=[cx,cy,cz],tc=[cx,cy,cz+H];
+  for(let i=0;i<s;i++){const j=(i+1)%s;const n=fn(bo[i],bo[j],to[j]);tri(bo[i],bo[j],to[j],n,r,g,b);tri(bo[i],to[j],to[i],n,r,g,b);tri(bc,bo[j],bo[i],[0,0,-1],r,g,b);tri(tc,to[i],to[j],[0,0,1],r,g,b)}
+}
+function PIPE(x1,y1,z1,x2,y2,z2,R,s,r,g,b){
+  const dx=x2-x1,dy=y2-y1,dz=z2-z1,L=Math.sqrt(dx*dx+dy*dy+dz*dz);if(L<.001)return;
+  const fw=[dx/L,dy/L,dz/L],up=Math.abs(fw[2])<.9?[0,0,1]:[1,0,0];
+  let rx=fw[1]*up[2]-fw[2]*up[1],ry=fw[2]*up[0]-fw[0]*up[2],rz=fw[0]*up[1]-fw[1]*up[0];
+  let rl=Math.sqrt(rx*rx+ry*ry+rz*rz);rx/=rl;ry/=rl;rz/=rl;
+  const ux=ry*fw[2]-rz*fw[1],uy=rz*fw[0]-rx*fw[2],uz=rx*fw[1]-ry*fw[0];
+  const bo=[],to=[];
+  for(let i=0;i<s;i++){const a=2*Math.PI*i/s,ca=Math.cos(a),sa=Math.sin(a);
+    bo.push([x1+R*(ca*rx+sa*ux),y1+R*(ca*ry+sa*uy),z1+R*(ca*rz+sa*uz)]);
+    to.push([x2+R*(ca*rx+sa*ux),y2+R*(ca*ry+sa*uy),z2+R*(ca*rz+sa*uz)])}
+  const c1=[x1,y1,z1],c2=[x2,y2,z2],nb=[-fw[0],-fw[1],-fw[2]];
+  for(let i=0;i<s;i++){const j=(i+1)%s;const n=fn(bo[i],bo[j],to[j]);tri(bo[i],bo[j],to[j],n,r,g,b);tri(bo[i],to[j],to[i],n,r,g,b);tri(c1,bo[j],bo[i],nb,r,g,b);tri(c2,to[i],to[j],fw,r,g,b)}
+}
+function VALVE(cx,cy,cz,R,r,g,b){CYL(cx,cy,cz,R,R*1.2,8,r,g,b);BOX(cx-R*.15,cy-R*.5,cz+R*1.2,R*.3,R*1,R*.15,r*.8,g*.8,b*.8)}
+
+// Colors
+const Cc={co:[.55,.54,.52],tk:[.88,.86,.82],ld:[.72,.70,.67],pg:[.45,.45,.47],
+  gn:[.23,.60,.27],bl:[.23,.48,.85],vr:[.80,.20,.14],vg:[.38,.38,.40],
+  yl:[.85,.72,.13],pu:[.25,.27,.30],fi:[.30,.33,.37],rf:[.50,.32,.18],
+  po:[.42,.42,.44],pa:[.80,.78,.73],ga:[.62,.62,.65],mp:[.30,.32,.35],
+  lb:[.90,.87,.76],lv:[.10,.55,.80]};
+
+// Build
+let t2s=0,t2e=0,showT2=true;
+const S=18,PS=8,PR=.04,VR=.06,TR=1.15,TH=2.40;
+const TK=[[1.0,1.5],[4.2,1.5]];
+
+function buildTank(tx,ty){
+  CYL(tx,ty,0,TR,TH,S,...Cc.tk);CYL(tx,ty,TH,TR+.02,.06,S,...Cc.ld);
+  BOX(tx-.03,ty-TR-.02,.3,.06,.02,TH*.7,...Cc.lv);
+  BOX(tx-.20,ty-TR-.02,TH*.6,.40,.02,.20,...Cc.lb);
+  CYL(tx,ty-TR+.05,-.05,.05,.15,8,...Cc.pg);
+  CYL(tx+.4,ty-TR+.05,-.05,.03,.12,6,...Cc.pg);
+  VALVE(tx,ty-TR-.15,0,VR,...Cc.vg);
+}
+
+// Base
+BOX(-1,-1,-.15,8,5,.15,...Cc.co);
+// Tank 1
+buildTank(TK[0][0],TK[0][1]);
+// Tank 2
+t2s=P.length/3;
+buildTank(TK[1][0],TK[1][1]);
+t2e=P.length/3;
+
+const cy_=TK[0][1]-TR-.50,cz_=-.10,mx=(TK[0][0]+TK[1][0])/2;
+// Drops
+for(const [tx] of TK) PIPE(tx,TK[0][1]-TR-.15-VR*1.2,0,tx,cy_,cz_,PR,PS,...Cc.gn);
+// Collector
+PIPE(TK[0][0],cy_,cz_,TK[1][0],cy_,cz_,PR*1.2,PS,...Cc.gn);
+// Recirc
+const ry_=cy_-.20,rzt=TH+.10;
+PIPE(TK[0][0],ry_,cz_,TK[1][0],ry_,cz_,PR,PS,...Cc.gn);
+PIPE(mx,cy_,cz_,mx,ry_,cz_,PR,PS,...Cc.gn);
+VALVE(mx,ry_-.05,cz_,VR,...Cc.vg);
+for(const [tx,ty] of TK){
+  PIPE(tx,ry_,cz_,tx,ry_,rzt,PR,PS,...Cc.gn);
+  PIPE(tx,ry_,rzt,tx,ty,rzt,PR,PS,...Cc.gn);
+  VALVE(tx,ry_,rzt*.5,VR*.8,...Cc.vg);
+}
+// Filter
+PIPE(mx,cy_,cz_,mx,cy_-.50,cz_,PR,PS,...Cc.gn);
+const fy=cy_-.60;
+CYL(mx,fy,cz_-.10,.10,.30,12,...Cc.fi);
+BOX(mx-.06,fy-.12,cz_+.20,.12,.05,.05,...Cc.yl);
+// Pump
+const py=cy_-1.00;
+PIPE(mx,fy,cz_,mx,py+.15,cz_,PR,PS,...Cc.gn);
+BOX(mx-.15,py-.15,cz_-.10,.30,.30,.25,...Cc.pu);
+CYL(mx,py,cz_+.15,.08,.20,10,...Cc.pu);
+// Meter
+const my_=py-.35;
+PIPE(mx,py-.15,cz_,mx,my_+.08,cz_,PR,PS,...Cc.gn);
+CYL(mx,my_,cz_-.05,.06,.15,10,...Cc.ga);
+CYL(mx+.10,my_,cz_+.05,.04,.03,10,...Cc.ga);
+// Check valve
+const cv=my_-.25;
+PIPE(mx,my_-.08,cz_,mx,cv+.06,cz_,PR,PS,...Cc.gn);
+VALVE(mx,cv,cz_,VR,...Cc.vr);
+// Block valve
+const bv=cv-.20;
+PIPE(mx,cv-VR*.6,cz_,mx,bv+.06,cz_,PR,PS,...Cc.gn);
+VALVE(mx,bv,cz_,VR,...Cc.vg);
+// Main line
+const mpy=cy_-2.50,mpz=.20,mpr=.15;
+PIPE(-1,mpy,mpz,8,mpy,mpz,mpr,14,...Cc.mp);
+PIPE(mx,bv-VR*.6,cz_,mx,mpy+mpr+.02,mpz,PR,PS,...Cc.gn);
+CYL(mx,mpy,mpz-mpr,.08,mpr*2,10,...Cc.yl);
+VALVE(mx,mpy+.15,mpz+mpr+.02,VR,...Cc.vr);
+// Water
+const wx=6.5,wy=1.5,wz=TH+.25;
+PIPE(wx,wy,wz,TK[0][0]-.5,wy,wz,PR*1.1,PS,...Cc.bl);
+for(const [tx,ty] of TK){PIPE(tx,ty,wz,tx,ty,TH+.08,PR,PS,...Cc.bl);VALVE(tx,ty+.15,wz-.3,VR*.8,...Cc.vg)}
+PIPE(wx,wy,wz,wx,mpy+.5,mpz+.3,PR,PS,...Cc.bl);
+PIPE(wx,mpy+.5,mpz+.3,wx,mpy,mpz+mpr+.02,PR,PS,...Cc.bl);
+VALVE(wx,wy+.3,wz,VR,...Cc.vg);
+// Shelter
+const sx_=mx-1.2,sy_=cy_-1.50,sw=2.4,sd=1.8,sh=2.60,ps=.08;
+for(const [dx,dy] of [[0,0],[sw-ps,0],[0,sd-ps],[sw-ps,sd-ps]]) BOX(sx_+dx,sy_+dy,0,ps,ps,sh,...Cc.po);
+BOX(sx_-.15,sy_-.15,sh,sw+.30,sd+.30,.05,...Cc.rf);
+BOX(sx_+.3,sy_+sd-.08,sh*.5,.60,.08,.45,...Cc.pa);
+
+// Upload
+const TV=P.length/3;
+function upload(){
+  const mk=(d,a)=>{const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(d),gl.STATIC_DRAW);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,0,0)};
+  mk(P,_aP);mk(N,_aN);mk(Co,_aC);
+}
+upload();
+
+// Camera
+let az=.65,el=.45,dist=14,tgt=[3,.2,1];
+let anim=null,aT=0,aF={};
+function camTo(a,e,d,t){aF={az,el,dist,tgt:[...tgt]};anim={az:a,el:e,dist:d,tgt:t};aT=performance.now()}
+function ease(t){return t<.5?2*t*t:1-(-2*t+2)**2/2}
+function updCam(now){
+  if(!anim)return;let t=(now-aT)/600;if(t>=1){t=1;az=anim.az;el=anim.el;dist=anim.dist;tgt=[...anim.tgt];anim=null;return}
+  const e=ease(t);az=aF.az+(anim.az-aF.az)*e;el=aF.el+(anim.el-aF.el)*e;dist=aF.dist+(anim.dist-aF.dist)*e;
+  for(let i=0;i<3;i++)tgt[i]=aF.tgt[i]+(anim.tgt[i]-aF.tgt[i])*e;
+}
+function eye(){const ce=Math.cos(el),se=Math.sin(el);return[tgt[0]+dist*ce*Math.cos(az),tgt[1]+dist*ce*Math.sin(az),tgt[2]+dist*se]}
+
+// Mouse
+let drag=false,lx=0,ly=0;
+canvas.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY;anim=null};
+onpointerup=()=>drag=false;
+onpointermove=e=>{if(!drag)return;az-=(e.clientX-lx)*.006;el=Math.max(.05,Math.min(1.5,el+(e.clientY-ly)*.006));lx=e.clientX;ly=e.clientY};
+canvas.onwheel=e=>{e.preventDefault();dist=Math.max(4,Math.min(30,dist+e.deltaY*.01));anim=null};
+
+// Labels
+const LB=[
+  {p:[TK[0][0],TK[0][1],TH+.3],t:'Caixa 1 — 10.000 L'},
+  {p:[TK[1][0],TK[1][1],TH+.3],t:'Caixa 2 — 10.000 L',t2:1},
+  {p:[mx,cy_,cz_+.15],t:'Coletor'},
+  {p:[mx,fy,cz_+.35],t:'Filtro'},
+  {p:[mx,py,cz_+.4],t:'Bomba dosadora'},
+  {p:[mx,my_,cz_+.15],t:'Medidor de vazão'},
+  {p:[mx,cv,cz_+.15],t:'Válv. retenção',c:'#cc3328'},
+  {p:[mx,bv,cz_+.15],t:'Registro bloqueio'},
+  {p:[mx,mpy,.5],t:'Ponto de injeção',c:'#d9b820'},
+  {p:[3.5,mpy,.5],t:'Adutora pivô'},
+  {p:[TK[0][0],cy_-.1,TH*.55],t:'Recirculação',c:'#3a9944'},
+  {p:[6.5,1.5,TH+.5],t:'Água limpa',c:'#3b7ad9'},
+  {p:[mx,sy_+.9,2.8],t:'Abrigo técnico'},
+  {p:[mx+.5,sy_+1.6,1.5],t:'Painel controle'},
+];
+const lEls=LB.map(d=>{const e=document.createElement('div');e.className='label3d';e.textContent=d.t;if(d.c)e.style.borderLeft='3px solid '+d.c;document.getElementById('main').appendChild(e);return{e,p:d.p,t2:d.t2}});
+function proj(p,m,w,h){const x=p[0],y=p[1],z=p[2];const cx=m[0]*x+m[4]*y+m[8]*z+m[12],cy_=m[1]*x+m[5]*y+m[9]*z+m[13],cw=m[3]*x+m[7]*y+m[11]*z+m[15];if(cw<.01)return null;return[(cx/cw*.5+.5)*w,(1-(cy_/cw*.5+.5))*h]}
+
+// Render
+const bgD=[.067,.075,.094],bgL=[.89,.90,.92];
+function bg(){const m=matchMedia('(prefers-color-scheme:dark)').matches,d=document.documentElement.dataset.theme;return(d==='light'||(d!=='dark'&&!m))?bgL:bgD}
+
+function render(now){
+  requestAnimationFrame(render);updCam(now);
+  const r=canvas.parentElement.getBoundingClientRect(),dp=devicePixelRatio||1,w=r.width,h=r.height;
+  canvas.width=w*dp;canvas.height=h*dp;canvas.style.width=w+'px';canvas.style.height=h+'px';
+  gl.viewport(0,0,canvas.width,canvas.height);
+  const c=bg();gl.clearColor(c[0],c[1],c[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const e=eye(),pj=persp(Math.PI/5,w/h,.1,100),vw=look(e,tgt,[0,0,1]),mvp=mul(pj,vw);
+  gl.uniformMatrix4fv(_uMVP,false,new Float32Array(mvp));
+  const ld=[.4,.3,.7],ll=Math.sqrt(ld[0]**2+ld[1]**2+ld[2]**2);
+  gl.uniform3f(_uL,ld[0]/ll,ld[1]/ll,ld[2]/ll);
+  if(showT2){gl.drawArrays(gl.TRIANGLES,0,TV)}
+  else{gl.drawArrays(gl.TRIANGLES,0,t2s);if(t2e<TV)gl.drawArrays(gl.TRIANGLES,t2e,TV-t2e)}
+  for(const l of lEls){
+    if(l.t2&&!showT2){l.e.classList.remove('show');continue}
+    const s=proj(l.p,mvp,w,h);
+    if(s&&s[0]>-50&&s[0]<w+50&&s[1]>-50&&s[1]<h+50){l.e.style.left=s[0]+'px';l.e.style.top=s[1]+'px';l.e.classList.add('show')}
+    else l.e.classList.remove('show');
   }
-  setOpt(1);
+}
+requestAnimationFrame(render);
+
+// Views
+const VW={
+  geral:{az:.65,el:.45,dist:14,tgt:[3,.2,1]},
+  topo:{az:0,el:1.49,dist:12,tgt:[3,.2,.5]},
+  caixas:{az:.5,el:.35,dist:7,tgt:[2.6,1.5,1.2]},
+  bomba:{az:.3,el:.3,dist:5,tgt:[mx,cy_-1,0]},
+  injecao:{az:.2,el:.25,dist:5,tgt:[mx,mpy,.3]},
+  recirc:{az:1,el:.5,dist:8,tgt:[2.6,.5,1.3]},
+};
+document.querySelectorAll('[data-view]').forEach(b=>{b.onclick=()=>{document.querySelectorAll('[data-view]').forEach(x=>x.classList.remove('active'));b.classList.add('active');const v=VW[b.dataset.view];camTo(v.az,v.el,v.dist,v.tgt)}});
+document.querySelectorAll('[data-cfg]').forEach(b=>{b.onclick=()=>{document.querySelectorAll('[data-cfg]').forEach(x=>x.classList.remove('active'));b.classList.add('active');showT2=b.dataset.cfg==='2';
+  document.getElementById('sVol').textContent=showT2?'20.000 L':'10.000 L';
+  document.getElementById('sFlow').textContent=showT2?'2.857 L/h':'1.428 L/h';
+  document.getElementById('sMin').textContent=showT2?'47,6 L/min':'23,8 L/min'}});
 </script>
-</body>
-</html>
