@@ -7,7 +7,7 @@ export default function FertirrigacaoPage() {
     <div className="space-y-4">
       <PageHeader
         titulo="Projeto Fertirrigação"
-        descricao="Prancha técnica 3D — Sistema de fertirrigação em caixas para pivô central"
+        descricao="Sistema simples — Caixa azul 20.000 L com bomba injetora para pivô central"
       />
 
       <div className="flex flex-wrap items-center gap-3">
@@ -33,7 +33,7 @@ export default function FertirrigacaoPage() {
           Baixar modelo 3D (SketchUp)
         </a>
         <span className="text-xs text-gray-400 dark:text-gray-500">
-          ZIP com OBJ + MTL + STL + README
+          ZIP com DAE + RB + STL + README
         </span>
       </div>
 

@@ -1,9 +1,9 @@
-<title>Projeto Fertirrigação 3D — Pivô Central</title>
+<title>Fertirrigação — Caixa 20.000 L + Bomba Injetora</title>
 <style>
 :root {
   --bg:#111318; --panel:#1a1d25; --border:#2a2d35;
   --t1:#f0f0f0; --t2:#9a9da6; --t3:#6b6e77;
-  --accent:#2e8c38; --blue:#3373cc; --red:#c42a24;
+  --accent:#1a6fcc; --green:#2e8c38; --red:#c42a24;
 }
 @media(prefers-color-scheme:light){:root{
   --bg:#e4e6ea; --panel:#fff; --border:#d0d2d6;
@@ -15,7 +15,7 @@
 body{font-family:system-ui,-apple-system,'Segoe UI',sans-serif;background:var(--bg);color:var(--t1);overflow:hidden;height:100vh;display:flex}
 canvas{display:block;width:100%;height:100%;cursor:grab}
 canvas:active{cursor:grabbing}
-#sidebar{width:320px;min-width:320px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;z-index:10}
+#sidebar{width:310px;min-width:310px;background:var(--panel);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow-y:auto;z-index:10}
 #sidebar::-webkit-scrollbar{width:4px}
 #sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
 #main{flex:1;position:relative;display:flex;flex-direction:column}
@@ -33,12 +33,9 @@ canvas:active{cursor:grabbing}
 .btn{padding:6px 12px;font-size:11px;font-weight:600;border:1px solid var(--border);border-radius:6px;background:transparent;color:var(--t2);cursor:pointer;transition:all .15s}
 .btn:hover{border-color:var(--accent);color:var(--accent)}
 .btn.active{background:var(--accent);border-color:var(--accent);color:#fff}
-.cfg-toggle{display:flex;border:1px solid var(--border);border-radius:6px;overflow:hidden}
-.cfg-toggle .btn{border:0;border-radius:0;flex:1;text-align:center}
-.cfg-toggle .btn+.btn{border-left:1px solid var(--border)}
 .steps{counter-reset:step}
 .step{counter-increment:step;display:flex;gap:8px;padding:4px 0;font-size:11px;color:var(--t2);line-height:1.5}
-.step::before{content:counter(step);font-size:9px;font-weight:700;color:var(--accent);background:rgba(46,140,56,.12);width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.step::before{content:counter(step);font-size:9px;font-weight:700;color:var(--accent);background:rgba(26,111,204,.12);width:18px;height:18px;border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
 .label3d{position:absolute;pointer-events:none;font-size:10px;font-weight:600;color:#fff;background:rgba(0,0,0,.7);padding:2px 7px;border-radius:3px;white-space:nowrap;transform:translate(-50%,-100%);opacity:0;transition:opacity .15s}
 .label3d.show{opacity:1}
 .label3d::after{content:'';position:absolute;bottom:-4px;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:rgba(0,0,0,.7)}
@@ -52,57 +49,62 @@ canvas:active{cursor:grabbing}
 
 <div id="sidebar">
   <div class="logo">
-    <h1>Projeto Fertirrigação</h1>
-    <p>Sistema de fertirrigação em caixas para pivô central — Vista 3D interativa</p>
-  </div>
-  <div class="section">
-    <h2>Configuração</h2>
-    <div class="cfg-toggle" id="cfgToggle">
-      <button class="btn" data-cfg="1">1 Caixa · 10.000 L</button>
-      <button class="btn active" data-cfg="2">2 Caixas · 20.000 L</button>
-    </div>
+    <h1>Fertirrigação — Pivô Central</h1>
+    <p>Sistema simples: caixa azul 20.000 L com bomba injetora</p>
   </div>
   <div class="section">
     <h2>Dados Técnicos</h2>
-    <div class="spec"><span class="spec-label">Volume total</span><span class="spec-value" id="sVol">20.000 L</span></div>
+    <div class="spec"><span class="spec-label">Volume</span><span class="spec-value">20.000 L</span></div>
+    <div class="spec"><span class="spec-label">Caixa</span><span class="spec-value">1 × azul (D3,0 × H2,85 m)</span></div>
     <div class="spec"><span class="spec-label">Autonomia</span><span class="spec-value">~7 h</span></div>
-    <div class="spec"><span class="spec-label">Vazão</span><span class="spec-value" id="sFlow">2.857 L/h</span></div>
-    <div class="spec"><span class="spec-label">Vazão (L/min)</span><span class="spec-value" id="sMin">47,6 L/min</span></div>
-    <div class="spec"><span class="spec-label">Base concreto</span><span class="spec-value">8,0 × 5,0 m</span></div>
-    <div class="spec"><span class="spec-label">Caixa (D × H)</span><span class="spec-value">2,30 × 2,40 m</span></div>
+    <div class="spec"><span class="spec-label">Vazão injeção</span><span class="spec-value">2.857 L/h</span></div>
+    <div class="spec"><span class="spec-label">Vazão (L/min)</span><span class="spec-value">47,6 L/min</span></div>
+    <div class="spec"><span class="spec-label">Base concreto</span><span class="spec-value">5,0 × 5,0 m</span></div>
+    <div class="spec"><span class="spec-label">Bomba injetora</span><span class="spec-value">Elétrica / pistão</span></div>
   </div>
   <div class="section">
     <h2>Legenda de Cores</h2>
+    <div class="legend-item"><div class="legend-dot" style="background:#2a7acc"></div>Caixa d'água (20.000 L)</div>
     <div class="legend-item"><div class="legend-dot" style="background:#3a9944"></div>Calda / Fertilizante</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#3b7ad9"></div>Água limpa / Lavagem</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#3b7ad9"></div>Água limpa / Abastecimento</div>
     <div class="legend-item"><div class="legend-dot" style="background:#888"></div>Estrutura / Concreto</div>
     <div class="legend-item"><div class="legend-dot" style="background:#cc3328"></div>Válvula de retenção</div>
     <div class="legend-item"><div class="legend-dot" style="background:#d9b820"></div>Ponto de atenção</div>
-    <div class="legend-item"><div class="legend-dot" style="background:#ddd8cc"></div>Caixas d'água</div>
   </div>
   <div class="section">
     <h2>Vistas</h2>
     <div class="btn-row">
       <button class="btn active" data-view="geral">Geral</button>
       <button class="btn" data-view="topo">Superior</button>
-      <button class="btn" data-view="caixas">Caixas</button>
+      <button class="btn" data-view="caixa">Caixa</button>
       <button class="btn" data-view="bomba">Bomba</button>
       <button class="btn" data-view="injecao">Injeção</button>
-      <button class="btn" data-view="recirc">Recirculação</button>
+    </div>
+  </div>
+  <div class="section">
+    <h2>Componentes do Sistema</h2>
+    <div class="steps">
+      <div class="step">Caixa azul 20.000 L com tampa e indicador de nível</div>
+      <div class="step">Saída inferior com registro de gaveta</div>
+      <div class="step">Dreno de limpeza (registro independente)</div>
+      <div class="step">Bomba injetora (elétrica, pistão)</div>
+      <div class="step">Válvula de retenção (anti-retorno)</div>
+      <div class="step">Registro de bloqueio geral</div>
+      <div class="step">Ponto de injeção na adutora do pivô</div>
+      <div class="step">Linha de água limpa para abastecimento</div>
     </div>
   </div>
   <div class="section">
     <h2>Sequência Operacional</h2>
     <div class="steps">
-      <div class="step">Abastecer caixa com parte da água</div>
+      <div class="step">Encher caixa com parte da água</div>
       <div class="step">Adicionar fertilizante aos poucos</div>
-      <div class="step">Completar volume de água</div>
-      <div class="step">Acionar recirculação para mistura</div>
-      <div class="step">Ligar pivô apenas com água</div>
-      <div class="step">Iniciar injeção da calda</div>
-      <div class="step">Regular bomba para ~7 horas</div>
-      <div class="step">Lavar linha com água limpa ao final</div>
-      <div class="step">Limpar caixa, filtro e bomba</div>
+      <div class="step">Completar volume de água (20.000 L)</div>
+      <div class="step">Ligar pivô apenas com água limpa</div>
+      <div class="step">Abrir registro e ligar bomba injetora</div>
+      <div class="step">Regular vazão para ~7 horas de autonomia</div>
+      <div class="step">Ao final, lavar linha com água limpa</div>
+      <div class="step">Limpar caixa e bomba</div>
     </div>
   </div>
 </div>
@@ -125,7 +127,7 @@ varying vec3 vC;
 void main(){
   gl_Position=uMVP*vec4(aP,1);
   float d=max(dot(aN,uL),0.0);
-  vC=aC*(0.38+(1.0-0.38)*d);
+  vC=aC*(0.35+(1.0-0.35)*d);
 }`;
 const FS=`precision mediump float;varying vec3 vC;void main(){gl_FragColor=vec4(vC,1);}`;
 
@@ -142,7 +144,7 @@ const _uMVP=gl.getUniformLocation(prg,'uMVP');
 const _uL=gl.getUniformLocation(prg,'uL');
 gl.enable(gl.DEPTH_TEST);
 
-// Matrix
+// Matrix math
 function persp(f,a,n,r){const t=1/Math.tan(f/2),d=1/(n-r);return[t/a,0,0,0,0,t,0,0,0,0,(r+n)*d,-1,0,0,2*r*n*d,0]}
 function look(e,c,u){
   let zx=e[0]-c[0],zy=e[1]-c[1],zz=e[2]-c[2],l=Math.sqrt(zx*zx+zy*zy+zz*zz);
@@ -155,7 +157,7 @@ function look(e,c,u){
 }
 function mul(a,b){const o=new Float32Array(16);for(let i=0;i<4;i++)for(let j=0;j<4;j++)o[j*4+i]=a[i]*b[j*4]+a[4+i]*b[j*4+1]+a[8+i]*b[j*4+2]+a[12+i]*b[j*4+3];return o}
 
-// Geometry accumulator
+// Geometry
 let P=[],N=[],Co=[];
 function fn(a,b,c){const ux=b[0]-a[0],uy=b[1]-a[1],uz=b[2]-a[2],vx=c[0]-a[0],vy=c[1]-a[1],vz=c[2]-a[2];let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;const l=Math.sqrt(nx*nx+ny*ny+nz*nz)||1;return[nx/l,ny/l,nz/l]}
 function tri(a,b,c,n,r,g,bl){P.push(...a,...b,...c);N.push(...n,...n,...n);Co.push(r,g,bl,r,g,bl,r,g,bl)}
@@ -189,93 +191,138 @@ function PIPE(x1,y1,z1,x2,y2,z2,R,s,r,g,b){
 function VALVE(cx,cy,cz,R,r,g,b){CYL(cx,cy,cz,R,R*1.2,8,r,g,b);BOX(cx-R*.15,cy-R*.5,cz+R*1.2,R*.3,R*1,R*.15,r*.8,g*.8,b*.8)}
 
 // Colors
-const Cc={co:[.55,.54,.52],tk:[.88,.86,.82],ld:[.72,.70,.67],pg:[.45,.45,.47],
-  gn:[.23,.60,.27],bl:[.23,.48,.85],vr:[.80,.20,.14],vg:[.38,.38,.40],
-  yl:[.85,.72,.13],pu:[.25,.27,.30],fi:[.30,.33,.37],rf:[.50,.32,.18],
-  po:[.42,.42,.44],pa:[.80,.78,.73],ga:[.62,.62,.65],mp:[.30,.32,.35],
-  lb:[.90,.87,.76],lv:[.10,.55,.80]};
+const C={
+  co:[.55,.54,.52],   // concreto
+  tk:[.17,.48,.80],   // caixa azul
+  tkd:[.14,.40,.68],  // azul escuro (tampa)
+  gn:[.23,.60,.27],   // calda/fertilizante
+  bl:[.23,.48,.85],   // agua limpa
+  vr:[.80,.20,.14],   // valvula retencao
+  vg:[.38,.38,.40],   // valvula/registro cinza
+  yl:[.85,.72,.13],   // atencao
+  pu:[.25,.27,.30],   // bomba corpo
+  fi:[.30,.33,.37],   // filtro/metal
+  po:[.42,.42,.44],   // pilares
+  rf:[.50,.32,.18],   // telhado
+  pa:[.80,.78,.73],   // painel
+  mp:[.30,.32,.35],   // adutora
+  lv:[.10,.55,.80],   // nivel
+  lb:[.90,.87,.76],   // placa ID
+  ga:[.62,.62,.65],   // medidor
+};
 
-// Build
-let t2s=0,t2e=0,showT2=true;
-const S=18,PS=8,PR=.04,VR=.06,TR=1.15,TH=2.40;
-const TK=[[1.0,1.5],[4.2,1.5]];
+const S=20,PS=8,PR=.04,VR=.06;
+const TR=1.50,TH=2.85; // tank radius, height (20,000L = π×1.5²×2.85 ≈ 20.1m³)
+const TX=2.5,TY=2.5;   // tank center position on base
 
-function buildTank(tx,ty){
-  CYL(tx,ty,0,TR,TH,S,...Cc.tk);CYL(tx,ty,TH,TR+.02,.06,S,...Cc.ld);
-  BOX(tx-.03,ty-TR-.02,.3,.06,.02,TH*.7,...Cc.lv);
-  BOX(tx-.20,ty-TR-.02,TH*.6,.40,.02,.20,...Cc.lb);
-  CYL(tx,ty-TR+.05,-.05,.05,.15,8,...Cc.pg);
-  CYL(tx+.4,ty-TR+.05,-.05,.03,.12,6,...Cc.pg);
-  VALVE(tx,ty-TR-.15,0,VR,...Cc.vg);
+// ====== BASE ======
+BOX(0,0,-.15,5,5,.15,...C.co);
+// small ramp
+BOX(-.2,1.8,-.15,.2,.4,.15,...C.co);
+
+// ====== BLUE TANK 20,000L ======
+CYL(TX,TY,0,TR,TH,S,...C.tk);
+// lid
+CYL(TX,TY,TH,TR+.03,.07,S,...C.tkd);
+// lid handle
+BOX(TX-.15,TY-.02,TH+.07,.30,.04,.06,...C.vg);
+// level indicator strip
+BOX(TX-.03,TY-TR-.02,.25,.06,.02,TH*.75,...C.lv);
+// level scale marks
+for(let i=0;i<5;i++){
+  const z=.25+i*(TH*.75)/4;
+  BOX(TX-.08,TY-TR-.025,z,.12,.025,.015,...C.lb);
 }
+// ID plate
+BOX(TX-.25,TY-TR-.02,TH*.65,.50,.02,.25,...C.lb);
+// filling hole on top
+CYL(TX+.5,TY,TH+.07,.12,.04,10,...C.vg);
 
-// Base
-BOX(-1,-1,-.15,8,5,.15,...Cc.co);
-// Tank 1
-buildTank(TK[0][0],TK[0][1]);
-// Tank 2
-t2s=P.length/3;
-buildTank(TK[1][0],TK[1][1]);
-t2e=P.length/3;
+// ====== OUTLET (bottom) ======
+const outY=TY-TR-.15;
+CYL(TX,outY,0,.06,.18,8,...C.fi);
+VALVE(TX,outY-.12,0,VR,...C.vg);
 
-const cy_=TK[0][1]-TR-.50,cz_=-.10,mx=(TK[0][0]+TK[1][0])/2;
-// Drops
-for(const [tx] of TK) PIPE(tx,TK[0][1]-TR-.15-VR*1.2,0,tx,cy_,cz_,PR,PS,...Cc.gn);
-// Collector
-PIPE(TK[0][0],cy_,cz_,TK[1][0],cy_,cz_,PR*1.2,PS,...Cc.gn);
-// Recirc
-const ry_=cy_-.20,rzt=TH+.10;
-PIPE(TK[0][0],ry_,cz_,TK[1][0],ry_,cz_,PR,PS,...Cc.gn);
-PIPE(mx,cy_,cz_,mx,ry_,cz_,PR,PS,...Cc.gn);
-VALVE(mx,ry_-.05,cz_,VR,...Cc.vg);
-for(const [tx,ty] of TK){
-  PIPE(tx,ry_,cz_,tx,ry_,rzt,PR,PS,...Cc.gn);
-  PIPE(tx,ry_,rzt,tx,ty,rzt,PR,PS,...Cc.gn);
-  VALVE(tx,ry_,rzt*.5,VR*.8,...Cc.vg);
-}
-// Filter
-PIPE(mx,cy_,cz_,mx,cy_-.50,cz_,PR,PS,...Cc.gn);
-const fy=cy_-.60;
-CYL(mx,fy,cz_-.10,.10,.30,12,...Cc.fi);
-BOX(mx-.06,fy-.12,cz_+.20,.12,.05,.05,...Cc.yl);
-// Pump
-const py=cy_-1.00;
-PIPE(mx,fy,cz_,mx,py+.15,cz_,PR,PS,...Cc.gn);
-BOX(mx-.15,py-.15,cz_-.10,.30,.30,.25,...Cc.pu);
-CYL(mx,py,cz_+.15,.08,.20,10,...Cc.pu);
-// Meter
-const my_=py-.35;
-PIPE(mx,py-.15,cz_,mx,my_+.08,cz_,PR,PS,...Cc.gn);
-CYL(mx,my_,cz_-.05,.06,.15,10,...Cc.ga);
-CYL(mx+.10,my_,cz_+.05,.04,.03,10,...Cc.ga);
-// Check valve
-const cv=my_-.25;
-PIPE(mx,my_-.08,cz_,mx,cv+.06,cz_,PR,PS,...Cc.gn);
-VALVE(mx,cv,cz_,VR,...Cc.vr);
-// Block valve
-const bv=cv-.20;
-PIPE(mx,cv-VR*.6,cz_,mx,bv+.06,cz_,PR,PS,...Cc.gn);
-VALVE(mx,bv,cz_,VR,...Cc.vg);
-// Main line
-const mpy=cy_-2.50,mpz=.20,mpr=.15;
-PIPE(-1,mpy,mpz,8,mpy,mpz,mpr,14,...Cc.mp);
-PIPE(mx,bv-VR*.6,cz_,mx,mpy+mpr+.02,mpz,PR,PS,...Cc.gn);
-CYL(mx,mpy,mpz-mpr,.08,mpr*2,10,...Cc.yl);
-VALVE(mx,mpy+.15,mpz+mpr+.02,VR,...Cc.vr);
-// Water
-const wx=6.5,wy=1.5,wz=TH+.25;
-PIPE(wx,wy,wz,TK[0][0]-.5,wy,wz,PR*1.1,PS,...Cc.bl);
-for(const [tx,ty] of TK){PIPE(tx,ty,wz,tx,ty,TH+.08,PR,PS,...Cc.bl);VALVE(tx,ty+.15,wz-.3,VR*.8,...Cc.vg)}
-PIPE(wx,wy,wz,wx,mpy+.5,mpz+.3,PR,PS,...Cc.bl);
-PIPE(wx,mpy+.5,mpz+.3,wx,mpy,mpz+mpr+.02,PR,PS,...Cc.bl);
-VALVE(wx,wy+.3,wz,VR,...Cc.vg);
-// Shelter
-const sx_=mx-1.2,sy_=cy_-1.50,sw=2.4,sd=1.8,sh=2.60,ps=.08;
-for(const [dx,dy] of [[0,0],[sw-ps,0],[0,sd-ps],[sw-ps,sd-ps]]) BOX(sx_+dx,sy_+dy,0,ps,ps,sh,...Cc.po);
-BOX(sx_-.15,sy_-.15,sh,sw+.30,sd+.30,.05,...Cc.rf);
-BOX(sx_+.3,sy_+sd-.08,sh*.5,.60,.08,.45,...Cc.pa);
+// ====== DRAIN (separate) ======
+const drX=TX+.6;
+CYL(drX,TY-TR-.05,0,.04,.12,6,...C.fi);
+VALVE(drX,TY-TR-.18,0,VR*.7,...C.vg);
+// drain pipe goes to side
+PIPE(drX,TY-TR-.18-VR*.7*1.2,0,drX,TY-TR-.18-VR*.7*1.2,-.10,PR*.8,PS,...C.fi);
+PIPE(drX,TY-TR-.18-VR*.7*1.2,-.10,5.2,TY-TR-.18-VR*.7*1.2,-.10,PR*.8,PS,...C.fi);
 
-// Upload
+// ====== PIPE from tank outlet down to pump ======
+const pipeZ=-.10;
+PIPE(TX,outY-.12-VR*1.2,0, TX,outY-.12-VR*1.2,pipeZ, PR,PS,...C.gn);
+PIPE(TX,outY-.12-VR*1.2,pipeZ, TX,outY-.80,pipeZ, PR,PS,...C.gn);
+
+// ====== INJECTOR PUMP (bomba injetora) ======
+const pmpX=TX, pmpY=outY-1.00, pmpZ=pipeZ;
+// pump body - rectangular
+BOX(pmpX-.18,pmpY-.12,pmpZ-.08,.36,.24,.22,...C.pu);
+// pump motor cylinder
+CYL(pmpX,pmpY,pmpZ+.14,.09,.25,10,...C.pu);
+// pump motor top cap
+CYL(pmpX,pmpY,pmpZ+.39,.06,.03,8,...C.yl);
+// pump inlet pipe
+PIPE(TX,outY-.80,pipeZ, pmpX,pmpY+.12,pmpZ, PR,PS,...C.gn);
+// pump outlet pipe
+PIPE(pmpX,pmpY-.12,pmpZ, pmpX,pmpY-.35,pmpZ, PR,PS,...C.gn);
+// pump base/mount
+BOX(pmpX-.22,pmpY-.16,-.15,.44,.32,.05,...C.co);
+
+// ====== CHECK VALVE (valvula retencao) ======
+const cvY=pmpY-.45;
+PIPE(pmpX,pmpY-.35,pmpZ, pmpX,cvY+VR*.6,pmpZ, PR,PS,...C.gn);
+VALVE(pmpX,cvY,pmpZ,VR,...C.vr);
+
+// ====== BLOCK VALVE (registro) ======
+const bvY=cvY-.22;
+PIPE(pmpX,cvY-VR*.6,pmpZ, pmpX,bvY+VR*.6,pmpZ, PR,PS,...C.gn);
+VALVE(pmpX,bvY,pmpZ,VR,...C.vg);
+
+// ====== MAIN IRRIGATION LINE (adutora do pivo) ======
+const mpY=bvY-.60, mpZ=.20, mpR=.15;
+PIPE(-1,mpY,mpZ,7,mpY,mpZ,mpR,14,...C.mp);
+// text label ring on pipe
+CYL(0,mpY,mpZ-.01,mpR+.01,.08,14,...C.fi);
+CYL(5.5,mpY,mpZ-.01,mpR+.01,.08,14,...C.fi);
+
+// ====== INJECTION POINT ======
+PIPE(pmpX,bvY-VR*.6,pmpZ, pmpX,mpY+mpR+.02,mpZ, PR,PS,...C.gn);
+// injection saddle
+CYL(pmpX,mpY,mpZ-mpR,.10,mpR*2,10,...C.yl);
+// injection arrow indicator
+VALVE(pmpX,mpY+.18,mpZ+mpR+.02,VR,...C.vr);
+
+// ====== WATER SUPPLY (agua limpa) ======
+const wX=4.5, wY=4.0, wZ=TH+.20;
+// water supply pipe comes from outside, enters top of tank
+PIPE(5.2,wY,wZ, wX,wY,wZ, PR*1.2,PS,...C.bl);
+PIPE(wX,wY,wZ, TX+.5,TY,wZ, PR*1.2,PS,...C.bl);
+PIPE(TX+.5,TY,wZ, TX+.5,TY,TH+.10, PR*1.2,PS,...C.bl);
+// water supply valve
+VALVE(wX+.2,wY,wZ,VR,...C.vg);
+// water supply pipe label
+CYL(4.8,wY,wZ-.02,.04,.04,8,...C.bl);
+
+// ====== FLOW DIRECTION ARROWS (small markers on pipes) ======
+// on main fertigation pipe (between pump and check valve)
+CYL(pmpX,pmpY-.30,pmpZ-.02,.03,.04,6,...C.yl);
+// on injection descent
+CYL(pmpX,bvY-.30,pmpZ-.02,.03,.04,6,...C.yl);
+
+// ====== SIMPLE SHELTER / COVER over pump area ======
+const shX=pmpX-1.0, shY=pmpY-.55, shW=2.0, shD=1.2, shH=2.2, pp=.07;
+// 4 posts
+for(const [dx,dy] of [[0,0],[shW-pp,0],[0,shD-pp],[shW-pp,shD-pp]]) BOX(shX+dx,shY+dy,0,pp,pp,shH,...C.po);
+// roof
+BOX(shX-.10,shY-.10,shH,shW+.20,shD+.20,.04,...C.rf);
+// roof overhang detail
+BOX(shX-.12,shY-.12,shH+.04,shW+.24,.04,.02,...C.rf);
+BOX(shX-.12,shY+shD+.08,shH+.04,shW+.24,.04,.02,...C.rf);
+
+// Upload geometry
 const TV=P.length/3;
 function upload(){
   const mk=(d,a)=>{const buf=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,buf);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array(d),gl.STATIC_DRAW);gl.enableVertexAttribArray(a);gl.vertexAttribPointer(a,3,gl.FLOAT,false,0,0)};
@@ -284,7 +331,7 @@ function upload(){
 upload();
 
 // Camera
-let az=.65,el=.45,dist=14,tgt=[3,.2,1];
+let az=.6,el=.4,dist=12,tgt=[2.5,1.2,1.2];
 let anim=null,aT=0,aF={};
 function camTo(a,e,d,t){aF={az,el,dist,tgt:[...tgt]};anim={az:a,el:e,dist:d,tgt:t};aT=performance.now()}
 function ease(t){return t<.5?2*t*t:1-(-2*t+2)**2/2}
@@ -295,51 +342,55 @@ function updCam(now){
 }
 function eye(){const ce=Math.cos(el),se=Math.sin(el);return[tgt[0]+dist*ce*Math.cos(az),tgt[1]+dist*ce*Math.sin(az),tgt[2]+dist*se]}
 
-// Mouse
+// Mouse interaction
 let drag=false,lx=0,ly=0;
 canvas.onpointerdown=e=>{drag=true;lx=e.clientX;ly=e.clientY;anim=null};
 onpointerup=()=>drag=false;
 onpointermove=e=>{if(!drag)return;az-=(e.clientX-lx)*.006;el=Math.max(.05,Math.min(1.5,el+(e.clientY-ly)*.006));lx=e.clientX;ly=e.clientY};
-canvas.onwheel=e=>{e.preventDefault();dist=Math.max(4,Math.min(30,dist+e.deltaY*.01));anim=null};
+canvas.onwheel=e=>{e.preventDefault();dist=Math.max(3,Math.min(25,dist+e.deltaY*.01));anim=null};
 
-// Labels
+// Touch support
+let lastTD=0;
+canvas.ontouchstart=e=>{if(e.touches.length===1){drag=true;lx=e.touches[0].clientX;ly=e.touches[0].clientY;anim=null}
+  if(e.touches.length===2){lastTD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY)}};
+canvas.ontouchmove=e=>{e.preventDefault();
+  if(e.touches.length===1&&drag){const t=e.touches[0];az-=(t.clientX-lx)*.006;el=Math.max(.05,Math.min(1.5,el+(t.clientY-ly)*.006));lx=t.clientX;ly=t.clientY}
+  if(e.touches.length===2){const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);dist=Math.max(3,Math.min(25,dist-(d-lastTD)*.02));lastTD=d;anim=null}};
+canvas.ontouchend=()=>drag=false;
+
+// 3D Labels
 const LB=[
-  {p:[TK[0][0],TK[0][1],TH+.3],t:'Caixa 1 — 10.000 L'},
-  {p:[TK[1][0],TK[1][1],TH+.3],t:'Caixa 2 — 10.000 L',t2:1},
-  {p:[mx,cy_,cz_+.15],t:'Coletor'},
-  {p:[mx,fy,cz_+.35],t:'Filtro'},
-  {p:[mx,py,cz_+.4],t:'Bomba dosadora'},
-  {p:[mx,my_,cz_+.15],t:'Medidor de vazão'},
-  {p:[mx,cv,cz_+.15],t:'Válv. retenção',c:'#cc3328'},
-  {p:[mx,bv,cz_+.15],t:'Registro bloqueio'},
-  {p:[mx,mpy,.5],t:'Ponto de injeção',c:'#d9b820'},
-  {p:[3.5,mpy,.5],t:'Adutora pivô'},
-  {p:[TK[0][0],cy_-.1,TH*.55],t:'Recirculação',c:'#3a9944'},
-  {p:[6.5,1.5,TH+.5],t:'Água limpa',c:'#3b7ad9'},
-  {p:[mx,sy_+.9,2.8],t:'Abrigo técnico'},
-  {p:[mx+.5,sy_+1.6,1.5],t:'Painel controle'},
+  {p:[TX,TY,TH+.35],t:'Caixa Azul — 20.000 L',c:'#2a7acc'},
+  {p:[TX,outY-.12,0.2],t:'Registro saída'},
+  {p:[drX,TY-TR-.18,.2],t:'Dreno limpeza'},
+  {p:[pmpX,pmpY,pmpZ+.65],t:'Bomba injetora'},
+  {p:[pmpX,cvY,pmpZ+.18],t:'Válv. retenção',c:'#cc3328'},
+  {p:[pmpX,bvY,pmpZ+.18],t:'Registro bloqueio'},
+  {p:[pmpX,mpY,.55],t:'Ponto de injeção',c:'#d9b820'},
+  {p:[3,mpY,.55],t:'Adutora pivô (≈300 mm)'},
+  {p:[wX,wY,wZ+.18],t:'Água limpa',c:'#3b7ad9'},
+  {p:[pmpX,pmpY-.45,shH+.15],t:'Abrigo / Cobertura'},
+  {p:[TX-.03,TY-TR-.02,TH*.4],t:'Indicador nível',c:'#1a8fcc'},
 ];
-const lEls=LB.map(d=>{const e=document.createElement('div');e.className='label3d';e.textContent=d.t;if(d.c)e.style.borderLeft='3px solid '+d.c;document.getElementById('main').appendChild(e);return{e,p:d.p,t2:d.t2}});
-function proj(p,m,w,h){const x=p[0],y=p[1],z=p[2];const cx=m[0]*x+m[4]*y+m[8]*z+m[12],cy_=m[1]*x+m[5]*y+m[9]*z+m[13],cw=m[3]*x+m[7]*y+m[11]*z+m[15];if(cw<.01)return null;return[(cx/cw*.5+.5)*w,(1-(cy_/cw*.5+.5))*h]}
+const lEls=LB.map(d=>{const e=document.createElement('div');e.className='label3d';e.textContent=d.t;if(d.c)e.style.borderLeft='3px solid '+d.c;document.getElementById('main').appendChild(e);return{e,p:d.p}});
+function proj(p,m,w,h){const x=p[0],y=p[1],z=p[2];const cx=m[0]*x+m[4]*y+m[8]*z+m[12],cy=m[1]*x+m[5]*y+m[9]*z+m[13],cw=m[3]*x+m[7]*y+m[11]*z+m[15];if(cw<.01)return null;return[(cx/cw*.5+.5)*w,(1-(cy/cw*.5+.5))*h]}
 
 // Render
 const bgD=[.067,.075,.094],bgL=[.89,.90,.92];
-function bg(){const m=matchMedia('(prefers-color-scheme:dark)').matches,d=document.documentElement.dataset.theme;return(d==='light'||(d!=='dark'&&!m))?bgL:bgD}
+function bgC(){const m=matchMedia('(prefers-color-scheme:dark)').matches,d=document.documentElement.dataset.theme;return(d==='light'||(d!=='dark'&&!m))?bgL:bgD}
 
 function render(now){
   requestAnimationFrame(render);updCam(now);
   const r=canvas.parentElement.getBoundingClientRect(),dp=devicePixelRatio||1,w=r.width,h=r.height;
   canvas.width=w*dp;canvas.height=h*dp;canvas.style.width=w+'px';canvas.style.height=h+'px';
   gl.viewport(0,0,canvas.width,canvas.height);
-  const c=bg();gl.clearColor(c[0],c[1],c[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  const c=bgC();gl.clearColor(c[0],c[1],c[2],1);gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
   const e=eye(),pj=persp(Math.PI/5,w/h,.1,100),vw=look(e,tgt,[0,0,1]),mvp=mul(pj,vw);
   gl.uniformMatrix4fv(_uMVP,false,new Float32Array(mvp));
   const ld=[.4,.3,.7],ll=Math.sqrt(ld[0]**2+ld[1]**2+ld[2]**2);
   gl.uniform3f(_uL,ld[0]/ll,ld[1]/ll,ld[2]/ll);
-  if(showT2){gl.drawArrays(gl.TRIANGLES,0,TV)}
-  else{gl.drawArrays(gl.TRIANGLES,0,t2s);if(t2e<TV)gl.drawArrays(gl.TRIANGLES,t2e,TV-t2e)}
+  gl.drawArrays(gl.TRIANGLES,0,TV);
   for(const l of lEls){
-    if(l.t2&&!showT2){l.e.classList.remove('show');continue}
     const s=proj(l.p,mvp,w,h);
     if(s&&s[0]>-50&&s[0]<w+50&&s[1]>-50&&s[1]<h+50){l.e.style.left=s[0]+'px';l.e.style.top=s[1]+'px';l.e.classList.add('show')}
     else l.e.classList.remove('show');
@@ -349,16 +400,11 @@ requestAnimationFrame(render);
 
 // Views
 const VW={
-  geral:{az:.65,el:.45,dist:14,tgt:[3,.2,1]},
-  topo:{az:0,el:1.49,dist:12,tgt:[3,.2,.5]},
-  caixas:{az:.5,el:.35,dist:7,tgt:[2.6,1.5,1.2]},
-  bomba:{az:.3,el:.3,dist:5,tgt:[mx,cy_-1,0]},
-  injecao:{az:.2,el:.25,dist:5,tgt:[mx,mpy,.3]},
-  recirc:{az:1,el:.5,dist:8,tgt:[2.6,.5,1.3]},
+  geral:{az:.6,el:.4,dist:12,tgt:[2.5,1.2,1.2]},
+  topo:{az:0,el:1.49,dist:10,tgt:[2.5,1.5,.5]},
+  caixa:{az:.45,el:.30,dist:6,tgt:[TX,TY,1.4]},
+  bomba:{az:.3,el:.25,dist:4.5,tgt:[pmpX,pmpY,.3]},
+  injecao:{az:.2,el:.20,dist:4,tgt:[pmpX,mpY,.3]},
 };
 document.querySelectorAll('[data-view]').forEach(b=>{b.onclick=()=>{document.querySelectorAll('[data-view]').forEach(x=>x.classList.remove('active'));b.classList.add('active');const v=VW[b.dataset.view];camTo(v.az,v.el,v.dist,v.tgt)}});
-document.querySelectorAll('[data-cfg]').forEach(b=>{b.onclick=()=>{document.querySelectorAll('[data-cfg]').forEach(x=>x.classList.remove('active'));b.classList.add('active');showT2=b.dataset.cfg==='2';
-  document.getElementById('sVol').textContent=showT2?'20.000 L':'10.000 L';
-  document.getElementById('sFlow').textContent=showT2?'2.857 L/h':'1.428 L/h';
-  document.getElementById('sMin').textContent=showT2?'47,6 L/min':'23,8 L/min'}});
 </script>
