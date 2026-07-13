@@ -78,6 +78,7 @@ export const STATION_TYPES = [
 
 export const DATA_SOURCES = [
   { value: "manual", label: "Entrada manual" },
+  { value: "open_meteo", label: "Open-Meteo" },
   { value: "api_inmet", label: "API INMET" },
   { value: "api_nasa_power", label: "NASA POWER" },
   { value: "davis_link", label: "Davis WeatherLink" },

@@ -249,15 +249,29 @@ export default function BalancoHidricoPage() {
       const stationIds = (stations ?? []).map((s: { id: string }) => s.id);
 
       let weatherReadings: WeatherReading[] = [];
+      const selectedIdByDate = new Map<string, string>();
       if (stationIds.length > 0) {
-        const { data: wr } = await supabase
-          .from("weather_readings")
-          .select("id, date, et0_calculated, precipitation, station_id")
-          .in("station_id", stationIds)
-          .gte("date", dateStart)
-          .lte("date", dateEnd)
-          .order("date");
-        weatherReadings = (wr ?? []) as WeatherReading[];
+        const [wrRes, dsRes] = await Promise.all([
+          supabase
+            .from("weather_readings")
+            .select("id, date, et0_calculated, precipitation, station_id")
+            .in("station_id", stationIds)
+            .gte("date", dateStart)
+            .lte("date", dateEnd)
+            .order("date"),
+          supabase
+            .from("weather_daily_selection")
+            .select("date, selected_reading_id")
+            .eq("farm_id", activeFarmId!)
+            .gte("date", dateStart)
+            .lte("date", dateEnd),
+        ]);
+        weatherReadings = (wrRes.data ?? []) as WeatherReading[];
+        for (const s of dsRes.data ?? []) {
+          if (s.selected_reading_id) {
+            selectedIdByDate.set(s.date as string, s.selected_reading_id as string);
+          }
+        }
       }
 
       // 2. Get irrigation events for the pivot
@@ -288,9 +302,17 @@ export default function BalancoHidricoPage() {
         }
       }
 
-      // 4. Build weather lookup by date (pick highest priority station per day)
+      // 4. Build weather lookup by date
+      //    Prioridade: leitura apontada por weather_daily_selection quando
+      //    existir. Fallback: qualquer leitura com ET₀ > 0 disponível.
       const weatherByDate: Record<string, { et0: number; precip: number }> = {};
+      const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
+      selectedIdByDate.forEach((readingId, date) => {
+        const r = readingsById.get(readingId);
+        if (r) weatherByDate[date] = { et0: r.et0_calculated ?? 0, precip: r.precipitation };
+      });
       for (const r of weatherReadings) {
+        if (weatherByDate[r.date]) continue;
         if (!weatherByDate[r.date] || (r.et0_calculated ?? 0) > 0) {
           weatherByDate[r.date] = {
             et0: r.et0_calculated ?? 0,

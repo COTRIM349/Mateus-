@@ -45,6 +45,9 @@ const climaTabs = [
   { id: "estacoes", label: "Estações" },
   { id: "lancamento", label: "Lançamento Manual" },
   { id: "historico", label: "Histórico Climático" },
+  { id: "previsao", label: "Previsão" },
+  { id: "fonte", label: "Fonte Diária" },
+  { id: "sync", label: "Sincronizações" },
 ];
 
 export default function ClimaPage() {
@@ -58,7 +61,13 @@ export default function ClimaPage() {
         {activeTab === "estacoes" && <StationsTab />}
         {activeTab === "lancamento" && <ManualEntryTab />}
         {activeTab === "historico" && <HistoryTab />}
+        {activeTab === "previsao" && <ForecastTab />}
+        {activeTab === "fonte" && <DailySelectionTab />}
+        {activeTab === "sync" && <IngestionRunsTab />}
       </div>
+      <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+        Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
+      </p>
     </div>
   );
 }
@@ -605,5 +614,258 @@ function HistoryTab() {
         loading={deleting}
       />
     </>
+  );
+}
+
+// ── Previsão ──────────────────────────────────────────────────────────────
+
+interface ForecastRow {
+  id: string;
+  station_id: string | null;
+  issued_at: string;
+  target_date: string;
+  horizon_days: number;
+  provider: string;
+  temp_max: number | null;
+  temp_min: number | null;
+  humidity: number | null;
+  wind_speed: number | null;
+  solar_radiation: number | null;
+  precipitation: number | null;
+  precipitation_probability: number | null;
+  et0_source: number | null;
+  et0_calculated: number | null;
+}
+
+function ForecastTab() {
+  const { activeFarmId } = useAuth();
+  const supabase = createClient();
+  const [rows, setRows] = useState<ForecastRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!activeFarmId) return;
+    setLoading(true);
+    const today = new Date().toISOString().slice(0, 10);
+    supabase
+      .from("weather_forecasts")
+      .select(
+        "id, station_id, issued_at, target_date, horizon_days, provider, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source, et0_calculated",
+      )
+      .eq("farm_id", activeFarmId)
+      .gte("target_date", today)
+      .order("issued_at", { ascending: false })
+      .order("target_date", { ascending: true })
+      .limit(200)
+      .then(({ data }) => {
+        setRows((data ?? []) as ForecastRow[]);
+        setLoading(false);
+      });
+  }, [activeFarmId, supabase]);
+
+  if (!activeFarmId) {
+    return (
+      <Card>
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          Selecione uma fazenda ativa para ver a previsão.
+        </p>
+      </Card>
+    );
+  }
+
+  const columns: Column<ForecastRow>[] = [
+    { header: "Alvo", render: (r) => new Date(r.target_date + "T12:00:00").toLocaleDateString("pt-BR") },
+    { header: "Horiz.", render: (r) => `D+${r.horizon_days}`, align: "center" },
+    { header: "Emitida em", render: (r) => new Date(r.issued_at).toLocaleString("pt-BR") },
+    { header: "Provedor", render: (r) => r.provider },
+    { header: "T.máx", render: (r) => r.temp_max?.toFixed(1) ?? "—", align: "right" },
+    { header: "T.mín", render: (r) => r.temp_min?.toFixed(1) ?? "—", align: "right" },
+    { header: "Chuva (mm)", render: (r) => r.precipitation?.toFixed(1) ?? "—", align: "right" },
+    { header: "Prob. chuva", render: (r) => (r.precipitation_probability != null ? `${r.precipitation_probability.toFixed(0)}%` : "—"), align: "right" },
+    { header: "ET₀ fonte", render: (r) => r.et0_source?.toFixed(2) ?? "—", align: "right" },
+    { header: "ET₀ Cotrim", render: (r) => r.et0_calculated?.toFixed(2) ?? "—", align: "right" },
+  ];
+
+  return (
+    <Card>
+      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        Previsão meteorológica é armazenada separadamente das observações e nunca as sobrescreve.
+      </div>
+      {loading ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+      ) : rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
+        </p>
+      ) : (
+        <Table columns={columns} data={rows} getKey={(r) => r.id} />
+      )}
+    </Card>
+  );
+}
+
+// ── Fonte Diária (auditoria) ─────────────────────────────────────────────
+
+interface SelectionRow {
+  id: string;
+  date: string;
+  selected_station_id: string | null;
+  priority_used: number | null;
+  quality_used: string | null;
+  reason: string;
+  fallback_used: boolean;
+  selected_at: string;
+}
+
+function DailySelectionTab() {
+  const { activeFarmId } = useAuth();
+  const supabase = createClient();
+  const [rows, setRows] = useState<SelectionRow[]>([]);
+  const [stationNames, setStationNames] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!activeFarmId) return;
+    setLoading(true);
+    (async () => {
+      const [selRes, stRes] = await Promise.all([
+        supabase
+          .from("weather_daily_selection")
+          .select("id, date, selected_station_id, priority_used, quality_used, reason, fallback_used, selected_at")
+          .eq("farm_id", activeFarmId)
+          .order("date", { ascending: false })
+          .limit(60),
+        supabase
+          .from("weather_stations")
+          .select("id, name")
+          .eq("farm_id", activeFarmId),
+      ]);
+      setRows((selRes.data ?? []) as SelectionRow[]);
+      const map: Record<string, string> = {};
+      for (const s of stRes.data ?? []) map[s.id as string] = s.name as string;
+      setStationNames(map);
+      setLoading(false);
+    })();
+  }, [activeFarmId, supabase]);
+
+  if (!activeFarmId) {
+    return (
+      <Card>
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          Selecione uma fazenda ativa para ver a seleção diária.
+        </p>
+      </Card>
+    );
+  }
+
+  const columns: Column<SelectionRow>[] = [
+    { header: "Data", render: (r) => new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR") },
+    { header: "Estação escolhida", render: (r) => r.selected_station_id ? stationNames[r.selected_station_id] ?? "—" : "—" },
+    { header: "Prioridade", render: (r) => r.priority_used ?? "—", align: "center" },
+    { header: "Qualidade", render: (r) => r.quality_used ?? "—" },
+    { header: "Fallback", render: (r) => (r.fallback_used ? "Sim" : "Não") },
+    { header: "Motivo", render: (r) => <span className="text-xs">{r.reason}</span> },
+  ];
+
+  return (
+    <Card>
+      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        A fonte utilizada pelo balanço hídrico em cada dia é registrada aqui para auditoria.
+      </div>
+      {loading ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+      ) : rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          Nenhuma seleção registrada ainda. As seleções são criadas quando a ingestão climática executa.
+        </p>
+      ) : (
+        <Table columns={columns} data={rows} getKey={(r) => r.id} />
+      )}
+    </Card>
+  );
+}
+
+// ── Sincronizações (ingestion runs) ──────────────────────────────────────
+
+interface IngestionRunRow {
+  id: string;
+  run_at: string;
+  station_id: string | null;
+  provider: string;
+  status: string;
+  rows_inserted: number;
+  rows_updated: number;
+  rows_skipped: number;
+  error_message: string | null;
+  duration_ms: number | null;
+}
+
+function IngestionRunsTab() {
+  const { activeFarmId } = useAuth();
+  const supabase = createClient();
+  const [rows, setRows] = useState<IngestionRunRow[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!activeFarmId) return;
+    setLoading(true);
+    supabase
+      .from("climate_ingestion_runs")
+      .select("id, run_at, station_id, provider, status, rows_inserted, rows_updated, rows_skipped, error_message, duration_ms")
+      .eq("farm_id", activeFarmId)
+      .order("run_at", { ascending: false })
+      .limit(50)
+      .then(({ data }) => {
+        setRows((data ?? []) as IngestionRunRow[]);
+        setLoading(false);
+      });
+  }, [activeFarmId, supabase]);
+
+  if (!activeFarmId) {
+    return (
+      <Card>
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          Selecione uma fazenda ativa para ver as sincronizações.
+        </p>
+      </Card>
+    );
+  }
+
+  const statusBadge = (s: string) => {
+    const cls =
+      s === "success"
+        ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+        : s === "partial"
+          ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
+          : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
+    return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{s}</span>;
+  };
+
+  const columns: Column<IngestionRunRow>[] = [
+    { header: "Quando", render: (r) => new Date(r.run_at).toLocaleString("pt-BR") },
+    { header: "Provedor", render: (r) => r.provider },
+    { header: "Status", render: (r) => statusBadge(r.status) },
+    { header: "Inseridas", render: (r) => r.rows_inserted, align: "right" },
+    { header: "Atualizadas", render: (r) => r.rows_updated, align: "right" },
+    { header: "Ignoradas", render: (r) => r.rows_skipped, align: "right" },
+    { header: "Duração", render: (r) => (r.duration_ms != null ? `${r.duration_ms} ms` : "—"), align: "right" },
+    { header: "Erro", render: (r) => (r.error_message ? <span className="text-xs text-red-600 dark:text-red-400">{r.error_message}</span> : "—") },
+  ];
+
+  return (
+    <Card>
+      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+        Log das execuções de ingestão climática automática.
+      </div>
+      {loading ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+      ) : rows.length === 0 ? (
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          Nenhuma execução registrada ainda.
+        </p>
+      ) : (
+        <Table columns={columns} data={rows} getKey={(r) => r.id} />
+      )}
+    </Card>
   );
 }
