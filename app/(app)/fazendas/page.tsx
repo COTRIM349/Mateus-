@@ -6,6 +6,8 @@ import { Button, Card, Input, Select, Table, Modal, ConfirmDialog, Tabs, TextAre
 import { useAuth } from "@/components/providers";
 import { useCrud } from "@/lib/hooks";
 import { BRAZILIAN_STATES } from "@/constants/brazil";
+import { createClient } from "@/lib/supabase/client";
+import { ensureVirtualStation } from "@/modules/weather/services/virtual-station.service";
 
 interface Farm {
   id: string;
@@ -102,6 +104,7 @@ function FarmsTab() {
     setSaving(true);
     setFormError("");
     const fd = new FormData(e.currentTarget);
+    const activateVirtual = fd.get("activate_virtual_station") === "on";
     const payload = {
       company_id: profile?.companyId,
       name: fd.get("name") as string,
@@ -115,11 +118,36 @@ function FarmsTab() {
       timezone: "America/Sao_Paulo",
     };
     try {
+      let farmId: string | null = null;
       if (editing) {
         await update(editing.id, payload);
+        farmId = editing.id;
       } else {
         await create(payload as Omit<Farm, "id" | "created_at" | "updated_at">);
+        // Recupera o id da fazenda recém-criada (o useCrud não retorna o insert).
+        const supabase = createClient();
+        const { data: created } = await supabase
+          .from("farms")
+          .select("id")
+          .eq("company_id", profile?.companyId ?? "")
+          .eq("name", payload.name)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        farmId = (created?.id as string) ?? null;
       }
+
+      // Autocriação idempotente da estação virtual, se solicitado e viável.
+      if (activateVirtual && farmId && Number.isFinite(payload.latitude) && Number.isFinite(payload.longitude)) {
+        try {
+          const supabase = createClient();
+          await ensureVirtualStation(supabase, farmId);
+        } catch (vsErr) {
+          // Não bloqueia o cadastro da fazenda — apenas registra.
+          console.warn("Falha ao criar estação virtual:", vsErr);
+        }
+      }
+
       setModalOpen(false);
       setEditing(null);
     } catch (err) {
@@ -168,6 +196,17 @@ function FarmsTab() {
             <Input id="total_area" name="total_area" label="Área total (ha)" type="number" step="any" required defaultValue={editing?.total_area} />
             <Input id="irrigated_area" name="irrigated_area" label="Área irrigada (ha)" type="number" step="any" required defaultValue={editing?.irrigated_area} />
           </div>
+          {!editing && (
+            <label className="flex items-start gap-2 rounded-md border border-gray-200 bg-gray-50 p-3 text-sm dark:border-graphite-700 dark:bg-graphite-800">
+              <input type="checkbox" name="activate_virtual_station" defaultChecked className="mt-0.5" />
+              <span>
+                <span className="font-medium text-graphite-900 dark:text-white">Ativar Estação Virtual (Open-Meteo)</span>
+                <span className="block text-xs text-gray-500 dark:text-gray-400">
+                  Cria automaticamente uma estação virtual nas coordenadas desta fazenda. Serve de fallback quando não houver estação física com dados para o dia.
+                </span>
+              </span>
+            </label>
+          )}
           {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>

@@ -23,6 +23,10 @@ import {
   type WeatherReadingRow,
   type WeatherValidation,
 } from "@/modules/weather/services/weather.service";
+import {
+  getVirtualStationSnapshot,
+  type VirtualStationSnapshot,
+} from "@/modules/weather/services/virtual-station.service";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -42,6 +46,7 @@ interface WeatherStation {
 }
 
 const climaTabs = [
+  { id: "virtual", label: "Estação Virtual" },
   { id: "estacoes", label: "Estações" },
   { id: "lancamento", label: "Lançamento Manual" },
   { id: "historico", label: "Histórico Climático" },
@@ -51,13 +56,14 @@ const climaTabs = [
 ];
 
 export default function ClimaPage() {
-  const [activeTab, setActiveTab] = useState("estacoes");
+  const [activeTab, setActiveTab] = useState("virtual");
 
   return (
     <div className="space-y-6">
       <PageHeader titulo="Clima" descricao="Estações meteorológicas, dados climáticos e histórico" />
       <Tabs tabs={climaTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
+        {activeTab === "virtual" && <VirtualStationTab />}
         {activeTab === "estacoes" && <StationsTab />}
         {activeTab === "lancamento" && <ManualEntryTab />}
         {activeTab === "historico" && <HistoryTab />}
@@ -867,5 +873,231 @@ function IngestionRunsTab() {
         <Table columns={columns} data={rows} getKey={(r) => r.id} />
       )}
     </Card>
+  );
+}
+
+// ── Estação Virtual ───────────────────────────────────────────────────────
+// Sprint 5.2: snapshot da estação virtual da fazenda ativa.
+
+function StatBox({ label, value, unit }: { label: string; value: string; unit?: string }) {
+  return (
+    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-graphite-700 dark:bg-graphite-800">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
+        {value}
+        {unit ? <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">{unit}</span> : null}
+      </p>
+    </div>
+  );
+}
+
+function fmt(v: number | null | undefined, digits = 1): string {
+  return v == null || Number.isNaN(v) ? "—" : v.toFixed(digits);
+}
+
+function VirtualStationTab() {
+  const { activeFarmId } = useAuth();
+  const supabase = createClient();
+  const [snapshot, setSnapshot] = useState<VirtualStationSnapshot | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  const load = useCallback(async () => {
+    if (!activeFarmId) return;
+    setLoading(true);
+    try {
+      const snap = await getVirtualStationSnapshot(supabase, activeFarmId);
+      setSnapshot(snap);
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : "Erro ao carregar" });
+    }
+    setLoading(false);
+  }, [activeFarmId, supabase]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const callSync = async (ensureVirtual: boolean) => {
+    if (!activeFarmId) return;
+    setBusy(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/climate/sync-farm", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ farmId: activeFarmId, ensureVirtual, pastDays: 7, forecastDays: 7 }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const runs = (json.runs ?? []) as Array<{ status: string; rowsInserted: number; rowsUpdated: number }>;
+      const inserted = runs.reduce((s, r) => s + r.rowsInserted, 0);
+      const updated = runs.reduce((s, r) => s + r.rowsUpdated, 0);
+      const created = json.virtualStationCreated ? "Estação virtual criada. " : "";
+      setMessage({
+        type: "success",
+        text: `${created}Sincronização concluída: ${inserted} inseridas, ${updated} atualizadas, ${json.selections} seleções.`,
+      });
+      await load();
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+    setBusy(false);
+  };
+
+  if (!activeFarmId) {
+    return (
+      <Card>
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          Selecione uma fazenda ativa para visualizar a estação virtual.
+        </p>
+      </Card>
+    );
+  }
+
+  if (loading) {
+    return (
+      <Card>
+        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+      </Card>
+    );
+  }
+
+  if (!snapshot) {
+    return (
+      <Card>
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">
+              Nenhuma estação virtual cadastrada
+            </h3>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+              A estação virtual usa as coordenadas da fazenda para buscar dados climáticos automaticamente
+              via Open-Meteo, servindo de fallback quando não há estação física com dados para o dia.
+            </p>
+          </div>
+          {message && (
+            <p className={message.type === "success" ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+              {message.text}
+            </p>
+          )}
+          <div className="flex gap-3">
+            <Button disabled={busy} onClick={() => callSync(true)}>
+              {busy ? "Ativando..." : "Ativar estação virtual e sincronizar"}
+            </Button>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  const st = snapshot.station;
+  const r = snapshot.latestReading;
+  const run = snapshot.lastRun;
+
+  const statusColor =
+    st.sync_status === "ok"
+      ? "text-green-700 bg-green-100 dark:text-green-400 dark:bg-green-900/30"
+      : st.sync_status === "degraded"
+        ? "text-yellow-700 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30"
+        : st.sync_status === "failed"
+          ? "text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-900/30"
+          : "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-graphite-700";
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h3 className="text-base font-semibold text-graphite-900 dark:text-white">{st.name}</h3>
+            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+              Fonte: <span className="font-medium">{st.data_source}</span> · Prioridade: {st.source_priority}
+              {" · "}Fuso: {st.timezone}
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColor}`}>
+              {st.sync_status === "idle" ? "Não sincronizada" : `Status: ${st.sync_status}`}
+            </span>
+            <Button variant="secondary" disabled={busy} onClick={() => callSync(false)}>
+              {busy ? "Sincronizando..." : "Sincronizar agora"}
+            </Button>
+          </div>
+        </div>
+
+        {message && (
+          <p className={`mb-3 text-sm ${message.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            {message.text}
+          </p>
+        )}
+
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <StatBox label="Latitude" value={fmt(st.latitude, 4)} unit="°" />
+          <StatBox label="Longitude" value={fmt(st.longitude, 4)} unit="°" />
+          <StatBox label="Altitude" value={fmt(st.altitude, 0)} unit="m" />
+          <StatBox
+            label="Última sincronização"
+            value={st.last_sync_at ? new Date(st.last_sync_at).toLocaleString("pt-BR") : "—"}
+          />
+        </div>
+
+        {st.sync_error && (
+          <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
+            Último erro: {st.sync_error}
+          </p>
+        )}
+      </Card>
+
+      <Card>
+        <div className="mb-3 flex items-center justify-between">
+          <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">Última leitura observada</h4>
+          {r && (
+            <span className="text-xs text-gray-500 dark:text-gray-400">
+              {new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}
+              {" · qualidade: "}
+              <span className={r.data_quality === "ok" ? "text-green-700 dark:text-green-400" : "text-yellow-700 dark:text-yellow-400"}>
+                {r.data_quality}
+              </span>
+              {" · origem: "}
+              <span className="font-medium">{r.origin}</span>
+            </span>
+          )}
+        </div>
+        {r ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatBox label="ET₀ (Cotrim)" value={fmt(r.et0_calculated, 2)} unit="mm/dia" />
+            <StatBox label="Chuva" value={fmt(r.precipitation, 1)} unit="mm" />
+            <StatBox label="Chuva efetiva" value={fmt(r.effective_precip, 1)} unit="mm" />
+            <StatBox label="Temp. média" value={fmt(r.temp_mean, 1)} unit="°C" />
+            <StatBox label="Temp. mín" value={fmt(r.temp_min, 1)} unit="°C" />
+            <StatBox label="Temp. máx" value={fmt(r.temp_max, 1)} unit="°C" />
+            <StatBox label="Umidade" value={fmt(r.humidity, 1)} unit="%" />
+            <StatBox label="Vento" value={fmt(r.wind_speed, 1)} unit="m/s" />
+            <StatBox label="Radiação" value={fmt(r.solar_radiation, 1)} unit="MJ/m²" />
+            <StatBox label="ET₀ (fonte)" value={fmt(r.et0_source, 2)} unit="mm/dia" />
+          </div>
+        ) : (
+          <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+            Nenhuma leitura observada ainda. Clique em &quot;Sincronizar agora&quot; para trazer os últimos 7 dias.
+          </p>
+        )}
+      </Card>
+
+      {run && (
+        <Card>
+          <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">Última execução de ingestão</h4>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
+            <div><span className="text-xs text-gray-500 dark:text-gray-400">Quando</span><br />{new Date(run.run_at).toLocaleString("pt-BR")}</div>
+            <div><span className="text-xs text-gray-500 dark:text-gray-400">Status</span><br />{run.status}</div>
+            <div><span className="text-xs text-gray-500 dark:text-gray-400">Inseridas / Atualizadas / Ignoradas</span><br />{run.rows_inserted} / {run.rows_updated} / {run.rows_skipped}</div>
+            <div><span className="text-xs text-gray-500 dark:text-gray-400">Duração</span><br />{run.duration_ms != null ? `${run.duration_ms} ms` : "—"}</div>
+            <div><span className="text-xs text-gray-500 dark:text-gray-400">Erro</span><br />{run.error_message ?? "—"}</div>
+          </div>
+        </Card>
+      )}
+    </div>
   );
 }
