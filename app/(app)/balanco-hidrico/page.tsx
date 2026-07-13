@@ -128,6 +128,7 @@ interface StoredBalance {
   volume_needed: number;
   irrigation_time: number;
   water_status: WaterStatus;
+  phase: string | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -354,11 +355,16 @@ export default function BalancoHidricoPage() {
         waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
       }));
 
+      // fator p real usado pelo motor (afd / adt)
+      const resolvedPFactors = series.map((d) =>
+        d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
+      );
+
       setBalanceRows(rows);
 
       // 6. Persiste o resultado do motor em water_balances (item 14)
       if (series.length > 0) {
-        const upsertData = series.map((d) => ({
+        const upsertData = series.map((d, i) => ({
           pivot_crop_assignment_id: assignment.id,
           date: d.date,
           dae: d.dae,
@@ -375,7 +381,7 @@ export default function BalancoHidricoPage() {
           afd: d.afd,
           soil_storage: d.storage,
           surplus: d.surplus,
-          depletion_factor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
+          depletion_factor: resolvedPFactors[i],
           deficit: d.deficit,
           depletion: d.depletion,
           net_depth: d.recommendedNetDepth,
@@ -432,7 +438,7 @@ export default function BalancoHidricoPage() {
         volumeNeeded: r.volume_needed,
         irrigationTime: r.irrigation_time,
         waterStatus: r.water_status,
-        phase: "—",
+        phase: r.phase ?? "—",
       }));
       setBalanceRows(rows);
     }

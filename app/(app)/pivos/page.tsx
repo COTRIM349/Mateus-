@@ -183,7 +183,14 @@ export default function PivosPage() {
 
     const efficiency = Number(fd.get("efficiency"));
     if (efficiency < 0 || efficiency > 100) {
-      setFormError("Eficiência deve estar entre 0 e 100%");
+      setFormError("Eficiência de irrigação deve estar entre 0 e 100%");
+      setSaving(false);
+      return;
+    }
+
+    const motorEfficiency = Number(fd.get("motor_efficiency"));
+    if (motorEfficiency < 0 || motorEfficiency > 100) {
+      setFormError("Eficiência do motor deve estar entre 0 e 100%");
       setSaving(false);
       return;
     }

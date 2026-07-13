@@ -3,28 +3,12 @@
 -- ============================================================================
 
 -- 1. Configuração tarifária por fazenda
-CREATE TABLE energy_tariffs (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  farm_id           UUID NOT NULL REFERENCES farms(id) ON DELETE CASCADE,
-  tariff_type       TEXT NOT NULL DEFAULT 'verde'
-    CHECK (tariff_type IN ('verde','azul','convencional')),
-  rate_peak         DOUBLE PRECISION NOT NULL DEFAULT 0,
-  rate_off_peak     DOUBLE PRECISION NOT NULL DEFAULT 0,
-  rate_reserved     DOUBLE PRECISION NOT NULL DEFAULT 0,
-  demand_rate       DOUBLE PRECISION NOT NULL DEFAULT 0,
-  peak_start        INTEGER NOT NULL DEFAULT 18,
-  peak_end          INTEGER NOT NULL DEFAULT 21,
-  contracted_demand_kw  DOUBLE PRECISION NOT NULL DEFAULT 0,
-  valid_from        DATE NOT NULL DEFAULT CURRENT_DATE,
-  valid_to          DATE,
-  active            BOOLEAN NOT NULL DEFAULT true,
-  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()
-);
+-- (tabela base criada em 00001; aqui apenas adicionamos as colunas extras)
+ALTER TABLE energy_tariffs
+  ADD COLUMN IF NOT EXISTS contracted_demand_kw DOUBLE PRECISION NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS active               BOOLEAN NOT NULL DEFAULT true;
 
-CREATE INDEX idx_et_farm ON energy_tariffs(farm_id);
-CREATE TRIGGER trg_et_updated BEFORE UPDATE ON energy_tariffs
-  FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+CREATE INDEX IF NOT EXISTS idx_et_farm ON energy_tariffs(farm_id);
 
 -- 2. Registro de consumo energético por slot/pivô
 CREATE TABLE energy_consumption (

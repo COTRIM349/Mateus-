@@ -288,11 +288,17 @@ function SoilsTab({
         });
       } else {
         await create(payload as Omit<Soil, "id" | "created_at" | "updated_at">);
-        await refetch();
-        const newSoil = data.find((s) => s.name === payload.name);
-        if (newSoil) {
+        const { data: created } = await supabase
+          .from("soils")
+          .select("id")
+          .eq("farm_id", activeFarmId!)
+          .eq("name", payload.name)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .single();
+        if (created) {
           await supabase.from("soil_history").insert({
-            soil_id: newSoil.id,
+            soil_id: created.id,
             change_type: "criacao",
             description: `Solo "${payload.name}" criado`,
             new_values: payload,
