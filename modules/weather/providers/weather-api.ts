@@ -1,21 +1,20 @@
 // ============================================================================
-// Provider WeatherAPI.com — server-only (nunca importado do browser)
+// Provider WeatherAPI.com — funções destinadas ao backend
 // ----------------------------------------------------------------------------
 // Consulta forecast.json (dia atual + próximos 3 dias no free) e history.json
 // (um dia observado passado por chamada). Normaliza kph → m/s a 10 m e a 2 m
 // (FAO-56 eq. 47). NÃO calcula ETo — dados WeatherAPI são apenas para
 // comparação. Chave é lida de process.env.WEATHERAPI_KEY e sempre redigida
 // antes de ir para qualquer log ou coluna persistida.
+//
+// Nota sobre "server-only": este módulo pode ser transitivamente importado
+// por client components (via provider-registry ← virtual-station.service).
+// Não usamos throw no topo — em vez disso, `requireKey()` só falha quando
+// uma função é efetivamente chamada, e process.env.WEATHERAPI_KEY é
+// `undefined` no bundle do cliente (não tem prefixo NEXT_PUBLIC_), então
+// a chave nunca vaza. As funções aqui só devem ser chamadas de rotas API
+// e Server Components.
 // ============================================================================
-
-// Barreira de execução: garante que este arquivo nunca vá para bundle de
-// cliente. Se algum client component importá-lo, o erro é lançado no primeiro
-// acesso.
-if (typeof window !== "undefined") {
-  throw new Error(
-    "weather-api provider é server-only e não pode ser usado no cliente.",
-  );
-}
 
 const BASE_URL = "https://api.weatherapi.com/v1";
 

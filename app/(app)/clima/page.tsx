@@ -1217,51 +1217,88 @@ function WeatherApiCompareCard({ farmId }: { farmId: string | null }) {
 
   const loadComparison = useCallback(async () => {
     if (!farmId) return;
-    const { data: stations } = await supabase
-      .from("weather_stations")
-      .select("id, data_source")
-      .eq("farm_id", farmId)
-      .in("data_source", ["open_meteo", "weather_api"])
-      .eq("station_type", "virtual");
-    const om = stations?.find((s) => s.data_source === "open_meteo");
-    const wa = stations?.find((s) => s.data_source === "weather_api");
-    setWaStationExists(Boolean(wa));
-    if (!om && !wa) {
-      setComparison([]);
-      return;
-    }
-    const ids = [om?.id, wa?.id].filter(Boolean) as string[];
-    const since = new Date();
-    since.setUTCDate(since.getUTCDate() - 7);
-    const { data: rows } = await supabase
-      .from("weather_readings")
-      .select(
-        "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation, atmospheric_pressure_hpa, condition_text",
-      )
-      .in("station_id", ids)
-      .gte("date", since.toISOString().slice(0, 10))
-      .order("date", { ascending: false });
-    if (!rows) return;
-    const byDate = new Map<string, ComparisonRow>();
-    for (const r of rows) {
-      const d = r.date as string;
-      if (!byDate.has(d)) byDate.set(d, { date: d, om: null, wa: null });
-      const entry = byDate.get(d)!;
-      const payload = {
-        temp_max: r.temp_max as number | null,
-        temp_min: r.temp_min as number | null,
-        temp_mean: r.temp_mean as number | null,
-        humidity: r.humidity as number | null,
-        wind_speed: r.wind_speed as number | null,
-        precipitation: r.precipitation as number | null,
-        atmospheric_pressure_hpa: r.atmospheric_pressure_hpa as number | null,
-      };
-      if (r.origin === "open_meteo") entry.om = payload;
-      if (r.origin === "weather_api") {
-        entry.wa = { ...payload, condition_text: (r.condition_text as string | null) ?? null };
+    // Isolamento defensivo: qualquer falha aqui (schema incompleto, sem
+    // estação, sem RLS, etc.) só zera a comparação — nunca derruba a página.
+    try {
+      const { data: stations, error: stErr } = await supabase
+        .from("weather_stations")
+        .select("id, data_source")
+        .eq("farm_id", farmId)
+        .in("data_source", ["open_meteo", "weather_api"])
+        .eq("station_type", "virtual");
+      if (stErr) {
+        setComparison([]);
+        setWaStationExists(false);
+        return;
       }
+      const om = stations?.find((s) => s.data_source === "open_meteo");
+      const wa = stations?.find((s) => s.data_source === "weather_api");
+      setWaStationExists(Boolean(wa));
+      if (!om && !wa) {
+        setComparison([]);
+        return;
+      }
+      const ids = [om?.id, wa?.id].filter(Boolean) as string[];
+      const since = new Date();
+      since.setUTCDate(since.getUTCDate() - 7);
+
+      // Tentativa 1: com colunas da migration 00023.
+      // Se a migration não estiver aplicada em produção, cai no fallback
+      // com apenas as colunas base — o app continua funcionando.
+      let rows: Array<Record<string, unknown>> | null = null;
+      const withNewCols = await supabase
+        .from("weather_readings")
+        .select(
+          "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation, atmospheric_pressure_hpa, condition_text",
+        )
+        .in("station_id", ids)
+        .gte("date", since.toISOString().slice(0, 10))
+        .order("date", { ascending: false });
+      if (withNewCols.error) {
+        const fallback = await supabase
+          .from("weather_readings")
+          .select(
+            "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation",
+          )
+          .in("station_id", ids)
+          .gte("date", since.toISOString().slice(0, 10))
+          .order("date", { ascending: false });
+        if (fallback.error) {
+          setComparison([]);
+          return;
+        }
+        rows = fallback.data ?? [];
+      } else {
+        rows = withNewCols.data ?? [];
+      }
+
+      const byDate = new Map<string, ComparisonRow>();
+      for (const r of rows) {
+        const d = r.date as string;
+        if (!byDate.has(d)) byDate.set(d, { date: d, om: null, wa: null });
+        const entry = byDate.get(d)!;
+        const payload = {
+          temp_max: (r.temp_max as number | null) ?? null,
+          temp_min: (r.temp_min as number | null) ?? null,
+          temp_mean: (r.temp_mean as number | null) ?? null,
+          humidity: (r.humidity as number | null) ?? null,
+          wind_speed: (r.wind_speed as number | null) ?? null,
+          precipitation: (r.precipitation as number | null) ?? null,
+          atmospheric_pressure_hpa:
+            (r.atmospheric_pressure_hpa as number | null) ?? null,
+        };
+        if (r.origin === "open_meteo") entry.om = payload;
+        if (r.origin === "weather_api") {
+          entry.wa = {
+            ...payload,
+            condition_text: (r.condition_text as string | null) ?? null,
+          };
+        }
+      }
+      setComparison(Array.from(byDate.values()));
+    } catch {
+      setComparison([]);
     }
-    setComparison(Array.from(byDate.values()));
   }, [farmId, supabase]);
 
   useEffect(() => {

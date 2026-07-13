@@ -1,5 +1,5 @@
 // ============================================================================
-// Ingestão WeatherAPI — server-only
+// Ingestão WeatherAPI — funções destinadas ao backend
 // ----------------------------------------------------------------------------
 // Espelha o padrão da ingestão Open-Meteo mas:
 //   • NÃO calcula ETo Cotrim (WeatherAPI free não tem Rs adequado)
@@ -7,11 +7,14 @@
 //   • Grava pressão atmosférica quando disponível, marcando pressure_origin
 //   • Cada leitura permanece integralmente do provider 'weather_api'
 //   • URL persistida em climate_ingestion_runs vem redigida do provider
+//
+// Nota sobre "server-only": ver mesma nota em providers/weather-api.ts.
+// Este módulo é referenciado pelo provider-registry (importado tanto por
+// código servidor quanto, transitivamente, por componentes cliente). As
+// funções em si só são chamadas de rotas API — a chave nunca é acessada
+// no browser porque `process.env.WEATHERAPI_KEY` resolve para undefined
+// no bundle cliente (sem prefixo NEXT_PUBLIC_).
 // ============================================================================
-
-if (typeof window !== "undefined") {
-  throw new Error("weather-api-ingest é server-only.");
-}
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { calculateEffectivePrecipitation } from "./weather.service";
