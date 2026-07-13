@@ -50,6 +50,7 @@ export interface IngestionStation {
   latitude: number;
   longitude: number;
   altitude: number;
+  altitude_origin?: string | null;
   timezone: string;
   data_source: string;
 }
@@ -69,6 +70,38 @@ export interface ObservationIngestionResult {
 
 // ── Ingestão de observações recentes de uma estação ──────────────────────────
 
+/**
+ * Resolve a altitude a usar em calculateET0 seguindo a cascata:
+ *  1. Se a estação já tem altitude > 0 e origem 'manual'/'physical', mantém.
+ *  2. Senão usa a `elevation` retornada pelo Open-Meteo.
+ *  3. Senão marca 'unknown' e usa 0 (com data_quality degradada).
+ */
+function resolveAltitude(
+  station: IngestionStation & { altitude_origin?: string | null },
+  elevationFromProvider: number | null,
+): { altitude: number; origin: "manual" | "open_meteo" | "physical" | "unknown" } {
+  const currentOrigin = (station.altitude_origin as string | undefined) ?? "unknown";
+  if (
+    (currentOrigin === "manual" || currentOrigin === "physical") &&
+    typeof station.altitude === "number" &&
+    Number.isFinite(station.altitude) &&
+    station.altitude > 0
+  ) {
+    return { altitude: station.altitude, origin: currentOrigin as "manual" | "physical" };
+  }
+  if (elevationFromProvider != null && Number.isFinite(elevationFromProvider)) {
+    return { altitude: elevationFromProvider, origin: "open_meteo" };
+  }
+  if (
+    typeof station.altitude === "number" &&
+    Number.isFinite(station.altitude) &&
+    station.altitude > 0
+  ) {
+    return { altitude: station.altitude, origin: "manual" };
+  }
+  return { altitude: 0, origin: "unknown" };
+}
+
 export async function ingestOpenMeteoObservations(
   supabase: SupabaseClient,
   station: IngestionStation,
@@ -82,13 +115,48 @@ export async function ingestOpenMeteoObservations(
   let errorMessage: string | null = null;
   let status: ObservationIngestionResult["status"] = "success";
 
+  // Contexto de auditoria — preenchido dentro do try; usado no INSERT de runs.
+  let requestUrl: string | null = null;
+  let responseElevation: number | null = null;
+  let altitudeUsed: number | null = null;
+  let altitudeOrigin: string | null = null;
+  let et0SourceSum = 0;
+  let et0CalcSum = 0;
+  let et0PairsCount = 0;
+  let et0DeltaPctSum = 0;
+
   try {
-    const daily = await fetchRecentObservations({
+    const result = await fetchRecentObservations({
       latitude: station.latitude,
       longitude: station.longitude,
       timezone: station.timezone || "America/Sao_Paulo",
       pastDays,
     });
+    const { context, daily } = result;
+    requestUrl = context.requestUrl;
+    responseElevation = context.elevation;
+
+    const resolved = resolveAltitude(
+      station as IngestionStation & { altitude_origin?: string },
+      context.elevation,
+    );
+    altitudeUsed = resolved.altitude;
+    altitudeOrigin = resolved.origin;
+
+    // Se a origem virou open_meteo (não era manual/física), persiste na estação
+    // para futuras execuções não precisarem consultar o provedor de novo.
+    if (
+      resolved.origin === "open_meteo" &&
+      (station.altitude ?? 0) !== resolved.altitude
+    ) {
+      await supabase
+        .from("weather_stations")
+        .update({
+          altitude: resolved.altitude,
+          altitude_origin: "open_meteo",
+        })
+        .eq("id", station.id);
+    }
 
     // Carrega linhas existentes para respeitar is_locked e diferenciar
     // insert de update.
@@ -120,7 +188,7 @@ export async function ingestOpenMeteoObservations(
             humidity: d.humidity as number,
             windSpeed: d.windSpeed2m as number,
             solarRadiation: d.solarRadiation as number,
-            altitude: station.altitude ?? 0,
+            altitude: resolved.altitude,
             latitude: station.latitude,
             dayOfYear: dayOfYear(d.date),
           })
@@ -129,8 +197,31 @@ export async function ingestOpenMeteoObservations(
       const precipitation = d.precipitation ?? 0;
       const effectivePrecip = calculateEffectivePrecipitation(precipitation);
 
-      const quality = canComputeEt0 ? "ok" : "degraded";
+      // Delta ET₀ Cotrim × Open-Meteo
+      let et0Delta: number | null = null;
+      let et0DeltaPct: number | null = null;
+      if (et0Calculated != null && d.et0Source != null) {
+        et0Delta = et0Calculated - d.et0Source;
+        if (d.et0Source !== 0) {
+          et0DeltaPct = (et0Delta / d.et0Source) * 100;
+          et0SourceSum += d.et0Source;
+          et0CalcSum += et0Calculated;
+          et0DeltaPctSum += Math.abs(et0DeltaPct);
+          et0PairsCount += 1;
+        }
+      }
+
+      // Qualidade: degradada se ET₀ não pôde ser calculada, se altitude é
+      // desconhecida, ou se a divergência com a fonte passar de 15%.
+      let quality: "ok" | "degraded" = canComputeEt0 ? "ok" : "degraded";
       if (!canComputeEt0) partial = true;
+      if (resolved.origin === "unknown") {
+        quality = "degraded";
+        partial = true;
+      }
+      if (et0DeltaPct != null && Math.abs(et0DeltaPct) > 15) {
+        quality = "degraded";
+      }
 
       const rowPayload = {
         station_id: station.id,
@@ -147,6 +238,8 @@ export async function ingestOpenMeteoObservations(
         sunshine: null,
         et0_source: d.et0Source,
         et0_calculated: et0Calculated,
+        et0_delta: et0Delta,
+        et0_delta_pct: et0DeltaPct,
         effective_precip: effectivePrecip,
         data_kind: dataKind,
         origin: OPEN_METEO_PROVIDER,
@@ -225,6 +318,10 @@ export async function ingestOpenMeteoObservations(
 
   const durationMs = Date.now() - startedAt;
 
+  const et0SourceAvg = et0PairsCount > 0 ? et0SourceSum / et0PairsCount : null;
+  const et0CalcAvg = et0PairsCount > 0 ? et0CalcSum / et0PairsCount : null;
+  const et0DeltaPctAvg = et0PairsCount > 0 ? et0DeltaPctSum / et0PairsCount : null;
+
   await supabase.from("climate_ingestion_runs").insert({
     farm_id: station.farm_id,
     station_id: station.id,
@@ -235,6 +332,16 @@ export async function ingestOpenMeteoObservations(
     rows_skipped: rowsSkipped,
     error_message: errorMessage,
     duration_ms: durationMs,
+    request_latitude: station.latitude,
+    request_longitude: station.longitude,
+    request_timezone: station.timezone,
+    request_url: requestUrl,
+    altitude_used: altitudeUsed,
+    altitude_origin: altitudeOrigin,
+    response_elevation: responseElevation,
+    et0_source_avg: et0SourceAvg,
+    et0_calculated_avg: et0CalcAvg,
+    et0_delta_pct_avg: et0DeltaPctAvg,
   });
 
   return {
@@ -261,13 +368,17 @@ export async function ingestOpenMeteoForecast(
   let errorMessage: string | null = null;
 
   try {
-    const { issuedAt, daily } = await fetchForecast({
+    const { issuedAt, daily, context } = await fetchForecast({
       latitude: station.latitude,
       longitude: station.longitude,
       timezone: station.timezone || "America/Sao_Paulo",
       days,
     });
 
+    const resolved = resolveAltitude(
+      station as IngestionStation & { altitude_origin?: string },
+      context.elevation,
+    );
     const issuedDay = new Date(issuedAt.slice(0, 10) + "T12:00:00Z");
 
     for (const d of daily) {
@@ -284,7 +395,7 @@ export async function ingestOpenMeteoForecast(
             humidity: d.humidity as number,
             windSpeed: d.windSpeed2m as number,
             solarRadiation: d.solarRadiation as number,
-            altitude: station.altitude ?? 0,
+            altitude: resolved.altitude,
             latitude: station.latitude,
             dayOfYear: dayOfYear(d.date),
           })
@@ -345,7 +456,7 @@ export async function ingestFarmClimate(
   const { data: stations, error } = await supabase
     .from("weather_stations")
     .select(
-      "id, farm_id, name, latitude, longitude, altitude, timezone, data_source",
+      "id, farm_id, name, latitude, longitude, altitude, altitude_origin, timezone, data_source",
     )
     .eq("farm_id", farmId)
     .eq("active", true)

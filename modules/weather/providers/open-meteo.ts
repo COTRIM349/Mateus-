@@ -87,6 +87,12 @@ async function fetchJsonWithRetry(url: string, attempts = 3): Promise<unknown> {
 }
 
 interface OpenMeteoDailyPayload {
+  latitude?: number;
+  longitude?: number;
+  elevation?: number;
+  timezone?: string;
+  timezone_abbreviation?: string;
+  utc_offset_seconds?: number;
   daily?: {
     time?: string[];
     temperature_2m_max?: (number | null)[];
@@ -99,6 +105,27 @@ interface OpenMeteoDailyPayload {
     precipitation_probability_max?: (number | null)[];
     et0_fao_evapotranspiration?: (number | null)[];
   };
+}
+
+/** Contexto retornado junto com os dados diários — usado para auditoria. */
+export interface OpenMeteoContext {
+  requestUrl: string;
+  requestLatitude: number;
+  requestLongitude: number;
+  requestTimezone: string;
+  responseLatitude: number | null;
+  responseLongitude: number | null;
+  elevation: number | null;
+  utcOffsetSeconds: number | null;
+}
+
+export interface OpenMeteoFetchResult {
+  context: OpenMeteoContext;
+  daily: OpenMeteoDaily[];
+}
+
+export interface OpenMeteoForecastResult extends OpenMeteoFetchResult {
+  issuedAt: string;
 }
 
 function parseDaily(payload: OpenMeteoDailyPayload): OpenMeteoDaily[] {
@@ -133,7 +160,7 @@ export async function fetchRecentObservations(params: {
   longitude: number;
   timezone: string;
   pastDays: number;   // 1..92
-}): Promise<OpenMeteoDaily[]> {
+}): Promise<OpenMeteoFetchResult> {
   const pastDays = Math.max(1, Math.min(params.pastDays, 92));
   const qs = new URLSearchParams({
     latitude: String(params.latitude),
@@ -146,7 +173,27 @@ export async function fetchRecentObservations(params: {
   });
   const url = `${FORECAST_URL}?${qs.toString()}`;
   const payload = (await fetchJsonWithRetry(url)) as OpenMeteoDailyPayload;
-  return parseDaily(payload);
+  return {
+    context: buildContext(url, params, payload),
+    daily: parseDaily(payload),
+  };
+}
+
+function buildContext(
+  url: string,
+  req: { latitude: number; longitude: number; timezone: string },
+  payload: OpenMeteoDailyPayload,
+): OpenMeteoContext {
+  return {
+    requestUrl: url,
+    requestLatitude: req.latitude,
+    requestLongitude: req.longitude,
+    requestTimezone: req.timezone,
+    responseLatitude: payload.latitude ?? null,
+    responseLongitude: payload.longitude ?? null,
+    elevation: payload.elevation ?? null,
+    utcOffsetSeconds: payload.utc_offset_seconds ?? null,
+  };
 }
 
 /**
@@ -159,7 +206,7 @@ export async function fetchArchive(params: {
   timezone: string;
   startDate: string; // YYYY-MM-DD
   endDate: string;   // YYYY-MM-DD
-}): Promise<OpenMeteoDaily[]> {
+}): Promise<OpenMeteoFetchResult> {
   const qs = new URLSearchParams({
     latitude: String(params.latitude),
     longitude: String(params.longitude),
@@ -171,7 +218,10 @@ export async function fetchArchive(params: {
   });
   const url = `${ARCHIVE_URL}?${qs.toString()}`;
   const payload = (await fetchJsonWithRetry(url)) as OpenMeteoDailyPayload;
-  return parseDaily(payload);
+  return {
+    context: buildContext(url, params, payload),
+    daily: parseDaily(payload),
+  };
 }
 
 /**
@@ -182,7 +232,7 @@ export async function fetchForecast(params: {
   longitude: number;
   timezone: string;
   days: number;
-}): Promise<{ issuedAt: string; daily: OpenMeteoDaily[] }> {
+}): Promise<OpenMeteoForecastResult> {
   const days = Math.max(1, Math.min(params.days, 16));
   const qs = new URLSearchParams({
     latitude: String(params.latitude),
@@ -196,6 +246,7 @@ export async function fetchForecast(params: {
   const payload = (await fetchJsonWithRetry(url)) as OpenMeteoDailyPayload;
   return {
     issuedAt: new Date().toISOString(),
+    context: buildContext(url, params, payload),
     daily: parseDaily(payload),
   };
 }

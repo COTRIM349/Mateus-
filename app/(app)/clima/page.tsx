@@ -1037,12 +1037,27 @@ function VirtualStationTab() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatBox label="Latitude" value={fmt(st.latitude, 4)} unit="°" />
           <StatBox label="Longitude" value={fmt(st.longitude, 4)} unit="°" />
-          <StatBox label="Altitude" value={fmt(st.altitude, 0)} unit="m" />
+          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-graphite-700 dark:bg-graphite-800">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Altitude</p>
+            <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
+              {fmt(st.altitude, 0)}
+              <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">m</span>
+            </p>
+            <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+              origem: <span className={st.altitude_origin === "unknown" ? "font-semibold text-yellow-700 dark:text-yellow-400" : "font-medium"}>{st.altitude_origin}</span>
+            </p>
+          </div>
           <StatBox
             label="Última sincronização"
             value={st.last_sync_at ? new Date(st.last_sync_at).toLocaleString("pt-BR") : "—"}
           />
         </div>
+
+        {st.altitude_origin === "unknown" && (
+          <p className="mt-3 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-800 dark:border-yellow-900/30 dark:bg-yellow-900/20 dark:text-yellow-300">
+            Altitude não determinada. O cálculo local de ET₀ está usando 0 m e a qualidade dos dados foi marcada como degradada. Informe a altitude da fazenda ou execute uma nova sincronização — a Open-Meteo retornará a elevação real da grade.
+          </p>
+        )}
 
         {st.sync_error && (
           <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
@@ -1067,18 +1082,39 @@ function VirtualStationTab() {
           )}
         </div>
         {r ? (
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <StatBox label="ET₀ (Cotrim)" value={fmt(r.et0_calculated, 2)} unit="mm/dia" />
-            <StatBox label="Chuva" value={fmt(r.precipitation, 1)} unit="mm" />
-            <StatBox label="Chuva efetiva" value={fmt(r.effective_precip, 1)} unit="mm" />
-            <StatBox label="Temp. média" value={fmt(r.temp_mean, 1)} unit="°C" />
-            <StatBox label="Temp. mín" value={fmt(r.temp_min, 1)} unit="°C" />
-            <StatBox label="Temp. máx" value={fmt(r.temp_max, 1)} unit="°C" />
-            <StatBox label="Umidade" value={fmt(r.humidity, 1)} unit="%" />
-            <StatBox label="Vento" value={fmt(r.wind_speed, 1)} unit="m/s" />
-            <StatBox label="Radiação" value={fmt(r.solar_radiation, 1)} unit="MJ/m²" />
-            <StatBox label="ET₀ (fonte)" value={fmt(r.et0_source, 2)} unit="mm/dia" />
-          </div>
+          <>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatBox label="ET₀ (Cotrim)" value={fmt(r.et0_calculated, 2)} unit="mm/dia" />
+              <StatBox label="ET₀ (Open-Meteo)" value={fmt(r.et0_source, 2)} unit="mm/dia" />
+              <div className={`rounded-md border p-3 ${
+                r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10
+                  ? "border-red-300 bg-red-50 dark:border-red-900/30 dark:bg-red-900/20"
+                  : "border-gray-200 bg-gray-50 dark:border-graphite-700 dark:bg-graphite-800"
+              }`}>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Diferença ET₀</p>
+                <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
+                  {r.et0_delta_pct != null ? `${r.et0_delta_pct >= 0 ? "+" : ""}${r.et0_delta_pct.toFixed(1)}` : "—"}
+                  {r.et0_delta_pct != null && <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">%</span>}
+                </p>
+                <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                  Δ absoluto: {fmt(r.et0_delta, 2)} mm/dia
+                </p>
+              </div>
+              <StatBox label="Chuva" value={fmt(r.precipitation, 1)} unit="mm" />
+              <StatBox label="Chuva efetiva" value={fmt(r.effective_precip, 1)} unit="mm" />
+              <StatBox label="Temp. média" value={fmt(r.temp_mean, 1)} unit="°C" />
+              <StatBox label="Temp. mín" value={fmt(r.temp_min, 1)} unit="°C" />
+              <StatBox label="Temp. máx" value={fmt(r.temp_max, 1)} unit="°C" />
+              <StatBox label="Umidade" value={fmt(r.humidity, 1)} unit="%" />
+              <StatBox label="Vento" value={fmt(r.wind_speed, 1)} unit="m/s" />
+              <StatBox label="Radiação" value={fmt(r.solar_radiation, 1)} unit="MJ/m²" />
+            </div>
+            {r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10 && (
+              <p className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
+                Divergência acima de 10% entre ET₀ Cotrim e ET₀ Open-Meteo. Possíveis causas: altitude imprecisa, dados de radiação/umidade instáveis ou coordenada com contraste micrometeorológico local. Verifique a altitude e as leituras de radiação.
+              </p>
+            )}
+          </>
         ) : (
           <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
             Nenhuma leitura observada ainda. Clique em &quot;Sincronizar agora&quot; para trazer os últimos 7 dias.
@@ -1095,6 +1131,26 @@ function VirtualStationTab() {
             <div><span className="text-xs text-gray-500 dark:text-gray-400">Inseridas / Atualizadas / Ignoradas</span><br />{run.rows_inserted} / {run.rows_updated} / {run.rows_skipped}</div>
             <div><span className="text-xs text-gray-500 dark:text-gray-400">Duração</span><br />{run.duration_ms != null ? `${run.duration_ms} ms` : "—"}</div>
             <div><span className="text-xs text-gray-500 dark:text-gray-400">Erro</span><br />{run.error_message ?? "—"}</div>
+          </div>
+
+          <div className="mt-4 border-t border-gray-200 pt-4 dark:border-graphite-700">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Contexto da requisição</p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
+              <div><span className="text-xs text-gray-500 dark:text-gray-400">Latitude enviada</span><br />{fmt(run.request_latitude, 4)}°</div>
+              <div><span className="text-xs text-gray-500 dark:text-gray-400">Longitude enviada</span><br />{fmt(run.request_longitude, 4)}°</div>
+              <div><span className="text-xs text-gray-500 dark:text-gray-400">Timezone</span><br />{run.request_timezone ?? "—"}</div>
+              <div><span className="text-xs text-gray-500 dark:text-gray-400">Altitude usada</span><br />{fmt(run.altitude_used, 0)} m <span className="text-xs text-gray-500 dark:text-gray-400">({run.altitude_origin ?? "—"})</span></div>
+              <div><span className="text-xs text-gray-500 dark:text-gray-400">Elevation Open-Meteo</span><br />{fmt(run.response_elevation, 0)} m</div>
+              <div><span className="text-xs text-gray-500 dark:text-gray-400">Δ ET₀ médio (7d)</span><br />{run.et0_delta_pct_avg != null ? `${run.et0_delta_pct_avg.toFixed(1)}%` : "—"}</div>
+            </div>
+            {run.request_url && (
+              <details className="mt-3 text-xs">
+                <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-graphite-900 dark:hover:text-white">URL requisitada</summary>
+                <p className="mt-1 break-all rounded-md border border-gray-200 bg-gray-50 p-2 font-mono text-[11px] dark:border-graphite-700 dark:bg-graphite-800">
+                  {run.request_url}
+                </p>
+              </details>
+            )}
           </div>
         </Card>
       )}

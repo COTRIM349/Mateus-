@@ -7,7 +7,11 @@ import { useAuth } from "@/components/providers";
 import { useCrud } from "@/lib/hooks";
 import { BRAZILIAN_STATES } from "@/constants/brazil";
 import { createClient } from "@/lib/supabase/client";
-import { ensureVirtualStation } from "@/modules/weather/services/virtual-station.service";
+import {
+  ensureVirtualStation,
+  syncVirtualStationWithFarm,
+} from "@/modules/weather/services/virtual-station.service";
+import { parseCoordinate } from "@/utils/coord";
 
 interface Farm {
   id: string;
@@ -99,22 +103,50 @@ function FarmsTab() {
     },
   ];
 
+  const [coordWarnings, setCoordWarnings] = useState<{ lat?: string; lon?: string }>({});
+
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setSaving(true);
     setFormError("");
+    setCoordWarnings({});
     const fd = new FormData(e.currentTarget);
     const activateVirtual = fd.get("activate_virtual_station") === "on";
+
+    // Parse robusto de latitude/longitude aceitando ponto ou vírgula.
+    const latParse = parseCoordinate(String(fd.get("latitude") ?? ""), "latitude");
+    const lonParse = parseCoordinate(String(fd.get("longitude") ?? ""), "longitude");
+    if (!latParse.valid || !lonParse.valid) {
+      setFormError(
+        [latParse.error && `Latitude: ${latParse.error}`, lonParse.error && `Longitude: ${lonParse.error}`]
+          .filter(Boolean)
+          .join(" · "),
+      );
+      setSaving(false);
+      return;
+    }
+    if (latParse.warning || lonParse.warning) {
+      setCoordWarnings({
+        lat: latParse.warning ?? undefined,
+        lon: lonParse.warning ?? undefined,
+      });
+    }
+
+    // Altitude também aceita vírgula/ponto; vazio significa "não informada".
+    const altRaw = String(fd.get("altitude") ?? "").trim().replace(",", ".");
+    const altitudeValue =
+      altRaw === "" ? null : Number.isFinite(Number(altRaw)) ? Number(altRaw) : null;
+
     const payload = {
       company_id: profile?.companyId,
       name: fd.get("name") as string,
       city: fd.get("city") as string,
       state: fd.get("state") as string,
-      latitude: Number(fd.get("latitude")),
-      longitude: Number(fd.get("longitude")),
-      altitude: Number(fd.get("altitude") || 0),
-      total_area: Number(fd.get("total_area")),
-      irrigated_area: Number(fd.get("irrigated_area")),
+      latitude: latParse.value as number,
+      longitude: lonParse.value as number,
+      altitude: altitudeValue ?? 0,
+      total_area: Number(String(fd.get("total_area") ?? "0").replace(",", ".")),
+      irrigated_area: Number(String(fd.get("irrigated_area") ?? "0").replace(",", ".")),
       timezone: "America/Sao_Paulo",
     };
     try {
@@ -137,19 +169,26 @@ function FarmsTab() {
         farmId = (created?.id as string) ?? null;
       }
 
-      // Autocriação idempotente da estação virtual, se solicitado e viável.
-      if (activateVirtual && farmId && Number.isFinite(payload.latitude) && Number.isFinite(payload.longitude)) {
+      const supabase = createClient();
+      if (editing && farmId) {
+        // Fazenda editada: propaga coordenadas/altitude para a estação virtual.
         try {
-          const supabase = createClient();
+          await syncVirtualStationWithFarm(supabase, farmId);
+        } catch (syncErr) {
+          console.warn("Falha ao sincronizar estação virtual:", syncErr);
+        }
+      } else if (activateVirtual && farmId) {
+        // Nova fazenda: criação idempotente da estação virtual.
+        try {
           await ensureVirtualStation(supabase, farmId);
         } catch (vsErr) {
-          // Não bloqueia o cadastro da fazenda — apenas registra.
           console.warn("Falha ao criar estação virtual:", vsErr);
         }
       }
 
       setModalOpen(false);
       setEditing(null);
+      setCoordWarnings({});
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao salvar");
     }
@@ -191,8 +230,34 @@ function FarmsTab() {
             <Input id="city" name="city" label="Cidade" required defaultValue={editing?.city} />
             <Select id="state" name="state" label="Estado" options={[...BRAZILIAN_STATES]} required defaultValue={editing?.state} />
             <Input id="altitude" name="altitude" label="Altitude (m)" type="number" step="any" defaultValue={editing?.altitude ?? 0} />
-            <Input id="latitude" name="latitude" label="Latitude" type="number" step="any" required defaultValue={editing?.latitude} placeholder="-15.8022" />
-            <Input id="longitude" name="longitude" label="Longitude" type="number" step="any" required defaultValue={editing?.longitude} placeholder="-43.3089" />
+            <div>
+              <Input
+                id="latitude"
+                name="latitude"
+                label="Latitude (decimal)"
+                type="text"
+                inputMode="decimal"
+                pattern="-?[0-9]+([.,][0-9]+)?"
+                required
+                defaultValue={editing?.latitude}
+                placeholder="-14.6491"
+              />
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Ex.: -14.6491 · aceita vírgula ou ponto · faixa -90 a 90</p>
+            </div>
+            <div>
+              <Input
+                id="longitude"
+                name="longitude"
+                label="Longitude (decimal)"
+                type="text"
+                inputMode="decimal"
+                pattern="-?[0-9]+([.,][0-9]+)?"
+                required
+                defaultValue={editing?.longitude}
+                placeholder="-45.2340"
+              />
+              <p className="mt-1 text-[11px] text-gray-500 dark:text-gray-400">Ex.: -45.2340 · aceita vírgula ou ponto · faixa -180 a 180</p>
+            </div>
             <Input id="total_area" name="total_area" label="Área total (ha)" type="number" step="any" required defaultValue={editing?.total_area} />
             <Input id="irrigated_area" name="irrigated_area" label="Área irrigada (ha)" type="number" step="any" required defaultValue={editing?.irrigated_area} />
           </div>
@@ -206,6 +271,14 @@ function FarmsTab() {
                 </span>
               </span>
             </label>
+          )}
+          {(coordWarnings.lat || coordWarnings.lon) && (
+            <div className="rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-800 dark:border-yellow-900/40 dark:bg-yellow-900/20 dark:text-yellow-300">
+              <p className="font-semibold">Coordenadas fora do território brasileiro</p>
+              {coordWarnings.lat && <p>{coordWarnings.lat}</p>}
+              {coordWarnings.lon && <p>{coordWarnings.lon}</p>}
+              <p className="mt-1">A fazenda será salva; verifique se este é o país de operação.</p>
+            </div>
           )}
           {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-2">

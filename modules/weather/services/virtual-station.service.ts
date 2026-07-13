@@ -27,6 +27,7 @@ export interface VirtualStationRow {
   latitude: number;
   longitude: number;
   altitude: number;
+  altitude_origin: string;
   timezone: string;
   data_source: string;
   source_priority: number;
@@ -36,6 +37,9 @@ export interface VirtualStationRow {
   sync_error: string | null;
   created_at: string;
 }
+
+const STATION_SELECT =
+  "id, farm_id, name, latitude, longitude, altitude, altitude_origin, timezone, data_source, source_priority, active, sync_status, last_sync_at, sync_error, created_at";
 
 export interface FarmCoordinates {
   id: string;
@@ -71,9 +75,7 @@ export async function getVirtualStation(
 ): Promise<VirtualStationRow | null> {
   const { data, error } = await supabase
     .from("weather_stations")
-    .select(
-      "id, farm_id, name, latitude, longitude, altitude, timezone, data_source, source_priority, active, sync_status, last_sync_at, sync_error, created_at",
-    )
+    .select(STATION_SELECT)
     .eq("farm_id", farmId)
     .eq("station_type", "virtual")
     .eq("active", true)
@@ -138,13 +140,17 @@ export async function ensureVirtualStation(
   const priority = options.priority ?? VIRTUAL_STATION_DEFAULT_PRIORITY;
   const namePrefix = options.namePrefix ?? "Estação Virtual";
 
+  const hasManualAltitude =
+    farm.altitude != null && Number.isFinite(farm.altitude) && farm.altitude > 0;
+
   const insertPayload = {
     farm_id: farmId,
     name: `${namePrefix} — ${farm.name}`,
     model: null,
     latitude: farm.latitude,
     longitude: farm.longitude,
-    altitude: farm.altitude ?? 0,
+    altitude: hasManualAltitude ? farm.altitude : 0,
+    altitude_origin: hasManualAltitude ? "manual" : "unknown",
     timezone: farm.timezone ?? "America/Sao_Paulo",
     station_type: "virtual",
     data_source: dataSource,
@@ -157,13 +163,86 @@ export async function ensureVirtualStation(
   const { data, error } = await supabase
     .from("weather_stations")
     .insert(insertPayload)
-    .select(
-      "id, farm_id, name, latitude, longitude, altitude, timezone, data_source, source_priority, active, sync_status, last_sync_at, sync_error, created_at",
-    )
+    .select(STATION_SELECT)
     .single();
 
   if (error) throw new Error(error.message);
   return { station: data as VirtualStationRow, created: true };
+}
+
+/**
+ * Propaga alterações da fazenda (coords/altitude/timezone) para a estação
+ * virtual associada. Não recria a estação — apenas sincroniza.
+ *
+ * Estratégia:
+ *  - Coordenadas: sempre atualiza para as da fazenda.
+ *  - Altitude: se a fazenda tem altitude manual > 0, atualiza e marca
+ *    origem 'manual'. Se não, mantém a que já estava (a próxima ingestão
+ *    resolverá via Open-Meteo `elevation`).
+ *  - Timezone: propaga o valor da fazenda.
+ *  - Ao mudar coords, invalida sync (idle) para forçar nova ingestão.
+ */
+export interface SyncVirtualStationResult {
+  station: VirtualStationRow;
+  coordinatesChanged: boolean;
+  altitudeChanged: boolean;
+}
+
+export async function syncVirtualStationWithFarm(
+  supabase: SupabaseClient,
+  farmId: string,
+): Promise<SyncVirtualStationResult | null> {
+  const station = await getVirtualStation(supabase, farmId);
+  if (!station) return null;
+
+  const farm = await fetchFarm(supabase, farmId);
+  if (!farm || farm.latitude == null || farm.longitude == null) return null;
+
+  const coordinatesChanged =
+    Math.abs(station.latitude - farm.latitude) > 1e-6 ||
+    Math.abs(station.longitude - farm.longitude) > 1e-6;
+
+  const hasManualAltitude =
+    farm.altitude != null && Number.isFinite(farm.altitude) && farm.altitude > 0;
+  const altitudeChanged =
+    hasManualAltitude && Math.abs(station.altitude - (farm.altitude as number)) > 0.5;
+
+  if (!coordinatesChanged && !altitudeChanged) {
+    return { station, coordinatesChanged: false, altitudeChanged: false };
+  }
+
+  const updatePayload: Record<string, unknown> = {
+    latitude: farm.latitude,
+    longitude: farm.longitude,
+    timezone: farm.timezone ?? station.timezone ?? "America/Sao_Paulo",
+  };
+
+  if (hasManualAltitude) {
+    updatePayload.altitude = farm.altitude;
+    updatePayload.altitude_origin = "manual";
+  }
+
+  if (coordinatesChanged) {
+    // Invalida a sincronização anterior; a próxima ingestão sobrescreve
+    // as leituras recentes com as coordenadas corretas.
+    updatePayload.sync_status = "idle";
+    updatePayload.sync_error =
+      "coordenadas atualizadas — nova sincronização necessária";
+  }
+
+  const { data, error } = await supabase
+    .from("weather_stations")
+    .update(updatePayload)
+    .eq("id", station.id)
+    .select(STATION_SELECT)
+    .single();
+
+  if (error) throw new Error(error.message);
+  return {
+    station: data as VirtualStationRow,
+    coordinatesChanged,
+    altitudeChanged,
+  };
 }
 
 // ── Snapshot para UI ────────────────────────────────────────────────────────
@@ -182,6 +261,8 @@ export interface VirtualStationSnapshot {
     effective_precip: number | null;
     et0_calculated: number | null;
     et0_source: number | null;
+    et0_delta: number | null;
+    et0_delta_pct: number | null;
     data_quality: string;
     origin: string;
     imported_at: string;
@@ -194,6 +275,16 @@ export interface VirtualStationSnapshot {
     rows_skipped: number;
     duration_ms: number | null;
     error_message: string | null;
+    request_latitude: number | null;
+    request_longitude: number | null;
+    request_timezone: string | null;
+    request_url: string | null;
+    altitude_used: number | null;
+    altitude_origin: string | null;
+    response_elevation: number | null;
+    et0_source_avg: number | null;
+    et0_calculated_avg: number | null;
+    et0_delta_pct_avg: number | null;
   } | null;
 }
 
@@ -212,7 +303,7 @@ export async function getVirtualStationSnapshot(
     supabase
       .from("weather_readings")
       .select(
-        "date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, effective_precip, et0_calculated, et0_source, data_quality, origin, imported_at",
+        "date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, effective_precip, et0_calculated, et0_source, et0_delta, et0_delta_pct, data_quality, origin, imported_at",
       )
       .eq("station_id", station.id)
       .order("date", { ascending: false })
@@ -220,7 +311,7 @@ export async function getVirtualStationSnapshot(
     supabase
       .from("climate_ingestion_runs")
       .select(
-        "run_at, status, rows_inserted, rows_updated, rows_skipped, duration_ms, error_message",
+        "run_at, status, rows_inserted, rows_updated, rows_skipped, duration_ms, error_message, request_latitude, request_longitude, request_timezone, request_url, altitude_used, altitude_origin, response_elevation, et0_source_avg, et0_calculated_avg, et0_delta_pct_avg",
       )
       .eq("station_id", station.id)
       .order("run_at", { ascending: false })
