@@ -527,7 +527,7 @@ function HistoryTab() {
     },
     { header: "UR%", render: (r) => r.humidity.toFixed(1), align: "right" },
     { header: "Vento", render: (r) => r.wind_speed.toFixed(1), align: "right" },
-    { header: "Rad.", render: (r) => r.solar_radiation.toFixed(1), align: "right" },
+    { header: "Rad.", render: (r) => r.solar_radiation != null ? r.solar_radiation.toFixed(1) : "—", align: "right" },
     {
       header: "",
       align: "right",
@@ -1122,9 +1122,11 @@ function VirtualStationTab() {
         )}
       </Card>
 
+      <WeatherApiCompareCard farmId={activeFarmId} />
+
       {run && (
         <Card>
-          <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">Última execução de ingestão</h4>
+          <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">Última execução de ingestão (Open-Meteo)</h4>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
             <div><span className="text-xs text-gray-500 dark:text-gray-400">Quando</span><br />{new Date(run.run_at).toLocaleString("pt-BR")}</div>
             <div><span className="text-xs text-gray-500 dark:text-gray-400">Status</span><br />{run.status}</div>
@@ -1155,5 +1157,284 @@ function VirtualStationTab() {
         </Card>
       )}
     </div>
+  );
+}
+
+// ── Comparação WeatherAPI ─────────────────────────────────────────────────
+// Card no fim da aba Estação Virtual. Botões "Verificar chave" e "Testar
+// WeatherAPI". A chamada de teste cria (se necessário) uma estação virtual
+// WeatherAPI (P6) e ingere 7 dias observados + 3 forecast. NÃO altera
+// weather_daily_selection nem toca o Open-Meteo.
+
+interface WeatherApiDiagnostic {
+  keyPresent: boolean;
+  status: string;
+  httpStatus: number | null;
+  latencyMs: number;
+  plan: string | null;
+  limitations: {
+    requestsPerMonth: number;
+    historyDays: number;
+    forecastDays: number;
+    solarRadiation: boolean;
+    ecoTo: boolean;
+    notes: string;
+  } | null;
+  error: string | null;
+}
+
+interface ComparisonRow {
+  date: string;
+  om: {
+    temp_max: number | null;
+    temp_min: number | null;
+    temp_mean: number | null;
+    humidity: number | null;
+    wind_speed: number | null;
+    precipitation: number | null;
+    atmospheric_pressure_hpa: number | null;
+  } | null;
+  wa: {
+    temp_max: number | null;
+    temp_min: number | null;
+    temp_mean: number | null;
+    humidity: number | null;
+    wind_speed: number | null;
+    precipitation: number | null;
+    atmospheric_pressure_hpa: number | null;
+    condition_text: string | null;
+  } | null;
+}
+
+function WeatherApiCompareCard({ farmId }: { farmId: string | null }) {
+  const supabase = createClient();
+  const [testing, setTesting] = useState(false);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [diagnostic, setDiagnostic] = useState<WeatherApiDiagnostic | null>(null);
+  const [comparison, setComparison] = useState<ComparisonRow[]>([]);
+  const [waStationExists, setWaStationExists] = useState<boolean | null>(null);
+
+  const loadComparison = useCallback(async () => {
+    if (!farmId) return;
+    const { data: stations } = await supabase
+      .from("weather_stations")
+      .select("id, data_source")
+      .eq("farm_id", farmId)
+      .in("data_source", ["open_meteo", "weather_api"])
+      .eq("station_type", "virtual");
+    const om = stations?.find((s) => s.data_source === "open_meteo");
+    const wa = stations?.find((s) => s.data_source === "weather_api");
+    setWaStationExists(Boolean(wa));
+    if (!om && !wa) {
+      setComparison([]);
+      return;
+    }
+    const ids = [om?.id, wa?.id].filter(Boolean) as string[];
+    const since = new Date();
+    since.setUTCDate(since.getUTCDate() - 7);
+    const { data: rows } = await supabase
+      .from("weather_readings")
+      .select(
+        "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation, atmospheric_pressure_hpa, condition_text",
+      )
+      .in("station_id", ids)
+      .gte("date", since.toISOString().slice(0, 10))
+      .order("date", { ascending: false });
+    if (!rows) return;
+    const byDate = new Map<string, ComparisonRow>();
+    for (const r of rows) {
+      const d = r.date as string;
+      if (!byDate.has(d)) byDate.set(d, { date: d, om: null, wa: null });
+      const entry = byDate.get(d)!;
+      const payload = {
+        temp_max: r.temp_max as number | null,
+        temp_min: r.temp_min as number | null,
+        temp_mean: r.temp_mean as number | null,
+        humidity: r.humidity as number | null,
+        wind_speed: r.wind_speed as number | null,
+        precipitation: r.precipitation as number | null,
+        atmospheric_pressure_hpa: r.atmospheric_pressure_hpa as number | null,
+      };
+      if (r.origin === "open_meteo") entry.om = payload;
+      if (r.origin === "weather_api") {
+        entry.wa = { ...payload, condition_text: (r.condition_text as string | null) ?? null };
+      }
+    }
+    setComparison(Array.from(byDate.values()));
+  }, [farmId, supabase]);
+
+  useEffect(() => {
+    loadComparison();
+  }, [loadComparison]);
+
+  const runDiagnostic = async () => {
+    setDiagnosing(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/climate/weather-api-diagnostic");
+      const json = (await res.json()) as WeatherApiDiagnostic;
+      setDiagnostic(json);
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+    setDiagnosing(false);
+  };
+
+  const runTest = async () => {
+    if (!farmId) return;
+    setTesting(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/climate/test-weather-api", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ farmId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const runs = (json.runs ?? []) as Array<{ status: string; rowsInserted: number; rowsUpdated: number; rowsSkipped: number; errorMessage: string | null }>;
+      const inserted = runs.reduce((s, r) => s + r.rowsInserted, 0);
+      const updated = runs.reduce((s, r) => s + r.rowsUpdated, 0);
+      const skipped = runs.reduce((s, r) => s + r.rowsSkipped, 0);
+      const runStatus = runs[0]?.status ?? "unknown";
+      const errMsg = runs[0]?.errorMessage;
+      const created = json.virtualStationCreated ? "Estação virtual WeatherAPI criada. " : "";
+      const summary = `${created}${inserted} inseridas · ${updated} atualizadas · ${skipped} ignoradas · status ${runStatus}${errMsg ? ` · erro: ${errMsg}` : ""}`;
+      setMessage({ type: runStatus === "success" ? "success" : "error", text: summary });
+      await loadComparison();
+    } catch (err) {
+      setMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
+    }
+    setTesting(false);
+  };
+
+  const diffColor = (v: number | null) => {
+    if (v == null) return "";
+    const abs = Math.abs(v);
+    if (abs >= 3) return "text-red-600 dark:text-red-400 font-semibold";
+    if (abs >= 1.5) return "text-yellow-700 dark:text-yellow-400";
+    return "text-gray-500 dark:text-gray-400";
+  };
+
+  const fmtNum = (v: number | null, digits = 1) => (v == null ? "—" : v.toFixed(digits));
+  const diff = (a: number | null, b: number | null) =>
+    a != null && b != null ? b - a : null;
+  const fmtDiff = (v: number | null, digits = 1) =>
+    v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(digits);
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">WeatherAPI (fonte secundária de comparação)</h4>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Fonte secundária. Open-Meteo (P5) continua como principal do balanço hídrico. WeatherAPI entra como P6 apenas para comparação.
+            Sem ETo Cotrim para leituras WeatherAPI (plano free não fornece radiação solar Rs).
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={diagnosing} onClick={runDiagnostic}>
+            {diagnosing ? "Verificando..." : "Verificar chave"}
+          </Button>
+          <Button disabled={testing || !farmId} onClick={runTest}>
+            {testing ? "Testando..." : "Testar WeatherAPI"}
+          </Button>
+        </div>
+      </div>
+
+      {message && (
+        <p className={`mb-3 text-sm ${message.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+          {message.text}
+        </p>
+      )}
+
+      {diagnostic && (
+        <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs dark:border-graphite-700 dark:bg-graphite-800">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div><span className="text-gray-500 dark:text-gray-400">Chave configurada:</span> {diagnostic.keyPresent ? "sim" : "não"}</div>
+            <div><span className="text-gray-500 dark:text-gray-400">Status:</span> {diagnostic.status}</div>
+            <div><span className="text-gray-500 dark:text-gray-400">Latência:</span> {diagnostic.latencyMs} ms</div>
+            {diagnostic.httpStatus != null && (
+              <div><span className="text-gray-500 dark:text-gray-400">HTTP:</span> {diagnostic.httpStatus}</div>
+            )}
+            {diagnostic.plan && (
+              <div><span className="text-gray-500 dark:text-gray-400">Plano:</span> {diagnostic.plan}</div>
+            )}
+            {diagnostic.error && (
+              <div className="sm:col-span-3 text-red-600 dark:text-red-400"><span className="text-gray-500 dark:text-gray-400">Erro:</span> {diagnostic.error}</div>
+            )}
+          </div>
+          {diagnostic.limitations && (
+            <p className="mt-2 text-[11px] text-gray-500 dark:text-gray-400">
+              Limitações: histórico {diagnostic.limitations.historyDays}d · forecast {diagnostic.limitations.forecastDays}d · Rs {diagnostic.limitations.solarRadiation ? "sim" : "não"} · quota {diagnostic.limitations.requestsPerMonth.toLocaleString()}/mês
+            </p>
+          )}
+        </div>
+      )}
+
+      {waStationExists === false && !message && (
+        <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          Clique em &quot;Testar WeatherAPI&quot; para criar a estação virtual e importar os primeiros 7 dias.
+        </p>
+      )}
+
+      {comparison.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead className="bg-gray-50 dark:bg-graphite-800">
+              <tr>
+                <th className="px-2 py-2 text-left">Data</th>
+                <th className="px-2 py-2 text-right">T_max OM</th>
+                <th className="px-2 py-2 text-right">T_max WA</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+                <th className="px-2 py-2 text-right">UR OM</th>
+                <th className="px-2 py-2 text-right">UR WA</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+                <th className="px-2 py-2 text-right">Vento OM</th>
+                <th className="px-2 py-2 text-right">Vento WA</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+                <th className="px-2 py-2 text-right">Chuva OM</th>
+                <th className="px-2 py-2 text-right">Chuva WA</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+                <th className="px-2 py-2 text-right">P (hPa) WA</th>
+                <th className="px-2 py-2 text-left">Cond. WA</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparison.map((r) => {
+                const dTmax = diff(r.om?.temp_max ?? null, r.wa?.temp_max ?? null);
+                const dRh = diff(r.om?.humidity ?? null, r.wa?.humidity ?? null);
+                const dWind = diff(r.om?.wind_speed ?? null, r.wa?.wind_speed ?? null);
+                const dRain = diff(r.om?.precipitation ?? null, r.wa?.precipitation ?? null);
+                return (
+                  <tr key={r.date} className="border-t border-gray-100 dark:border-graphite-700">
+                    <td className="px-2 py-1.5">{new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.om?.temp_max ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.wa?.temp_max ?? null)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dTmax)}`}>{fmtDiff(dTmax)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.om?.humidity ?? null, 0)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.wa?.humidity ?? null, 0)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dRh)}`}>{fmtDiff(dRh, 0)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.om?.wind_speed ?? null, 2)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.wa?.wind_speed ?? null, 2)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dWind)}`}>{fmtDiff(dWind, 2)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.om?.precipitation ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.wa?.precipitation ?? null)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dRain)}`}>{fmtDiff(dRain)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtNum(r.wa?.atmospheric_pressure_hpa ?? null, 0)}</td>
+                    <td className="px-2 py-1.5 text-left">{r.wa?.condition_text ?? "—"}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500">
+        WeatherAPI.com · Chave lida apenas no backend · Nunca exibida nesta interface.
+      </p>
+    </Card>
   );
 }

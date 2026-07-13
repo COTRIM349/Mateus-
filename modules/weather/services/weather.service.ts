@@ -9,7 +9,7 @@ export interface WeatherReadingRow {
   temp_mean: number;
   humidity: number;
   wind_speed: number;
-  solar_radiation: number;
+  solar_radiation: number | null;
   precipitation: number;
   sunshine: number | null;
   et0_calculated: number | null;
@@ -88,7 +88,7 @@ export function validateWeatherReading(reading: {
   temp_mean: number;
   humidity: number;
   wind_speed: number;
-  solar_radiation: number;
+  solar_radiation: number | null;
 }): WeatherValidation[] {
   const issues: WeatherValidation[] = [];
 
@@ -125,10 +125,10 @@ export function validateWeatherReading(reading: {
   if (reading.wind_speed > 30) {
     issues.push({ field: "wind_speed", level: "warning", message: "Velocidade do vento acima de 30 m/s é atípica" });
   }
-  if (reading.solar_radiation < 0) {
+  if (reading.solar_radiation != null && reading.solar_radiation < 0) {
     issues.push({ field: "solar_radiation", level: "error", message: "Radiação solar não pode ser negativa" });
   }
-  if (reading.solar_radiation > 40) {
+  if (reading.solar_radiation != null && reading.solar_radiation > 40) {
     issues.push({ field: "solar_radiation", level: "warning", message: "Radiação solar acima de 40 MJ/m²/dia é atípica" });
   }
 

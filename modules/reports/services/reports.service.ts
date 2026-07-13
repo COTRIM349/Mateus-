@@ -164,7 +164,7 @@ export interface DailyReportData {
     tempMean: number;
     humidity: number;
     windSpeed: number;
-    solarRadiation: number;
+    solarRadiation: number | null;
     precipitation: number;
     et0: number;
   };
@@ -539,7 +539,7 @@ export interface WeatherHistoryRow {
   tempMean: number;
   humidity: number;
   windSpeed: number;
-  solarRadiation: number;
+  solarRadiation: number | null;
   precipitation: number;
   et0: number;
 }
@@ -789,7 +789,7 @@ export function buildDailyReportSections(report: DailyReportData): ReportSection
       { label: "Umidade", value: `${report.weatherSummary.humidity.toFixed(0)}`, unit: "%" },
       { label: "Precipitação", value: `${report.weatherSummary.precipitation.toFixed(1)}`, unit: "mm" },
       { label: "ET₀", value: `${report.weatherSummary.et0.toFixed(2)}`, unit: "mm/dia" },
-      { label: "Radiação", value: `${report.weatherSummary.solarRadiation.toFixed(1)}`, unit: "MJ/m²" },
+      { label: "Radiação", value: report.weatherSummary.solarRadiation != null ? `${report.weatherSummary.solarRadiation.toFixed(1)}` : "—", unit: "MJ/m²" },
     ],
   });
 

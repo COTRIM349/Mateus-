@@ -449,9 +449,20 @@ export async function ingestOpenMeteoForecast(
 export async function ingestFarmClimate(
   supabase: SupabaseClient,
   farmId: string,
-  options: { pastDays?: number; forecastDays?: number } = {},
+  options: {
+    pastDays?: number;
+    forecastDays?: number;
+    /** Se informado, sincroniza apenas provedores nessa lista. */
+    providers?: string[];
+  } = {},
 ): Promise<ObservationIngestionResult[]> {
   const { getProvider, listProviderKeys } = await import("./provider-registry");
+
+  const registered = listProviderKeys();
+  const filter =
+    options.providers && options.providers.length > 0
+      ? options.providers.filter((k) => registered.includes(k))
+      : registered;
 
   const { data: stations, error } = await supabase
     .from("weather_stations")
@@ -460,7 +471,7 @@ export async function ingestFarmClimate(
     )
     .eq("farm_id", farmId)
     .eq("active", true)
-    .in("data_source", listProviderKeys());
+    .in("data_source", filter);
 
   if (error) throw new Error(error.message);
 
