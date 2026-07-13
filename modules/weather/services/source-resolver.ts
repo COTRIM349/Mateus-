@@ -25,17 +25,28 @@ interface CandidateReading {
   station_name: string;
   source_priority: number;
   data_quality: string;
+  data_kind: string;
   imported_at: string;
   origin: string;
 }
 
 const QUALITY_ORDER: Record<string, number> = { ok: 0, degraded: 1, missing: 2 };
+// Preferimos leituras de estação real (observed) sobre grade histórica
+// (BR-DWGD) ou entrada manual, mantidos os outros critérios iguais.
+const KIND_ORDER: Record<string, number> = {
+  observed: 0,
+  historical_grid: 1,
+  manual: 2,
+};
 
 function rankCandidate(a: CandidateReading, b: CandidateReading): number {
   if (a.source_priority !== b.source_priority) return a.source_priority - b.source_priority;
   const qa = QUALITY_ORDER[a.data_quality] ?? 3;
   const qb = QUALITY_ORDER[b.data_quality] ?? 3;
   if (qa !== qb) return qa - qb;
+  const ka = KIND_ORDER[a.data_kind] ?? 9;
+  const kb = KIND_ORDER[b.data_kind] ?? 9;
+  if (ka !== kb) return ka - kb;
   // mais recente vence
   return b.imported_at.localeCompare(a.imported_at);
 }
@@ -96,7 +107,7 @@ export async function resolveDailyClimateSource(
   const stationIds = stations.map((s) => s.id);
   const { data: readingsRaw, error: rErr } = await supabase
     .from("weather_readings")
-    .select("id, station_id, data_quality, imported_at, origin")
+    .select("id, station_id, data_quality, data_kind, imported_at, origin")
     .in("station_id", stationIds)
     .eq("date", date);
   if (rErr) throw new Error(rErr.message);
@@ -106,6 +117,7 @@ export async function resolveDailyClimateSource(
     id: string;
     station_id: string;
     data_quality: string;
+    data_kind: string;
     imported_at: string;
     origin: string;
   }>)
@@ -118,6 +130,7 @@ export async function resolveDailyClimateSource(
         station_name: st.name,
         source_priority: st.source_priority,
         data_quality: r.data_quality,
+        data_kind: r.data_kind,
         imported_at: r.imported_at,
         origin: r.origin,
       };

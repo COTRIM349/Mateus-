@@ -19,6 +19,9 @@ import {
   type OpenMeteoDaily,
 } from "@/modules/weather/providers/open-meteo";
 
+/** Categoria de dado que um provedor grava em weather_readings.data_kind. */
+type ProviderDataKind = "observed" | "historical_grid";
+
 // Considera dados suficientes para calcular ET₀ pelo Penman-Monteith FAO-56.
 function hasEt0Inputs(d: OpenMeteoDaily): boolean {
   return (
@@ -70,6 +73,7 @@ export async function ingestOpenMeteoObservations(
   supabase: SupabaseClient,
   station: IngestionStation,
   pastDays = 7,
+  dataKind: ProviderDataKind = "observed",
 ): Promise<ObservationIngestionResult> {
   const startedAt = Date.now();
   let rowsInserted = 0;
@@ -144,7 +148,7 @@ export async function ingestOpenMeteoObservations(
         et0_source: d.et0Source,
         et0_calculated: et0Calculated,
         effective_precip: effectivePrecip,
-        data_kind: "observed",
+        data_kind: dataKind,
         origin: OPEN_METEO_PROVIDER,
         data_quality: quality,
         imported_at: new Date().toISOString(),
@@ -327,13 +331,17 @@ export async function ingestOpenMeteoForecast(
   return { rowsInserted, rowsUpdated, errorMessage };
 }
 
-// ── Ingestão completa (observado + forecast) para uma fazenda ────────────────
+// ── Ingestão completa despachada por registry de provedores ─────────────────
+// Estas funções não conhecem provedores específicos: consultam o registry.
+// Importam de forma tardia para evitar ciclo (registry importa daqui).
 
 export async function ingestFarmClimate(
   supabase: SupabaseClient,
   farmId: string,
   options: { pastDays?: number; forecastDays?: number } = {},
 ): Promise<ObservationIngestionResult[]> {
+  const { getProvider, listProviderKeys } = await import("./provider-registry");
+
   const { data: stations, error } = await supabase
     .from("weather_stations")
     .select(
@@ -341,15 +349,19 @@ export async function ingestFarmClimate(
     )
     .eq("farm_id", farmId)
     .eq("active", true)
-    .eq("data_source", OPEN_METEO_PROVIDER);
+    .in("data_source", listProviderKeys());
 
   if (error) throw new Error(error.message);
 
   const results: ObservationIngestionResult[] = [];
   for (const s of (stations ?? []) as IngestionStation[]) {
-    const obs = await ingestOpenMeteoObservations(supabase, s, options.pastDays ?? 7);
+    const provider = getProvider(s.data_source);
+    if (!provider) continue; // nenhum handler registrado — pula silenciosamente
+    const obs = await provider.ingestObservations(supabase, s, options.pastDays ?? 7);
     results.push(obs);
-    await ingestOpenMeteoForecast(supabase, s, options.forecastDays ?? 7);
+    if (provider.ingestForecast) {
+      await provider.ingestForecast(supabase, s, options.forecastDays ?? 7);
+    }
   }
   return results;
 }
