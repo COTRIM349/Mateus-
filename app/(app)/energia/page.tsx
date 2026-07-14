@@ -464,10 +464,10 @@ function ConsumoTab({
             key={opt.value}
             type="button"
             onClick={() => setViewMode(opt.value)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
               viewMode === opt.value
                 ? "bg-brand-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-300 dark:hover:bg-graphite-600"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700/50 dark:text-gray-300 dark:hover:bg-graphite-600"
             }`}
           >
             {opt.label}
@@ -605,7 +605,7 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
                   ? "border-brand-300 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20"
                   : sim.savingsCost > 0
                     ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-900/20"
-                    : "border-gray-200 bg-white dark:border-graphite-700 dark:bg-graphite-800"
+                    : "border-gray-100 bg-white dark:border-graphite-700/50 dark:bg-graphite-800/60"
               }`}
             >
               <div className="mb-3 flex items-center justify-between">
@@ -634,7 +634,7 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
                 </div>
               </div>
               {sim.savingsCost > 0 && (
-                <div className="mt-3 rounded-lg bg-green-100 p-2 text-center dark:bg-green-900/30">
+                <div className="mt-3 rounded-xl bg-green-100 p-2 text-center dark:bg-green-900/30">
                   <span className="text-xs font-semibold text-green-700 dark:text-green-400">
                     Economia: R$ {sim.savingsCost.toFixed(2)} ({sim.savingsPct.toFixed(1)}%)
                   </span>
@@ -708,9 +708,9 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
               )}
             </div>
             <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">{sug.title}</h4>
-            <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">{sug.description}</p>
+            <p className="mb-3 text-xs text-gray-600 dark:text-gray-500">{sug.description}</p>
             {sug.estimatedSavings > 0 && (
-              <div className="flex items-center gap-3 rounded-lg bg-white/60 p-2 dark:bg-graphite-800/60">
+              <div className="flex items-center gap-3 rounded-xl bg-white/60 p-2 dark:bg-graphite-800/60">
                 <div>
                   <p className="text-xs text-graphite-400 dark:text-gray-500">Economia estimada</p>
                   <p className="text-sm font-bold text-green-600 dark:text-green-400">
@@ -734,19 +734,19 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
       <Card>
         <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Resumo de Otimização</h3>
         <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
+          <div className="rounded-xl bg-green-50/80 p-3 dark:bg-green-900/20">
             <p className="text-xs text-graphite-400 dark:text-gray-500">Economia potencial total</p>
             <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">
               R$ {suggestions.reduce((s, sug) => s + sug.estimatedSavings, 0).toFixed(2)}
             </p>
           </div>
-          <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
+          <div className="rounded-xl bg-blue-50/80 p-3 dark:bg-blue-900/20">
             <p className="text-xs text-graphite-400 dark:text-gray-500">Sugestões acionáveis</p>
             <p className="mt-1 text-lg font-bold text-blue-600 dark:text-blue-400">
               {suggestions.filter((s) => s.actionable).length}
             </p>
           </div>
-          <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
+          <div className="rounded-xl bg-amber-50/80 p-3 dark:bg-amber-900/20">
             <p className="text-xs text-graphite-400 dark:text-gray-500">Impacto alto</p>
             <p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-400">
               {suggestions.filter((s) => s.impact === "alto").length}

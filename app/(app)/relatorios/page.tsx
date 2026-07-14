@@ -523,7 +523,7 @@ function ReportPreview({
         return <p className="py-8 text-center text-sm text-gray-400">Sem dados de consumo energético por pivô.</p>;
       }
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniKPI label="Pivôs operando" value={`${byPivot.length}`} />
             <MiniKPI label="Volume total" value={`${formatNumber(farmTotals.totalVolumeM3)} m³`} />
@@ -533,17 +533,17 @@ function ReportPreview({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-sm">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-graphite-700">
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Pivô</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">kWh</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">Custo</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">m³</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">Horas</th>
+                <tr className="border-b border-gray-100 dark:border-graphite-700/50">
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-graphite-400">Pivô</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">kWh</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">Custo</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">m³</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">Horas</th>
                 </tr>
               </thead>
               <tbody>
                 {byPivot.slice(0, 10).map((p) => (
-                  <tr key={p.groupKey} className="border-b border-gray-100 dark:border-graphite-800">
+                  <tr key={p.groupKey} className="border-b border-gray-100/80 dark:border-graphite-800/60">
                     <td className="px-3 py-2 font-medium text-graphite-900 dark:text-white">{p.groupLabel}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{formatNumber(p.totalKwh)}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{formatBRL(p.totalCost)}</td>
@@ -560,7 +560,7 @@ function ReportPreview({
     case "semanal":
     case "mensal":
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <MiniKPI label="Registros" value={`${balanceSummary?.days ?? 0}`} />
             <MiniKPI label="Precipitação" value={`${formatNumber(balanceSummary?.totalPrecipitation ?? 0, 1)} mm`} />
@@ -590,7 +590,7 @@ function ReportPreview({
         return <p className="py-8 text-center text-sm text-gray-400">Sem dados de consumo por cultura.</p>;
       }
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {byCulture.map((c) => (
               <MiniKPI key={c.groupKey} label={c.groupLabel} value={formatBRL(c.totalCost)} />
@@ -617,7 +617,7 @@ function ReportPreview({
         return <p className="py-8 text-center text-sm text-gray-400">Sem dados energéticos/financeiros.</p>;
       }
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <MiniKPI label="Total kWh" value={formatNumber(farmTotals.totalKwh)} />
             <MiniKPI label="Ponta" value={`${formatPercent(farmTotals.peakPct)}`} />
@@ -644,7 +644,7 @@ function ReportPreview({
 
     case "executivo":
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniKPI label="Efic. irrigação" value={kpis ? formatPercent(kpis.irrigationEfficiency) : "—"} />
             <MiniKPI label="ARM médio" value={kpis ? formatPercent(kpis.avgArm) : "—"} />
@@ -653,11 +653,11 @@ function ReportPreview({
           </div>
           {recommendations.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Top 5 — Prioridade</p>
+              <p className="mb-2 text-xs font-semibold uppercase text-graphite-400 dark:text-gray-500">Top 5 — Prioridade</p>
               {rankRecommendations(recommendations).slice(0, 5).map((r) => (
-                <div key={r.pivotId} className="flex items-center justify-between border-b border-gray-100 py-2 dark:border-graphite-800">
+                <div key={r.pivotId} className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-graphite-800/60">
                   <span className="text-sm text-graphite-900 dark:text-white">{r.pivotName}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
+                  <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
                     {PRIORITY_CONFIG[r.priority].label} ({r.priorityScore.toFixed(0)})
                   </span>
                 </div>
@@ -674,9 +674,9 @@ function ReportPreview({
 
 function MiniKPI({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 p-3 dark:border-graphite-700">
-      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="text-lg font-bold text-graphite-900 dark:text-white">{value}</p>
+    <div className="rounded-xl border border-gray-100 p-3 dark:border-graphite-700/50">
+      <p className="text-xs text-graphite-400 dark:text-gray-500">{label}</p>
+      <p className="text-lg font-bold tracking-tight text-graphite-900 dark:text-white">{value}</p>
     </div>
   );
 }
@@ -695,16 +695,16 @@ function TabHistorico({
   const dimensions = Object.entries(HISTORY_DIMENSION_CONFIG) as Array<[HistoryDimension, typeof HISTORY_DIMENSION_CONFIG[HistoryDimension]]>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap gap-2">
         {dimensions.map(([key, cfg]) => (
           <button
             key={key}
             onClick={() => onChangeDimension(key)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               dimension === key
                 ? "bg-brand-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-400 dark:hover:bg-graphite-600"
+                : "bg-gray-50/80 text-gray-600 hover:bg-gray-200 dark:bg-graphite-800/60 dark:text-gray-500 dark:hover:bg-graphite-600"
             }`}
           >
             {cfg.label}

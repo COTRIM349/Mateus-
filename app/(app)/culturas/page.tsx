@@ -753,7 +753,7 @@ function PhasesTab({
           <TextArea id="description" name="description" label="Observações" defaultValue={editing?.description ?? ""} />
 
           {warnings.length > 0 && (
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900/50 dark:bg-yellow-900/20">
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3.5 dark:border-yellow-900/50 dark:bg-yellow-900/20">
               {warnings.map((w, i) => (
                 <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">{w.message}</p>
               ))}

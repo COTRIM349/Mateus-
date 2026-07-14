@@ -814,7 +814,7 @@ function LancamentoTab({
           Selecione um pivô acima para lançar irrigação.
         </p>
       ) : (
-        <div className="grid max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid max-w-lg grid-cols-1 gap-5 sm:grid-cols-2">
           <Input
             label="Data"
             type="date"
@@ -841,7 +841,7 @@ function LancamentoTab({
             </Button>
           </div>
           {message && (
-            <p className={`col-span-full text-xs ${message.includes("sucesso") ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            <p className={`col-span-full rounded-xl p-3.5 text-xs ${message.includes("sucesso") ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"}`}>
               {message}
             </p>
           )}
