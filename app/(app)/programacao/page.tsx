@@ -533,7 +533,7 @@ export default function ProgramacaoPage() {
       />
 
       {error && (
-        <Card className="mb-4 border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-900/10">
+        <Card className="mb-4 border-red-200 bg-red-50 p-3.5 dark:border-red-900 dark:bg-red-900/20">
           <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </Card>
       )}
@@ -597,7 +597,7 @@ function CentralTab({
   }
 
   if (generating) {
-    return <Card className="py-8 text-center text-sm text-gray-500">Analisando pivôs e gerando programação...</Card>;
+    return <Card className="py-8 text-center text-sm text-graphite-400">Analisando pivôs e gerando programação...</Card>;
   }
 
   if (!schedule) return null;
@@ -610,7 +610,7 @@ function CentralTab({
     <div className="space-y-5">
       {/* Status & Summary */}
       <div className="flex flex-wrap items-center gap-3">
-        <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">
+        <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
           Programação {schedule.scheduleDate}
         </h3>
         <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-medium ${statusCfg.bgClass}`}>
@@ -706,7 +706,7 @@ function CentralTab({
 
       {/* Blocked slots */}
       {blockedSlots.length > 0 && (
-        <Card className="border-amber-200 dark:border-amber-900">
+        <Card className="border-amber-100 dark:border-amber-900/50">
           <h4 className="mb-5 text-sm font-semibold tracking-tight text-amber-700 dark:text-amber-400">Pivôs Bloqueados ({blockedSlots.length})</h4>
           {blockedSlots.map((s) => (
             <div key={s.pivotId} className="mb-2 flex items-center justify-between text-xs">
@@ -727,7 +727,7 @@ function CentralTab({
 
 function TimelineVisual({ slots }: { slots: ScheduleSlot[] }) {
   if (slots.length === 0) {
-    return <p className="text-xs text-gray-500">Nenhum slot ativo.</p>;
+    return <p className="text-xs text-graphite-400">Nenhum slot ativo.</p>;
   }
 
   const timeToMin = (t: string) => {
@@ -764,7 +764,7 @@ function TimelineVisual({ slots }: { slots: ScheduleSlot[] }) {
       {/* Peak hour marker */}
       <div className="relative h-2">
         <div
-          className="absolute h-full rounded bg-red-200 opacity-40 dark:bg-red-900/30"
+          className="absolute h-full rounded-lg bg-red-200 opacity-40 dark:bg-red-900/30"
           style={{
             left: `${Math.max(0, ((18 * 60 - minTime) / range) * 100)}%`,
             width: `${Math.min(100, ((3 * 60) / range) * 100)}%`,
@@ -781,7 +781,7 @@ function TimelineVisual({ slots }: { slots: ScheduleSlot[] }) {
         return (
           <div key={slot.pivotId} className="relative h-6">
             <div
-              className={`absolute h-full rounded ${colors[i % colors.length]} flex items-center overflow-hidden px-1`}
+              className={`absolute h-full rounded-lg ${colors[i % colors.length]} flex items-center overflow-hidden px-1`}
               style={{ left: `${left}%`, width: `${Math.max(width, 2)}%` }}
               title={`${slot.pivotName}: ${slot.startTime}–${slot.endTime} (${slot.grossDepth.toFixed(1)} mm)`}
             >
@@ -871,7 +871,7 @@ function RecommendationsTab({
       </div>
 
       {generating ? (
-        <Card className="py-8 text-center text-sm text-gray-500">Analisando...</Card>
+        <Card className="py-8 text-center text-sm text-graphite-400">Analisando...</Card>
       ) : (
         <div className="space-y-3">
           {recommendations.map((rec) => (
@@ -891,10 +891,10 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
   return (
     <Card className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
-        <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{rec.pivotName}</h3>
+        <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">{rec.pivotName}</h3>
         <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${opCfg.bgClass}`}>{opCfg.label}</span>
         <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${priCfg.bgClass}`}>{priCfg.label}</span>
-        <span className="ml-auto text-xs text-gray-500">Score: {rec.priorityScore.toFixed(0)}/100</span>
+        <span className="ml-auto text-xs text-graphite-400">Score: {rec.priorityScore.toFixed(0)}/100</span>
       </div>
       <p className="text-xs text-gray-600 dark:text-gray-300">{rec.reason}</p>
       <div className="flex flex-wrap gap-4 text-xs text-graphite-400 dark:text-gray-500">
@@ -974,26 +974,26 @@ function ScenarioCard({ scenario }: { scenario: SimulationScenario }) {
   return (
     <Card className="flex flex-col gap-3">
       <div>
-        <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">{scenario.name}</h4>
+        <h4 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">{scenario.name}</h4>
         <p className="text-xs text-graphite-400 dark:text-gray-500">{scenario.description}</p>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
-          <span className="text-gray-500">Lâmina</span>
+          <span className="text-graphite-400">Lâmina</span>
           <div className="font-semibold text-graphite-900 dark:text-white">{scenario.irrigationDepth > 0 ? `${scenario.irrigationDepth.toFixed(1)} mm` : "—"}</div>
         </div>
         <div>
-          <span className="text-gray-500">ARM Projetado</span>
+          <span className="text-graphite-400">ARM Projetado</span>
           <div className="font-semibold text-graphite-900 dark:text-white">{scenario.projectedArm.toFixed(1)} mm ({armPct}%)</div>
         </div>
         <div>
-          <span className="text-gray-500">Status</span>
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${statusCfg.bgClass}`}>
+          <span className="text-graphite-400">Status</span>
+          <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${statusCfg.bgClass}`}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" />{statusCfg.label}
           </span>
         </div>
         <div>
-          <span className="text-gray-500">Risco</span>
+          <span className="text-graphite-400">Risco</span>
           <div className={`font-semibold ${scenario.projectedRisk > 50 ? "text-red-600" : scenario.projectedRisk > 20 ? "text-amber-600" : "text-green-600"}`}>{scenario.projectedRisk.toFixed(0)}%</div>
         </div>
       </div>
@@ -1055,7 +1055,7 @@ function HistoryTab({
     },
   ];
 
-  if (loading) return <Card className="py-8 text-center text-sm text-gray-500">Carregando...</Card>;
+  if (loading) return <Card className="py-8 text-center text-sm text-graphite-400">Carregando...</Card>;
 
   if (history.length === 0) {
     return <Card className="py-12 text-center"><p className="text-graphite-400 dark:text-gray-500">Nenhuma recomendação registrada.</p></Card>;

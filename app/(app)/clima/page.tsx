@@ -565,46 +565,46 @@ function HistoryTab() {
         </div>
 
         {summary && (
-          <div className="mb-4 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-graphite-700 dark:bg-graphite-800 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-graphite-700/50 dark:bg-graphite-800/60 sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Período</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Período</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.days} dias</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Temp. média</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Temp. média</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgTemp}°C</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Chuva total</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Chuva total</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.totalPrecip} mm</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">ET₀ média</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">ET₀ média</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgET0} mm/dia</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">ET₀ acumulada</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">ET₀ acumulada</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.totalET0} mm</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Chuva efetiva</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Chuva efetiva</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.totalEffPrecip} mm</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">UR média</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">UR média</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgHumidity}%</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Vento médio</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Vento médio</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgWind} m/s</p>
             </div>
           </div>
         )}
 
         {loading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
         ) : readings.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhum dado climático encontrado para o período selecionado.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum dado climático encontrado para o período selecionado.</p>
         ) : (
           <Table columns={columns} data={readings} getKey={(r) => r.id} />
         )}
@@ -672,7 +672,7 @@ function ForecastTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para ver a previsão.
         </p>
       </Card>
@@ -694,13 +694,13 @@ function ForecastTab() {
 
   return (
     <Card>
-      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <div className="mb-3 text-xs text-graphite-400 dark:text-gray-500">
         Previsão meteorológica é armazenada separadamente das observações e nunca as sobrescreve.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
         </p>
       ) : (
@@ -757,7 +757,7 @@ function DailySelectionTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para ver a seleção diária.
         </p>
       </Card>
@@ -775,13 +775,13 @@ function DailySelectionTab() {
 
   return (
     <Card>
-      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <div className="mb-3 text-xs text-graphite-400 dark:text-gray-500">
         A fonte utilizada pelo balanço hídrico em cada dia é registrada aqui para auditoria.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma seleção registrada ainda. As seleções são criadas quando a ingestão climática executa.
         </p>
       ) : (
@@ -830,7 +830,7 @@ function IngestionRunsTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para ver as sincronizações.
         </p>
       </Card>
@@ -844,7 +844,7 @@ function IngestionRunsTab() {
         : s === "partial"
           ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
           : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-    return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{s}</span>;
+    return <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>{s}</span>;
   };
 
   const columns: Column<IngestionRunRow>[] = [
@@ -860,13 +860,13 @@ function IngestionRunsTab() {
 
   return (
     <Card>
-      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <div className="mb-3 text-xs text-graphite-400 dark:text-gray-500">
         Log das execuções de ingestão climática automática.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma execução registrada ainda.
         </p>
       ) : (
@@ -881,13 +881,13 @@ function IngestionRunsTab() {
 
 function StatBox({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-graphite-700 dark:bg-graphite-800">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+    <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-graphite-700/50 dark:bg-graphite-800/60">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
         {label}
       </p>
       <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
         {value}
-        {unit ? <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">{unit}</span> : null}
+        {unit ? <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">{unit}</span> : null}
       </p>
     </div>
   );
@@ -951,7 +951,7 @@ function VirtualStationTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para visualizar a estação virtual.
         </p>
       </Card>
@@ -961,7 +961,7 @@ function VirtualStationTab() {
   if (loading) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
       </Card>
     );
   }
@@ -969,18 +969,18 @@ function VirtualStationTab() {
   if (!snapshot) {
     return (
       <Card>
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">
+            <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
               Nenhuma estação virtual cadastrada
             </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-graphite-400 dark:text-gray-500">
               A estação virtual usa as coordenadas da fazenda para buscar dados climáticos automaticamente
               via Open-Meteo, servindo de fallback quando não há estação física com dados para o dia.
             </p>
           </div>
           {message && (
-            <p className={message.type === "success" ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            <p className={message.type === "success" ? "rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400" : "rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"}>
               {message.text}
             </p>
           )}

@@ -984,8 +984,8 @@ function TabIndicadores({
 
 function SummaryRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex items-center justify-between border-b border-gray-100 py-2 dark:border-graphite-800">
-      <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+    <div className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-graphite-800/60">
+      <span className="text-sm text-gray-600 dark:text-gray-500">{label}</span>
       <span className={`text-sm font-semibold ${
         highlight ? "text-red-600 dark:text-red-400" : "text-graphite-900 dark:text-white"
       }`}>
@@ -1021,19 +1021,19 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
 
   const columns: Column<AuditLogEntry>[] = [
     { header: "Data/Hora", render: (r) => (
-      <span className="text-xs text-gray-600 dark:text-gray-400">
+      <span className="text-xs text-gray-600 dark:text-gray-500">
         {new Date(r.createdAt).toLocaleString("pt-BR")}
       </span>
     )},
     { header: "Usuário", render: (r) => <span className="font-medium text-graphite-900 dark:text-white">{r.userName}</span> },
     { header: "Ação", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${AUDIT_ACTION_CONFIG[r.action].bgClass}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${AUDIT_ACTION_CONFIG[r.action].bgClass}`}>
         {AUDIT_ACTION_CONFIG[r.action].label}
       </span>
     )},
     { header: "Entidade", render: (r) => (
       <div>
-        <span className="text-xs uppercase text-gray-500 dark:text-gray-400">{r.entityType}</span>
+        <span className="text-xs uppercase text-graphite-400 dark:text-gray-500">{r.entityType}</span>
         <p className="text-sm text-graphite-900 dark:text-white">{r.entityName}</p>
       </div>
     )},
@@ -1043,7 +1043,7 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
       return (
         <div className="max-w-xs">
           {keys.slice(0, 2).map((k) => (
-            <p key={k} className="truncate text-xs text-gray-500 dark:text-gray-400">
+            <p key={k} className="truncate text-xs text-graphite-400 dark:text-gray-500">
               <span className="font-medium">{k}:</span> {String((r.changes[k] as Record<string, unknown>).from)} → {String((r.changes[k] as Record<string, unknown>).to)}
             </p>
           ))}
@@ -1054,36 +1054,36 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {actions.slice(0, 6).map(([key, cfg]) => (
           <button
             key={key}
             onClick={() => setFilterAction(filterAction === key ? "all" : key)}
-            className={`rounded-lg border p-3 text-center transition-all ${
+            className={`rounded-xl border p-3 text-center transition-all ${
               filterAction === key
                 ? "border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-900/20"
-                : "border-gray-200 hover:border-gray-300 dark:border-graphite-700 dark:hover:border-graphite-600"
+                : "border-gray-100 hover:border-gray-300 dark:border-graphite-700/50 dark:hover:border-graphite-600"
             }`}
           >
-            <p className="text-lg font-bold text-graphite-900 dark:text-white">{actionStats[key] ?? 0}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</p>
+            <p className="text-lg font-bold tracking-tight text-graphite-900 dark:text-white">{actionStats[key] ?? 0}</p>
+            <p className="text-xs text-graphite-400 dark:text-gray-500">{cfg.label}</p>
           </button>
         ))}
       </div>
 
       <Card>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-5 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">Log de Auditoria</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h3 className="text-lg font-semibold tracking-tight text-graphite-900 dark:text-white">Log de Auditoria</h3>
+            <p className="text-sm text-graphite-400 dark:text-gray-500">
               {filtered.length} registro(s) {filterAction !== "all" ? `— filtrado por: ${AUDIT_ACTION_CONFIG[filterAction].label}` : ""}
             </p>
           </div>
           {filterAction !== "all" && (
             <button
               onClick={() => setFilterAction("all")}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 dark:border-graphite-600 dark:text-gray-400 dark:hover:bg-graphite-800"
+              className="rounded-xl border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50/80 dark:border-graphite-600 dark:text-gray-500 dark:hover:bg-graphite-800/60"
             >
               Limpar filtro
             </button>
