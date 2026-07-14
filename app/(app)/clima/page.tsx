@@ -1187,6 +1187,13 @@ interface MbDiagnostic {
   httpStatus: number | null;
   latencyMs: number;
   error: string | null;
+  envDebug?: {
+    envVarExists: boolean;
+    rawLength: number;
+    trimmedLength: number;
+    hasWhitespace: boolean;
+    prefix: string;
+  };
 }
 
 interface MbCacheEntry {
@@ -1400,6 +1407,16 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
             )}
             {diagnostic.error && (
               <div className="sm:col-span-3 text-red-600 dark:text-red-400"><span className="text-gray-500 dark:text-gray-400">Erro:</span> {diagnostic.error}</div>
+            )}
+            {diagnostic.envDebug && (
+              <>
+                <div><span className="text-gray-500 dark:text-gray-400">Env var existe:</span> {diagnostic.envDebug.envVarExists ? "sim" : "não"}</div>
+                <div><span className="text-gray-500 dark:text-gray-400">Tamanho:</span> {diagnostic.envDebug.trimmedLength} chars</div>
+                <div><span className="text-gray-500 dark:text-gray-400">Prefixo:</span> {diagnostic.envDebug.prefix}</div>
+                {diagnostic.envDebug.hasWhitespace && (
+                  <div className="sm:col-span-3 text-yellow-600 dark:text-yellow-400">⚠ A chave contém espaços extras (foram removidos automaticamente)</div>
+                )}
+              </>
             )}
           </div>
         </div>
