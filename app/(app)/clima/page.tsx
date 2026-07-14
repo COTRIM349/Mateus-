@@ -55,6 +55,108 @@ const climaTabs = [
   { id: "sync", label: "Sincronizações" },
 ];
 
+// ── Visual Dashboard Components ─────────────────────────────────────────
+
+function ClimateGauge({ value, max, color, size = 72 }: {
+  value: number;
+  max: number;
+  color: string;
+  size?: number;
+}) {
+  const r = 26;
+  const c = 2 * Math.PI * r;
+  const pct = Math.min(Math.max(value / max, 0), 1);
+  const offset = c * (1 - pct);
+  return (
+    <svg width={size} height={size} viewBox="0 0 72 72">
+      <circle cx="36" cy="36" r={r} fill="none" strokeWidth="5"
+        className="stroke-gray-100 dark:stroke-white/[0.06]" />
+      <circle cx="36" cy="36" r={r} fill="none" strokeWidth="5"
+        stroke={color} strokeDasharray={c} strokeDashoffset={offset}
+        strokeLinecap="round" transform="rotate(-90 36 36)"
+        style={{ transition: "stroke-dashoffset 0.8s ease-out" }} />
+    </svg>
+  );
+}
+
+function MetricCard({ icon, label, value, unit, gauge, accentColor, sub }: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  unit: string;
+  gauge?: { value: number; max: number; color: string };
+  accentColor: string;
+  sub?: React.ReactNode;
+}) {
+  return (
+    <div className="group relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 transition-shadow hover:shadow-card dark:border-white/[0.06] dark:bg-graphite-800 dark:hover:shadow-none">
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: `linear-gradient(90deg, ${accentColor}, transparent)` }} />
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex items-center gap-1.5">
+            {icon}
+            <span className="text-[10px] font-bold uppercase tracking-widest text-graphite-400 dark:text-gray-500">{label}</span>
+          </div>
+          <p className="text-[22px] font-extrabold leading-none tracking-tight text-graphite-900 dark:text-white">
+            {value}
+            <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">{unit}</span>
+          </p>
+          {sub && <div className="mt-2">{sub}</div>}
+        </div>
+        {gauge && <ClimateGauge value={gauge.value} max={gauge.max} color={gauge.color} />}
+      </div>
+    </div>
+  );
+}
+
+function WeatherIcon({ precipitation, radiation, size = 36 }: {
+  precipitation?: number | null;
+  radiation?: number | null;
+  size?: number;
+}) {
+  const precip = precipitation ?? 0;
+  const rad = radiation ?? 20;
+
+  if (precip > 5) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <path d="M10.8 20a7.2 7.2 0 01-.53-14.4A9.9 9.9 0 0128.8 15.8h.72a5 5 0 01.18 10H10.8z" className="fill-gray-300 dark:fill-gray-600" />
+        <path d="M13 27l-1.5 4M18 27l-1.5 4M23 27l-1.5 4" className="stroke-blue-500 dark:stroke-blue-400" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (precip > 0) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <path d="M10.8 22a7.2 7.2 0 01-.53-14.4A9.9 9.9 0 0128.8 17.8h.72a5 5 0 01.18 10H10.8z" className="fill-gray-300 dark:fill-gray-600" />
+        <path d="M15.5 29l-1 3M20.5 29l-1 3" className="stroke-blue-400 dark:stroke-blue-300" strokeWidth="1.5" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (rad < 12) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <path d="M9 24a8.1 8.1 0 01-.6-16.2A11.25 11.25 0 0130.6 19h.9a5.6 5.6 0 010 11.2H9z" className="fill-gray-300 dark:fill-gray-600" />
+      </svg>
+    );
+  }
+  if (rad < 20) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <circle cx="14" cy="12" r="6" className="fill-amber-400 dark:fill-amber-300" />
+        <path d="M8.5 8l-1.5-1.5M14 4V2M19.5 8l1.5-1.5M8.5 16l-1.5 1.5" className="stroke-amber-400 dark:stroke-amber-300" strokeWidth="1.5" strokeLinecap="round" />
+        <path d="M12 26a6.3 6.3 0 01-.46-12.6A8.7 8.7 0 0127 20.6h.63a4.4 4.4 0 010 8.8H12z" className="fill-gray-300 dark:fill-gray-600" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <circle cx="18" cy="18" r="7" className="fill-amber-400 dark:fill-amber-300" />
+      <path d="M18 5v3M18 28v3M5 18h3M28 18h3M9.4 9.4l2.1 2.1M24.5 24.5l2.1 2.1M9.4 26.6l2.1-2.1M24.5 11.5l2.1-2.1" className="stroke-amber-400 dark:stroke-amber-300" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function ClimaPage() {
   const [activeTab, setActiveTab] = useState("virtual");
 
@@ -679,34 +781,102 @@ function ForecastTab() {
     );
   }
 
-  const columns: Column<ForecastRow>[] = [
-    { header: "Alvo", render: (r) => new Date(r.target_date + "T12:00:00").toLocaleDateString("pt-BR") },
-    { header: "Horiz.", render: (r) => `D+${r.horizon_days}`, align: "center" },
-    { header: "Emitida em", render: (r) => new Date(r.issued_at).toLocaleString("pt-BR") },
-    { header: "Provedor", render: (r) => r.provider },
-    { header: "T.máx", render: (r) => r.temp_max?.toFixed(1) ?? "—", align: "right" },
-    { header: "T.mín", render: (r) => r.temp_min?.toFixed(1) ?? "—", align: "right" },
-    { header: "Chuva (mm)", render: (r) => r.precipitation?.toFixed(1) ?? "—", align: "right" },
-    { header: "Prob. chuva", render: (r) => (r.precipitation_probability != null ? `${r.precipitation_probability.toFixed(0)}%` : "—"), align: "right" },
-    { header: "ET₀ fonte", render: (r) => r.et0_source?.toFixed(2) ?? "—", align: "right" },
-    { header: "ET₀ Cotrim", render: (r) => r.et0_calculated?.toFixed(2) ?? "—", align: "right" },
-  ];
+  const grouped = new Map<string, ForecastRow>();
+  for (const r of rows) {
+    const existing = grouped.get(r.target_date);
+    if (!existing || r.issued_at > existing.issued_at) {
+      grouped.set(r.target_date, r);
+    }
+  }
+  const dailyForecasts = Array.from(grouped.values())
+    .sort((a, b) => a.target_date.localeCompare(b.target_date))
+    .slice(0, 7);
+
+  const dayNames: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
 
   return (
-    <Card>
-      <div className="mb-3 text-xs text-graphite-400 dark:text-gray-500">
-        Previsão meteorológica é armazenada separadamente das observações e nunca as sobrescreve.
-      </div>
+    <>
+      <p className="mb-4 text-xs text-graphite-400 dark:text-gray-500">
+        Previsão meteorológica · Dados separados das observações
+      </p>
       {loading ? (
         <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-      ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-          Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
-        </p>
+      ) : dailyForecasts.length === 0 ? (
+        <Card>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
+            Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
+          </p>
+        </Card>
       ) : (
-        <Table columns={columns} data={rows} getKey={(r) => r.id} />
+        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+          {dailyForecasts.map((f) => {
+            const date = new Date(f.target_date + "T12:00:00");
+            const isToday = f.target_date === new Date().toISOString().slice(0, 10);
+            return (
+              <div
+                key={f.id}
+                className={`relative overflow-hidden rounded-2xl border p-4 text-center transition-shadow hover:shadow-card ${
+                  isToday
+                    ? "border-brand-200 bg-brand-50/50 dark:border-brand-700/30 dark:bg-brand-900/10"
+                    : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"
+                } dark:hover:shadow-none`}
+              >
+                {isToday && <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-brand-400/60 to-transparent" />}
+                <p className="text-[11px] font-bold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
+                  {dayNames[date.getDay()]}
+                </p>
+                <p className="text-[10px] text-graphite-300 dark:text-gray-600">
+                  {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                </p>
+                <div className="my-2.5 flex justify-center">
+                  <WeatherIcon precipitation={f.precipitation} radiation={f.solar_radiation} size={32} />
+                </div>
+                <div className="flex items-baseline justify-center gap-1.5">
+                  <span className="text-lg font-extrabold text-graphite-900 dark:text-white">
+                    {f.temp_max?.toFixed(0) ?? "—"}°
+                  </span>
+                  <span className="text-sm font-medium text-graphite-400 dark:text-gray-500">
+                    {f.temp_min?.toFixed(0) ?? "—"}°
+                  </span>
+                </div>
+                <div className="mx-auto mt-2 h-1.5 w-4/5 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-blue-400 via-amber-300 to-red-400"
+                    style={{ width: `${Math.min(Math.max(((f.temp_max ?? 30) - (f.temp_min ?? 15)) / 25 * 100, 20), 100)}%` }}
+                  />
+                </div>
+                <div className="mt-3 space-y-1.5">
+                  {f.precipitation != null && (
+                    <div className="flex items-center justify-center gap-1 text-[11px] text-graphite-500 dark:text-gray-400">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M5 1s-3 3.5-3 5.5a3 3 0 006 0C8 4.5 5 1 5 1z" className="fill-blue-400 dark:fill-blue-300" />
+                      </svg>
+                      {f.precipitation.toFixed(1)} mm
+                      {f.precipitation_probability != null && (
+                        <span className="text-graphite-300 dark:text-gray-600">({f.precipitation_probability.toFixed(0)}%)</span>
+                      )}
+                    </div>
+                  )}
+                  {f.wind_speed != null && (
+                    <div className="flex items-center justify-center gap-1 text-[11px] text-graphite-500 dark:text-gray-400">
+                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                        <path d="M1.5 3.5h5.5a1.5 1.5 0 000-3M1.5 6.5h4a1.2 1.2 0 010 2.4" className="stroke-cyan-500 dark:stroke-cyan-400" strokeWidth="1" strokeLinecap="round" fill="none" />
+                      </svg>
+                      {f.wind_speed.toFixed(1)} m/s
+                    </div>
+                  )}
+                  {(f.et0_calculated ?? f.et0_source) != null && (
+                    <div className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">
+                      ET₀ {((f.et0_calculated ?? f.et0_source) as number).toFixed(1)}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
-    </Card>
+    </>
   );
 }
 
@@ -1066,49 +1236,125 @@ function VirtualStationTab() {
         )}
       </Card>
 
-      <Card>
-        <div className="mb-5 flex items-center justify-between">
-          <h4 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Última leitura observada</h4>
+      <div>
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <h4 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Condições Atuais</h4>
           {r && (
-            <span className="text-xs text-graphite-400 dark:text-gray-500">
-              {new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}
-              {" · qualidade: "}
-              <span className={r.data_quality === "ok" ? "text-green-700 dark:text-green-400" : "text-yellow-700 dark:text-yellow-400"}>
-                {r.data_quality}
-              </span>
-              {" · origem: "}
-              <span className="font-medium">{r.origin}</span>
-            </span>
+            <div className="flex flex-wrap items-center gap-2 text-xs text-graphite-400 dark:text-gray-500">
+              <span>{new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}</span>
+              <span className="h-1 w-1 rounded-full bg-graphite-200 dark:bg-gray-600" />
+              <span>Qualidade: <span className={r.data_quality === "ok" ? "font-medium text-green-600 dark:text-green-400" : "font-medium text-yellow-600 dark:text-yellow-400"}>{r.data_quality}</span></span>
+              <span className="h-1 w-1 rounded-full bg-graphite-200 dark:bg-gray-600" />
+              <span>Origem: <span className="font-medium">{r.origin}</span></span>
+            </div>
           )}
         </div>
+
         {r ? (
           <>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatBox label="ET₀ (Cotrim)" value={fmt(r.et0_calculated, 2)} unit="mm/dia" />
-              <StatBox label="ET₀ (Open-Meteo)" value={fmt(r.et0_source, 2)} unit="mm/dia" />
-              <div className={`rounded-xl border p-3 ${
-                r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10
-                  ? "border-red-300 bg-red-50 dark:border-red-900/30 dark:bg-red-900/20"
-                  : "border-gray-100 bg-gray-50/80 dark:border-white/[0.06] dark:bg-white/[0.03]"
-              }`}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Diferença ET₀</p>
-                <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
-                  {r.et0_delta_pct != null ? `${r.et0_delta_pct >= 0 ? "+" : ""}${r.et0_delta_pct.toFixed(1)}` : "—"}
-                  {r.et0_delta_pct != null && <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">%</span>}
+              <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-800">
+                <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-400 via-amber-400 to-red-500" />
+                <div className="mb-2 flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <rect x="5.5" y="1" width="3" height="9" rx="1.5" className="fill-red-400" />
+                    <circle cx="7" cy="11.5" r="2" className="fill-red-500" />
+                  </svg>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-graphite-400 dark:text-gray-500">Temperatura</span>
+                </div>
+                <p className="text-[22px] font-extrabold leading-none tracking-tight text-graphite-900 dark:text-white">
+                  {fmt(r.temp_mean, 1)}<span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">°C</span>
                 </p>
-                <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">
+                <div className="relative mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
+                  <div
+                    className="absolute inset-y-0 rounded-full bg-gradient-to-r from-blue-400 via-amber-300 to-red-400"
+                    style={{
+                      left: `${Math.max(((r.temp_min ?? 0) / 50) * 100, 0)}%`,
+                      width: `${Math.min((((r.temp_max ?? 40) - (r.temp_min ?? 0)) / 50) * 100, 100)}%`,
+                    }}
+                  />
+                </div>
+                <div className="mt-1.5 flex justify-between text-[10px]">
+                  <span className="font-semibold text-blue-500 dark:text-blue-400">{fmt(r.temp_min, 1)}° min</span>
+                  <span className="font-semibold text-red-500 dark:text-red-400">{fmt(r.temp_max, 1)}° máx</span>
+                </div>
+              </div>
+
+              <MetricCard
+                icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1S3 5.5 3 8a4 4 0 008 0c0-2.5-4-7-4-7z" className="fill-blue-400 dark:fill-blue-300" /></svg>}
+                label="Umidade"
+                value={fmt(r.humidity, 1)}
+                unit="%"
+                accentColor="#3b82f6"
+                gauge={r.humidity != null ? { value: r.humidity, max: 100, color: "#3b82f6" } : undefined}
+              />
+
+              <MetricCard
+                icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 4h7a2 2 0 000-4M2 7h5.5a1.5 1.5 0 010 3M2 10h3.5a1.5 1.5 0 010 3" className="stroke-cyan-500 dark:stroke-cyan-400" strokeWidth="1.2" strokeLinecap="round" fill="none" /></svg>}
+                label="Vento"
+                value={fmt(r.wind_speed, 1)}
+                unit="m/s"
+                accentColor="#06b6d4"
+                gauge={r.wind_speed != null ? { value: r.wind_speed, max: 15, color: "#06b6d4" } : undefined}
+              />
+
+              <MetricCard
+                icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="3" className="fill-amber-400 dark:fill-amber-300" /><path d="M7 1v2M7 11v2M1 7h2M11 7h2M3 3l1.4 1.4M9.6 9.6L11 11M3 11l1.4-1.4M9.6 4.4L11 3" className="stroke-amber-400 dark:stroke-amber-300" strokeWidth="1.2" strokeLinecap="round" /></svg>}
+                label="Radiação Solar"
+                value={fmt(r.solar_radiation, 1)}
+                unit="MJ/m²"
+                accentColor="#f59e0b"
+                gauge={r.solar_radiation != null ? { value: r.solar_radiation, max: 35, color: "#f59e0b" } : undefined}
+              />
+            </div>
+
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <MetricCard
+                icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M3.5 10a3.5 3.5 0 017 0" className="stroke-brand-500 dark:stroke-brand-400" strokeWidth="1.5" strokeLinecap="round" fill="none" /><circle cx="7" cy="11.5" r="1.5" className="fill-brand-500 dark:fill-brand-400" /><path d="M7 2v2M3 4l1 1M11 4l-1 1" className="stroke-brand-500 dark:stroke-brand-400" strokeWidth="1.2" strokeLinecap="round" /></svg>}
+                label="ET₀ Cotrim"
+                value={fmt(r.et0_calculated, 2)}
+                unit="mm/dia"
+                accentColor="#1ea85b"
+                gauge={r.et0_calculated != null ? { value: r.et0_calculated, max: 12, color: "#1ea85b" } : undefined}
+              />
+
+              <MetricCard
+                icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><circle cx="7" cy="7" r="5" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1.2" fill="none" /><path d="M7 4v3l2 1.5" className="stroke-gray-400 dark:stroke-gray-500" strokeWidth="1.2" strokeLinecap="round" fill="none" /></svg>}
+                label="ET₀ Open-Meteo"
+                value={fmt(r.et0_source, 2)}
+                unit="mm/dia"
+                accentColor="#64748b"
+              />
+
+              <div className={`relative overflow-hidden rounded-2xl border p-4 ${
+                r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10
+                  ? "border-red-200 bg-red-50/50 dark:border-red-900/30 dark:bg-red-900/10"
+                  : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"
+              }`}>
+                <div className="absolute inset-x-0 top-0 h-1" style={{ background: r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10 ? "linear-gradient(90deg, #ef4444, transparent)" : "linear-gradient(90deg, #94a3b8, transparent)" }} />
+                <div className="mb-2 flex items-center gap-1.5">
+                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M2 7h10M7 2l5 5-5 5" className="stroke-graphite-400 dark:stroke-gray-500" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" fill="none" /></svg>
+                  <span className="text-[10px] font-bold uppercase tracking-widest text-graphite-400 dark:text-gray-500">Diferença ET₀</span>
+                </div>
+                <p className="text-[22px] font-extrabold leading-none tracking-tight text-graphite-900 dark:text-white">
+                  {r.et0_delta_pct != null ? `${r.et0_delta_pct >= 0 ? "+" : ""}${r.et0_delta_pct.toFixed(1)}` : "—"}
+                  <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">%</span>
+                </p>
+                <p className="mt-1.5 text-[10px] text-graphite-400 dark:text-gray-500">
                   Δ absoluto: {fmt(r.et0_delta, 2)} mm/dia
                 </p>
               </div>
-              <StatBox label="Chuva" value={fmt(r.precipitation, 1)} unit="mm" />
-              <StatBox label="Chuva efetiva" value={fmt(r.effective_precip, 1)} unit="mm" />
-              <StatBox label="Temp. média" value={fmt(r.temp_mean, 1)} unit="°C" />
-              <StatBox label="Temp. mín" value={fmt(r.temp_min, 1)} unit="°C" />
-              <StatBox label="Temp. máx" value={fmt(r.temp_max, 1)} unit="°C" />
-              <StatBox label="Umidade" value={fmt(r.humidity, 1)} unit="%" />
-              <StatBox label="Vento" value={fmt(r.wind_speed, 1)} unit="m/s" />
-              <StatBox label="Radiação" value={fmt(r.solar_radiation, 1)} unit="MJ/m²" />
+
+              <MetricCard
+                icon={<svg width="14" height="14" viewBox="0 0 14 14" fill="none"><path d="M7 1S3.5 5 3.5 7.5a3.5 3.5 0 007 0C10.5 5 7 1 7 1z" className="fill-indigo-400 dark:fill-indigo-300" /></svg>}
+                label="Chuva"
+                value={fmt(r.precipitation, 1)}
+                unit="mm"
+                accentColor="#818cf8"
+                sub={<span className="text-[10px] text-graphite-400 dark:text-gray-500">Efetiva: {fmt(r.effective_precip, 1)} mm</span>}
+              />
             </div>
+
             {r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10 && (
               <p className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3.5 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
                 Divergência acima de 10% entre ET₀ Cotrim e ET₀ Open-Meteo. Possíveis causas: altitude imprecisa, dados de radiação/umidade instáveis ou coordenada com contraste micrometeorológico local. Verifique a altitude e as leituras de radiação.
@@ -1116,11 +1362,13 @@ function VirtualStationTab() {
             )}
           </>
         ) : (
-          <p className="py-6 text-center text-sm text-graphite-400 dark:text-gray-500">
-            Nenhuma leitura observada ainda. Clique em &quot;Sincronizar agora&quot; para trazer os últimos 7 dias.
-          </p>
+          <Card>
+            <p className="py-6 text-center text-sm text-graphite-400 dark:text-gray-500">
+              Nenhuma leitura observada ainda. Clique em &quot;Sincronizar agora&quot; para trazer os últimos 7 dias.
+            </p>
+          </Card>
         )}
-      </Card>
+      </div>
 
       <MeteoblueCompareCard farmId={activeFarmId} />
 
