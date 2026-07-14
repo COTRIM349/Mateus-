@@ -23,7 +23,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
       <Sidebar />
       <div className="flex flex-1 flex-col lg:pl-64">
         <Topbar />
-        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-10">{children}</main>
+        <main className="flex-1 bg-gradient-to-b from-transparent via-transparent to-brand-50/30 px-4 py-8 dark:to-brand-950/5 sm:px-6 lg:px-10">{children}</main>
       </div>
     </div>
   );

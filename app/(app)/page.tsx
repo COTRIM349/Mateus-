@@ -50,9 +50,9 @@ export default function DashboardPage() {
       />
 
       {profile && implantation.foundationComplete && summary && (
-        <Card className="border-brand-100 bg-gradient-to-r from-brand-50 to-white dark:border-brand-800/30 dark:from-brand-900/20 dark:to-graphite-900">
+        <Card className="border-brand-200/60 bg-gradient-to-r from-brand-50 to-white dark:border-brand-500/20 dark:from-brand-900/30 dark:to-graphite-800">
           <div className="flex items-start gap-4">
-            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-glow">
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
               </svg>
@@ -127,7 +127,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Pivôs mais críticos</h3>
+          <h3 className="mb-5 text-[13px] font-bold tracking-tight text-graphite-900 dark:text-white">Pivôs mais críticos</h3>
           {summary.ranking.length > 0 ? (
             <div className="space-y-2">
               {summary.ranking.slice(0, 8).map((s, i) => (
@@ -140,7 +140,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
         </Card>
 
         <Card>
-          <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Prioridade de irrigação</h3>
+          <h3 className="mb-5 text-[13px] font-bold tracking-tight text-graphite-900 dark:text-white">Prioridade de irrigação</h3>
           {summary.priorityList.length > 0 ? (
             <div className="space-y-2">
               {summary.priorityList.map((s, i) => (

@@ -34,20 +34,20 @@ body {
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  @apply bg-graphite-600/30;
+  @apply bg-white/10;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  @apply bg-graphite-500/50;
+  @apply bg-white/20;
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 .animate-in {
-  animation: fadeIn 0.2s ease-out;
+  animation: fadeIn 0.25s ease-out;
 }
 
 @media (prefers-reduced-motion: reduce) {
