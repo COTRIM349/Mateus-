@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -1122,6 +1122,8 @@ function VirtualStationTab() {
         )}
       </Card>
 
+      <MeteoblueCompareCard farmId={activeFarmId} />
+
       {run && (
         <Card>
           <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">Última execução de ingestão (Open-Meteo)</h4>
@@ -1158,3 +1160,313 @@ function VirtualStationTab() {
   );
 }
 
+// ── Comparação meteoblue ────────────────────────────────────────────────────
+
+interface MbComparisonRow {
+  date: string;
+  om: {
+    temp_max: number | null;
+    temp_min: number | null;
+    humidity: number | null;
+    wind_speed: number | null;
+    precipitation: number | null;
+  } | null;
+  mb: {
+    temp_max: number | null;
+    temp_min: number | null;
+    humidity: number | null;
+    wind_speed: number | null;
+    precipitation: number | null;
+    pressure_hpa: number | null;
+  } | null;
+}
+
+interface MbDiagnostic {
+  keyPresent: boolean;
+  status: string;
+  httpStatus: number | null;
+  latencyMs: number;
+  error: string | null;
+}
+
+interface MbCacheEntry {
+  data: MbComparisonRow[];
+  mbExists: boolean;
+  ts: number;
+}
+const MB_CACHE = new Map<string, MbCacheEntry>();
+const MB_TTL_MS = 5 * 60 * 1000;
+const MB_TIMEOUT_MS = 8000;
+
+function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
+  const supabase = createClient();
+  const [testing, setTesting] = useState(false);
+  const [diagnosing, setDiagnosing] = useState(false);
+  const [loadingComparison, setLoadingComparison] = useState(false);
+  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [diagnostic, setDiagnostic] = useState<MbDiagnostic | null>(null);
+  const [comparison, setComparison] = useState<MbComparisonRow[]>([]);
+  const [mbStationExists, setMbStationExists] = useState<boolean | null>(null);
+  const testAbortRef = useRef<AbortController | null>(null);
+  const diagAbortRef = useRef<AbortController | null>(null);
+
+  const loadComparison = useCallback(
+    async (options: { force?: boolean } = {}) => {
+      if (!farmId) return;
+      if (!options.force) {
+        const cached = MB_CACHE.get(farmId);
+        if (cached && Date.now() - cached.ts < MB_TTL_MS) {
+          setComparison(cached.data);
+          setMbStationExists(cached.mbExists);
+          return;
+        }
+      }
+      setLoadingComparison(true);
+      try {
+        const { data: stations, error: stErr } = await supabase
+          .from("weather_stations")
+          .select("id, data_source")
+          .eq("farm_id", farmId)
+          .in("data_source", ["open_meteo", "meteoblue"])
+          .eq("station_type", "virtual");
+        if (stErr) {
+          setComparison([]);
+          setMbStationExists(false);
+          setLoadingComparison(false);
+          return;
+        }
+        const om = stations?.find((s) => s.data_source === "open_meteo");
+        const mb = stations?.find((s) => s.data_source === "meteoblue");
+        const mbExists = Boolean(mb);
+        setMbStationExists(mbExists);
+        if (!om && !mb) {
+          setComparison([]);
+          MB_CACHE.set(farmId, { data: [], mbExists: false, ts: Date.now() });
+          setLoadingComparison(false);
+          return;
+        }
+        const ids = [om?.id, mb?.id].filter(Boolean) as string[];
+        const since = new Date();
+        since.setUTCDate(since.getUTCDate() - 7);
+
+        const { data: rows, error: rErr } = await supabase
+          .from("weather_readings")
+          .select("date, station_id, origin, temp_max, temp_min, humidity, wind_speed, precipitation")
+          .in("station_id", ids)
+          .gte("date", since.toISOString().slice(0, 10))
+          .order("date", { ascending: false })
+          .limit(20);
+
+        if (rErr || !rows) {
+          setComparison([]);
+          MB_CACHE.set(farmId, { data: [], mbExists, ts: Date.now() });
+          setLoadingComparison(false);
+          return;
+        }
+
+        const byDate = new Map<string, MbComparisonRow>();
+        for (const r of rows) {
+          const d = r.date as string;
+          if (!byDate.has(d)) byDate.set(d, { date: d, om: null, mb: null });
+          const entry = byDate.get(d)!;
+          const base = {
+            temp_max: (r.temp_max as number | null) ?? null,
+            temp_min: (r.temp_min as number | null) ?? null,
+            humidity: (r.humidity as number | null) ?? null,
+            wind_speed: (r.wind_speed as number | null) ?? null,
+            precipitation: (r.precipitation as number | null) ?? null,
+          };
+          if (r.origin === "open_meteo") entry.om = base;
+          if (r.origin === "meteoblue") entry.mb = { ...base, pressure_hpa: null };
+        }
+        const built = Array.from(byDate.values());
+        setComparison(built);
+        MB_CACHE.set(farmId, { data: built, mbExists, ts: Date.now() });
+      } catch {
+        setComparison([]);
+      }
+      setLoadingComparison(false);
+    },
+    [farmId, supabase],
+  );
+
+  useEffect(() => {
+    if (!farmId) return;
+    const id = setTimeout(() => loadComparison(), 0);
+    return () => clearTimeout(id);
+  }, [farmId, loadComparison]);
+
+  const runDiagnostic = async () => {
+    if (diagnosing) return;
+    diagAbortRef.current?.abort();
+    const ac = new AbortController();
+    diagAbortRef.current = ac;
+    const timeoutId = setTimeout(() => ac.abort(), MB_TIMEOUT_MS);
+    setDiagnosing(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/climate/meteoblue-diagnostic", { signal: ac.signal });
+      const json = (await res.json()) as MbDiagnostic;
+      setDiagnostic(json);
+    } catch (err) {
+      const isAbort = err instanceof Error && (err.name === "AbortError" || /aborted/i.test(err.message));
+      setMessage({ type: "error", text: isAbort ? "Verificação cancelada (timeout)." : err instanceof Error ? err.message : String(err) });
+    } finally {
+      clearTimeout(timeoutId);
+      setDiagnosing(false);
+    }
+  };
+
+  const runTest = async () => {
+    if (!farmId || testing) return;
+    testAbortRef.current?.abort();
+    const ac = new AbortController();
+    testAbortRef.current = ac;
+    const timeoutId = setTimeout(() => ac.abort(), MB_TIMEOUT_MS);
+    setTesting(true);
+    setMessage(null);
+    try {
+      const res = await fetch("/api/climate/test-meteoblue", {
+        method: "POST",
+        signal: ac.signal,
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ farmId }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+      const runs = (json.runs ?? []) as Array<{ status: string; rowsInserted: number; rowsUpdated: number; rowsSkipped: number; errorMessage: string | null }>;
+      const inserted = runs.reduce((s: number, r: { rowsInserted: number }) => s + r.rowsInserted, 0);
+      const updated = runs.reduce((s: number, r: { rowsUpdated: number }) => s + r.rowsUpdated, 0);
+      const runStatus = runs[0]?.status ?? "unknown";
+      const errMsg = runs[0]?.errorMessage;
+      const created = json.virtualStationCreated ? "Estação virtual meteoblue criada. " : "";
+      setMessage({ type: runStatus === "success" ? "success" : "error", text: `${created}${inserted} inseridas · ${updated} atualizadas · status ${runStatus}${errMsg ? ` · erro: ${errMsg}` : ""}` });
+      MB_CACHE.delete(farmId);
+      await loadComparison({ force: true });
+    } catch (err) {
+      const isAbort = err instanceof Error && (err.name === "AbortError" || /aborted/i.test(err.message));
+      setMessage({ type: "error", text: isAbort ? "Teste cancelado (timeout)." : err instanceof Error ? err.message : String(err) });
+    } finally {
+      clearTimeout(timeoutId);
+      setTesting(false);
+    }
+  };
+
+  const diffColor = (v: number | null) => {
+    if (v == null) return "";
+    const abs = Math.abs(v);
+    if (abs >= 3) return "text-red-600 dark:text-red-400 font-semibold";
+    if (abs >= 1.5) return "text-yellow-700 dark:text-yellow-400";
+    return "text-gray-500 dark:text-gray-400";
+  };
+
+  const fmtN = (v: number | null, digits = 1) => (v == null ? "—" : v.toFixed(digits));
+  const diff = (a: number | null, b: number | null) => (a != null && b != null ? b - a : null);
+  const fmtD = (v: number | null, digits = 1) => (v == null ? "—" : (v >= 0 ? "+" : "") + v.toFixed(digits));
+
+  return (
+    <Card>
+      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">Comparação meteoblue</h4>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+            Fonte secundária de comparação. Open-Meteo (P5) continua como principal do balanço hídrico. meteoblue entra como P6 apenas para comparação.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="secondary" disabled={diagnosing} onClick={runDiagnostic}>
+            {diagnosing ? "Verificando..." : "Verificar chave"}
+          </Button>
+          <Button disabled={testing || !farmId} onClick={runTest}>
+            {testing ? "Testando..." : "Testar meteoblue"}
+          </Button>
+        </div>
+      </div>
+
+      {message && (
+        <p className={`mb-3 text-sm ${message.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+          {message.text}
+        </p>
+      )}
+
+      {diagnostic && (
+        <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs dark:border-graphite-700 dark:bg-graphite-800">
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div><span className="text-gray-500 dark:text-gray-400">Chave configurada:</span> {diagnostic.keyPresent ? "sim" : "não"}</div>
+            <div><span className="text-gray-500 dark:text-gray-400">Status:</span> {diagnostic.status}</div>
+            <div><span className="text-gray-500 dark:text-gray-400">Latência:</span> {diagnostic.latencyMs} ms</div>
+            {diagnostic.httpStatus != null && (
+              <div><span className="text-gray-500 dark:text-gray-400">HTTP:</span> {diagnostic.httpStatus}</div>
+            )}
+            {diagnostic.error && (
+              <div className="sm:col-span-3 text-red-600 dark:text-red-400"><span className="text-gray-500 dark:text-gray-400">Erro:</span> {diagnostic.error}</div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {loadingComparison && comparison.length === 0 && (
+        <p className="py-4 text-center text-xs text-gray-500 dark:text-gray-400">Carregando comparação (últimos 7 dias)...</p>
+      )}
+
+      {!loadingComparison && mbStationExists === false && !message && (
+        <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+          Clique em &quot;Testar meteoblue&quot; para criar a estação virtual e importar os primeiros 7 dias.
+        </p>
+      )}
+
+      {comparison.length > 0 && (
+        <div className="overflow-x-auto">
+          <table className="min-w-full text-xs">
+            <thead className="bg-gray-50 dark:bg-graphite-800">
+              <tr>
+                <th className="px-2 py-2 text-left">Data</th>
+                <th className="px-2 py-2 text-right">T_max OM</th>
+                <th className="px-2 py-2 text-right">T_max MB</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+                <th className="px-2 py-2 text-right">T_min OM</th>
+                <th className="px-2 py-2 text-right">T_min MB</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+                <th className="px-2 py-2 text-right">Chuva OM</th>
+                <th className="px-2 py-2 text-right">Chuva MB</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+                <th className="px-2 py-2 text-right">Vento OM</th>
+                <th className="px-2 py-2 text-right">Vento MB</th>
+                <th className="px-2 py-2 text-right">Δ</th>
+              </tr>
+            </thead>
+            <tbody>
+              {comparison.map((r) => {
+                const dTmax = diff(r.om?.temp_max ?? null, r.mb?.temp_max ?? null);
+                const dTmin = diff(r.om?.temp_min ?? null, r.mb?.temp_min ?? null);
+                const dRain = diff(r.om?.precipitation ?? null, r.mb?.precipitation ?? null);
+                const dWind = diff(r.om?.wind_speed ?? null, r.mb?.wind_speed ?? null);
+                return (
+                  <tr key={r.date} className="border-t border-gray-100 dark:border-graphite-700">
+                    <td className="px-2 py-1.5">{new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.om?.temp_max ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.mb?.temp_max ?? null)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dTmax)}`}>{fmtD(dTmax)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.om?.temp_min ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.mb?.temp_min ?? null)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dTmin)}`}>{fmtD(dTmin)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.om?.precipitation ?? null)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.mb?.precipitation ?? null)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dRain)}`}>{fmtD(dRain)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.om?.wind_speed ?? null, 2)}</td>
+                    <td className="px-2 py-1.5 text-right">{fmtN(r.mb?.wind_speed ?? null, 2)}</td>
+                    <td className={`px-2 py-1.5 text-right ${diffColor(dWind)}`}>{fmtD(dWind, 2)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      <p className="mt-3 text-[11px] text-gray-400 dark:text-gray-500">
+        meteoblue.com · Chave lida apenas no backend · Nunca exibida nesta interface.
+      </p>
+    </Card>
+  );
+}
