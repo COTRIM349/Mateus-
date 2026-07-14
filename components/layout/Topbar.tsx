@@ -61,7 +61,7 @@ export function Topbar() {
           <input
             type="search"
             placeholder="Buscar pivôs, culturas, alertas..."
-            className="w-full rounded-xl border border-gray-200 bg-gray-50/80 py-2 pl-10 pr-4 text-sm text-graphite-800 outline-none transition-all duration-150 placeholder:text-graphite-300 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100 dark:border-graphite-700 dark:bg-graphite-800/50 dark:text-gray-100 dark:placeholder:text-gray-600 dark:focus:border-brand-500 dark:focus:bg-graphite-800"
+            className="w-full rounded-xl border border-gray-100 bg-gray-50/80 py-2 pl-10 pr-4 text-sm text-graphite-800 outline-none transition-all duration-150 placeholder:text-graphite-300 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100 dark:border-graphite-700/50 dark:bg-graphite-800/50 dark:text-gray-100 dark:placeholder:text-gray-600 dark:focus:border-brand-500 dark:focus:bg-graphite-800"
           />
         </div>
       </div>
@@ -95,7 +95,7 @@ export function Topbar() {
           <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-graphite-950" />
         </button>
 
-        <div className="ml-1 h-6 w-px bg-gray-200 dark:bg-graphite-700" />
+        <div className="ml-1 h-6 w-px bg-gray-100 dark:bg-graphite-700/50" />
 
         <div className="relative ml-1" ref={menuRef}>
           <button

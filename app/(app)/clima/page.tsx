@@ -71,7 +71,7 @@ export default function ClimaPage() {
         {activeTab === "fonte" && <DailySelectionTab />}
         {activeTab === "sync" && <IngestionRunsTab />}
       </div>
-      <p className="mt-6 text-xs text-graphite-300 dark:text-graphite-600">
+      <p className="mt-6 text-xs text-graphite-400 dark:text-gray-500">
         Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
       </p>
     </div>

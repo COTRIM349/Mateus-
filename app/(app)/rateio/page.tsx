@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, Table, type Column, ChartCard, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
-import { useCrud } from "@/lib/hooks";
+import { useCrud, useRecharts } from "@/lib/hooks";
 import {
   type ApportionmentResult,
   type ApportionmentInput,
@@ -14,19 +14,6 @@ import {
   aggregateApportionmentByModule,
   APPORTIONMENT_METHOD_CONFIG,
 } from "@/modules/energy/services";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -102,13 +89,14 @@ export default function RateioPage() {
 
   const byCulture = useMemo(() => results.length > 0 ? aggregateApportionmentByCulture(results) : [], [results]);
   const byModule = useMemo(() => results.length > 0 ? aggregateApportionmentByModule(results) : [], [results]);
+  const recharts = useRecharts();
 
-  if (loading) {
+  if (loading || !recharts) {
     return (
       <div>
         <PageHeader titulo="Rateio de Custos" descricao="Rateio automático de energia por pivô, cultura, safra e módulo" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -190,6 +178,7 @@ export default function RateioPage() {
 // ── Pivot Tab ──────────────────────────────────────────────────────────
 
 function PivotTab({ results }: { results: ApportionmentResult[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } = useRecharts()!;
   const columns: Column<ApportionmentResult>[] = [
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivotName}</span> },
     { header: "Cultura", render: (r) => r.cultureName },
@@ -236,6 +225,7 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
 // ── Cultura Tab ────────────────────────────────────────────────────────
 
 function CulturaTab({ results }: { results: ApportionmentResult[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } = useRecharts()!;
   if (results.length === 0) {
     return <EmptyState title="Sem dados por cultura" description="Nenhum rateio por cultura disponível." />;
   }
@@ -302,6 +292,7 @@ function CulturaTab({ results }: { results: ApportionmentResult[] }) {
 // ── Módulo Tab ─────────────────────────────────────────────────────────
 
 function ModuloTab({ results }: { results: ApportionmentResult[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   if (results.length === 0) {
     return <EmptyState title="Sem dados por módulo" description="Nenhum rateio por módulo disponível." />;
   }
@@ -353,6 +344,7 @@ function ComparativoTab({
   byCulture: ApportionmentResult[];
   byModule: ApportionmentResult[];
 }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Cell } = useRecharts()!;
   return (
     <div className="space-y-6">
       <Card>

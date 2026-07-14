@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, Table, type Column, ChartCard, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
-import { useCrud } from "@/lib/hooks";
+import { useCrud, useRecharts } from "@/lib/hooks";
 import {
   type ConsumptionResult,
   type TariffConfig,
@@ -27,23 +27,6 @@ import {
   buildHourlyCostProfile,
   DEMAND_RISK_CONFIG,
 } from "@/modules/energy/services";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  BarChart,
-  Bar,
-  Line,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-  ReferenceLine,
-} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -216,13 +199,14 @@ export default function EnergiaPage() {
   const dailyAgg = useMemo(() => hasData ? aggregateByDate(consumption) : [], [consumption, hasData]);
   const monthlyAgg = useMemo(() => hasData ? aggregateByMonth(consumption) : [], [consumption, hasData]);
   const cultureAgg = useMemo(() => hasData ? aggregateByCulture(consumption) : [], [consumption, hasData]);
+  const recharts = useRecharts();
 
-  if (loading) {
+  if (loading || !recharts) {
     return (
       <div>
         <PageHeader titulo="Centro de Energia" descricao="Gestão energética completa para irrigação" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -299,6 +283,7 @@ function CentroTab({
   cultureAgg: AggregatedConsumption[];
   hourlyCost: HourlyCostProfile[];
 }) {
+  const { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } = useRecharts()!;
   const metrics = [
     { id: "kwh", title: "Consumo Total", value: `${totals.totalKwh.toLocaleString("pt-BR")} kWh`, description: `${totals.pivotCount} pivôs operando`, variation: `${totals.peakPct.toFixed(0)}% ponta`, trend: totals.peakPct > 20 ? "negative" as const : "positive" as const },
     { id: "cost", title: "Custo Total", value: `R$ ${totals.totalCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, description: "Consumo + demanda", variation: `R$ ${totals.avgDailyCost.toFixed(2)}/dia`, trend: "neutral" as const },
@@ -431,6 +416,7 @@ function ConsumoTab({
   setViewMode: (v: "pivot" | "pump" | "culture" | "module") => void;
   monthlyAgg: AggregatedConsumption[];
 }) {
+  const { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   const columns: Column<AggregatedConsumption>[] = [
     { header: "Agrupamento", render: (r) => <span className="font-medium">{r.groupLabel}</span> },
     { header: "kWh", render: (r) => r.totalKwh.toLocaleString("pt-BR"), align: "right" },
@@ -525,6 +511,7 @@ function DemandaTab({
   demand: DemandAnalysis;
   dailyAgg: AggregatedConsumption[];
 }) {
+  const { ResponsiveContainer, ComposedChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ReferenceLine } = useRecharts()!;
   const riskConf = DEMAND_RISK_CONFIG[demand.riskLevel];
   const trendLabel = demand.demandTrend === "subindo" ? "Subindo" : demand.demandTrend === "descendo" ? "Descendo" : "Estável";
 
@@ -584,6 +571,7 @@ function DemandaTab({
 // ── Simulações Tab ─────────────────────────────────────────────────────
 
 function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   if (simulations.length === 0) {
     return <EmptyState title="Sem dados para simulação" description="Registre consumo energético para visualizar cenários de otimização." />;
   }

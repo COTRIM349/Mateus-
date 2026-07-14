@@ -6,7 +6,7 @@ import { Card, StatCard, Tabs, Table, type Column, EmptyState } from "@/componen
 import { formatBRL, formatNumber, formatPercent, formatDate } from "@/utils/format";
 import { roundTo, sum } from "@/utils/math";
 import { useAuth } from "@/components/providers";
-import { useCrud } from "@/lib/hooks";
+import { useCrud, useRecharts } from "@/lib/hooks";
 import {
   type DailyBalanceRow,
   calculateSummary,
@@ -41,24 +41,6 @@ import {
   calculateReportKPIs,
   calculatePeriodSummary,
 } from "@/modules/reports/services";
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -330,13 +312,14 @@ export default function RelatoriosPage() {
   const byPivot = useMemo(() => energyResults.length > 0 ? aggregateByPivot(energyResults) : [], [energyResults]);
   const byCulture = useMemo(() => energyResults.length > 0 ? aggregateByCulture(energyResults) : [], [energyResults]);
   const balanceSummary = useMemo(() => balanceRows.length > 0 ? calculateSummary(balanceRows) : null, [balanceRows]);
+  const recharts = useRecharts();
 
-  if (loading) {
+  if (loading || !recharts) {
     return (
       <div>
         <PageHeader titulo="Relatórios Inteligentes" descricao="Relatórios, histórico, indicadores e auditoria" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -512,6 +495,7 @@ function ReportPreview({
   byCulture: ReturnType<typeof aggregateByCulture>;
   recommendations: Recommendation[];
 }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } = useRecharts()!;
   if (!farmTotals && !balanceSummary && recommendations.length === 0) {
     return <p className="py-8 text-center text-sm text-gray-400">Sem dados disponíveis para este tipo de relatório.</p>;
   }
@@ -914,6 +898,7 @@ function TabIndicadores({
   byPivot: ReturnType<typeof aggregateByPivot>;
   byCulture: ReturnType<typeof aggregateByCulture>;
 }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   if (!kpis || (!farmTotals && !balanceSummary)) {
     return <EmptyState title="Sem indicadores disponíveis" description="Registre dados operacionais para visualizar indicadores de desempenho." />;
   }

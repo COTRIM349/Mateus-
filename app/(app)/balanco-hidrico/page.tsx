@@ -24,6 +24,7 @@ import {
   type HydricStatus,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
+import { useRecharts } from "@/lib/hooks";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -32,19 +33,6 @@ const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
   vermelho: "deficit_critico",
   cinza: "ideal",
 };
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Area,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ReferenceLine,
-} from "recharts";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -665,6 +653,8 @@ function BalanceTab({
 // ── Charts Tab ──────────────────────────────────────────────────────────
 
 function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
+  const recharts = useRecharts();
+
   if (rows.length === 0) {
     return (
       <Card className="py-12 text-center">
@@ -674,6 +664,16 @@ function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
       </Card>
     );
   }
+
+  if (!recharts) {
+    return (
+      <Card className="flex items-center justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+      </Card>
+    );
+  }
+
+  const { ResponsiveContainer, ComposedChart, Area, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = recharts;
 
   const chartData = rows.map((r) => ({
     date: r.date.slice(5),

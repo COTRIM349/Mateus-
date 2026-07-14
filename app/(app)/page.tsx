@@ -37,7 +37,7 @@ export default function DashboardPage() {
   if (implantation.loading || loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
       </div>
     );
   }
@@ -348,8 +348,8 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
       {state.history.length > 1 && (
         <div className="mt-5">
           <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Histórico diário</h4>
-          <div className="max-h-48 overflow-y-auto">
-            <table className="w-full text-left text-[11px]">
+          <div className="max-h-48 overflow-x-auto overflow-y-auto">
+            <table className="w-full min-w-[360px] text-left text-[11px]">
               <thead>
                 <tr className="border-b border-gray-100 dark:border-graphite-700/50 text-graphite-400 dark:text-gray-500">
                   <th className="pb-2 pr-2 text-[10px] font-semibold uppercase tracking-wider">Data</th>
