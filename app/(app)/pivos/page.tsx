@@ -24,7 +24,7 @@ import { radiusFromArea } from "@/utils/geo";
 const MapPicker = dynamic(() => import("@/components/maps/MapPicker").then((mod) => mod.MapPicker), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[60vh] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-graphite-700/50 dark:bg-graphite-800/60">
+    <div className="flex h-[60vh] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-white/[0.03]">
       <p className="text-sm text-gray-400">Carregando mapa...</p>
     </div>
   ),
@@ -320,7 +320,7 @@ export default function PivosPage() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activePivots.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô cadastrado para esta fazenda.</p>
         ) : (
@@ -362,7 +362,7 @@ export default function PivosPage() {
 
           {formError && <div role="alert" className="mt-3 rounded-xl bg-red-50 p-3.5 dark:bg-red-900/20"><p className="text-sm text-red-600 dark:text-red-400">{formError}</p></div>}
 
-          <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 dark:border-graphite-700/50">
+          <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 dark:border-white/[0.06]">
             <div className="flex gap-2">
               {activeTab !== "geral" && (
                 <Button
@@ -728,7 +728,7 @@ function TabLocalizacao({
           <label className="block text-sm font-medium text-graphite-900 dark:text-gray-200">
             Raio calculado
           </label>
-          <p className="flex h-[38px] items-center rounded-xl border border-gray-100 bg-gray-50/80 px-3 text-sm text-graphite-900 dark:border-graphite-700/50 dark:bg-graphite-800/60 dark:text-gray-100">
+          <p className="flex h-[38px] items-center rounded-xl border border-gray-100 bg-gray-50/80 px-3 text-sm text-graphite-900 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-gray-100">
             {computedRadius > 0 ? `${computedRadius} m` : "Informe a área"}
           </p>
         </div>
@@ -757,7 +757,7 @@ function TabLocalizacao({
               onChange={(la, lo) => setDraft({ lat: la, lng: lo })}
               radiusMeters={computedRadius}
               otherPivots={otherPivots}
-              className="h-[60vh] w-full rounded-2xl border border-gray-100 dark:border-graphite-700/50"
+              className="h-[60vh] w-full rounded-2xl border border-gray-100 dark:border-white/[0.06]"
             />
           )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

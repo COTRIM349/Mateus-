@@ -276,7 +276,7 @@ function CulturesTab({
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeCultures.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma cultura cadastrada.</p>
         ) : (
@@ -475,7 +475,7 @@ function VarietiesTab({
       ) : (
         <Card>
           {loading ? (
-            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
           ) : varieties.length === 0 ? (
             <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma variedade cadastrada.</p>
           ) : (
@@ -690,7 +690,7 @@ function PhasesTab({
       ) : (
         <>
           {previewDay !== null && phases.length > 0 && (
-            <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-graphite-700/50 dark:bg-graphite-800/60 sm:grid-cols-4">
+            <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-white/[0.06] dark:bg-white/[0.03] sm:grid-cols-4">
               <div>
                 <p className="text-xs text-graphite-400 dark:text-gray-500">Dia exemplo (DAP {previewDay})</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">
@@ -718,7 +718,7 @@ function PhasesTab({
 
           <Card>
             {loading ? (
-              <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+              <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
             ) : phases.length === 0 ? (
               <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma fase cadastrada. Adicione fases para definir o perfil fenológico.</p>
             ) : (
@@ -852,7 +852,7 @@ function AssociationTab({
       ) : (
         <Card>
           {loading ? (
-            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
           ) : assignments.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhuma associação encontrada.</p>
@@ -957,7 +957,7 @@ function HistoryTabComponent({
       ) : (
         <Card>
           {loading ? (
-            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
           ) : history.length === 0 ? (
             <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum registro de alteração.</p>
           ) : (

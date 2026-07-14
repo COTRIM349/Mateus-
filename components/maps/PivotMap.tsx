@@ -120,7 +120,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
   return (
     <div
       ref={containerRef}
-      className={className ?? "h-[400px] w-full rounded-2xl border border-gray-100 dark:border-graphite-700/50"}
+      className={className ?? "h-[400px] w-full rounded-2xl border border-gray-100 dark:border-white/[0.06]"}
     />
   );
 }

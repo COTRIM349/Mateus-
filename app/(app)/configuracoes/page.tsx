@@ -124,7 +124,7 @@ export default function ConfiguracoesPage() {
                   className={`flex w-full items-center justify-between rounded-xl border px-4 py-3.5 text-sm transition-all duration-150 ${
                     farm.id === activeFarmId
                       ? "border-brand-200 bg-brand-50/80 text-brand-700 shadow-soft dark:border-brand-700/40 dark:bg-brand-900/15 dark:text-brand-400"
-                      : "border-gray-100 text-graphite-900 hover:border-gray-200 hover:bg-gray-50/50 dark:border-graphite-700/50 dark:text-gray-200 dark:hover:border-graphite-600"
+                      : "border-gray-100 text-graphite-900 hover:border-gray-200 hover:bg-gray-50/50 dark:border-white/[0.06] dark:text-gray-200 dark:hover:border-white/[0.12]"
                   }`}
                 >
                   <span className="font-medium">{farm.name}</span>

@@ -319,7 +319,7 @@ export default function RelatoriosPage() {
       <div>
         <PageHeader titulo="Relatórios Inteligentes" descricao="Relatórios, histórico, indicadores e auditoria" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -409,14 +409,14 @@ function TabRelatorios({
             className={`rounded-xl border p-4 text-left transition-all ${
               selectedType === key
                 ? "border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-900/20"
-                : "border-gray-100 hover:border-gray-300 dark:border-graphite-700/50 dark:hover:border-graphite-600"
+                : "border-gray-100 hover:border-gray-300 dark:border-white/[0.06] dark:hover:border-white/[0.12]"
             }`}
           >
             <div className="mb-1 flex items-center gap-2">
               <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${
                 selectedType === key
                   ? "bg-brand-500 text-white"
-                  : "bg-gray-50/80 text-gray-600 dark:bg-graphite-800/60 dark:text-gray-500"
+                  : "bg-gray-50/80 text-gray-600 dark:bg-white/[0.03] dark:text-gray-500"
               }`}>
                 {cfg.icon}
               </span>
@@ -434,7 +434,7 @@ function TabRelatorios({
             <p className="text-sm text-graphite-400 dark:text-gray-500">{config.description}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex rounded-xl border border-gray-100 dark:border-graphite-700/50">
+            <div className="flex rounded-xl border border-gray-100 dark:border-white/[0.06]">
               {formats.map(([key, cfg]) => (
                 <button
                   key={key}
@@ -442,7 +442,7 @@ function TabRelatorios({
                   className={`px-4 py-2 text-sm font-medium transition-colors first:rounded-l-xl last:rounded-r-xl ${
                     selectedFormat === key
                       ? "bg-brand-500 text-white"
-                      : "text-gray-600 hover:bg-gray-50/80 dark:text-gray-500 dark:hover:bg-graphite-800/60"
+                      : "text-gray-600 hover:bg-gray-50/80 dark:text-gray-500 dark:hover:bg-white/[0.06]"
                   }`}
                 >
                   {cfg.label}
@@ -517,7 +517,7 @@ function ReportPreview({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-sm">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-graphite-700/50">
+                <tr className="border-b border-gray-100 dark:border-white/[0.06]">
                   <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-graphite-400">Pivô</th>
                   <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">kWh</th>
                   <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">Custo</th>
@@ -527,7 +527,7 @@ function ReportPreview({
               </thead>
               <tbody>
                 {byPivot.slice(0, 10).map((p) => (
-                  <tr key={p.groupKey} className="border-b border-gray-100/80 dark:border-graphite-800/60">
+                  <tr key={p.groupKey} className="border-b border-gray-100/80 dark:border-white/[0.04]">
                     <td className="px-3 py-2 font-medium text-graphite-900 dark:text-white">{p.groupLabel}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{formatNumber(p.totalKwh)}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{formatBRL(p.totalCost)}</td>
@@ -639,7 +639,7 @@ function ReportPreview({
             <div>
               <p className="mb-2 text-xs font-semibold uppercase text-graphite-400 dark:text-gray-500">Top 5 — Prioridade</p>
               {rankRecommendations(recommendations).slice(0, 5).map((r) => (
-                <div key={r.pivotId} className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-graphite-800/60">
+                <div key={r.pivotId} className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-white/[0.04]">
                   <span className="text-sm text-graphite-900 dark:text-white">{r.pivotName}</span>
                   <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
                     {PRIORITY_CONFIG[r.priority].label} ({r.priorityScore.toFixed(0)})
@@ -658,7 +658,7 @@ function ReportPreview({
 
 function MiniKPI({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-100 p-3 dark:border-graphite-700/50">
+    <div className="rounded-xl border border-gray-100 p-3 dark:border-white/[0.06]">
       <p className="text-xs text-graphite-400 dark:text-gray-500">{label}</p>
       <p className="text-lg font-bold tracking-tight text-graphite-900 dark:text-white">{value}</p>
     </div>
@@ -688,7 +688,7 @@ function TabHistorico({
             className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               dimension === key
                 ? "bg-brand-500 text-white"
-                : "bg-gray-50/80 text-gray-600 hover:bg-gray-200 dark:bg-graphite-800/60 dark:text-gray-500 dark:hover:bg-graphite-600"
+                : "bg-gray-50/80 text-gray-600 hover:bg-gray-200 dark:bg-white/[0.03] dark:text-gray-500 dark:hover:bg-white/[0.08]"
             }`}
           >
             {cfg.label}
@@ -969,7 +969,7 @@ function TabIndicadores({
 
 function SummaryRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-graphite-800/60">
+    <div className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-white/[0.04]">
       <span className="text-sm text-gray-600 dark:text-gray-500">{label}</span>
       <span className={`text-sm font-semibold ${
         highlight ? "text-red-600 dark:text-red-400" : "text-graphite-900 dark:text-white"
@@ -1048,7 +1048,7 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
             className={`rounded-xl border p-3 text-center transition-all ${
               filterAction === key
                 ? "border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-900/20"
-                : "border-gray-100 hover:border-gray-300 dark:border-graphite-700/50 dark:hover:border-graphite-600"
+                : "border-gray-100 hover:border-gray-300 dark:border-white/[0.06] dark:hover:border-white/[0.12]"
             }`}
           >
             <p className="text-lg font-bold tracking-tight text-graphite-900 dark:text-white">{actionStats[key] ?? 0}</p>
@@ -1068,7 +1068,7 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
           {filterAction !== "all" && (
             <button
               onClick={() => setFilterAction("all")}
-              className="rounded-xl border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50/80 dark:border-graphite-600 dark:text-gray-500 dark:hover:bg-graphite-800/60"
+              className="rounded-xl border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50/80 dark:border-white/[0.08] dark:text-gray-500 dark:hover:bg-white/[0.06]"
             >
               Limpar filtro
             </button>

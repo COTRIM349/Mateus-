@@ -25,7 +25,7 @@ export function Table<T>({
     <div className="overflow-x-auto rounded-xl">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-gray-100 dark:border-graphite-700/50">
+          <tr className="border-b border-gray-100 dark:border-white/[0.06]">
             {columns.map((col, i) => (
               <th
                 key={i}
@@ -43,7 +43,7 @@ export function Table<T>({
           {data.map((row) => (
             <tr
               key={getKey(row)}
-              className="border-b border-gray-50 transition-colors duration-100 hover:bg-gray-50/80 dark:border-graphite-800/50 dark:hover:bg-graphite-800/30"
+              className="border-b border-gray-50 transition-colors duration-100 hover:bg-gray-50/80 dark:border-white/[0.04] dark:hover:bg-white/[0.04]"
             >
               {columns.map((col, i) => (
                 <td

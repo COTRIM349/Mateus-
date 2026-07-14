@@ -215,7 +215,7 @@ function FarmsTab() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeFarms.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma fazenda cadastrada.</p>
         ) : (
@@ -262,7 +262,7 @@ function FarmsTab() {
             <Input id="irrigated_area" name="irrigated_area" label="Área irrigada (ha)" type="number" step="any" required defaultValue={editing?.irrigated_area} />
           </div>
           {!editing && (
-            <label className="flex items-start gap-2 rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-sm dark:border-graphite-700/50 dark:bg-graphite-800/60">
+            <label className="flex items-start gap-2 rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-sm dark:border-white/[0.06] dark:bg-white/[0.03]">
               <input type="checkbox" name="activate_virtual_station" defaultChecked className="mt-0.5" />
               <span>
                 <span className="font-medium text-graphite-900 dark:text-white">Ativar Estação Virtual (Open-Meteo)</span>
@@ -380,7 +380,7 @@ function SeasonsTab() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeSeasons.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma safra cadastrada para esta fazenda.</p>
         ) : (
@@ -486,7 +486,7 @@ function ModulesTab() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeModules.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum módulo cadastrado para esta fazenda.</p>
         ) : (

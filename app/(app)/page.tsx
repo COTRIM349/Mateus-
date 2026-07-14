@@ -16,7 +16,7 @@ import {
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
-  { ssr: false, loading: () => <div className="flex h-[400px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-graphite-700/50 dark:bg-graphite-800"><p className="text-sm text-graphite-400">Carregando mapa...</p></div> }
+  { ssr: false, loading: () => <div className="flex h-[400px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800"><p className="text-sm text-graphite-400">Carregando mapa...</p></div> }
 );
 
 const TABS = [
@@ -37,7 +37,7 @@ export default function DashboardPage() {
   if (implantation.loading || loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
       </div>
     );
   }
@@ -174,7 +174,7 @@ function RankRow({ rank, state }: { rank: number; state: PivotHydricState }) {
   const c = state.current!;
   const conf = HYDRIC_STATUS_CONFIG[c.status];
   return (
-    <div className="flex items-center justify-between rounded-xl bg-gray-50/80 p-3.5 transition-colors duration-100 hover:bg-gray-100/60 dark:bg-graphite-800/60 dark:hover:bg-graphite-800">
+    <div className="flex items-center justify-between rounded-xl bg-gray-50/80 p-3.5 transition-colors duration-100 hover:bg-gray-100/60 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
       <div className="flex items-center gap-3">
         <span className="w-5 text-center text-xs font-bold text-graphite-300 dark:text-graphite-600">{rank}</span>
         <div className="h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-graphite-900" style={{ backgroundColor: conf.color }} />
@@ -238,7 +238,7 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
               pivots={mapPivots.filter((p) => p.latitude && p.longitude)}
               highlightId={selectedId ?? undefined}
               onSelect={setSelectedId}
-              className="h-[520px] w-full overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-graphite-700/50"
+              className="h-[520px] w-full overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-white/[0.06]"
             />
           ) : (
             <EmptyState
@@ -257,7 +257,7 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
                   className={`flex items-center gap-2 rounded-xl border px-3.5 py-1.5 text-xs font-medium transition-all duration-150 ${
                     selectedId === s.pivotId
                       ? "border-brand-200 bg-brand-50 text-brand-700 shadow-soft dark:border-brand-600 dark:bg-brand-900/20 dark:text-brand-400"
-                      : "border-gray-100 text-graphite-500 hover:border-gray-200 hover:bg-gray-50 dark:border-graphite-700/50 dark:text-gray-400 dark:hover:border-graphite-600"
+                      : "border-gray-100 text-graphite-500 hover:border-gray-200 hover:bg-gray-50 dark:border-white/[0.06] dark:text-gray-400 dark:hover:border-white/[0.12]"
                   }`}
                 >
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: conf.color }} />
@@ -351,7 +351,7 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
           <div className="max-h-48 overflow-x-auto overflow-y-auto">
             <table className="w-full min-w-[360px] text-left text-[11px]">
               <thead>
-                <tr className="border-b border-gray-100 dark:border-graphite-700/50 text-graphite-400 dark:text-gray-500">
+                <tr className="border-b border-gray-100 dark:border-white/[0.06] text-graphite-400 dark:text-gray-500">
                   <th className="pb-2 pr-2 text-[10px] font-semibold uppercase tracking-wider">Data</th>
                   <th className="pb-2 pr-2 text-right text-[10px] font-semibold uppercase tracking-wider">ETc</th>
                   <th className="pb-2 pr-2 text-right text-[10px] font-semibold uppercase tracking-wider">Arm.</th>
@@ -363,7 +363,7 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
                 {state.history.slice(-10).reverse().map((d) => {
                   const dc = HYDRIC_STATUS_CONFIG[d.status];
                   return (
-                    <tr key={d.date} className="border-b border-gray-50 dark:border-graphite-800/50">
+                    <tr key={d.date} className="border-b border-gray-50 dark:border-white/[0.04]">
                       <td className="py-1.5 pr-2 text-graphite-500 dark:text-gray-400">{d.date.slice(5)}</td>
                       <td className="py-1.5 pr-2 text-right text-graphite-500 dark:text-gray-400">{d.etc.toFixed(1)}</td>
                       <td className="py-1.5 pr-2 text-right text-graphite-500 dark:text-gray-400">{d.storage.toFixed(0)}</td>

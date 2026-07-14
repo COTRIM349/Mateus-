@@ -96,7 +96,7 @@ export default function RateioPage() {
       <div>
         <PageHeader titulo="Rateio de Custos" descricao="Rateio automático de energia por pivô, cultura, safra e módulo" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -151,7 +151,7 @@ export default function RateioPage() {
                   className={`rounded-xl px-4 py-2 text-xs font-medium transition-colors ${
                     method === key
                       ? "bg-brand-500 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200/70 dark:bg-graphite-700/50 dark:text-gray-300 dark:hover:bg-graphite-600"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200/70 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.08]"
                   }`}
                 >
                   <div className="font-semibold">{conf.label}</div>
@@ -187,7 +187,7 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
     { header: "Volume (m³)", render: (r) => r.volumeM3.toLocaleString("pt-BR"), align: "right" },
     { header: "% Rateio", render: (r) => (
       <div className="flex items-center gap-2">
-        <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
+        <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
           <div className="h-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
         </div>
         <span className="text-xs">{r.sharePct.toFixed(1)}%</span>
@@ -352,7 +352,7 @@ function ComparativoTab({
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {results.map((r) => (
-            <div key={r.pivotId} className="rounded-xl border border-gray-100 p-4 dark:border-graphite-700/50">
+            <div key={r.pivotId} className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.06]">
               <h4 className="mb-1 text-sm font-semibold text-graphite-900 dark:text-white">{r.pivotName}</h4>
               <p className="mb-3 text-xs text-graphite-400 dark:text-gray-500">{r.cultureName} — {r.moduleName}</p>
 
@@ -379,7 +379,7 @@ function ComparativoTab({
 
               <div className="mt-3">
                 <div className="text-xs text-graphite-400 dark:text-gray-500">Participação</div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
                   <div className="h-full rounded-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
                 </div>
               </div>

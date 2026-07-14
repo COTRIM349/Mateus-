@@ -664,7 +664,7 @@ function CentralTab({
                   <span>{pu.totalHours}h</span>
                   <span>{pu.totalVolumeM3.toFixed(0)} m³</span>
                   <div className="w-20">
-                    <div className="h-2 rounded-full bg-gray-100 dark:bg-graphite-700/50">
+                    <div className="h-2 rounded-full bg-gray-100 dark:bg-white/[0.06]">
                       <div className="h-2 rounded-full bg-brand-500" style={{ width: `${Math.min(100, pu.utilizationPct)}%` }} />
                     </div>
                   </div>
@@ -690,7 +690,7 @@ function CentralTab({
                   <span className="text-green-500">+{ru.recharged.toFixed(0)}</span>
                   <span className="font-semibold text-graphite-900 dark:text-white">{ru.endVolume.toFixed(0)} m³</span>
                   <div className="flex-1">
-                    <div className="h-2 rounded-full bg-gray-100 dark:bg-graphite-700/50">
+                    <div className="h-2 rounded-full bg-gray-100 dark:bg-white/[0.06]">
                       <div
                         className={`h-2 rounded-full ${ru.capacityPct < 20 ? "bg-red-500" : ru.capacityPct < 50 ? "bg-amber-500" : "bg-blue-500"}`}
                         style={{ width: `${Math.min(100, ru.capacityPct)}%` }}
@@ -998,7 +998,7 @@ function ScenarioCard({ scenario }: { scenario: SimulationScenario }) {
         </div>
       </div>
       <div className="mt-auto">
-        <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
+        <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
           <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, parseFloat(armPct))}%`, backgroundColor: statusCfg.color }} />
         </div>
       </div>
@@ -1055,7 +1055,7 @@ function HistoryTab({
     },
   ];
 
-  if (loading) return <Card className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></Card>;
+  if (loading) return <Card className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></Card>;
 
   if (history.length === 0) {
     return <Card className="py-12 text-center"><p className="text-graphite-400 dark:text-gray-500">Nenhuma recomendação registrada.</p></Card>;

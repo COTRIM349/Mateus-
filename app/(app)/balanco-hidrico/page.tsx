@@ -641,7 +641,7 @@ function BalanceTab({
 
       {loading ? (
         <Card className="flex items-center justify-center gap-3 py-8">
-          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
           <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
         </Card>
       ) : (
@@ -671,7 +671,7 @@ function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
   if (!recharts) {
     return (
       <Card className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
       </Card>
     );
   }

@@ -23,8 +23,8 @@ export function TextArea({
           "w-full rounded-xl border bg-white px-4 py-2.5 text-sm outline-none transition-all duration-150",
           "border-gray-200 text-graphite-800 placeholder:text-gray-400",
           "focus:border-brand-400 focus:ring-2 focus:ring-brand-100",
-          "dark:border-graphite-600 dark:bg-graphite-800 dark:text-gray-100 dark:placeholder:text-gray-500",
-          "dark:focus:border-brand-500 dark:focus:ring-brand-900/30",
+          "dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-100 dark:placeholder:text-gray-500",
+          "dark:focus:border-brand-500/50 dark:focus:bg-white/[0.06] dark:focus:ring-brand-900/30",
           error && "border-red-300 dark:border-red-500/60",
           className,
         )}

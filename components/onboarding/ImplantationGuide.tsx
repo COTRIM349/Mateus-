@@ -44,7 +44,7 @@ export function ImplantationGuide({ steps, progress, nextStep }: ImplantationGui
                 className={`flex items-start gap-4 rounded-2xl border p-4 transition-all duration-150 ${
                   isNext
                     ? "border-brand-200 bg-brand-50/60 dark:border-brand-700/40 dark:bg-brand-900/10"
-                    : "border-gray-100 hover:border-gray-200 hover:bg-gray-50/50 dark:border-graphite-700/50 dark:hover:border-graphite-600/50"
+                    : "border-gray-100 hover:border-gray-200 hover:bg-gray-50/50 dark:border-white/[0.06] dark:hover:border-white/[0.12]"
                 }`}
               >
                 <div

@@ -183,7 +183,7 @@ function StationsTab() {
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeStations.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma estação cadastrada para esta fazenda.</p>
         ) : (
@@ -565,7 +565,7 @@ function HistoryTab() {
         </div>
 
         {summary && (
-          <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-graphite-700/50 dark:bg-graphite-800/60 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-white/[0.06] dark:bg-white/[0.03] sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <p className="text-xs text-graphite-400 dark:text-gray-500">Período</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.days} dias</p>
@@ -602,7 +602,7 @@ function HistoryTab() {
         )}
 
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : readings.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum dado climático encontrado para o período selecionado.</p>
         ) : (
@@ -698,7 +698,7 @@ function ForecastTab() {
         Previsão meteorológica é armazenada separadamente das observações e nunca as sobrescreve.
       </div>
       {loading ? (
-        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
@@ -779,7 +779,7 @@ function DailySelectionTab() {
         A fonte utilizada pelo balanço hídrico em cada dia é registrada aqui para auditoria.
       </div>
       {loading ? (
-        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma seleção registrada ainda. As seleções são criadas quando a ingestão climática executa.
@@ -864,7 +864,7 @@ function IngestionRunsTab() {
         Log das execuções de ingestão climática automática.
       </div>
       {loading ? (
-        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma execução registrada ainda.
@@ -881,7 +881,7 @@ function IngestionRunsTab() {
 
 function StatBox({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-graphite-700/50 dark:bg-graphite-800/60">
+    <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
       <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
         {label}
       </p>
@@ -961,7 +961,7 @@ function VirtualStationTab() {
   if (loading) {
     return (
       <Card>
-        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       </Card>
     );
   }
@@ -1005,7 +1005,7 @@ function VirtualStationTab() {
         ? "text-yellow-700 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30"
         : st.sync_status === "failed"
           ? "text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-900/30"
-          : "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-graphite-700";
+          : "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-white/[0.08]";
 
   return (
     <div className="space-y-5">
@@ -1037,7 +1037,7 @@ function VirtualStationTab() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatBox label="Latitude" value={fmt(st.latitude, 4)} unit="°" />
           <StatBox label="Longitude" value={fmt(st.longitude, 4)} unit="°" />
-          <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-graphite-700/50 dark:bg-graphite-800/60">
+          <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Altitude</p>
             <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
               {fmt(st.altitude, 0)}
@@ -1089,7 +1089,7 @@ function VirtualStationTab() {
               <div className={`rounded-xl border p-3 ${
                 r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10
                   ? "border-red-300 bg-red-50 dark:border-red-900/30 dark:bg-red-900/20"
-                  : "border-gray-100 bg-gray-50/80 dark:border-graphite-700/50 dark:bg-graphite-800/60"
+                  : "border-gray-100 bg-gray-50/80 dark:border-white/[0.06] dark:bg-white/[0.03]"
               }`}>
                 <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Diferença ET₀</p>
                 <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
@@ -1135,7 +1135,7 @@ function VirtualStationTab() {
             <div><span className="text-xs text-graphite-400 dark:text-gray-500">Erro</span><br />{run.error_message ?? "—"}</div>
           </div>
 
-          <div className="mt-4 border-t border-gray-100 pt-4 dark:border-graphite-700/50">
+          <div className="mt-4 border-t border-gray-100 pt-4 dark:border-white/[0.06]">
             <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Contexto da requisição</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
               <div><span className="text-xs text-graphite-400 dark:text-gray-500">Latitude enviada</span><br />{fmt(run.request_latitude, 4)}°</div>
@@ -1148,7 +1148,7 @@ function VirtualStationTab() {
             {run.request_url && (
               <details className="mt-3 text-xs">
                 <summary className="cursor-pointer text-graphite-400 dark:text-gray-500 hover:text-graphite-900 dark:hover:text-white">URL requisitada</summary>
-                <p className="mt-1 break-all rounded-xl border border-gray-100 bg-gray-50/80 p-2 font-mono text-[11px] dark:border-graphite-700/50 dark:bg-graphite-800/60">
+                <p className="mt-1 break-all rounded-xl border border-gray-100 bg-gray-50/80 p-2 font-mono text-[11px] dark:border-white/[0.06] dark:bg-white/[0.03]">
                   {run.request_url}
                 </p>
               </details>
@@ -1397,7 +1397,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
       )}
 
       {diagnostic && (
-        <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-xs dark:border-graphite-700/50 dark:bg-graphite-800/60">
+        <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-xs dark:border-white/[0.06] dark:bg-white/[0.03]">
           <div className="grid gap-2 sm:grid-cols-3">
             <div><span className="text-graphite-400 dark:text-gray-500">Chave configurada:</span> {diagnostic.keyPresent ? "sim" : "não"}</div>
             <div><span className="text-graphite-400 dark:text-gray-500">Status:</span> {diagnostic.status}</div>
@@ -1423,7 +1423,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
       )}
 
       {loadingComparison && comparison.length === 0 && (
-        <div className="flex items-center justify-center gap-2 py-4"><div className="h-4 w-4 animate-spin rounded-full border-[2px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-xs text-graphite-400 dark:text-gray-500">Carregando comparação (últimos 7 dias)...</span></div>
+        <div className="flex items-center justify-center gap-2 py-4"><div className="h-4 w-4 animate-spin rounded-full border-[2px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-xs text-graphite-400 dark:text-gray-500">Carregando comparação (últimos 7 dias)...</span></div>
       )}
 
       {!loadingComparison && mbStationExists === false && !message && (
@@ -1435,7 +1435,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
       {comparison.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
-            <thead className="bg-gray-50/80 dark:bg-graphite-800/60">
+            <thead className="bg-gray-50/80 dark:bg-white/[0.03]">
               <tr>
                 <th className="px-2 py-2 text-left">Data</th>
                 <th className="px-2 py-2 text-right">T_max OM</th>
@@ -1459,7 +1459,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
                 const dRain = diff(r.om?.precipitation ?? null, r.mb?.precipitation ?? null);
                 const dWind = diff(r.om?.wind_speed ?? null, r.mb?.wind_speed ?? null);
                 return (
-                  <tr key={r.date} className="border-t border-gray-100 dark:border-graphite-700/50">
+                  <tr key={r.date} className="border-t border-gray-100 dark:border-white/[0.06]">
                     <td className="px-2 py-1.5">{new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}</td>
                     <td className="px-2 py-1.5 text-right">{fmtN(r.om?.temp_max ?? null)}</td>
                     <td className="px-2 py-1.5 text-right">{fmtN(r.mb?.temp_max ?? null)}</td>

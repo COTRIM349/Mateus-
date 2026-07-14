@@ -5,11 +5,13 @@ import { useAuth, useTheme } from "@/components/providers";
 import { useRouter } from "next/navigation";
 
 export function Topbar() {
-  const { profile, signOut } = useAuth();
+  const { profile, farms, activeFarmId, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
   const router = useRouter();
+
+  const activeFarm = farms.find((f) => f.id === activeFarmId);
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -44,16 +46,16 @@ export function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-100 bg-white/80 px-4 backdrop-blur-lg dark:border-graphite-800/50 dark:bg-graphite-950/80 sm:px-6 lg:px-8">
+    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-100 bg-white/90 px-4 backdrop-blur-lg dark:border-white/[0.04] dark:bg-graphite-900/90 sm:px-6 lg:px-8">
       <div className="flex items-center gap-3 pl-12 lg:pl-0">
-        <div className="hidden text-sm text-graphite-400 dark:text-gray-500 sm:block">
-          {profile?.companyName ?? "Cotrim Irrigação Pro"}
-        </div>
+        <span className="text-sm font-semibold text-graphite-800 dark:text-white">
+          {activeFarm?.name ?? profile?.companyName ?? "Cotrim Irrigação Pro"}
+        </span>
       </div>
 
       <div className="mx-4 hidden max-w-md flex-1 md:block">
         <div className="relative">
-          <span className="pointer-events-none absolute inset-y-0 left-3.5 flex items-center text-graphite-300">
+          <span className="pointer-events-none absolute inset-y-0 left-3 flex items-center text-graphite-300 dark:text-gray-600">
             <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-4.3-4.3m1.3-5.2a6.5 6.5 0 11-13 0 6.5 6.5 0 0113 0z" />
             </svg>
@@ -61,7 +63,7 @@ export function Topbar() {
           <input
             type="search"
             placeholder="Buscar pivôs, culturas, alertas..."
-            className="w-full rounded-xl border border-gray-100 bg-gray-50/80 py-2 pl-10 pr-4 text-sm text-graphite-800 outline-none transition-all duration-150 placeholder:text-graphite-300 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100 dark:border-graphite-700/50 dark:bg-graphite-800/50 dark:text-gray-100 dark:placeholder:text-gray-600 dark:focus:border-brand-500 dark:focus:bg-graphite-800"
+            className="w-full rounded-xl border border-gray-100 bg-gray-50/80 py-2 pl-9 pr-4 text-sm text-graphite-800 outline-none transition-all duration-150 placeholder:text-graphite-300 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100 dark:border-white/[0.06] dark:bg-white/[0.04] dark:text-gray-100 dark:placeholder:text-gray-600 dark:focus:border-brand-500/50 dark:focus:bg-white/[0.06]"
           />
         </div>
       </div>
@@ -71,7 +73,7 @@ export function Topbar() {
           type="button"
           aria-label={theme === "dark" ? "Modo claro" : "Modo escuro"}
           onClick={toggleTheme}
-          className="rounded-xl p-2.5 text-graphite-400 transition-colors hover:bg-gray-100 hover:text-graphite-600 dark:text-gray-500 dark:hover:bg-graphite-800 dark:hover:text-gray-300"
+          className="rounded-xl p-2 text-graphite-400 transition-colors hover:bg-gray-100 hover:text-graphite-600 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300"
         >
           {theme === "dark" ? (
             <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
@@ -87,38 +89,38 @@ export function Topbar() {
         <button
           type="button"
           aria-label="Notificações"
-          className="relative rounded-xl p-2.5 text-graphite-400 transition-colors hover:bg-gray-100 hover:text-graphite-600 dark:text-gray-500 dark:hover:bg-graphite-800 dark:hover:text-gray-300"
+          className="relative rounded-xl p-2 text-graphite-400 transition-colors hover:bg-gray-100 hover:text-graphite-600 dark:text-gray-500 dark:hover:bg-white/[0.06] dark:hover:text-gray-300"
         >
           <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 17h5l-1.4-1.4A2 2 0 0118 14.2V11a6 6 0 10-12 0v3.2a2 2 0 01-.6 1.4L4 17h5m6 0a3 3 0 11-6 0" />
           </svg>
-          <span className="absolute right-2 top-2 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-graphite-950" />
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white dark:ring-graphite-900" />
         </button>
 
-        <div className="ml-1 h-6 w-px bg-gray-100 dark:bg-graphite-700/50" />
+        <div className="ml-1 h-6 w-px bg-gray-100 dark:bg-white/[0.06]" />
 
         <div className="relative ml-1" ref={menuRef}>
           <button
             type="button"
             onClick={() => setMenuOpen(!menuOpen)}
-            className="flex items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-graphite-800"
+            className="flex items-center gap-2.5 rounded-xl p-1.5 transition-colors hover:bg-gray-100 dark:hover:bg-white/[0.06]"
           >
-            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-xs font-semibold text-white">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-brand-600 text-xs font-bold text-white">
               {initials}
             </div>
             <div className="hidden text-left sm:block">
               <p className="text-sm font-medium text-graphite-800 dark:text-white">
                 {profile?.name ?? "Usuário"}
               </p>
-              <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+              <p className="text-[10px] text-graphite-400 dark:text-gray-600">
                 {roleLabels[profile?.role ?? "viewer"]}
               </p>
             </div>
           </button>
 
           {menuOpen && (
-            <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-elevated dark:border-graphite-700/50 dark:bg-graphite-800">
-              <div className="border-b border-gray-100 px-3 py-2.5 dark:border-graphite-700/50">
+            <div className="absolute right-0 top-full mt-2 w-52 rounded-2xl border border-gray-100 bg-white p-1.5 shadow-elevated dark:border-white/[0.06] dark:bg-graphite-800">
+              <div className="border-b border-gray-100 px-3 py-2.5 dark:border-white/[0.06]">
                 <p className="text-sm font-medium text-graphite-800 dark:text-white">
                   {profile?.name}
                 </p>

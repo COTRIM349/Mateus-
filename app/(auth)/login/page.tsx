@@ -36,7 +36,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-100 bg-white p-10 shadow-elevated dark:border-graphite-700/50 dark:bg-graphite-900">
+    <div className="rounded-2xl border border-gray-100 bg-white p-10 shadow-elevated dark:border-white/[0.06] dark:bg-graphite-900">
       <div className="mb-10 flex flex-col items-center">
         <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
           <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">

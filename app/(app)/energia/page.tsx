@@ -206,7 +206,7 @@ export default function EnergiaPage() {
       <div>
         <PageHeader titulo="Centro de Energia" descricao="Gestão energética completa para irrigação" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -392,7 +392,7 @@ function CentroTab({
             { label: "R$/m³", value: totals.costPerM3.toFixed(3) },
             { label: "R$/ha", value: totals.costPerHa.toFixed(2) },
           ].map((ind) => (
-            <div key={ind.label} className="rounded-xl bg-gray-50/80 p-3 text-center dark:bg-graphite-800/60">
+            <div key={ind.label} className="rounded-xl bg-gray-50/80 p-3 text-center dark:bg-white/[0.03]">
               <p className="text-xs text-graphite-400 dark:text-gray-500">{ind.label}</p>
               <p className="mt-1 text-lg font-bold text-graphite-900 dark:text-white">{ind.value}</p>
             </div>
@@ -453,7 +453,7 @@ function ConsumoTab({
             className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
               viewMode === opt.value
                 ? "bg-brand-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700/50 dark:text-gray-300 dark:hover:bg-graphite-600"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.08]"
             }`}
           >
             {opt.label}
@@ -539,7 +539,7 @@ function DemandaTab({
 
       <Card>
         <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Indicador de Demanda</h3>
-        <div className="relative h-8 overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
+        <div className="relative h-8 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
           <div
             className={`h-full transition-all ${demand.exceedsContracted ? "bg-red-500" : demand.demandMarginPct < 15 ? "bg-amber-500" : "bg-green-500"}`}
             style={{ width: `${Math.min(100, (demand.peakDemandKw / Math.max(1, demand.contractedDemandKw)) * 100)}%` }}
@@ -593,7 +593,7 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
                   ? "border-brand-300 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20"
                   : sim.savingsCost > 0
                     ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-900/20"
-                    : "border-gray-100 bg-white dark:border-graphite-700/50 dark:bg-graphite-800/60"
+                    : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-white/[0.03]"
               }`}
             >
               <div className="mb-3 flex items-center justify-between">
@@ -684,7 +684,7 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
           <div key={i} className={`rounded-xl border p-4 ${impactColors[sug.impact]}`}>
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-graphite-700 dark:text-gray-300">
+                <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-white/[0.08] dark:text-gray-300">
                   {typeLabels[sug.type]}
                 </span>
                 <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${impactBadge[sug.impact]}`}>
@@ -698,7 +698,7 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
             <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">{sug.title}</h4>
             <p className="mb-3 text-xs text-gray-600 dark:text-gray-500">{sug.description}</p>
             {sug.estimatedSavings > 0 && (
-              <div className="flex items-center gap-3 rounded-xl bg-white/60 p-2 dark:bg-graphite-800/60">
+              <div className="flex items-center gap-3 rounded-xl bg-white/60 p-2 dark:bg-white/[0.03]">
                 <div>
                   <p className="text-xs text-graphite-400 dark:text-gray-500">Economia estimada</p>
                   <p className="text-sm font-bold text-green-600 dark:text-green-400">
