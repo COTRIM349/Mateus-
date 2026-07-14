@@ -64,7 +64,7 @@ export async function ingestMeteoblueObservations(
         temp_mean: d.tempMean ?? (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : 0),
         humidity: d.humidity ?? 0,
         wind_speed: d.windSpeed ?? 0,
-        solar_radiation: null,
+        solar_radiation: 0,
         precipitation: d.precipitation ?? 0,
         sunshine: null,
         et0_source: null,
