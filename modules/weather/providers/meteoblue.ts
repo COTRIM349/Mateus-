@@ -13,7 +13,7 @@ export const METEOBLUE_ATTRIBUTION = "Weather data by meteoblue.com";
 const PACKAGES_URL = "https://my.meteoblue.com/packages/basic-day";
 
 function getApiKey(): string {
-  const key = process.env.METEOBLUE_API_KEY ?? "";
+  const key = (process.env.METEOBLUE_API_KEY ?? "").trim();
   if (!key) throw new Error("METEOBLUE_API_KEY não configurada.");
   return key;
 }
@@ -138,7 +138,7 @@ export async function pingMeteoblue(params: {
   latitude: number;
   longitude: number;
 }): Promise<MeteobluePingResult> {
-  const key = process.env.METEOBLUE_API_KEY ?? "";
+  const key = (process.env.METEOBLUE_API_KEY ?? "").trim();
   if (!key) {
     return { keyPresent: false, status: "error", httpStatus: null, latencyMs: 0, error: "METEOBLUE_API_KEY não configurada." };
   }
