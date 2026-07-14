@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -1206,131 +1206,213 @@ interface ComparisonRow {
   } | null;
 }
 
+// Cache de comparação em memória (persistente entre montagens do card,
+// dentro da mesma sessão de navegação). TTL de 5 minutos por fazenda.
+interface ComparisonCacheEntry {
+  data: ComparisonRow[];
+  waExists: boolean;
+  ts: number;
+}
+const COMPARISON_CACHE = new Map<string, ComparisonCacheEntry>();
+const COMPARISON_TTL_MS = 5 * 60 * 1000;
+// null=ainda não descoberto, true=schema tem as colunas do 00023,
+// false=schema antigo. Uma vez descoberto (falha), evita a query wide
+// nas próximas montagens — corta 1 roundtrip.
+let schemaWideSupported: boolean | null = null;
+
+const NETWORK_TIMEOUT_MS = 8000;
+
 function WeatherApiCompareCard({ farmId }: { farmId: string | null }) {
   const supabase = createClient();
   const [testing, setTesting] = useState(false);
   const [diagnosing, setDiagnosing] = useState(false);
+  const [loadingComparison, setLoadingComparison] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
   const [diagnostic, setDiagnostic] = useState<WeatherApiDiagnostic | null>(null);
   const [comparison, setComparison] = useState<ComparisonRow[]>([]);
   const [waStationExists, setWaStationExists] = useState<boolean | null>(null);
+  const testAbortRef = useRef<AbortController | null>(null);
+  const diagAbortRef = useRef<AbortController | null>(null);
 
-  const loadComparison = useCallback(async () => {
-    if (!farmId) return;
-    // Isolamento defensivo: qualquer falha aqui (schema incompleto, sem
-    // estação, sem RLS, etc.) só zera a comparação — nunca derruba a página.
-    try {
-      const { data: stations, error: stErr } = await supabase
-        .from("weather_stations")
-        .select("id, data_source")
-        .eq("farm_id", farmId)
-        .in("data_source", ["open_meteo", "weather_api"])
-        .eq("station_type", "virtual");
-      if (stErr) {
-        setComparison([]);
-        setWaStationExists(false);
-        return;
-      }
-      const om = stations?.find((s) => s.data_source === "open_meteo");
-      const wa = stations?.find((s) => s.data_source === "weather_api");
-      setWaStationExists(Boolean(wa));
-      if (!om && !wa) {
-        setComparison([]);
-        return;
-      }
-      const ids = [om?.id, wa?.id].filter(Boolean) as string[];
-      const since = new Date();
-      since.setUTCDate(since.getUTCDate() - 7);
-
-      // Tentativa 1: com colunas da migration 00023.
-      // Se a migration não estiver aplicada em produção, cai no fallback
-      // com apenas as colunas base — o app continua funcionando.
-      let rows: Array<Record<string, unknown>> | null = null;
-      const withNewCols = await supabase
-        .from("weather_readings")
-        .select(
-          "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation, atmospheric_pressure_hpa, condition_text",
-        )
-        .in("station_id", ids)
-        .gte("date", since.toISOString().slice(0, 10))
-        .order("date", { ascending: false });
-      if (withNewCols.error) {
-        const fallback = await supabase
-          .from("weather_readings")
-          .select(
-            "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation",
-          )
-          .in("station_id", ids)
-          .gte("date", since.toISOString().slice(0, 10))
-          .order("date", { ascending: false });
-        if (fallback.error) {
-          setComparison([]);
+  const loadComparison = useCallback(
+    async (options: { force?: boolean } = {}) => {
+      if (!farmId) return;
+      // Cache: 5 min por fazenda. Requisito 9 + 10.
+      if (!options.force) {
+        const cached = COMPARISON_CACHE.get(farmId);
+        if (cached && Date.now() - cached.ts < COMPARISON_TTL_MS) {
+          setComparison(cached.data);
+          setWaStationExists(cached.waExists);
           return;
         }
-        rows = fallback.data ?? [];
-      } else {
-        rows = withNewCols.data ?? [];
       }
-
-      const byDate = new Map<string, ComparisonRow>();
-      for (const r of rows) {
-        const d = r.date as string;
-        if (!byDate.has(d)) byDate.set(d, { date: d, om: null, wa: null });
-        const entry = byDate.get(d)!;
-        const payload = {
-          temp_max: (r.temp_max as number | null) ?? null,
-          temp_min: (r.temp_min as number | null) ?? null,
-          temp_mean: (r.temp_mean as number | null) ?? null,
-          humidity: (r.humidity as number | null) ?? null,
-          wind_speed: (r.wind_speed as number | null) ?? null,
-          precipitation: (r.precipitation as number | null) ?? null,
-          atmospheric_pressure_hpa:
-            (r.atmospheric_pressure_hpa as number | null) ?? null,
-        };
-        if (r.origin === "open_meteo") entry.om = payload;
-        if (r.origin === "weather_api") {
-          entry.wa = {
-            ...payload,
-            condition_text: (r.condition_text as string | null) ?? null,
-          };
+      setLoadingComparison(true);
+      try {
+        const { data: stations, error: stErr } = await supabase
+          .from("weather_stations")
+          .select("id, data_source")
+          .eq("farm_id", farmId)
+          .in("data_source", ["open_meteo", "weather_api"])
+          .eq("station_type", "virtual");
+        if (stErr) {
+          setComparison([]);
+          setWaStationExists(false);
+          setLoadingComparison(false);
+          return;
         }
-      }
-      setComparison(Array.from(byDate.values()));
-    } catch {
-      setComparison([]);
-    }
-  }, [farmId, supabase]);
+        const om = stations?.find((s) => s.data_source === "open_meteo");
+        const wa = stations?.find((s) => s.data_source === "weather_api");
+        const waExists = Boolean(wa);
+        setWaStationExists(waExists);
+        if (!om && !wa) {
+          setComparison([]);
+          COMPARISON_CACHE.set(farmId, { data: [], waExists: false, ts: Date.now() });
+          setLoadingComparison(false);
+          return;
+        }
+        const ids = [om?.id, wa?.id].filter(Boolean) as string[];
+        const since = new Date();
+        since.setUTCDate(since.getUTCDate() - 7); // requisito 11
 
+        // Colunas: sabendo qual schema o banco tem, faz uma única query.
+        // Se ainda não sabemos, tenta a wide; ao falhar, fixa para reduced.
+        const wideCols =
+          "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation, atmospheric_pressure_hpa, condition_text";
+        const reducedCols =
+          "date, station_id, origin, temp_max, temp_min, temp_mean, humidity, wind_speed, precipitation";
+
+        let rows: Array<Record<string, unknown>> | null = null;
+        if (schemaWideSupported !== false) {
+          const wide = await supabase
+            .from("weather_readings")
+            .select(wideCols)
+            .in("station_id", ids)
+            .gte("date", since.toISOString().slice(0, 10))
+            .order("date", { ascending: false })
+            .limit(20);
+          if (wide.error) {
+            schemaWideSupported = false;
+          } else {
+            schemaWideSupported = true;
+            rows = wide.data ?? [];
+          }
+        }
+        if (rows === null) {
+          const reduced = await supabase
+            .from("weather_readings")
+            .select(reducedCols)
+            .in("station_id", ids)
+            .gte("date", since.toISOString().slice(0, 10))
+            .order("date", { ascending: false })
+            .limit(20);
+          if (reduced.error) {
+            setComparison([]);
+            COMPARISON_CACHE.set(farmId, { data: [], waExists, ts: Date.now() });
+            setLoadingComparison(false);
+            return;
+          }
+          rows = reduced.data ?? [];
+        }
+
+        const byDate = new Map<string, ComparisonRow>();
+        for (const r of rows) {
+          const d = r.date as string;
+          if (!byDate.has(d)) byDate.set(d, { date: d, om: null, wa: null });
+          const entry = byDate.get(d)!;
+          const payload = {
+            temp_max: (r.temp_max as number | null) ?? null,
+            temp_min: (r.temp_min as number | null) ?? null,
+            temp_mean: (r.temp_mean as number | null) ?? null,
+            humidity: (r.humidity as number | null) ?? null,
+            wind_speed: (r.wind_speed as number | null) ?? null,
+            precipitation: (r.precipitation as number | null) ?? null,
+            atmospheric_pressure_hpa:
+              (r.atmospheric_pressure_hpa as number | null) ?? null,
+          };
+          if (r.origin === "open_meteo") entry.om = payload;
+          if (r.origin === "weather_api") {
+            entry.wa = {
+              ...payload,
+              condition_text: (r.condition_text as string | null) ?? null,
+            };
+          }
+        }
+        const built = Array.from(byDate.values());
+        setComparison(built);
+        COMPARISON_CACHE.set(farmId, { data: built, waExists, ts: Date.now() });
+      } catch {
+        setComparison([]);
+      }
+      setLoadingComparison(false);
+    },
+    [farmId, supabase],
+  );
+
+  // Diferido: setTimeout(0) empurra o loadComparison para o próximo macrotask,
+  // de modo que a página primeiro renderiza os dados do Open-Meteo já em
+  // cache do parent e só depois busca a comparação. Requisitos 3, 4.
   useEffect(() => {
-    loadComparison();
-  }, [loadComparison]);
+    if (!farmId) return;
+    const id = setTimeout(() => loadComparison(), 0);
+    return () => clearTimeout(id);
+  }, [farmId, loadComparison]);
 
   const runDiagnostic = async () => {
+    // Impede clique duplo enquanto ocupado (req. 8).
+    if (diagnosing) return;
+    // Cancela a requisição anterior se ainda estiver em andamento (req. 7).
+    diagAbortRef.current?.abort();
+    const ac = new AbortController();
+    diagAbortRef.current = ac;
+    const timeoutId = setTimeout(() => ac.abort(), NETWORK_TIMEOUT_MS); // req. 6
     setDiagnosing(true);
     setMessage(null);
     try {
-      const res = await fetch("/api/climate/weather-api-diagnostic");
+      const res = await fetch("/api/climate/weather-api-diagnostic", { signal: ac.signal });
       const json = (await res.json()) as WeatherApiDiagnostic;
       setDiagnostic(json);
     } catch (err) {
-      setMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
+      const isAbort =
+        err instanceof Error && (err.name === "AbortError" || /aborted/i.test(err.message));
+      setMessage({
+        type: "error",
+        text: isAbort
+          ? `Verificação cancelada (timeout ${NETWORK_TIMEOUT_MS / 1000}s ou nova execução).`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      });
+    } finally {
+      clearTimeout(timeoutId);
+      setDiagnosing(false);
     }
-    setDiagnosing(false);
   };
 
   const runTest = async () => {
     if (!farmId) return;
+    if (testing) return; // req. 8
+    testAbortRef.current?.abort(); // req. 7
+    const ac = new AbortController();
+    testAbortRef.current = ac;
+    const timeoutId = setTimeout(() => ac.abort(), NETWORK_TIMEOUT_MS);
     setTesting(true);
     setMessage(null);
     try {
       const res = await fetch("/api/climate/test-weather-api", {
         method: "POST",
+        signal: ac.signal,
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ farmId }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      const runs = (json.runs ?? []) as Array<{ status: string; rowsInserted: number; rowsUpdated: number; rowsSkipped: number; errorMessage: string | null }>;
+      const runs = (json.runs ?? []) as Array<{
+        status: string;
+        rowsInserted: number;
+        rowsUpdated: number;
+        rowsSkipped: number;
+        errorMessage: string | null;
+      }>;
       const inserted = runs.reduce((s, r) => s + r.rowsInserted, 0);
       const updated = runs.reduce((s, r) => s + r.rowsUpdated, 0);
       const skipped = runs.reduce((s, r) => s + r.rowsSkipped, 0);
@@ -1339,11 +1421,25 @@ function WeatherApiCompareCard({ farmId }: { farmId: string | null }) {
       const created = json.virtualStationCreated ? "Estação virtual WeatherAPI criada. " : "";
       const summary = `${created}${inserted} inseridas · ${updated} atualizadas · ${skipped} ignoradas · status ${runStatus}${errMsg ? ` · erro: ${errMsg}` : ""}`;
       setMessage({ type: runStatus === "success" ? "success" : "error", text: summary });
-      await loadComparison();
+      // Invalida o cache e recarrega para refletir os dados recém-ingeridos
+      // (req. 10 — cache invalidado após o teste).
+      COMPARISON_CACHE.delete(farmId);
+      await loadComparison({ force: true });
     } catch (err) {
-      setMessage({ type: "error", text: err instanceof Error ? err.message : String(err) });
+      const isAbort =
+        err instanceof Error && (err.name === "AbortError" || /aborted/i.test(err.message));
+      setMessage({
+        type: "error",
+        text: isAbort
+          ? `Teste cancelado (timeout ${NETWORK_TIMEOUT_MS / 1000}s ou nova execução). A ingestão em progresso no servidor pode continuar.`
+          : err instanceof Error
+            ? err.message
+            : String(err),
+      });
+    } finally {
+      clearTimeout(timeoutId);
+      setTesting(false);
     }
-    setTesting(false);
   };
 
   const diffColor = (v: number | null) => {
@@ -1410,7 +1506,13 @@ function WeatherApiCompareCard({ farmId }: { farmId: string | null }) {
         </div>
       )}
 
-      {waStationExists === false && !message && (
+      {loadingComparison && comparison.length === 0 && (
+        <p className="py-4 text-center text-xs text-gray-500 dark:text-gray-400">
+          Carregando comparação (últimos 7 dias)...
+        </p>
+      )}
+
+      {!loadingComparison && waStationExists === false && !message && (
         <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
           Clique em &quot;Testar WeatherAPI&quot; para criar a estação virtual e importar os primeiros 7 dias.
         </p>
