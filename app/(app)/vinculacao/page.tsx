@@ -369,7 +369,7 @@ export default function VinculacaoPage() {
 
       <Card>
         {loading || lookupsLoading ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : farmAssignments.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
             Nenhuma vinculação cadastrada. Crie a primeira para habilitar o balanço hídrico dos pivôs.
@@ -498,7 +498,7 @@ export default function VinculacaoPage() {
             onChange={(e) => patch({ notes: e.target.value })}
           />
 
-          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={closeModal}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>

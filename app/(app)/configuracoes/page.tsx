@@ -164,8 +164,8 @@ export default function ConfiguracoesPage() {
           <Input id="contact_email" name="contact_email" label="E-mail de contato" type="email" required defaultValue={company?.contact_email} />
           <Input id="contact_phone" name="contact_phone" label="Telefone" defaultValue={company?.contact_phone ?? ""} placeholder="(00) 00000-0000" />
           <Input id="address" name="address" label="Endereço" defaultValue={company?.address ?? ""} />
-          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
-          {successMsg && <p className="rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400">{successMsg}</p>}
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          {successMsg && <p role="alert" className="rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400">{successMsg}</p>}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => setCompanyModal(false)}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>

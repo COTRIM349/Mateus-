@@ -63,13 +63,13 @@ export default function ClimaPage() {
       <PageHeader titulo="Clima" descricao="Estações meteorológicas, dados climáticos e histórico" />
       <Tabs tabs={climaTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-8">
-        {activeTab === "virtual" && <VirtualStationTab />}
-        {activeTab === "estacoes" && <StationsTab />}
-        {activeTab === "lancamento" && <ManualEntryTab />}
-        {activeTab === "historico" && <HistoryTab />}
-        {activeTab === "previsao" && <ForecastTab />}
-        {activeTab === "fonte" && <DailySelectionTab />}
-        {activeTab === "sync" && <IngestionRunsTab />}
+        {activeTab === "virtual" && <div className="animate-in"><VirtualStationTab /></div>}
+        {activeTab === "estacoes" && <div className="animate-in"><StationsTab /></div>}
+        {activeTab === "lancamento" && <div className="animate-in"><ManualEntryTab /></div>}
+        {activeTab === "historico" && <div className="animate-in"><HistoryTab /></div>}
+        {activeTab === "previsao" && <div className="animate-in"><ForecastTab /></div>}
+        {activeTab === "fonte" && <div className="animate-in"><DailySelectionTab /></div>}
+        {activeTab === "sync" && <div className="animate-in"><IngestionRunsTab /></div>}
       </div>
       <p className="mt-6 text-xs text-graphite-400 dark:text-gray-500">
         Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
@@ -183,7 +183,7 @@ function StationsTab() {
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeStations.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma estação cadastrada para esta fazenda.</p>
         ) : (
@@ -204,7 +204,7 @@ function StationsTab() {
             <Input id="longitude" name="longitude" label="Longitude" type="number" step="any" required defaultValue={editing?.longitude} placeholder="-43.3089" />
             <Input id="altitude" name="altitude" label="Altitude (m)" type="number" step="any" defaultValue={editing?.altitude ?? 0} />
           </div>
-          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
@@ -381,8 +381,8 @@ function ManualEntryTab() {
           </div>
         </div>
 
-        {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
-        {successMsg && <p className="rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400">{successMsg}</p>}
+        {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+        {successMsg && <p role="alert" className="rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400">{successMsg}</p>}
 
         <div className="flex justify-end gap-3 pt-4">
           <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar dados"}</Button>
@@ -602,7 +602,7 @@ function HistoryTab() {
         )}
 
         {loading ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : readings.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum dado climático encontrado para o período selecionado.</p>
         ) : (
@@ -698,7 +698,7 @@ function ForecastTab() {
         Previsão meteorológica é armazenada separadamente das observações e nunca as sobrescreve.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
@@ -779,7 +779,7 @@ function DailySelectionTab() {
         A fonte utilizada pelo balanço hídrico em cada dia é registrada aqui para auditoria.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma seleção registrada ainda. As seleções são criadas quando a ingestão climática executa.
@@ -864,7 +864,7 @@ function IngestionRunsTab() {
         Log das execuções de ingestão climática automática.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
         <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma execução registrada ainda.
@@ -961,7 +961,7 @@ function VirtualStationTab() {
   if (loading) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       </Card>
     );
   }
@@ -980,7 +980,7 @@ function VirtualStationTab() {
             </p>
           </div>
           {message && (
-            <p className={message.type === "success" ? "rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400" : "rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"}>
+            <p role="alert" className={message.type === "success" ? "rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400" : "rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"}>
               {message.text}
             </p>
           )}
@@ -1423,7 +1423,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
       )}
 
       {loadingComparison && comparison.length === 0 && (
-        <p className="py-4 text-center text-xs text-graphite-400 dark:text-gray-500">Carregando comparação (últimos 7 dias)...</p>
+        <div className="flex items-center justify-center gap-2 py-4"><div className="h-4 w-4 animate-spin rounded-full border-[2px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-xs text-graphite-400 dark:text-gray-500">Carregando comparação (últimos 7 dias)...</span></div>
       )}
 
       {!loadingComparison && mbStationExists === false && !message && (

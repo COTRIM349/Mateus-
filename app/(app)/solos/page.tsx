@@ -121,9 +121,9 @@ export default function SolosPage() {
         {activeTab === "cadastro" && (
           <SoilsTab selectedSoilId={selectedSoilId} onSelectSoil={setSelectedSoilId} />
         )}
-        {activeTab === "camadas" && <LayersTab selectedSoilId={selectedSoilId} onSelectSoil={setSelectedSoilId} />}
-        {activeTab === "associacao" && <AssociationTab selectedSoilId={selectedSoilId} onSelectSoil={setSelectedSoilId} />}
-        {activeTab === "historico" && <HistoryTab selectedSoilId={selectedSoilId} onSelectSoil={setSelectedSoilId} />}
+        {activeTab === "camadas" && <div className="animate-in"><LayersTab selectedSoilId={selectedSoilId} onSelectSoil={setSelectedSoilId} /></div>}
+        {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedSoilId={selectedSoilId} onSelectSoil={setSelectedSoilId} /></div>}
+        {activeTab === "historico" && <div className="animate-in"><HistoryTab selectedSoilId={selectedSoilId} onSelectSoil={setSelectedSoilId} /></div>}
       </div>
     </div>
   );
@@ -335,7 +335,7 @@ function SoilsTab({
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeSoils.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum solo cadastrado para esta fazenda.</p>
         ) : (
@@ -377,7 +377,7 @@ function SoilsTab({
               ))}
             </div>
           )}
-          {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+          {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); setWarnings([]); }}>Cancelar</Button>
@@ -627,7 +627,7 @@ function LayersTab({
 
           <Card>
             {loading ? (
-              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+              <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
             ) : layers.length === 0 ? (
               <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma camada cadastrada. Adicione camadas para detalhar o perfil do solo.</p>
             ) : (
@@ -655,7 +655,7 @@ function LayersTab({
               ))}
             </div>
           )}
-          {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
+          {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
@@ -754,7 +754,7 @@ function AssociationTab({
       ) : (
         <Card>
           {loading ? (
-            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
           ) : assignments.length === 0 ? (
             <div className="py-8 text-center">
               <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô vinculado a este solo.</p>
@@ -865,7 +865,7 @@ function HistoryTab({
       ) : (
         <Card>
           {loading ? (
-            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
           ) : history.length === 0 ? (
             <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum registro de alteração encontrado.</p>
           ) : (

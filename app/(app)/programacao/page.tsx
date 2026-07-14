@@ -534,7 +534,7 @@ export default function ProgramacaoPage() {
 
       {error && (
         <Card className="mb-4 border-red-200 bg-red-50 p-3.5 dark:border-red-900 dark:bg-red-900/20">
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>
         </Card>
       )}
 
@@ -1055,7 +1055,7 @@ function HistoryTab({
     },
   ];
 
-  if (loading) return <Card className="py-8 text-center text-sm text-graphite-400">Carregando...</Card>;
+  if (loading) return <Card className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></Card>;
 
   if (history.length === 0) {
     return <Card className="py-12 text-center"><p className="text-graphite-400 dark:text-gray-500">Nenhuma recomendação registrada.</p></Card>;

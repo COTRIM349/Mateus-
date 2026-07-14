@@ -345,7 +345,7 @@ export default function RelatoriosPage() {
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
         {activeTab === "relatorios" && (
-          <TabRelatorios
+          <div className="animate-in"><TabRelatorios
             selectedType={selectedReportType}
             onSelectType={setSelectedReportType}
             selectedFormat={selectedFormat}
@@ -356,21 +356,21 @@ export default function RelatoriosPage() {
             byPivot={byPivot}
             byCulture={byCulture}
             recommendations={recommendations}
-          />
+          /></div>
         )}
         {activeTab === "historico" && (
-          <TabHistorico
+          <div className="animate-in"><TabHistorico
             dimension={historyDimension}
             onChangeDimension={setHistoryDimension}
             balanceRows={balanceRows}
             energyResults={energyResults}
             recommendations={recommendations}
-          />
+          /></div>
         )}
         {activeTab === "indicadores" && (
-          <TabIndicadores kpis={kpis} farmTotals={farmTotals} balanceSummary={balanceSummary} byPivot={byPivot} byCulture={byCulture} />
+          <div className="animate-in"><TabIndicadores kpis={kpis} farmTotals={farmTotals} balanceSummary={balanceSummary} byPivot={byPivot} byCulture={byCulture} /></div>
         )}
-        {activeTab === "auditoria" && <TabAuditoria auditLog={rawAuditLog} />}
+        {activeTab === "auditoria" && <div className="animate-in"><TabAuditoria auditLog={rawAuditLog} /></div>}
       </div>
     </div>
   );
@@ -923,7 +923,7 @@ function TabIndicadores({
 
       {balanceSummary && (
         <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-graphite-400 dark:text-gray-500">Resumo do Período</h4>
+          <h4 className="mb-3 text-sm font-semibold uppercase tracking-tight text-graphite-400 dark:text-gray-500">Resumo do Período</h4>
           <div className="space-y-3">
             <SummaryRow label="Dias no período" value={`${balanceSummary.days}`} />
             <SummaryRow label="ETc média diária" value={`${formatNumber(balanceSummary.avgETc, 2)} mm/dia`} />
@@ -946,7 +946,7 @@ function TabIndicadores({
 
       {byPivot.length > 0 && (
         <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-graphite-400 dark:text-gray-500">Indicadores por Pivô</h4>
+          <h4 className="mb-3 text-sm font-semibold uppercase tracking-tight text-graphite-400 dark:text-gray-500">Indicadores por Pivô</h4>
           <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byPivot}>

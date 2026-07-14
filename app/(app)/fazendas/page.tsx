@@ -60,9 +60,9 @@ export default function FazendasPage() {
       <PageHeader titulo="Fazendas" descricao="Gestão de fazendas, safras e módulos produtivos" />
       <Tabs tabs={farmTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
-        {activeTab === "fazendas" && <FarmsTab />}
-        {activeTab === "safras" && <SeasonsTab />}
-        {activeTab === "modulos" && <ModulesTab />}
+        {activeTab === "fazendas" && <div className="animate-in"><FarmsTab /></div>}
+        {activeTab === "safras" && <div className="animate-in"><SeasonsTab /></div>}
+        {activeTab === "modulos" && <div className="animate-in"><ModulesTab /></div>}
       </div>
     </div>
   );
@@ -215,7 +215,7 @@ function FarmsTab() {
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeFarms.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma fazenda cadastrada.</p>
         ) : (
@@ -280,7 +280,7 @@ function FarmsTab() {
               <p className="mt-1">A fazenda será salva; verifique se este é o país de operação.</p>
             </div>
           )}
-          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
@@ -380,7 +380,7 @@ function SeasonsTab() {
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeSeasons.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma safra cadastrada para esta fazenda.</p>
         ) : (
@@ -395,7 +395,7 @@ function SeasonsTab() {
             <Input id="start_date" name="start_date" label="Data de início" type="date" required defaultValue={editing?.start_date} />
             <Input id="end_date" name="end_date" label="Data de fim" type="date" required defaultValue={editing?.end_date} />
           </div>
-          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
@@ -486,7 +486,7 @@ function ModulesTab() {
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeModules.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum módulo cadastrado para esta fazenda.</p>
         ) : (
@@ -499,7 +499,7 @@ function ModulesTab() {
           <Input id="name" name="name" label="Nome" placeholder="RDM, M1, M2/M3..." required defaultValue={editing?.name} />
           <TextArea id="description" name="description" label="Descrição" defaultValue={editing?.description ?? ""} />
           <Input id="total_area" name="total_area" label="Área total (ha)" type="number" step="any" defaultValue={editing?.total_area ?? 0} />
-          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>

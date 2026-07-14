@@ -151,7 +151,7 @@ export default function RateioPage() {
                   className={`rounded-xl px-4 py-2 text-xs font-medium transition-colors ${
                     method === key
                       ? "bg-brand-500 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-300 dark:hover:bg-graphite-600"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200/70 dark:bg-graphite-700/50 dark:text-gray-300 dark:hover:bg-graphite-600"
                   }`}
                 >
                   <div className="font-semibold">{conf.label}</div>
@@ -164,11 +164,11 @@ export default function RateioPage() {
 
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-        {activeTab === "pivot" && <PivotTab results={results} />}
-        {activeTab === "cultura" && <CulturaTab results={byCulture} />}
-        {activeTab === "modulo" && <ModuloTab results={byModule} />}
+        {activeTab === "pivot" && <div className="animate-in"><PivotTab results={results} /></div>}
+        {activeTab === "cultura" && <div className="animate-in"><CulturaTab results={byCulture} /></div>}
+        {activeTab === "modulo" && <div className="animate-in"><ModuloTab results={byModule} /></div>}
         {activeTab === "comparativo" && (
-          <ComparativoTab results={results} byCulture={byCulture} byModule={byModule} />
+          <div className="animate-in"><ComparativoTab results={results} byCulture={byCulture} byModule={byModule} /></div>
         )}
       </div>
     </div>
@@ -187,7 +187,7 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
     { header: "Volume (m³)", render: (r) => r.volumeM3.toLocaleString("pt-BR"), align: "right" },
     { header: "% Rateio", render: (r) => (
       <div className="flex items-center gap-2">
-        <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
+        <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
           <div className="h-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
         </div>
         <span className="text-xs">{r.sharePct.toFixed(1)}%</span>
@@ -379,7 +379,7 @@ function ComparativoTab({
 
               <div className="mt-3">
                 <div className="text-xs text-graphite-400 dark:text-gray-500">Participação</div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
                   <div className="h-full rounded-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
                 </div>
               </div>

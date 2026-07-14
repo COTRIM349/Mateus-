@@ -94,8 +94,8 @@ export default function DashboardPage() {
 
           <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-          {activeTab === "painel" && <PainelTab summary={summary} />}
-          {activeTab === "mapa" && <MapaHidricoTab states={states} />}
+          {activeTab === "painel" && <div className="animate-in"><PainelTab summary={summary} /></div>}
+          {activeTab === "mapa" && <div className="animate-in"><MapaHidricoTab states={states} /></div>}
         </>
       )}
     </div>
@@ -119,7 +119,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
 
   return (
     <div className="space-y-8">
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
         {kpis.map((k) => (
           <StatCard key={k.id} metric={k} />
         ))}

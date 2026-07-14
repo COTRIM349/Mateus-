@@ -234,34 +234,34 @@ export default function EnergiaPage() {
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
         {activeTab === "centro" && farmTotals && demand && (
-          <CentroTab
+          <div className="animate-in"><CentroTab
             totals={farmTotals}
             demand={demand}
             dailyAgg={dailyAgg}
             cultureAgg={cultureAgg}
             hourlyCost={hourlyCost}
-          />
+          /></div>
         )}
 
         {activeTab === "consumo" && (
-          <ConsumoTab
+          <div className="animate-in"><ConsumoTab
             aggregated={aggregated}
             viewMode={viewMode}
             setViewMode={setViewMode}
             monthlyAgg={monthlyAgg}
-          />
+          /></div>
         )}
 
         {activeTab === "demanda" && demand && (
-          <DemandaTab demand={demand} dailyAgg={dailyAgg} />
+          <div className="animate-in"><DemandaTab demand={demand} dailyAgg={dailyAgg} /></div>
         )}
 
         {activeTab === "simulacoes" && (
-          <SimulacoesTab simulations={simulations} />
+          <div className="animate-in"><SimulacoesTab simulations={simulations} /></div>
         )}
 
         {activeTab === "inteligencia" && (
-          <InteligenciaTab suggestions={suggestions} />
+          <div className="animate-in"><InteligenciaTab suggestions={suggestions} /></div>
         )}
       </div>
     </div>
@@ -305,7 +305,7 @@ function CentroTab({
 
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-graphite-900 dark:text-white">Risco de Demanda:</span>
-        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${riskConf.bgClass}`}>
+        <span className={`inline-flex rounded-lg px-3 py-1 text-xs font-semibold ${riskConf.bgClass}`}>
           {riskConf.label}
         </span>
         {demand.exceedsContracted && (
@@ -539,7 +539,7 @@ function DemandaTab({
 
       <Card>
         <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Indicador de Demanda</h3>
-        <div className="relative h-8 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
+        <div className="relative h-8 overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
           <div
             className={`h-full transition-all ${demand.exceedsContracted ? "bg-red-500" : demand.demandMarginPct < 15 ? "bg-amber-500" : "bg-green-500"}`}
             style={{ width: `${Math.min(100, (demand.peakDemandKw / Math.max(1, demand.contractedDemandKw)) * 100)}%` }}
@@ -599,7 +599,7 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">{sim.name}</h4>
                 {i === 0 && (
-                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-400">
+                  <span className="rounded-lg bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-400">
                     Atual
                   </span>
                 )}
@@ -687,7 +687,7 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
                 <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-graphite-700 dark:text-gray-300">
                   {typeLabels[sug.type]}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${impactBadge[sug.impact]}`}>
+                <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${impactBadge[sug.impact]}`}>
                   Impacto {sug.impact}
                 </span>
               </div>

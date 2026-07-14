@@ -549,20 +549,20 @@ export default function BalancoHidricoPage() {
             Nenhuma associação ativa (pivô↔safra↔cultura↔solo) encontrada para este pivô.
           </p>
         )}
-        {error && <p className="mt-3 rounded-xl bg-red-50 p-3.5 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
+        {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3.5 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
       </Card>
 
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
       <div className="mt-5">
         {activeTab === "balanco" && (
-          <BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} />
+          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} /></div>
         )}
         {activeTab === "graficos" && (
-          <ChartsTab rows={balanceRows} />
+          <div className="animate-in"><ChartsTab rows={balanceRows} /></div>
         )}
         {activeTab === "lancamento" && (
-          <LancamentoTab
+          <div className="animate-in"><LancamentoTab
             pivotId={selectedPivotId}
             pivots={pivots}
             date={lancDate}
@@ -572,7 +572,7 @@ export default function BalancoHidricoPage() {
             onDateChange={setLancDate}
             onDepthChange={setLancDepth}
             onSave={handleLancamento}
-          />
+          /></div>
         )}
       </div>
     </div>
@@ -640,7 +640,10 @@ function BalanceTab({
       </div>
 
       {loading ? (
-        <Card className="py-8 text-center text-sm text-gray-500">Carregando...</Card>
+        <Card className="flex items-center justify-center gap-3 py-8">
+          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-graphite-700 dark:border-t-brand-500" />
+          <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+        </Card>
       ) : (
         <Card className="overflow-x-auto">
           <Table columns={columns} data={rows} getKey={(r) => r.date} />
@@ -841,7 +844,7 @@ function LancamentoTab({
             </Button>
           </div>
           {message && (
-            <p className={`col-span-full rounded-xl p-3.5 text-xs ${message.includes("sucesso") ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"}`}>
+            <p role="alert" className={`col-span-full rounded-xl p-3.5 text-xs ${message.includes("sucesso") ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"}`}>
               {message}
             </p>
           )}
