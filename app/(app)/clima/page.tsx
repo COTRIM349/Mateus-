@@ -1060,17 +1060,17 @@ function VirtualStationTab() {
         )}
 
         {st.sync_error && (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
             Último erro: {st.sync_error}
           </p>
         )}
       </Card>
 
       <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">Última leitura observada</h4>
+        <div className="mb-5 flex items-center justify-between">
+          <h4 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Última leitura observada</h4>
           {r && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-graphite-400 dark:text-gray-500">
               {new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}
               {" · qualidade: "}
               <span className={r.data_quality === "ok" ? "text-green-700 dark:text-green-400" : "text-yellow-700 dark:text-yellow-400"}>
