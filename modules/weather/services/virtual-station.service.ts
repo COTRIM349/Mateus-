@@ -85,27 +85,6 @@ export async function getVirtualStation(
   return ((data ?? [])[0] ?? null) as VirtualStationRow | null;
 }
 
-/**
- * Como uma fazenda pode ter múltiplas estações virtuais (uma por provedor),
- * essa função retorna a estação de um provider específico.
- */
-export async function getVirtualStationByProvider(
-  supabase: SupabaseClient,
-  farmId: string,
-  dataSource: string,
-): Promise<VirtualStationRow | null> {
-  const { data, error } = await supabase
-    .from("weather_stations")
-    .select(STATION_SELECT)
-    .eq("farm_id", farmId)
-    .eq("station_type", "virtual")
-    .eq("data_source", dataSource)
-    .eq("active", true)
-    .limit(1);
-  if (error) throw new Error(error.message);
-  return ((data ?? [])[0] ?? null) as VirtualStationRow | null;
-}
-
 export async function hasVirtualStation(
   supabase: SupabaseClient,
   farmId: string,
@@ -136,13 +115,7 @@ export async function ensureVirtualStation(
   options: EnsureVirtualStationOptions = {},
 ): Promise<EnsureVirtualStationResult> {
   const dataSource = options.dataSource ?? VIRTUAL_STATION_DEFAULT_SOURCE;
-  // Checa existência POR PROVIDER — permite múltiplas estações virtuais
-  // (ex.: Open-Meteo P5 + WeatherAPI P6) na mesma fazenda.
-  const existing = await getVirtualStationByProvider(
-    supabase,
-    farmId,
-    dataSource,
-  );
+  const existing = await getVirtualStation(supabase, farmId);
   if (existing) return { station: existing, created: false };
 
   const farm = await fetchFarm(supabase, farmId);

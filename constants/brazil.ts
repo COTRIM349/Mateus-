@@ -79,7 +79,7 @@ export const STATION_TYPES = [
 export const DATA_SOURCES = [
   { value: "manual", label: "Entrada manual" },
   { value: "open_meteo", label: "Open-Meteo" },
-  { value: "weather_api", label: "WeatherAPI.com" },
+
   { value: "br_dwgd", label: "BR-DWGD (histórico)" },
   { value: "api_inmet", label: "API INMET" },
   { value: "api_nasa_power", label: "NASA POWER" },
