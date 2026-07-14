@@ -113,7 +113,7 @@ export default function CulturasPage() {
   const [cultures, setCultures] = useState<Culture[]>([]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader titulo="Culturas" descricao="Motor de cultura — coeficientes, fases fenológicas e sistema radicular" />
       <Tabs tabs={cultureTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
@@ -196,7 +196,7 @@ function CulturesTab({
     {
       header: "Status",
       render: (r) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${statusColors[r.status] ?? ""}`}>
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${statusColors[r.status] ?? ""}`}>
           {statusLabels[r.status] ?? r.status}
         </span>
       ),
@@ -276,16 +276,16 @@ function CulturesTab({
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
         ) : activeCultures.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma cultura cadastrada.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma cultura cadastrada.</p>
         ) : (
           <Table columns={columns} data={activeCultures} getKey={(r) => r.id} />
         )}
       </Card>
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar cultura" : "Nova cultura"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="name" name="name" label="Nome" placeholder="Soja" required defaultValue={editing?.name} />
             <Input id="scientific_name" name="scientific_name" label="Nome científico" placeholder="Glycine max" defaultValue={editing?.scientific_name ?? ""} />
@@ -319,7 +319,7 @@ function CulturesTab({
           </div>
 
           {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
@@ -471,13 +471,13 @@ function VarietiesTab({
       </div>
 
       {!selectedCultureId ? (
-        <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma cultura para gerenciar variedades.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para gerenciar variedades.</p></Card>
       ) : (
         <Card>
           {loading ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
           ) : varieties.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma variedade cadastrada.</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma variedade cadastrada.</p>
           ) : (
             <Table columns={columns} data={varieties} getKey={(r) => r.id} />
           )}
@@ -485,7 +485,7 @@ function VarietiesTab({
       )}
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar variedade" : "Nova variedade"}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <Input id="name" name="name" label="Cultivar" placeholder="BRS 388" required defaultValue={editing?.name} />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="company" name="company" label="Empresa" placeholder="Embrapa" defaultValue={editing?.company ?? ""} />
@@ -494,7 +494,7 @@ function VarietiesTab({
           </div>
           <TextArea id="observations" name="observations" label="Observações" defaultValue={editing?.observations ?? ""} />
           {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
@@ -686,31 +686,31 @@ function PhasesTab({
       </div>
 
       {!selectedCultureId ? (
-        <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma cultura para gerenciar fases fenológicas.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para gerenciar fases fenológicas.</p></Card>
       ) : (
         <>
           {previewDay !== null && phases.length > 0 && (
-            <div className="mb-4 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-graphite-700 dark:bg-graphite-800 sm:grid-cols-4">
+            <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-graphite-700/50 dark:bg-graphite-800/60 sm:grid-cols-4">
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Dia exemplo (DAP {previewDay})</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">Dia exemplo (DAP {previewDay})</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">
                   {identifyPhase(phases as CulturePhase[], previewDay)?.phase.name ?? "—"}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Kc interpolado</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">Kc interpolado</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">
                   {interpolateKc(phases as CulturePhase[], previewDay).toFixed(3)}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Raiz interpolada</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">Raiz interpolada</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">
                   {interpolateRootDepth(phases as CulturePhase[], previewDay).toFixed(3)} m
                 </p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Total fases</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">Total fases</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">{phases.length}</p>
               </div>
             </div>
@@ -718,9 +718,9 @@ function PhasesTab({
 
           <Card>
             {loading ? (
-              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
             ) : phases.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma fase cadastrada. Adicione fases para definir o perfil fenológico.</p>
+              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma fase cadastrada. Adicione fases para definir o perfil fenológico.</p>
             ) : (
               <Table columns={columns} data={phases} getKey={(r) => r.id} />
             )}
@@ -729,7 +729,7 @@ function PhasesTab({
       )}
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); setWarnings([]); }} title={editing ? "Editar fase" : "Nova fase"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="phase_order" name="phase_order" label="Ordem" type="number" min="1" required defaultValue={editing?.phase_order ?? nextOrder} />
             <Input id="name" name="name" label="Nome da fase" placeholder="Germinação" required defaultValue={editing?.name} />
@@ -760,7 +760,7 @@ function PhasesTab({
             </div>
           )}
           {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
@@ -848,14 +848,14 @@ function AssociationTab({
       </div>
 
       {!selectedCultureId ? (
-        <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma cultura para ver seus vínculos.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para ver seus vínculos.</p></Card>
       ) : (
         <Card>
           {loading ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
           ) : assignments.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Nenhuma associação encontrada.</p>
+              <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhuma associação encontrada.</p>
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Cultura → Variedade → Safra → Pivô via pivot_crop_assignments.</p>
             </div>
           ) : (
@@ -929,7 +929,7 @@ function HistoryTabComponent({
     {
       header: "Tipo",
       render: (r) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${changeTypeColors[r.change_type] ?? ""}`}>
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${changeTypeColors[r.change_type] ?? ""}`}>
           {changeTypeLabels[r.change_type] ?? r.change_type}
         </span>
       ),
@@ -953,13 +953,13 @@ function HistoryTabComponent({
       </div>
 
       {!selectedCultureId ? (
-        <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma cultura para ver o histórico.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para ver o histórico.</p></Card>
       ) : (
         <Card>
           {loading ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
           ) : history.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhum registro de alteração.</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum registro de alteração.</p>
           ) : (
             <Table columns={columns} data={history} getKey={(r) => r.id} />
           )}

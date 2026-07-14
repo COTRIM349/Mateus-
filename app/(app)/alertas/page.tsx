@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function AlertasPage() {
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader titulo="Alertas" descricao="Notificações e ações pendentes" />
       <EmptyState
         title="Alertas"

@@ -101,7 +101,7 @@ export default function SolosPage() {
 
   if (!activeFarmId) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <PageHeader titulo="Solos" descricao="Motor de dados de solo para balanço hídrico" />
         <PrerequisiteNotice
           title="Cadastre uma fazenda primeiro"
@@ -114,7 +114,7 @@ export default function SolosPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader titulo="Solos" descricao="Motor de dados de solo para balanço hídrico" />
       <Tabs tabs={soloTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
@@ -335,16 +335,16 @@ function SoilsTab({
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
         ) : activeSoils.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhum solo cadastrado para esta fazenda.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum solo cadastrado para esta fazenda.</p>
         ) : (
           <Table columns={columns} data={activeSoils} getKey={(r) => r.id} />
         )}
       </Card>
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); setWarnings([]); }} title={editing ? "Editar solo" : "Novo solo"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="name" name="name" label="Nome" placeholder="Latossolo Vermelho" required defaultValue={editing?.name} />
             <Select id="texture" name="texture" label="Classe textural" options={[...SOIL_TEXTURES]} required defaultValue={editing?.texture ?? "franco"} />
@@ -371,7 +371,7 @@ function SoilsTab({
           <TextArea id="observations" name="observations" label="Observações" defaultValue={editing?.observations ?? ""} />
 
           {warnings.length > 0 && (
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900/50 dark:bg-yellow-900/20">
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3.5 dark:border-yellow-900/50 dark:bg-yellow-900/20">
               {warnings.map((w, i) => (
                 <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">{w.message}</p>
               ))}
@@ -379,7 +379,7 @@ function SoilsTab({
           )}
           {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
 
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); setWarnings([]); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
@@ -605,21 +605,21 @@ function LayersTab({
       </div>
 
       {!selectedSoilId ? (
-        <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione um solo para gerenciar suas camadas.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione um solo para gerenciar suas camadas.</p></Card>
       ) : (
         <>
           {totalCAD !== null && (
-            <div className="mb-4 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-graphite-700 dark:bg-graphite-800 sm:grid-cols-3">
+            <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-graphite-700/50 dark:bg-graphite-800/60 sm:grid-cols-3">
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Solo selecionado</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">Solo selecionado</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">{selectedSoil?.name}</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">CAD total (camadas)</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">CAD total (camadas)</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">{totalCAD.toFixed(1)} mm</p>
               </div>
               <div>
-                <p className="text-xs text-gray-500 dark:text-gray-400">Camadas</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">Camadas</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">{layers.length}</p>
               </div>
             </div>
@@ -627,9 +627,9 @@ function LayersTab({
 
           <Card>
             {loading ? (
-              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
             ) : layers.length === 0 ? (
-              <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma camada cadastrada. Adicione camadas para detalhar o perfil do solo.</p>
+              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma camada cadastrada. Adicione camadas para detalhar o perfil do solo.</p>
             ) : (
               <Table columns={columns} data={layers} getKey={(r) => r.id} />
             )}
@@ -638,7 +638,7 @@ function LayersTab({
       )}
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); setLayerWarnings([]); }} title={editing ? "Editar camada" : "Nova camada"}>
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="depth_start" name="depth_start" label="Início (cm)" type="number" min="0" required defaultValue={editing?.depth_start ?? (layers.length > 0 ? layers[layers.length - 1].depth_end : 0)} />
             <Input id="depth_end" name="depth_end" label="Fim (cm)" type="number" min="1" required defaultValue={editing?.depth_end ?? (layers.length > 0 ? layers[layers.length - 1].depth_end + 20 : 20)} />
@@ -649,14 +649,14 @@ function LayersTab({
             <Input id="infiltration_rate" name="infiltration_rate" label="Infiltração (mm/h)" type="number" step="0.1" defaultValue={editing?.infiltration_rate ?? ""} />
           </div>
           {layerWarnings.length > 0 && (
-            <div className="rounded-lg border border-yellow-200 bg-yellow-50 p-3 dark:border-yellow-900/50 dark:bg-yellow-900/20">
+            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3.5 dark:border-yellow-900/50 dark:bg-yellow-900/20">
               {layerWarnings.map((w, i) => (
                 <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">{w.message}</p>
               ))}
             </div>
           )}
           {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
@@ -750,14 +750,14 @@ function AssociationTab({
       </div>
 
       {!selectedSoilId ? (
-        <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione um solo para ver seus vínculos com pivôs.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione um solo para ver seus vínculos com pivôs.</p></Card>
       ) : (
         <Card>
           {loading ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
           ) : assignments.length === 0 ? (
             <div className="py-8 text-center">
-              <p className="text-sm text-gray-500 dark:text-gray-400">Nenhum pivô vinculado a este solo.</p>
+              <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô vinculado a este solo.</p>
               <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">A associação solo ↔ pivô é feita via Vínculo Pivô-Cultura-Solo (pivot_crop_assignments).</p>
             </div>
           ) : (
@@ -837,7 +837,7 @@ function HistoryTab({
     {
       header: "Tipo",
       render: (r) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${changeTypeColors[r.change_type] ?? ""}`}>
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${changeTypeColors[r.change_type] ?? ""}`}>
           {changeTypeLabels[r.change_type] ?? r.change_type}
         </span>
       ),
@@ -861,13 +861,13 @@ function HistoryTab({
       </div>
 
       {!selectedSoilId ? (
-        <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione um solo para ver o histórico de alterações.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione um solo para ver o histórico de alterações.</p></Card>
       ) : (
         <Card>
           {loading ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
           ) : history.length === 0 ? (
-            <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhum registro de alteração encontrado.</p>
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum registro de alteração encontrado.</p>
           ) : (
             <Table columns={columns} data={history} getKey={(r) => r.id} />
           )}

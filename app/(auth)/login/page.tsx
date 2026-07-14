@@ -36,22 +36,22 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-lg dark:border-graphite-700 dark:bg-graphite-900">
-      <div className="mb-8 flex flex-col items-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-500 text-white">
-          <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
+    <div className="rounded-2xl border border-gray-100 bg-white p-10 shadow-elevated dark:border-graphite-700/50 dark:bg-graphite-900">
+      <div className="mb-10 flex flex-col items-center">
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
+          <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
           </svg>
         </div>
-        <h1 className="text-xl font-bold text-graphite-900 dark:text-white">
+        <h1 className="text-xl font-bold tracking-tight text-graphite-900 dark:text-white">
           Cotrim Irrigação Pro
         </h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
           Entre com suas credenciais
         </p>
       </div>
 
-      <form onSubmit={handleLogin} className="space-y-4">
+      <form onSubmit={handleLogin} className="space-y-5">
         <Input
           id="email"
           label="E-mail"
@@ -75,7 +75,7 @@ export default function LoginPage() {
         />
 
         {error && (
-          <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+          <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
             {error}
           </p>
         )}
@@ -85,10 +85,10 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-6 text-center">
+      <div className="mt-8 text-center">
         <Link
           href="/recuperar-senha"
-          className="text-sm text-brand-600 hover:text-brand-700 dark:text-brand-400"
+          className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400"
         >
           Esqueceu a senha?
         </Link>

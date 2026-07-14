@@ -2,8 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
-  --font-sans: "Inter", "Segoe UI", system-ui, sans-serif;
+@layer base {
+  * {
+    border-color: theme("colors.gray.200");
+  }
+  .dark * {
+    border-color: theme("colors.graphite.700" / 60%);
+  }
 }
 
 html,
@@ -12,8 +17,8 @@ body {
 }
 
 ::-webkit-scrollbar {
-  width: 8px;
-  height: 8px;
+  width: 6px;
+  height: 6px;
 }
 
 ::-webkit-scrollbar-track {
@@ -21,17 +26,17 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  @apply rounded-full bg-graphite-300/40;
+  @apply rounded-full bg-graphite-300/30;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-graphite-400/60;
+  @apply bg-graphite-400/50;
 }
 
 .dark ::-webkit-scrollbar-thumb {
-  @apply bg-graphite-600/40;
+  @apply bg-graphite-600/30;
 }
 
 .dark ::-webkit-scrollbar-thumb:hover {
-  @apply bg-graphite-500/60;
+  @apply bg-graphite-500/50;
 }

@@ -298,7 +298,7 @@ export default function VinculacaoPage() {
     {
       header: "Parâmetros",
       render: (r) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${
           r.parameter_mode === "personalizado"
             ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
             : "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400"
@@ -323,7 +323,7 @@ export default function VinculacaoPage() {
 
   if (!activeFarmId) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <PageHeader titulo="Vinculação Operacional" descricao="Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico" />
         <PrerequisiteNotice
           title="Cadastre uma fazenda primeiro"
@@ -349,7 +349,7 @@ export default function VinculacaoPage() {
 
   if (prerequisite) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <PageHeader titulo="Vinculação Operacional" descricao="Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico" />
         <PrerequisiteNotice {...prerequisite} />
       </div>
@@ -357,11 +357,11 @@ export default function VinculacaoPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader titulo="Vinculação Operacional" descricao="Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico" />
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-graphite-400 dark:text-gray-500">
           {farmAssignments.length} vinculação{farmAssignments.length !== 1 ? "ões" : ""} ativa{farmAssignments.length !== 1 ? "s" : ""}
         </p>
         <Button onClick={openNew}>Nova vinculação</Button>
@@ -369,9 +369,9 @@ export default function VinculacaoPage() {
 
       <Card>
         {loading || lookupsLoading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
         ) : farmAssignments.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
             Nenhuma vinculação cadastrada. Crie a primeira para habilitar o balanço hídrico dos pivôs.
           </p>
         ) : (
@@ -380,7 +380,7 @@ export default function VinculacaoPage() {
       </Card>
 
       <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar vinculação" : "Nova vinculação"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Select
               id="pivot_id" label="Pivô" required
@@ -432,7 +432,7 @@ export default function VinculacaoPage() {
           </div>
 
           {/* Origem dos parâmetros de manejo */}
-          <div className="rounded-xl border border-gray-200 p-4 dark:border-graphite-700">
+          <div className="rounded-xl border border-gray-100 p-4 dark:border-graphite-700/50">
             <p className="mb-3 text-sm font-medium text-graphite-900 dark:text-gray-200">Parâmetros de manejo</p>
             <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
               <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
@@ -456,7 +456,7 @@ export default function VinculacaoPage() {
             </div>
 
             {form.parameter_mode === "padrao" ? (
-              <p className="mt-3 text-xs text-gray-500 dark:text-gray-400">
+              <p className="mt-3 text-xs text-graphite-400 dark:text-gray-500">
                 Kc, fator p, profundidade radicular e eficiência serão carregados automaticamente do cadastro da cultura e do pivô. O crescimento radicular é calculado pelo sistema conforme a fase fenológica e o DAE.
               </p>
             ) : (
@@ -485,7 +485,7 @@ export default function VinculacaoPage() {
                   onChange={(e) => patch({ depletion_factor: e.target.value })}
                   placeholder="0.50"
                 />
-                <p className="sm:col-span-2 text-xs text-gray-500 dark:text-gray-400">
+                <p className="sm:col-span-2 text-xs text-graphite-400 dark:text-gray-500">
                   Os valores personalizados valem apenas para este pivô nesta safra e não alteram o cadastro original da cultura.
                 </p>
               </div>
@@ -498,8 +498,8 @@ export default function VinculacaoPage() {
             onChange={(e) => patch({ notes: e.target.value })}
           />
 
-          {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
+          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={closeModal}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>

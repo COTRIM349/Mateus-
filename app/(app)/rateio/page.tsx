@@ -144,7 +144,7 @@ export default function RateioPage() {
     <div>
       <PageHeader titulo="Rateio de Custos" descricao="Rateio automático de energia por pivô, cultura, safra e módulo" />
 
-      <div className="mt-6 space-y-6">
+      <div className="mt-6 space-y-8">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
           {metrics.map((m) => (
             <StatCard key={m.id} metric={m} />
@@ -152,15 +152,15 @@ export default function RateioPage() {
         </div>
 
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Método de Rateio</h3>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Método de Rateio</h3>
+          <div className="flex flex-wrap gap-3">
             {(Object.entries(APPORTIONMENT_METHOD_CONFIG) as [ApportionmentMethod, { label: string; description: string }][]).map(
               ([key, conf]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setMethod(key)}
-                  className={`rounded-lg px-4 py-2 text-xs font-medium transition-colors ${
+                  className={`rounded-xl px-4 py-2 text-xs font-medium transition-colors ${
                     method === key
                       ? "bg-brand-500 text-white"
                       : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-300 dark:hover:bg-graphite-600"
@@ -214,7 +214,7 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Rateio por Pivô</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Rateio por Pivô</h3>
         <Table columns={columns} data={results} getKey={(r) => r.pivotId} />
       </Card>
 
@@ -255,7 +255,7 @@ function CulturaTab({ results }: { results: ApportionmentResult[] }) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Rateio por Cultura</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Rateio por Cultura</h3>
         <Table columns={columns} data={results} getKey={(r) => r.cultureId} />
       </Card>
 
@@ -320,7 +320,7 @@ function ModuloTab({ results }: { results: ApportionmentResult[] }) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Rateio por Módulo</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Rateio por Módulo</h3>
         <Table columns={columns} data={results} getKey={(r) => r.moduleName} />
       </Card>
 
@@ -356,37 +356,37 @@ function ComparativoTab({
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Análise Comparativa de Eficiência</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Análise Comparativa de Eficiência</h3>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {results.map((r) => (
-            <div key={r.pivotId} className="rounded-xl border border-gray-200 p-4 dark:border-graphite-700">
+            <div key={r.pivotId} className="rounded-xl border border-gray-100 p-4 dark:border-graphite-700/50">
               <h4 className="mb-1 text-sm font-semibold text-graphite-900 dark:text-white">{r.pivotName}</h4>
-              <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{r.cultureName} — {r.moduleName}</p>
+              <p className="mb-3 text-xs text-graphite-400 dark:text-gray-500">{r.cultureName} — {r.moduleName}</p>
 
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Custo rateado:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Custo rateado:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">
                     R$ {r.apportionedCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Participação:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Participação:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">{r.sharePct.toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">R$/ha:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">R$/ha:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">R$ {r.costPerHa.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">kWh/m³:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">kWh/m³:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">{r.kwhPerM3.toFixed(3)}</span>
                 </div>
               </div>
 
               <div className="mt-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400">Participação</div>
+                <div className="text-xs text-graphite-400 dark:text-gray-500">Participação</div>
                 <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
                   <div className="h-full rounded-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
                 </div>

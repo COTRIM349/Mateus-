@@ -22,15 +22,15 @@ export function Table<T>({
   getKey: (row: T) => string;
 }) {
   return (
-    <div className="overflow-x-auto">
+    <div className="overflow-x-auto rounded-xl">
       <table className="w-full min-w-[640px] border-collapse text-sm">
         <thead>
-          <tr className="border-b border-gray-200 dark:border-graphite-700">
+          <tr className="border-b border-gray-100 dark:border-graphite-700/50">
             {columns.map((col, i) => (
               <th
                 key={i}
                 className={cn(
-                  "px-3 py-3 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400",
+                  "px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500",
                   alignClass[col.align ?? "left"],
                 )}
               >
@@ -43,13 +43,13 @@ export function Table<T>({
           {data.map((row) => (
             <tr
               key={getKey(row)}
-              className="border-b border-gray-100 transition-colors hover:bg-gray-50 dark:border-graphite-800 dark:hover:bg-graphite-800/50"
+              className="border-b border-gray-50 transition-colors duration-100 hover:bg-gray-50/80 dark:border-graphite-800/50 dark:hover:bg-graphite-800/30"
             >
               {columns.map((col, i) => (
                 <td
                   key={i}
                   className={cn(
-                    "px-3 py-3 text-graphite-900 dark:text-gray-200",
+                    "px-4 py-3.5 text-graphite-700 dark:text-gray-300",
                     alignClass[col.align ?? "left"],
                   )}
                 >

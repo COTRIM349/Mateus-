@@ -417,29 +417,29 @@ function TabRelatorios({
   const hasData = (farmTotals !== null || balanceSummary !== null || recommendations.length > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {reportTypes.map(([key, cfg]) => (
           <button
             key={key}
             onClick={() => onSelectType(key)}
-            className={`rounded-lg border p-4 text-left transition-all ${
+            className={`rounded-xl border p-4 text-left transition-all ${
               selectedType === key
                 ? "border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-900/20"
-                : "border-gray-200 hover:border-gray-300 dark:border-graphite-700 dark:hover:border-graphite-600"
+                : "border-gray-100 hover:border-gray-300 dark:border-graphite-700/50 dark:hover:border-graphite-600"
             }`}
           >
             <div className="mb-1 flex items-center gap-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold ${
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${
                 selectedType === key
                   ? "bg-brand-500 text-white"
-                  : "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400"
+                  : "bg-gray-50/80 text-gray-600 dark:bg-graphite-800/60 dark:text-gray-500"
               }`}>
                 {cfg.icon}
               </span>
               <span className="text-sm font-semibold text-graphite-900 dark:text-white">{cfg.label}</span>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.description}</p>
+            <p className="text-xs text-graphite-400 dark:text-gray-500">{cfg.description}</p>
           </button>
         ))}
       </div>
@@ -447,19 +447,19 @@ function TabRelatorios({
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">{config.label}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{config.description}</p>
+            <h3 className="text-lg font-semibold tracking-tight text-graphite-900 dark:text-white">{config.label}</h3>
+            <p className="text-sm text-graphite-400 dark:text-gray-500">{config.description}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex rounded-lg border border-gray-200 dark:border-graphite-700">
+            <div className="flex rounded-xl border border-gray-100 dark:border-graphite-700/50">
               {formats.map(([key, cfg]) => (
                 <button
                   key={key}
                   onClick={() => onSelectFormat(key)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                  className={`px-4 py-2 text-sm font-medium transition-colors first:rounded-l-xl last:rounded-r-xl ${
                     selectedFormat === key
                       ? "bg-brand-500 text-white"
-                      : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-graphite-800"
+                      : "text-gray-600 hover:bg-gray-50/80 dark:text-gray-500 dark:hover:bg-graphite-800/60"
                   }`}
                 >
                   {cfg.label}
@@ -468,7 +468,7 @@ function TabRelatorios({
             </div>
             <button
               disabled={!hasData}
-              className="rounded-lg bg-brand-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Gerar Relatório
             </button>
@@ -478,7 +478,7 @@ function TabRelatorios({
 
       {hasData ? (
         <Card>
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          <h3 className="mb-5 text-sm font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
             Pré-visualização — {config.label}
           </h3>
           <ReportPreview

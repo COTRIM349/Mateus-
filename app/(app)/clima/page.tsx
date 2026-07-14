@@ -59,10 +59,10 @@ export default function ClimaPage() {
   const [activeTab, setActiveTab] = useState("virtual");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader titulo="Clima" descricao="Estações meteorológicas, dados climáticos e histórico" />
       <Tabs tabs={climaTabs} activeTab={activeTab} onChange={setActiveTab} />
-      <div className="mt-6">
+      <div className="mt-8">
         {activeTab === "virtual" && <VirtualStationTab />}
         {activeTab === "estacoes" && <StationsTab />}
         {activeTab === "lancamento" && <ManualEntryTab />}
@@ -71,7 +71,7 @@ export default function ClimaPage() {
         {activeTab === "fonte" && <DailySelectionTab />}
         {activeTab === "sync" && <IngestionRunsTab />}
       </div>
-      <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+      <p className="mt-6 text-xs text-graphite-300 dark:text-graphite-600">
         Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
       </p>
     </div>

@@ -24,7 +24,7 @@ import { radiusFromArea } from "@/utils/geo";
 const MapPicker = dynamic(() => import("@/components/maps/MapPicker").then((mod) => mod.MapPicker), {
   ssr: false,
   loading: () => (
-    <div className="flex h-[60vh] items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-graphite-700 dark:bg-graphite-800">
+    <div className="flex h-[60vh] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-graphite-700/50 dark:bg-graphite-800/60">
       <p className="text-sm text-gray-400">Carregando mapa...</p>
     </div>
   ),
@@ -276,7 +276,7 @@ export default function PivosPage() {
     {
       header: "Status",
       render: (r) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status] ?? ""}`}>
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status] ?? ""}`}>
           {STATUS_LABELS[r.status] ?? r.status}
         </span>
       ),
@@ -295,7 +295,7 @@ export default function PivosPage() {
 
   if (!activeFarmId) {
     return (
-      <div className="space-y-6">
+      <div className="space-y-8">
         <PageHeader titulo="Pivôs" descricao="Cadastro e monitoramento de pivôs centrais" />
         <PrerequisiteNotice
           title="Cadastre uma fazenda primeiro"
@@ -308,11 +308,11 @@ export default function PivosPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader titulo="Pivôs" descricao="Cadastro e monitoramento de pivôs centrais" />
 
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-graphite-400 dark:text-gray-500">
           {activePivots.length} pivô{activePivots.length !== 1 ? "s" : ""} cadastrado{activePivots.length !== 1 ? "s" : ""}
         </p>
         <Button onClick={openNew}>Novo pivô</Button>
@@ -320,9 +320,9 @@ export default function PivosPage() {
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
         ) : activePivots.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhum pivô cadastrado para esta fazenda.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô cadastrado para esta fazenda.</p>
         ) : (
           <Table columns={columns} data={activePivots} getKey={(r) => r.id} />
         )}
@@ -360,9 +360,9 @@ export default function PivosPage() {
             </div>
           </div>
 
-          {formError && <p className="mt-3 text-sm text-red-600 dark:text-red-400">{formError}</p>}
+          {formError && <div className="mt-3 rounded-xl bg-red-50 p-3.5 dark:bg-red-900/20"><p className="text-sm text-red-600 dark:text-red-400">{formError}</p></div>}
 
-          <div className="mt-6 flex items-center justify-between border-t border-gray-200 pt-4 dark:border-graphite-700">
+          <div className="mt-6 flex items-center justify-between border-t border-gray-100 pt-4 dark:border-graphite-700/50">
             <div className="flex gap-2">
               {activeTab !== "geral" && (
                 <Button
@@ -426,7 +426,7 @@ function TabGeral({
   cultures: Culture[];
 }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className="grid gap-5 sm:grid-cols-2">
       <Input
         id="name"
         name="name"
@@ -480,12 +480,12 @@ function TabCaracteristicas({
   onAreaChange: (v: number) => void;
 }) {
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <fieldset>
-        <legend className="mb-3 text-sm font-semibold text-graphite-900 dark:text-gray-200">
+        <legend className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-gray-200">
           Identificação do equipamento
         </legend>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-3">
           <Select
             id="manufacturer"
             name="manufacturer"
@@ -511,10 +511,10 @@ function TabCaracteristicas({
       </fieldset>
 
       <fieldset>
-        <legend className="mb-3 text-sm font-semibold text-graphite-900 dark:text-gray-200">
+        <legend className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-gray-200">
           Dimensões e vazão
         </legend>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-3">
           <Input
             id="area"
             name="area"
@@ -555,10 +555,10 @@ function TabCaracteristicas({
       </fieldset>
 
       <fieldset>
-        <legend className="mb-3 text-sm font-semibold text-graphite-900 dark:text-gray-200">
+        <legend className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-gray-200">
           Velocidade e lâmina
         </legend>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-3">
           <Input
             id="speed_100_pct"
             name="speed_100_pct"
@@ -587,10 +587,10 @@ function TabCaracteristicas({
       </fieldset>
 
       <fieldset>
-        <legend className="mb-3 text-sm font-semibold text-graphite-900 dark:text-gray-200">
+        <legend className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-gray-200">
           Motor e energia
         </legend>
-        <div className="grid gap-4 sm:grid-cols-3">
+        <div className="grid gap-5 sm:grid-cols-3">
           <Input
             id="max_operating_time"
             name="max_operating_time"
@@ -700,8 +700,8 @@ function TabLocalizacao({
   };
 
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-3">
+    <div className="space-y-5">
+      <div className="grid gap-5 sm:grid-cols-3">
         <Input
           id="latitude"
           name="latitude"
@@ -728,7 +728,7 @@ function TabLocalizacao({
           <label className="block text-sm font-medium text-graphite-900 dark:text-gray-200">
             Raio calculado
           </label>
-          <p className="flex h-[38px] items-center rounded-lg border border-gray-200 bg-gray-100 px-3 text-sm text-graphite-900 dark:border-graphite-600 dark:bg-graphite-800 dark:text-gray-100">
+          <p className="flex h-[38px] items-center rounded-xl border border-gray-100 bg-gray-50/80 px-3 text-sm text-graphite-900 dark:border-graphite-700/50 dark:bg-graphite-800/60 dark:text-gray-100">
             {computedRadius > 0 ? `${computedRadius} m` : "Informe a área"}
           </p>
         </div>
@@ -750,18 +750,18 @@ function TabLocalizacao({
       </div>
 
       <Modal open={pickerOpen} onClose={() => setPickerOpen(false)} title="Localizar pivô no mapa" size="xl">
-        <div className="space-y-4">
+        <div className="space-y-5">
           {pickerOpen && (
             <MapPicker
               value={draft}
               onChange={(la, lo) => setDraft({ lat: la, lng: lo })}
               radiusMeters={computedRadius}
               otherPivots={otherPivots}
-              className="h-[60vh] w-full rounded-lg border border-gray-200 dark:border-graphite-700"
+              className="h-[60vh] w-full rounded-2xl border border-gray-100 dark:border-graphite-700/50"
             />
           )}
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-gray-500 dark:text-gray-400">
+            <p className="text-xs text-graphite-400 dark:text-gray-500">
               {draft
                 ? `Centro: ${draft.lat.toFixed(5)}, ${draft.lng.toFixed(5)}`
                 : "Clique no mapa para marcar o centro do pivô."}
@@ -781,11 +781,11 @@ function TabLocalizacao({
 
 function TabCustos({ editing }: { editing: Pivot | null }) {
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-gray-500 dark:text-gray-400">
+    <div className="space-y-5">
+      <p className="text-sm text-graphite-400 dark:text-gray-500">
         Custos operacionais do pivô. Esses valores são utilizados nos relatórios e no rateio de energia.
       </p>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-5 sm:grid-cols-3">
         <Input
           id="energy_cost"
           name="energy_cost"

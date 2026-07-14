@@ -246,7 +246,7 @@ export default function EnergiaPage() {
     <div>
       <PageHeader titulo="Centro de Energia" descricao="Gestão energética completa para irrigação" />
 
-      <div className="mt-6 space-y-6">
+      <div className="mt-6 space-y-8">
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
         {activeTab === "centro" && farmTotals && demand && (
@@ -311,7 +311,7 @@ function CentroTab({
   const riskConf = DEMAND_RISK_CONFIG[demand.riskLevel];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {metrics.map((m) => (
           <StatCard key={m.id} metric={m} />
@@ -398,7 +398,7 @@ function CentroTab({
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Indicadores de Eficiência</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Indicadores de Eficiência</h3>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           {[
             { label: "kWh/m³", value: totals.kwhPerM3.toFixed(3) },
@@ -407,8 +407,8 @@ function CentroTab({
             { label: "R$/m³", value: totals.costPerM3.toFixed(3) },
             { label: "R$/ha", value: totals.costPerHa.toFixed(2) },
           ].map((ind) => (
-            <div key={ind.label} className="rounded-lg bg-gray-50 p-3 text-center dark:bg-graphite-800">
-              <p className="text-xs text-gray-500 dark:text-gray-400">{ind.label}</p>
+            <div key={ind.label} className="rounded-xl bg-gray-50/80 p-3 text-center dark:bg-graphite-800/60">
+              <p className="text-xs text-graphite-400 dark:text-gray-500">{ind.label}</p>
               <p className="mt-1 text-lg font-bold text-graphite-900 dark:text-white">{ind.value}</p>
             </div>
           ))}
@@ -456,7 +456,7 @@ function ConsumoTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-graphite-900 dark:text-white">Visualizar:</span>
         {viewOptions.map((opt) => (
@@ -476,7 +476,7 @@ function ConsumoTab({
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
           Consumo {viewOptions.find((v) => v.value === viewMode)?.label}
         </h3>
         <Table columns={columns} data={aggregated} getKey={(r) => r.groupKey} />
@@ -543,7 +543,7 @@ function DemandaTab({
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {demandMetrics.map((m) => (
           <StatCard key={m.id} metric={m} />
@@ -551,7 +551,7 @@ function DemandaTab({
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Indicador de Demanda</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Indicador de Demanda</h3>
         <div className="relative h-8 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
           <div
             className={`h-full transition-all ${demand.exceedsContracted ? "bg-red-500" : demand.demandMarginPct < 15 ? "bg-amber-500" : "bg-green-500"}`}
@@ -589,10 +589,10 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Card>
-        <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Cenários de Otimização Energética</h3>
-        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Cenários de Otimização Energética</h3>
+        <p className="mb-5 text-xs text-graphite-400 dark:text-gray-500">
           Compare diferentes estratégias operacionais para otimizar o custo energético da irrigação.
         </p>
 
@@ -616,18 +616,18 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
                   </span>
                 )}
               </div>
-              <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{sim.description}</p>
+              <p className="mb-3 text-xs text-graphite-400 dark:text-gray-500">{sim.description}</p>
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Consumo:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Consumo:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">{sim.totalKwh.toLocaleString("pt-BR")} kWh</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Custo:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Custo:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">R$ {sim.totalCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Demanda:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Demanda:</span>
                   <span className={`font-medium ${sim.exceedsContracted ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                     {sim.demandKw.toFixed(0)} kW {sim.exceedsContracted ? "(EXCEDE)" : ""}
                   </span>
@@ -690,7 +690,7 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid gap-4 md:grid-cols-2">
         {suggestions.map((sug, i) => (
           <div key={i} className={`rounded-xl border p-4 ${impactColors[sug.impact]}`}>
@@ -712,14 +712,14 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
             {sug.estimatedSavings > 0 && (
               <div className="flex items-center gap-3 rounded-lg bg-white/60 p-2 dark:bg-graphite-800/60">
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Economia estimada</p>
+                  <p className="text-xs text-graphite-400 dark:text-gray-500">Economia estimada</p>
                   <p className="text-sm font-bold text-green-600 dark:text-green-400">
                     R$ {sug.estimatedSavings.toFixed(2)}
                   </p>
                 </div>
                 {sug.estimatedSavingsPct > 0 && (
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Redução</p>
+                    <p className="text-xs text-graphite-400 dark:text-gray-500">Redução</p>
                     <p className="text-sm font-bold text-green-600 dark:text-green-400">
                       {sug.estimatedSavingsPct.toFixed(1)}%
                     </p>
@@ -732,22 +732,22 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Resumo de Otimização</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Resumo de Otimização</h3>
         <div className="grid grid-cols-3 gap-4 text-center">
           <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Economia potencial total</p>
+            <p className="text-xs text-graphite-400 dark:text-gray-500">Economia potencial total</p>
             <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">
               R$ {suggestions.reduce((s, sug) => s + sug.estimatedSavings, 0).toFixed(2)}
             </p>
           </div>
           <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Sugestões acionáveis</p>
+            <p className="text-xs text-graphite-400 dark:text-gray-500">Sugestões acionáveis</p>
             <p className="mt-1 text-lg font-bold text-blue-600 dark:text-blue-400">
               {suggestions.filter((s) => s.actionable).length}
             </p>
           </div>
           <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Impacto alto</p>
+            <p className="text-xs text-graphite-400 dark:text-gray-500">Impacto alto</p>
             <p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-400">
               {suggestions.filter((s) => s.impact === "alto").length}
             </p>

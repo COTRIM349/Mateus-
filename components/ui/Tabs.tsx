@@ -12,18 +12,18 @@ export function Tabs({
   onChange: (id: string) => void;
 }) {
   return (
-    <div className="border-b border-gray-200 dark:border-graphite-700">
-      <nav className="-mb-px flex gap-6">
+    <div className="border-b border-gray-100 dark:border-graphite-700/50">
+      <nav className="-mb-px flex gap-1">
         {tabs.map((tab) => (
           <button
             key={tab.id}
             type="button"
             onClick={() => onChange(tab.id)}
             className={cn(
-              "whitespace-nowrap border-b-2 pb-3 text-sm font-medium transition-colors",
+              "whitespace-nowrap rounded-t-lg px-4 pb-3 pt-2 text-sm font-medium transition-all duration-150",
               activeTab === tab.id
-                ? "border-brand-500 text-brand-600 dark:text-brand-400"
-                : "border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300",
+                ? "border-b-2 border-brand-500 text-brand-600 dark:text-brand-400"
+                : "text-graphite-400 hover:text-graphite-700 dark:text-gray-500 dark:hover:text-gray-300",
             )}
           >
             {tab.label}

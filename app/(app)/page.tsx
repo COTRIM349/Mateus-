@@ -16,7 +16,7 @@ import {
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
-  { ssr: false, loading: () => <div className="flex h-[400px] items-center justify-center rounded-lg border border-gray-200 bg-gray-50 dark:border-graphite-700 dark:bg-graphite-800"><p className="text-sm text-gray-400">Carregando mapa...</p></div> }
+  { ssr: false, loading: () => <div className="flex h-[400px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-graphite-700/50 dark:bg-graphite-800"><p className="text-sm text-graphite-400">Carregando mapa...</p></div> }
 );
 
 const TABS = [
@@ -43,25 +43,25 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader
         titulo="Centro de Controle Operacional"
         descricao={activeFarm ? `${activeFarm.name} · Balanço hídrico em tempo real` : "Balanço hídrico da operação"}
       />
 
       {profile && implantation.foundationComplete && summary && (
-        <Card className="border-brand-200 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20">
+        <Card className="border-brand-100 bg-gradient-to-r from-brand-50 to-white dark:border-brand-800/30 dark:from-brand-900/20 dark:to-graphite-900">
           <div className="flex items-start gap-4">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-brand-500 text-white">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
               <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
               </svg>
             </div>
             <div>
-              <p className="text-sm font-semibold text-brand-800 dark:text-brand-300">
+              <p className="text-sm font-semibold text-graphite-900 dark:text-white">
                 Bom dia, {profile.name.split(" ")[0]}!
               </p>
-              <p className="mt-0.5 text-sm text-brand-700 dark:text-brand-400">
+              <p className="mt-1 text-sm text-graphite-400 dark:text-gray-500">
                 {summary.needIrrigationToday} pivô(s) para irrigar hoje · {summary.attention} em atenção · {summary.adequate} adequado(s)
               </p>
             </div>
@@ -85,8 +85,8 @@ export default function DashboardPage() {
       ) : (
         <>
           {summary.noData > 0 && (
-            <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-900/20">
-              <p className="text-sm text-amber-800 dark:text-amber-300">
+            <Card className="border-amber-100 bg-amber-50/80 dark:border-amber-900/40 dark:bg-amber-900/10">
+              <p className="text-sm leading-relaxed text-amber-700 dark:text-amber-400">
                 {summary.noData} pivô(s) sem dados suficientes para cálculo (vínculo, fases da cultura ou clima ausentes). Complete os cadastros para incluí-los no balanço.
               </p>
             </Card>
@@ -118,7 +118,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-5">
         {kpis.map((k) => (
           <StatCard key={k.id} metric={k} />
@@ -127,7 +127,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Pivôs mais críticos</h3>
+          <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Pivôs mais críticos</h3>
           {summary.ranking.length > 0 ? (
             <div className="space-y-2">
               {summary.ranking.slice(0, 8).map((s, i) => (
@@ -135,34 +135,34 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 dark:text-gray-500">Sem pivôs com dados de balanço.</p>
+            <p className="text-sm text-graphite-400 dark:text-gray-500">Sem pivôs com dados de balanço.</p>
           )}
         </Card>
 
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Prioridade de irrigação</h3>
+          <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Prioridade de irrigação</h3>
           {summary.priorityList.length > 0 ? (
             <div className="space-y-2">
               {summary.priorityList.map((s, i) => (
-                <div key={s.pivotId} className="flex items-center justify-between rounded-lg bg-red-50 p-3 dark:bg-red-900/20">
+                <div key={s.pivotId} className="flex items-center justify-between rounded-xl bg-red-50/80 p-3.5 dark:bg-red-900/10">
                   <div className="flex items-center gap-3">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-xs font-bold text-red-700 dark:bg-red-900/40 dark:text-red-400">
+                    <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-100 text-xs font-bold text-red-700 dark:bg-red-900/30 dark:text-red-400">
                       {i + 1}
                     </span>
                     <div>
                       <span className="text-sm font-medium text-graphite-900 dark:text-white">{s.pivotName}</span>
-                      <p className="text-xs text-gray-500 dark:text-gray-400">{s.cultureName} · {s.current!.phase}</p>
+                      <p className="text-xs text-graphite-400 dark:text-gray-500">{s.cultureName} · {s.current!.phase}</p>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-semibold text-graphite-900 dark:text-white">{s.current!.recommendedGrossDepth.toFixed(1)} mm</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">déficit {s.current!.deficit.toFixed(1)} mm</p>
+                    <p className="text-sm font-bold tracking-tight text-graphite-900 dark:text-white">{s.current!.recommendedGrossDepth.toFixed(1)} mm</p>
+                    <p className="text-xs text-graphite-400 dark:text-gray-500">déficit {s.current!.deficit.toFixed(1)} mm</p>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <p className="text-sm text-gray-400 dark:text-gray-500">Nenhum pivô precisa de irrigação hoje.</p>
+            <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô precisa de irrigação hoje.</p>
           )}
         </Card>
       </div>
@@ -174,18 +174,18 @@ function RankRow({ rank, state }: { rank: number; state: PivotHydricState }) {
   const c = state.current!;
   const conf = HYDRIC_STATUS_CONFIG[c.status];
   return (
-    <div className="flex items-center justify-between rounded-lg bg-gray-50 p-3 dark:bg-graphite-800">
+    <div className="flex items-center justify-between rounded-xl bg-gray-50/80 p-3.5 transition-colors duration-100 hover:bg-gray-100/60 dark:bg-graphite-800/60 dark:hover:bg-graphite-800">
       <div className="flex items-center gap-3">
-        <span className="w-5 text-center text-xs font-bold text-gray-400">{rank}</span>
-        <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: conf.color }} />
+        <span className="w-5 text-center text-xs font-bold text-graphite-300 dark:text-graphite-600">{rank}</span>
+        <div className="h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-graphite-900" style={{ backgroundColor: conf.color }} />
         <div>
           <span className="text-sm font-medium text-graphite-900 dark:text-white">{state.pivotName}</span>
-          <p className="text-xs text-gray-500 dark:text-gray-400">{state.cultureName} · {c.phase}</p>
+          <p className="text-xs text-graphite-400 dark:text-gray-500">{state.cultureName} · {c.phase}</p>
         </div>
       </div>
       <div className="text-right">
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${conf.bgClass}`}>{conf.label}</span>
-        <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">depleção {(c.depletion * 100).toFixed(0)}%</p>
+        <span className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold ${conf.bgClass}`}>{conf.label}</span>
+        <p className="mt-0.5 text-xs text-graphite-400 dark:text-gray-500">depleção {(c.depletion * 100).toFixed(0)}%</p>
       </div>
     </div>
   );
@@ -222,14 +222,14 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-wrap gap-4">
+      <Card className="flex flex-wrap items-center gap-5 py-4">
         {(["verde", "amarelo", "vermelho", "cinza"] as const).map((k) => (
-          <div key={k} className="flex items-center gap-2">
-            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: HYDRIC_STATUS_CONFIG[k].color }} />
-            <span className="text-xs text-gray-600 dark:text-gray-400">{HYDRIC_STATUS_CONFIG[k].label}: {counts[k] || 0}</span>
+          <div key={k} className="flex items-center gap-2.5">
+            <div className="h-3 w-3 rounded-full ring-2 ring-white dark:ring-graphite-900" style={{ backgroundColor: HYDRIC_STATUS_CONFIG[k].color }} />
+            <span className="text-xs font-medium text-graphite-500 dark:text-gray-400">{HYDRIC_STATUS_CONFIG[k].label}: <strong className="text-graphite-900 dark:text-white">{counts[k] || 0}</strong></span>
           </div>
         ))}
-      </div>
+      </Card>
 
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
@@ -238,7 +238,7 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
               pivots={mapPivots.filter((p) => p.latitude && p.longitude)}
               highlightId={selectedId ?? undefined}
               onSelect={setSelectedId}
-              className="h-[520px] w-full rounded-lg border border-gray-200 dark:border-graphite-700"
+              className="h-[520px] w-full overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-graphite-700/50"
             />
           ) : (
             <EmptyState
@@ -246,7 +246,6 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
               description="Cadastre latitude e longitude nos pivôs para exibi-los no mapa hídrico."
             />
           )}
-          {/* seleção também pela lista, caso o pivô não tenha coordenada */}
           <div className="mt-4 flex flex-wrap gap-2">
             {states.map((s) => {
               const conf = HYDRIC_STATUS_CONFIG[s.current?.status ?? "cinza"];
@@ -255,8 +254,10 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
                   key={s.pivotId}
                   type="button"
                   onClick={() => setSelectedId(s.pivotId)}
-                  className={`flex items-center gap-2 rounded-full border px-3 py-1 text-xs transition-colors ${
-                    selectedId === s.pivotId ? "border-brand-400 bg-brand-50 dark:border-brand-600 dark:bg-brand-900/20" : "border-gray-200 dark:border-graphite-700"
+                  className={`flex items-center gap-2 rounded-xl border px-3.5 py-1.5 text-xs font-medium transition-all duration-150 ${
+                    selectedId === s.pivotId
+                      ? "border-brand-200 bg-brand-50 text-brand-700 shadow-soft dark:border-brand-600 dark:bg-brand-900/20 dark:text-brand-400"
+                      : "border-gray-100 text-graphite-500 hover:border-gray-200 hover:bg-gray-50 dark:border-graphite-700/50 dark:text-gray-400 dark:hover:border-graphite-600"
                   }`}
                 >
                   <span className="h-2 w-2 rounded-full" style={{ backgroundColor: conf.color }} />
@@ -272,7 +273,7 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
             <PivotDetail state={selected} />
           ) : (
             <Card className="flex h-full items-center justify-center py-16 text-center">
-              <p className="text-sm text-gray-400 dark:text-gray-500">Selecione um pivô no mapa para ver o balanço hídrico detalhado.</p>
+              <p className="text-sm leading-relaxed text-graphite-400 dark:text-gray-500">Selecione um pivô no mapa para ver o balanço hídrico detalhado.</p>
             </Card>
           )}
         </div>
@@ -289,7 +290,7 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
     return (
       <Card>
         <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{state.pivotName}</h3>
-        <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-sm leading-relaxed text-graphite-400 dark:text-gray-500">
           Sem dados suficientes para cálculo. Verifique o vínculo operacional, as fases da cultura e as leituras de clima.
         </p>
       </Card>
@@ -315,59 +316,59 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
 
   return (
     <Card>
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{state.pivotName}</h3>
-        <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${conf.bgClass}`}>{conf.label}</span>
+      <div className="mb-5 flex items-center justify-between">
+        <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">{state.pivotName}</h3>
+        <span className={`rounded-lg px-2.5 py-1 text-[10px] font-bold ${conf.bgClass}`}>{conf.label}</span>
       </div>
 
-      <div className="space-y-1.5">
-        {rows.map(([label, value]) => (
-          <div key={label} className="flex items-center justify-between text-xs">
-            <span className="text-gray-500 dark:text-gray-400">{label}</span>
+      <div className="space-y-2">
+        {rows.map(([label, value], i) => (
+          <div key={label} className={`flex items-center justify-between rounded-lg px-2 py-1.5 text-xs ${i % 2 === 0 ? "bg-gray-50/60 dark:bg-graphite-800/40" : ""}`}>
+            <span className="text-graphite-400 dark:text-gray-500">{label}</span>
             <span className="font-medium text-graphite-900 dark:text-white">{value}</span>
           </div>
         ))}
       </div>
 
-      <div className={`mt-4 rounded-lg p-3 ${c.shouldIrrigate ? "bg-red-50 dark:bg-red-900/20" : "bg-green-50 dark:bg-green-900/20"}`}>
-        <p className={`text-xs font-semibold ${c.shouldIrrigate ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
+      <div className={`mt-5 rounded-xl p-4 ${c.shouldIrrigate ? "bg-red-50/80 dark:bg-red-900/10" : "bg-green-50/80 dark:bg-green-900/10"}`}>
+        <p className={`text-xs font-bold ${c.shouldIrrigate ? "text-red-700 dark:text-red-400" : "text-green-700 dark:text-green-400"}`}>
           {c.shouldIrrigate ? "Irrigar hoje" : "Sem necessidade de irrigação hoje"}
         </p>
-        <p className="mt-1 text-xs text-gray-600 dark:text-gray-400">{c.recommendationReason}</p>
+        <p className="mt-1.5 text-xs leading-relaxed text-graphite-500 dark:text-gray-400">{c.recommendationReason}</p>
         {c.shouldIrrigate && (
-          <div className="mt-2 grid grid-cols-2 gap-2 text-xs">
-            <div><span className="text-gray-400">Lâmina líquida:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedNetDepth.toFixed(1)} mm</strong></div>
-            <div><span className="text-gray-400">Lâmina bruta:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedGrossDepth.toFixed(1)} mm</strong></div>
-            <div><span className="text-gray-400">Volume:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedVolume.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³</strong></div>
-            <div><span className="text-gray-400">Tempo estimado:</span> <strong className="text-graphite-900 dark:text-white">{c.estimatedIrrigationTime.toFixed(1)} h</strong></div>
+          <div className="mt-3 grid grid-cols-2 gap-2.5 text-xs">
+            <div><span className="text-graphite-400">Lâmina líquida:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedNetDepth.toFixed(1)} mm</strong></div>
+            <div><span className="text-graphite-400">Lâmina bruta:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedGrossDepth.toFixed(1)} mm</strong></div>
+            <div><span className="text-graphite-400">Volume:</span> <strong className="text-graphite-900 dark:text-white">{c.recommendedVolume.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³</strong></div>
+            <div><span className="text-graphite-400">Tempo estimado:</span> <strong className="text-graphite-900 dark:text-white">{c.estimatedIrrigationTime.toFixed(1)} h</strong></div>
           </div>
         )}
       </div>
 
       {state.history.length > 1 && (
-        <div className="mt-4">
-          <h4 className="mb-2 text-xs font-semibold text-gray-500 dark:text-gray-400">Histórico diário (últimos dias)</h4>
+        <div className="mt-5">
+          <h4 className="mb-3 text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Histórico diário</h4>
           <div className="max-h-48 overflow-y-auto">
             <table className="w-full text-left text-[11px]">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-graphite-700 text-gray-400">
-                  <th className="pb-1 pr-2">Data</th>
-                  <th className="pb-1 pr-2 text-right">ETc</th>
-                  <th className="pb-1 pr-2 text-right">Arm.</th>
-                  <th className="pb-1 pr-2 text-right">Déf.</th>
-                  <th className="pb-1">Status</th>
+                <tr className="border-b border-gray-100 dark:border-graphite-700/50 text-graphite-400 dark:text-gray-500">
+                  <th className="pb-2 pr-2 text-[10px] font-semibold uppercase tracking-wider">Data</th>
+                  <th className="pb-2 pr-2 text-right text-[10px] font-semibold uppercase tracking-wider">ETc</th>
+                  <th className="pb-2 pr-2 text-right text-[10px] font-semibold uppercase tracking-wider">Arm.</th>
+                  <th className="pb-2 pr-2 text-right text-[10px] font-semibold uppercase tracking-wider">Déf.</th>
+                  <th className="pb-2 text-[10px] font-semibold uppercase tracking-wider">Status</th>
                 </tr>
               </thead>
               <tbody>
                 {state.history.slice(-10).reverse().map((d) => {
                   const dc = HYDRIC_STATUS_CONFIG[d.status];
                   return (
-                    <tr key={d.date} className="border-b border-gray-100 dark:border-graphite-800">
-                      <td className="py-1 pr-2 text-gray-600 dark:text-gray-300">{d.date.slice(5)}</td>
-                      <td className="py-1 pr-2 text-right text-gray-600 dark:text-gray-300">{d.etc.toFixed(1)}</td>
-                      <td className="py-1 pr-2 text-right text-gray-600 dark:text-gray-300">{d.storage.toFixed(0)}</td>
-                      <td className="py-1 pr-2 text-right text-gray-600 dark:text-gray-300">{d.deficit.toFixed(0)}</td>
-                      <td className="py-1"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: dc.color }} /></td>
+                    <tr key={d.date} className="border-b border-gray-50 dark:border-graphite-800/50">
+                      <td className="py-1.5 pr-2 text-graphite-500 dark:text-gray-400">{d.date.slice(5)}</td>
+                      <td className="py-1.5 pr-2 text-right text-graphite-500 dark:text-gray-400">{d.etc.toFixed(1)}</td>
+                      <td className="py-1.5 pr-2 text-right text-graphite-500 dark:text-gray-400">{d.storage.toFixed(0)}</td>
+                      <td className="py-1.5 pr-2 text-right text-graphite-500 dark:text-gray-400">{d.deficit.toFixed(0)}</td>
+                      <td className="py-1.5"><span className="inline-block h-2 w-2 rounded-full" style={{ backgroundColor: dc.color }} /></td>
                     </tr>
                   );
                 })}
