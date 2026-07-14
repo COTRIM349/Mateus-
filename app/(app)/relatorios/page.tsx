@@ -713,11 +713,11 @@ function TabHistorico({
       </div>
 
       <Card>
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">
+        <div className="mb-5">
+          <h3 className="text-lg font-semibold tracking-tight text-graphite-900 dark:text-white">
             {HISTORY_DIMENSION_CONFIG[dimension].label}
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-graphite-400 dark:text-gray-500">
             {HISTORY_DIMENSION_CONFIG[dimension].description}
           </p>
         </div>
@@ -767,7 +767,7 @@ function HistoricoIrrigacao({ balanceRows }: { balanceRows: DailyBalanceRow[] })
     { header: "Déficit", render: (r) => formatNumber(r.deficit, 1), align: "right" },
     { header: "ETc", render: (r) => formatNumber(r.etc, 1), align: "right" },
     { header: "Status", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
         {WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.label ?? r.status}
       </span>
     )},
@@ -786,19 +786,19 @@ function HistoricoRecomendacoes({ recommendations }: { recommendations: Recommen
   const columns: Column<Recommendation>[] = [
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivotName}</span> },
     { header: "Prioridade", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
         {PRIORITY_CONFIG[r.priority].label}
       </span>
     )},
     { header: "Score", render: (r) => formatNumber(r.priorityScore, 1), align: "right" },
     { header: "Status", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${OPERATIONAL_STATUS_CONFIG[r.operationalStatus].bgClass}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${OPERATIONAL_STATUS_CONFIG[r.operationalStatus].bgClass}`}>
         {OPERATIONAL_STATUS_CONFIG[r.operationalStatus].label}
       </span>
     )},
     { header: "Lâmina (mm)", render: (r) => formatNumber(r.grossDepth, 1), align: "right" },
     { header: "Volume (m³)", render: (r) => formatNumber(r.volumeM3), align: "right" },
-    { header: "Motivo", render: (r) => <span className="max-w-xs truncate text-xs text-gray-500">{r.reason}</span> },
+    { header: "Motivo", render: (r) => <span className="max-w-xs truncate text-xs text-graphite-400">{r.reason}</span> },
   ];
 
   return <Table columns={columns} data={ranked} getKey={(r) => r.pivotId} />;
@@ -837,7 +837,7 @@ function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
     { header: "ARM/CAD", render: (r) => `${formatNumber(r.arm, 1)}/${formatNumber(r.cad)}`, align: "right" },
     { header: "ARM%", render: (r) => formatPercent(r.armPct), align: "right" },
     { header: "Status", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
         {WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.label ?? r.status}
       </span>
     )},
@@ -929,7 +929,7 @@ function TabIndicadores({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {kpiCards.map((m) => (
           <StatCard key={m.id} metric={m} />
@@ -938,7 +938,7 @@ function TabIndicadores({
 
       {balanceSummary && (
         <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Resumo do Período</h4>
+          <h4 className="mb-3 text-sm font-semibold uppercase text-graphite-400 dark:text-gray-500">Resumo do Período</h4>
           <div className="space-y-3">
             <SummaryRow label="Dias no período" value={`${balanceSummary.days}`} />
             <SummaryRow label="ETc média diária" value={`${formatNumber(balanceSummary.avgETc, 2)} mm/dia`} />
@@ -961,7 +961,7 @@ function TabIndicadores({
 
       {byPivot.length > 0 && (
         <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Indicadores por Pivô</h4>
+          <h4 className="mb-3 text-sm font-semibold uppercase text-graphite-400 dark:text-gray-500">Indicadores por Pivô</h4>
           <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byPivot}>

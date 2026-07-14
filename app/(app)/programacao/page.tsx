@@ -589,7 +589,7 @@ function CentralTab({
   if (!schedule && !generating) {
     return (
       <Card className="py-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="text-graphite-400 dark:text-gray-500">
           Clique em &quot;Gerar Programação&quot; para criar a programação operacional do dia.
         </p>
       </Card>
@@ -607,13 +607,13 @@ function CentralTab({
   const statusCfg = SCHEDULE_STATUS_CONFIG[schedule.status];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Status & Summary */}
       <div className="flex flex-wrap items-center gap-3">
         <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">
           Programação {schedule.scheduleDate}
         </h3>
-        <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${statusCfg.bgClass}`}>
+        <span className={`inline-flex rounded-lg px-2.5 py-1 text-xs font-medium ${statusCfg.bgClass}`}>
           {statusCfg.label}
         </span>
       </div>
@@ -641,13 +641,13 @@ function CentralTab({
 
       {/* Timeline visual */}
       <Card>
-        <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Linha do Tempo Operacional</h4>
+        <h4 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Linha do Tempo Operacional</h4>
         <TimelineVisual slots={activeSlots} />
       </Card>
 
       {/* Slots table */}
       <Card className="overflow-x-auto">
-        <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Sequência de Irrigação</h4>
+        <h4 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Sequência de Irrigação</h4>
         <SlotsTable slots={schedule.slots} />
       </Card>
 
@@ -655,16 +655,16 @@ function CentralTab({
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {schedule.pumpUtilization.length > 0 && (
           <Card>
-            <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Utilização das Bombas</h4>
+            <h4 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Utilização das Bombas</h4>
             {schedule.pumpUtilization.map((pu) => (
               <div key={pu.pumpHouseId} className="mb-2 flex items-center justify-between text-xs">
-                <span className="text-gray-600 dark:text-gray-400">{pu.pumpHouseName}</span>
+                <span className="text-graphite-400 dark:text-gray-500">{pu.pumpHouseName}</span>
                 <div className="flex items-center gap-3">
                   <span>{pu.pivotsServed} pivô(s)</span>
                   <span>{pu.totalHours}h</span>
                   <span>{pu.totalVolumeM3.toFixed(0)} m³</span>
                   <div className="w-20">
-                    <div className="h-2 rounded-full bg-gray-200 dark:bg-graphite-700">
+                    <div className="h-2 rounded-full bg-gray-100 dark:bg-graphite-700/50">
                       <div className="h-2 rounded-full bg-brand-500" style={{ width: `${Math.min(100, pu.utilizationPct)}%` }} />
                     </div>
                   </div>
@@ -677,10 +677,10 @@ function CentralTab({
 
         {schedule.reservoirUsage.length > 0 && (
           <Card>
-            <h4 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Utilização dos Reservatórios</h4>
+            <h4 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Utilização dos Reservatórios</h4>
             {schedule.reservoirUsage.map((ru) => (
               <div key={ru.reservoirId} className="mb-2 text-xs">
-                <div className="flex justify-between text-gray-600 dark:text-gray-400">
+                <div className="flex justify-between text-graphite-400 dark:text-gray-500">
                   <span>{ru.reservoirName}</span>
                   <span>{ru.capacityPct}%</span>
                 </div>
@@ -690,7 +690,7 @@ function CentralTab({
                   <span className="text-green-500">+{ru.recharged.toFixed(0)}</span>
                   <span className="font-semibold text-graphite-900 dark:text-white">{ru.endVolume.toFixed(0)} m³</span>
                   <div className="flex-1">
-                    <div className="h-2 rounded-full bg-gray-200 dark:bg-graphite-700">
+                    <div className="h-2 rounded-full bg-gray-100 dark:bg-graphite-700/50">
                       <div
                         className={`h-2 rounded-full ${ru.capacityPct < 20 ? "bg-red-500" : ru.capacityPct < 50 ? "bg-amber-500" : "bg-blue-500"}`}
                         style={{ width: `${Math.min(100, ru.capacityPct)}%` }}
@@ -707,13 +707,13 @@ function CentralTab({
       {/* Blocked slots */}
       {blockedSlots.length > 0 && (
         <Card className="border-amber-200 dark:border-amber-900">
-          <h4 className="mb-3 text-sm font-semibold text-amber-700 dark:text-amber-400">Pivôs Bloqueados ({blockedSlots.length})</h4>
+          <h4 className="mb-5 text-sm font-semibold tracking-tight text-amber-700 dark:text-amber-400">Pivôs Bloqueados ({blockedSlots.length})</h4>
           {blockedSlots.map((s) => (
             <div key={s.pivotId} className="mb-2 flex items-center justify-between text-xs">
               <span className="font-medium text-graphite-900 dark:text-white">{s.pivotName}</span>
               <div className="flex items-center gap-2">
-                <span className={`inline-flex rounded-full px-2 py-0.5 font-medium ${PRIORITY_CONFIG[s.priority].bgClass}`}>{PRIORITY_CONFIG[s.priority].label}</span>
-                <span className="text-gray-500 dark:text-gray-400">{s.justification}</span>
+                <span className={`inline-flex rounded-lg px-2 py-0.5 font-medium ${PRIORITY_CONFIG[s.priority].bgClass}`}>{PRIORITY_CONFIG[s.priority].label}</span>
+                <span className="text-graphite-400 dark:text-gray-500">{s.justification}</span>
               </div>
             </div>
           ))}
@@ -804,12 +804,12 @@ function SlotsTable({ slots }: { slots: ScheduleSlot[] }) {
       header: "Status",
       render: (s) => {
         const cfg = SLOT_STATUS_CONFIG[s.slotStatus];
-        return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>{cfg.label}</span>;
+        return <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>{cfg.label}</span>;
       },
     },
     {
       header: "Prioridade",
-      render: (s) => <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[s.priority].bgClass}`}>{PRIORITY_CONFIG[s.priority].label}</span>,
+      render: (s) => <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[s.priority].bgClass}`}>{PRIORITY_CONFIG[s.priority].label}</span>,
     },
     { header: "Início", render: (s) => s.startTime },
     { header: "Término", render: (s) => s.endTime },
@@ -831,7 +831,7 @@ function SlotsTable({ slots }: { slots: ScheduleSlot[] }) {
     {
       header: "Justificativa",
       render: (s) => (
-        <span className="text-xs text-gray-500 dark:text-gray-400" title={s.justification}>
+        <span className="text-xs text-graphite-400 dark:text-gray-500" title={s.justification}>
           {s.justification.length > 60 ? s.justification.slice(0, 60) + "…" : s.justification}
         </span>
       ),
@@ -857,13 +857,13 @@ function RecommendationsTab({
   if (recommendations.length === 0 && !generating) {
     return (
       <Card className="py-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400">Clique em &quot;Gerar Programação&quot; para analisar todos os pivôs.</p>
+        <p className="text-graphite-400 dark:text-gray-500">Clique em &quot;Gerar Programação&quot; para analisar todos os pivôs.</p>
       </Card>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <div className="grid grid-cols-3 gap-3">
         <StatCard metric={{ id: "t", title: "Analisados", value: `${stats.total}` }} />
         <StatCard metric={{ id: "i", title: "Precisam Irrigar", value: `${stats.irrigar}`, trend: stats.irrigar > 0 ? "negative" : "positive", variation: stats.irrigar > 0 ? "Ação" : "OK" }} />
@@ -892,12 +892,12 @@ function RecommendationCard({ rec }: { rec: Recommendation }) {
     <Card className="space-y-2">
       <div className="flex flex-wrap items-center gap-2">
         <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{rec.pivotName}</h3>
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${opCfg.bgClass}`}>{opCfg.label}</span>
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${priCfg.bgClass}`}>{priCfg.label}</span>
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${opCfg.bgClass}`}>{opCfg.label}</span>
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${priCfg.bgClass}`}>{priCfg.label}</span>
         <span className="ml-auto text-xs text-gray-500">Score: {rec.priorityScore.toFixed(0)}/100</span>
       </div>
       <p className="text-xs text-gray-600 dark:text-gray-300">{rec.reason}</p>
-      <div className="flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
+      <div className="flex flex-wrap gap-4 text-xs text-graphite-400 dark:text-gray-500">
         <span>ARM: <strong className="text-graphite-900 dark:text-white">{rec.currentArm.toFixed(1)} mm ({armPct}%)</strong></span>
         <span>ETc: <strong>{rec.currentEtc.toFixed(1)} mm</strong></span>
         <span>Risco: <strong className={rec.productiveRisk > 50 ? "text-red-600 dark:text-red-400" : ""}>{rec.productiveRisk.toFixed(0)}%</strong></span>
@@ -933,7 +933,7 @@ function SimulationTab({
   context: PivotContext | null;
 }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Card>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <Select label="Pivô" value={selectedPivotId} onChange={(e) => onPivotChange(e.target.value)} options={pivots.map((p) => ({ value: p.id, label: p.name }))} />
@@ -942,7 +942,7 @@ function SimulationTab({
           </div>
         </div>
         {context && (
-          <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-3 flex flex-wrap gap-4 text-xs text-graphite-400 dark:text-gray-500">
             <span>ARM: <strong className="text-graphite-900 dark:text-white">{context.storedWater.toFixed(1)} mm</strong></span>
             <span>CAD: <strong className="text-graphite-900 dark:text-white">{context.cad.toFixed(1)} mm</strong></span>
             <span>ETc: <strong className="text-graphite-900 dark:text-white">{context.etc.toFixed(1)} mm/dia</strong></span>
@@ -954,7 +954,7 @@ function SimulationTab({
 
       {scenarios.length === 0 ? (
         <Card className="py-12 text-center">
-          <p className="text-gray-500 dark:text-gray-400">Selecione um pivô e clique em &quot;Simular Cenários&quot;.</p>
+          <p className="text-graphite-400 dark:text-gray-500">Selecione um pivô e clique em &quot;Simular Cenários&quot;.</p>
         </Card>
       ) : (
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
@@ -975,7 +975,7 @@ function ScenarioCard({ scenario }: { scenario: SimulationScenario }) {
     <Card className="flex flex-col gap-3">
       <div>
         <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">{scenario.name}</h4>
-        <p className="text-xs text-gray-500 dark:text-gray-400">{scenario.description}</p>
+        <p className="text-xs text-graphite-400 dark:text-gray-500">{scenario.description}</p>
       </div>
       <div className="grid grid-cols-2 gap-2 text-xs">
         <div>
@@ -998,7 +998,7 @@ function ScenarioCard({ scenario }: { scenario: SimulationScenario }) {
         </div>
       </div>
       <div className="mt-auto">
-        <div className="h-3 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
+        <div className="h-3 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-graphite-700/50">
           <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, parseFloat(armPct))}%`, backgroundColor: statusCfg.color }} />
         </div>
       </div>
@@ -1032,14 +1032,14 @@ function HistoryTab({
       header: "Status",
       render: (r) => {
         const cfg = OPERATIONAL_STATUS_CONFIG[r.operational_status];
-        return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>{cfg.label}</span>;
+        return <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>{cfg.label}</span>;
       },
     },
     {
       header: "Prioridade",
       render: (r) => {
         const cfg = PRIORITY_CONFIG[r.priority];
-        return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>{cfg.label}</span>;
+        return <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>{cfg.label}</span>;
       },
     },
     { header: "Score", render: (r) => r.priority_score.toFixed(0) },
@@ -1058,7 +1058,7 @@ function HistoryTab({
   if (loading) return <Card className="py-8 text-center text-sm text-gray-500">Carregando...</Card>;
 
   if (history.length === 0) {
-    return <Card className="py-12 text-center"><p className="text-gray-500 dark:text-gray-400">Nenhuma recomendação registrada.</p></Card>;
+    return <Card className="py-12 text-center"><p className="text-graphite-400 dark:text-gray-500">Nenhuma recomendação registrada.</p></Card>;
   }
 
   return (

@@ -113,10 +113,10 @@ function StationsTab() {
     {
       header: "Status",
       render: (r) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${
           r.active
             ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-            : "bg-gray-100 text-gray-500 dark:bg-gray-700/30 dark:text-gray-400"
+            : "bg-gray-100 text-graphite-400 dark:bg-gray-700/30 dark:text-gray-500"
         }`}>
           {r.active ? "Ativa" : "Inativa"}
         </span>
@@ -172,7 +172,7 @@ function StationsTab() {
   };
 
   if (!activeFarmId) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma fazenda ativa para gerenciar estações.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma fazenda ativa para gerenciar estações.</p></Card>;
   }
 
   return (
@@ -183,16 +183,16 @@ function StationsTab() {
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Carregando...</p>
         ) : activeStations.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma estação cadastrada para esta fazenda.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma estação cadastrada para esta fazenda.</p>
         ) : (
           <Table columns={columns} data={activeStations} getKey={(r) => r.id} />
         )}
       </Card>
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar estação" : "Nova estação"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="name" name="name" label="Nome" required defaultValue={editing?.name} placeholder="Estação Central" />
             <Input id="model" name="model" label="Modelo/Fabricante" defaultValue={editing?.model ?? ""} placeholder="Davis Vantage Pro2" />
@@ -204,8 +204,8 @@ function StationsTab() {
             <Input id="longitude" name="longitude" label="Longitude" type="number" step="any" required defaultValue={editing?.longitude} placeholder="-43.3089" />
             <Input id="altitude" name="altitude" label="Altitude (m)" type="number" step="any" defaultValue={editing?.altitude ?? 0} />
           </div>
-          {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
+          {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
@@ -318,11 +318,11 @@ function ManualEntryTab() {
   };
 
   if (!activeFarmId) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma fazenda ativa para lançar dados climáticos.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma fazenda ativa para lançar dados climáticos.</p></Card>;
   }
 
   if (stations.length === 0) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Cadastre uma estação meteorológica primeiro na aba &quot;Estações&quot;.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Cadastre uma estação meteorológica primeiro na aba &quot;Estações&quot;.</p></Card>;
   }
 
   const fieldWarning = (fieldName: string) => {
@@ -334,8 +334,8 @@ function ManualEntryTab() {
 
   return (
     <Card>
-      <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Lançamento de dados climáticos</h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Lançamento de dados climáticos</h3>
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Select
             id="station_select"
@@ -381,10 +381,10 @@ function ManualEntryTab() {
           </div>
         </div>
 
-        {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-        {successMsg && <p className="text-sm text-green-600 dark:text-green-400">{successMsg}</p>}
+        {formError && <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+        {successMsg && <p className="rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400">{successMsg}</p>}
 
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="flex justify-end gap-3 pt-4">
           <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar dados"}</Button>
         </div>
       </form>
@@ -538,7 +538,7 @@ function HistoryTab() {
   ];
 
   if (!activeFarmId) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma fazenda ativa para ver o histórico.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma fazenda ativa para ver o histórico.</p></Card>;
   }
 
   return (
