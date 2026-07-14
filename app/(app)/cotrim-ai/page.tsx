@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function CotrimAIPage() {
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader titulo="Cotrim AI" descricao="Inteligência artificial para manejo" />
       <EmptyState
         title="Cotrim AI"

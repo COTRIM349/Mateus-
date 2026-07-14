@@ -3,7 +3,7 @@ import { EmptyState } from "@/components/ui/EmptyState";
 
 export default function SensoresPage() {
   return (
-    <div>
+    <div className="space-y-8">
       <PageHeader titulo="Sensores" descricao="Dispositivos IoT e leituras" />
       <EmptyState
         title="Sensores"

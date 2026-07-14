@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, Table, type Column, ChartCard, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
-import { useCrud } from "@/lib/hooks";
+import { useCrud, useRecharts } from "@/lib/hooks";
 import {
   type ConsumptionResult,
   type TariffConfig,
@@ -27,23 +27,6 @@ import {
   buildHourlyCostProfile,
   DEMAND_RISK_CONFIG,
 } from "@/modules/energy/services";
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  BarChart,
-  Bar,
-  Line,
-  Area,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-  ReferenceLine,
-} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -216,13 +199,14 @@ export default function EnergiaPage() {
   const dailyAgg = useMemo(() => hasData ? aggregateByDate(consumption) : [], [consumption, hasData]);
   const monthlyAgg = useMemo(() => hasData ? aggregateByMonth(consumption) : [], [consumption, hasData]);
   const cultureAgg = useMemo(() => hasData ? aggregateByCulture(consumption) : [], [consumption, hasData]);
+  const recharts = useRecharts();
 
-  if (loading) {
+  if (loading || !recharts) {
     return (
       <div>
         <PageHeader titulo="Centro de Energia" descricao="Gestão energética completa para irrigação" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -246,38 +230,38 @@ export default function EnergiaPage() {
     <div>
       <PageHeader titulo="Centro de Energia" descricao="Gestão energética completa para irrigação" />
 
-      <div className="mt-6 space-y-6">
+      <div className="mt-6 space-y-8">
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
         {activeTab === "centro" && farmTotals && demand && (
-          <CentroTab
+          <div className="animate-in"><CentroTab
             totals={farmTotals}
             demand={demand}
             dailyAgg={dailyAgg}
             cultureAgg={cultureAgg}
             hourlyCost={hourlyCost}
-          />
+          /></div>
         )}
 
         {activeTab === "consumo" && (
-          <ConsumoTab
+          <div className="animate-in"><ConsumoTab
             aggregated={aggregated}
             viewMode={viewMode}
             setViewMode={setViewMode}
             monthlyAgg={monthlyAgg}
-          />
+          /></div>
         )}
 
         {activeTab === "demanda" && demand && (
-          <DemandaTab demand={demand} dailyAgg={dailyAgg} />
+          <div className="animate-in"><DemandaTab demand={demand} dailyAgg={dailyAgg} /></div>
         )}
 
         {activeTab === "simulacoes" && (
-          <SimulacoesTab simulations={simulations} />
+          <div className="animate-in"><SimulacoesTab simulations={simulations} /></div>
         )}
 
         {activeTab === "inteligencia" && (
-          <InteligenciaTab suggestions={suggestions} />
+          <div className="animate-in"><InteligenciaTab suggestions={suggestions} /></div>
         )}
       </div>
     </div>
@@ -299,6 +283,7 @@ function CentroTab({
   cultureAgg: AggregatedConsumption[];
   hourlyCost: HourlyCostProfile[];
 }) {
+  const { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, Area, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } = useRecharts()!;
   const metrics = [
     { id: "kwh", title: "Consumo Total", value: `${totals.totalKwh.toLocaleString("pt-BR")} kWh`, description: `${totals.pivotCount} pivôs operando`, variation: `${totals.peakPct.toFixed(0)}% ponta`, trend: totals.peakPct > 20 ? "negative" as const : "positive" as const },
     { id: "cost", title: "Custo Total", value: `R$ ${totals.totalCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`, description: "Consumo + demanda", variation: `R$ ${totals.avgDailyCost.toFixed(2)}/dia`, trend: "neutral" as const },
@@ -311,7 +296,7 @@ function CentroTab({
   const riskConf = DEMAND_RISK_CONFIG[demand.riskLevel];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {metrics.map((m) => (
           <StatCard key={m.id} metric={m} />
@@ -320,7 +305,7 @@ function CentroTab({
 
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium text-graphite-900 dark:text-white">Risco de Demanda:</span>
-        <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${riskConf.bgClass}`}>
+        <span className={`inline-flex rounded-lg px-3 py-1 text-xs font-semibold ${riskConf.bgClass}`}>
           {riskConf.label}
         </span>
         {demand.exceedsContracted && (
@@ -398,7 +383,7 @@ function CentroTab({
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Indicadores de Eficiência</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Indicadores de Eficiência</h3>
         <div className="grid grid-cols-2 gap-4 md:grid-cols-5">
           {[
             { label: "kWh/m³", value: totals.kwhPerM3.toFixed(3) },
@@ -407,8 +392,8 @@ function CentroTab({
             { label: "R$/m³", value: totals.costPerM3.toFixed(3) },
             { label: "R$/ha", value: totals.costPerHa.toFixed(2) },
           ].map((ind) => (
-            <div key={ind.label} className="rounded-lg bg-gray-50 p-3 text-center dark:bg-graphite-800">
-              <p className="text-xs text-gray-500 dark:text-gray-400">{ind.label}</p>
+            <div key={ind.label} className="rounded-xl bg-gray-50/80 p-3 text-center dark:bg-white/[0.03]">
+              <p className="text-xs text-graphite-400 dark:text-gray-500">{ind.label}</p>
               <p className="mt-1 text-lg font-bold text-graphite-900 dark:text-white">{ind.value}</p>
             </div>
           ))}
@@ -431,6 +416,7 @@ function ConsumoTab({
   setViewMode: (v: "pivot" | "pump" | "culture" | "module") => void;
   monthlyAgg: AggregatedConsumption[];
 }) {
+  const { ResponsiveContainer, ComposedChart, BarChart, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   const columns: Column<AggregatedConsumption>[] = [
     { header: "Agrupamento", render: (r) => <span className="font-medium">{r.groupLabel}</span> },
     { header: "kWh", render: (r) => r.totalKwh.toLocaleString("pt-BR"), align: "right" },
@@ -456,7 +442,7 @@ function ConsumoTab({
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex items-center gap-2">
         <span className="text-sm font-medium text-graphite-900 dark:text-white">Visualizar:</span>
         {viewOptions.map((opt) => (
@@ -464,10 +450,10 @@ function ConsumoTab({
             key={opt.value}
             type="button"
             onClick={() => setViewMode(opt.value)}
-            className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+            className={`rounded-xl px-3 py-1.5 text-xs font-medium transition-colors ${
               viewMode === opt.value
                 ? "bg-brand-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-300 dark:hover:bg-graphite-600"
+                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.08]"
             }`}
           >
             {opt.label}
@@ -476,7 +462,7 @@ function ConsumoTab({
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
           Consumo {viewOptions.find((v) => v.value === viewMode)?.label}
         </h3>
         <Table columns={columns} data={aggregated} getKey={(r) => r.groupKey} />
@@ -525,6 +511,7 @@ function DemandaTab({
   demand: DemandAnalysis;
   dailyAgg: AggregatedConsumption[];
 }) {
+  const { ResponsiveContainer, ComposedChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, ReferenceLine } = useRecharts()!;
   const riskConf = DEMAND_RISK_CONFIG[demand.riskLevel];
   const trendLabel = demand.demandTrend === "subindo" ? "Subindo" : demand.demandTrend === "descendo" ? "Descendo" : "Estável";
 
@@ -543,7 +530,7 @@ function DemandaTab({
   }));
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
         {demandMetrics.map((m) => (
           <StatCard key={m.id} metric={m} />
@@ -551,8 +538,8 @@ function DemandaTab({
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Indicador de Demanda</h3>
-        <div className="relative h-8 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Indicador de Demanda</h3>
+        <div className="relative h-8 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
           <div
             className={`h-full transition-all ${demand.exceedsContracted ? "bg-red-500" : demand.demandMarginPct < 15 ? "bg-amber-500" : "bg-green-500"}`}
             style={{ width: `${Math.min(100, (demand.peakDemandKw / Math.max(1, demand.contractedDemandKw)) * 100)}%` }}
@@ -584,15 +571,16 @@ function DemandaTab({
 // ── Simulações Tab ─────────────────────────────────────────────────────
 
 function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   if (simulations.length === 0) {
     return <EmptyState title="Sem dados para simulação" description="Registre consumo energético para visualizar cenários de otimização." />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <Card>
-        <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Cenários de Otimização Energética</h3>
-        <p className="mb-4 text-xs text-gray-500 dark:text-gray-400">
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Cenários de Otimização Energética</h3>
+        <p className="mb-5 text-xs text-graphite-400 dark:text-gray-500">
           Compare diferentes estratégias operacionais para otimizar o custo energético da irrigação.
         </p>
 
@@ -605,36 +593,36 @@ function SimulacoesTab({ simulations }: { simulations: EnergySimulation[] }) {
                   ? "border-brand-300 bg-brand-50 dark:border-brand-800 dark:bg-brand-900/20"
                   : sim.savingsCost > 0
                     ? "border-green-200 bg-green-50 dark:border-green-900 dark:bg-green-900/20"
-                    : "border-gray-200 bg-white dark:border-graphite-700 dark:bg-graphite-800"
+                    : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-white/[0.03]"
               }`}
             >
               <div className="mb-3 flex items-center justify-between">
                 <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">{sim.name}</h4>
                 {i === 0 && (
-                  <span className="rounded-full bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-400">
+                  <span className="rounded-lg bg-brand-100 px-2 py-0.5 text-xs font-medium text-brand-700 dark:bg-brand-900/40 dark:text-brand-400">
                     Atual
                   </span>
                 )}
               </div>
-              <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{sim.description}</p>
+              <p className="mb-3 text-xs text-graphite-400 dark:text-gray-500">{sim.description}</p>
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Consumo:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Consumo:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">{sim.totalKwh.toLocaleString("pt-BR")} kWh</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Custo:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Custo:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">R$ {sim.totalCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Demanda:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Demanda:</span>
                   <span className={`font-medium ${sim.exceedsContracted ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                     {sim.demandKw.toFixed(0)} kW {sim.exceedsContracted ? "(EXCEDE)" : ""}
                   </span>
                 </div>
               </div>
               {sim.savingsCost > 0 && (
-                <div className="mt-3 rounded-lg bg-green-100 p-2 text-center dark:bg-green-900/30">
+                <div className="mt-3 rounded-xl bg-green-100 p-2 text-center dark:bg-green-900/30">
                   <span className="text-xs font-semibold text-green-700 dark:text-green-400">
                     Economia: R$ {sim.savingsCost.toFixed(2)} ({sim.savingsPct.toFixed(1)}%)
                   </span>
@@ -690,16 +678,16 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid gap-4 md:grid-cols-2">
         {suggestions.map((sug, i) => (
           <div key={i} className={`rounded-xl border p-4 ${impactColors[sug.impact]}`}>
             <div className="mb-3 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-graphite-700 dark:text-gray-300">
+                <span className="rounded bg-gray-200 px-2 py-0.5 text-xs font-medium text-gray-700 dark:bg-white/[0.08] dark:text-gray-300">
                   {typeLabels[sug.type]}
                 </span>
-                <span className={`rounded-full px-2 py-0.5 text-xs font-semibold ${impactBadge[sug.impact]}`}>
+                <span className={`rounded-lg px-2 py-0.5 text-xs font-semibold ${impactBadge[sug.impact]}`}>
                   Impacto {sug.impact}
                 </span>
               </div>
@@ -708,18 +696,18 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
               )}
             </div>
             <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">{sug.title}</h4>
-            <p className="mb-3 text-xs text-gray-600 dark:text-gray-400">{sug.description}</p>
+            <p className="mb-3 text-xs text-gray-600 dark:text-gray-500">{sug.description}</p>
             {sug.estimatedSavings > 0 && (
-              <div className="flex items-center gap-3 rounded-lg bg-white/60 p-2 dark:bg-graphite-800/60">
+              <div className="flex items-center gap-3 rounded-xl bg-white/60 p-2 dark:bg-white/[0.03]">
                 <div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Economia estimada</p>
+                  <p className="text-xs text-graphite-400 dark:text-gray-500">Economia estimada</p>
                   <p className="text-sm font-bold text-green-600 dark:text-green-400">
                     R$ {sug.estimatedSavings.toFixed(2)}
                   </p>
                 </div>
                 {sug.estimatedSavingsPct > 0 && (
                   <div>
-                    <p className="text-xs text-gray-500 dark:text-gray-400">Redução</p>
+                    <p className="text-xs text-graphite-400 dark:text-gray-500">Redução</p>
                     <p className="text-sm font-bold text-green-600 dark:text-green-400">
                       {sug.estimatedSavingsPct.toFixed(1)}%
                     </p>
@@ -732,22 +720,22 @@ function InteligenciaTab({ suggestions }: { suggestions: EnergySuggestion[] }) {
       </div>
 
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Resumo de Otimização</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Resumo de Otimização</h3>
         <div className="grid grid-cols-3 gap-4 text-center">
-          <div className="rounded-lg bg-green-50 p-3 dark:bg-green-900/20">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Economia potencial total</p>
+          <div className="rounded-xl bg-green-50/80 p-3 dark:bg-green-900/20">
+            <p className="text-xs text-graphite-400 dark:text-gray-500">Economia potencial total</p>
             <p className="mt-1 text-lg font-bold text-green-600 dark:text-green-400">
               R$ {suggestions.reduce((s, sug) => s + sug.estimatedSavings, 0).toFixed(2)}
             </p>
           </div>
-          <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-900/20">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Sugestões acionáveis</p>
+          <div className="rounded-xl bg-blue-50/80 p-3 dark:bg-blue-900/20">
+            <p className="text-xs text-graphite-400 dark:text-gray-500">Sugestões acionáveis</p>
             <p className="mt-1 text-lg font-bold text-blue-600 dark:text-blue-400">
               {suggestions.filter((s) => s.actionable).length}
             </p>
           </div>
-          <div className="rounded-lg bg-amber-50 p-3 dark:bg-amber-900/20">
-            <p className="text-xs text-gray-500 dark:text-gray-400">Impacto alto</p>
+          <div className="rounded-xl bg-amber-50/80 p-3 dark:bg-amber-900/20">
+            <p className="text-xs text-graphite-400 dark:text-gray-500">Impacto alto</p>
             <p className="mt-1 text-lg font-bold text-amber-600 dark:text-amber-400">
               {suggestions.filter((s) => s.impact === "alto").length}
             </p>

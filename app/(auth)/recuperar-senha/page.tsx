@@ -33,40 +33,40 @@ export default function RecoverPasswordPage() {
   };
 
   return (
-    <div className="rounded-2xl border border-gray-200 bg-white p-8 shadow-lg dark:border-graphite-700 dark:bg-graphite-900">
-      <div className="mb-8 flex flex-col items-center">
-        <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-xl bg-brand-500 text-white">
-          <svg className="h-8 w-8" fill="currentColor" viewBox="0 0 24 24">
+    <div className="rounded-2xl border border-gray-100 bg-white p-10 shadow-elevated dark:border-white/[0.06] dark:bg-graphite-900">
+      <div className="mb-10 flex flex-col items-center">
+        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
+          <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
             <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
           </svg>
         </div>
-        <h1 className="text-xl font-bold text-graphite-900 dark:text-white">
+        <h1 className="text-xl font-bold tracking-tight text-graphite-900 dark:text-white">
           Recuperar senha
         </h1>
-        <p className="mt-1 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="mt-2 text-center text-sm text-graphite-400 dark:text-gray-500">
           Informe seu e-mail para receber o link de recuperação
         </p>
       </div>
 
       {sent ? (
-        <div className="space-y-4 text-center">
-          <div className="rounded-lg bg-brand-50 p-4 dark:bg-brand-900/20">
+        <div className="space-y-5 text-center">
+          <div className="rounded-xl bg-brand-50 p-5 dark:bg-brand-900/20">
             <p className="text-sm font-medium text-brand-700 dark:text-brand-400">
               E-mail enviado com sucesso!
             </p>
-            <p className="mt-1 text-xs text-brand-600 dark:text-brand-500">
+            <p className="mt-1.5 text-xs text-brand-600 dark:text-brand-500">
               Verifique sua caixa de entrada e siga as instruções.
             </p>
           </div>
           <Link
             href="/login"
-            className="inline-block text-sm text-brand-600 hover:text-brand-700 dark:text-brand-400"
+            className="inline-block text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400"
           >
             Voltar para o login
           </Link>
         </div>
       ) : (
-        <form onSubmit={handleRecover} className="space-y-4">
+        <form onSubmit={handleRecover} className="space-y-5">
           <Input
             id="email"
             label="E-mail"
@@ -79,7 +79,7 @@ export default function RecoverPasswordPage() {
           />
 
           {error && (
-            <p className="rounded-lg bg-red-50 p-3 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+            <p className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
               {error}
             </p>
           )}
@@ -91,7 +91,7 @@ export default function RecoverPasswordPage() {
           <div className="text-center">
             <Link
               href="/login"
-              className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400"
+              className="text-sm font-medium text-graphite-400 transition-colors hover:text-graphite-600 dark:text-gray-500"
             >
               Voltar para o login
             </Link>

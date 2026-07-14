@@ -131,7 +131,7 @@ export function MapPicker({ value, onChange, radiusMeters = 0, otherPivots = [],
   return (
     <div
       ref={containerRef}
-      className={className ?? "h-[400px] w-full rounded-lg border border-gray-200 dark:border-graphite-700"}
+      className={className ?? "h-[400px] w-full rounded-2xl border border-gray-100 dark:border-white/[0.06]"}
     />
   );
 }

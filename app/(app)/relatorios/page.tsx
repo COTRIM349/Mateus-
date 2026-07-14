@@ -6,7 +6,7 @@ import { Card, StatCard, Tabs, Table, type Column, EmptyState } from "@/componen
 import { formatBRL, formatNumber, formatPercent, formatDate } from "@/utils/format";
 import { roundTo, sum } from "@/utils/math";
 import { useAuth } from "@/components/providers";
-import { useCrud } from "@/lib/hooks";
+import { useCrud, useRecharts } from "@/lib/hooks";
 import {
   type DailyBalanceRow,
   calculateSummary,
@@ -41,24 +41,6 @@ import {
   calculateReportKPIs,
   calculatePeriodSummary,
 } from "@/modules/reports/services";
-import {
-  BarChart,
-  Bar,
-  PieChart,
-  Pie,
-  Cell,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-  RadarChart,
-  Radar,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -330,13 +312,14 @@ export default function RelatoriosPage() {
   const byPivot = useMemo(() => energyResults.length > 0 ? aggregateByPivot(energyResults) : [], [energyResults]);
   const byCulture = useMemo(() => energyResults.length > 0 ? aggregateByCulture(energyResults) : [], [energyResults]);
   const balanceSummary = useMemo(() => balanceRows.length > 0 ? calculateSummary(balanceRows) : null, [balanceRows]);
+  const recharts = useRecharts();
 
-  if (loading) {
+  if (loading || !recharts) {
     return (
       <div>
         <PageHeader titulo="Relatórios Inteligentes" descricao="Relatórios, histórico, indicadores e auditoria" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -362,7 +345,7 @@ export default function RelatoriosPage() {
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
         {activeTab === "relatorios" && (
-          <TabRelatorios
+          <div className="animate-in"><TabRelatorios
             selectedType={selectedReportType}
             onSelectType={setSelectedReportType}
             selectedFormat={selectedFormat}
@@ -373,21 +356,21 @@ export default function RelatoriosPage() {
             byPivot={byPivot}
             byCulture={byCulture}
             recommendations={recommendations}
-          />
+          /></div>
         )}
         {activeTab === "historico" && (
-          <TabHistorico
+          <div className="animate-in"><TabHistorico
             dimension={historyDimension}
             onChangeDimension={setHistoryDimension}
             balanceRows={balanceRows}
             energyResults={energyResults}
             recommendations={recommendations}
-          />
+          /></div>
         )}
         {activeTab === "indicadores" && (
-          <TabIndicadores kpis={kpis} farmTotals={farmTotals} balanceSummary={balanceSummary} byPivot={byPivot} byCulture={byCulture} />
+          <div className="animate-in"><TabIndicadores kpis={kpis} farmTotals={farmTotals} balanceSummary={balanceSummary} byPivot={byPivot} byCulture={byCulture} /></div>
         )}
-        {activeTab === "auditoria" && <TabAuditoria auditLog={rawAuditLog} />}
+        {activeTab === "auditoria" && <div className="animate-in"><TabAuditoria auditLog={rawAuditLog} /></div>}
       </div>
     </div>
   );
@@ -417,29 +400,29 @@ function TabRelatorios({
   const hasData = (farmTotals !== null || balanceSummary !== null || recommendations.length > 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         {reportTypes.map(([key, cfg]) => (
           <button
             key={key}
             onClick={() => onSelectType(key)}
-            className={`rounded-lg border p-4 text-left transition-all ${
+            className={`rounded-xl border p-4 text-left transition-all ${
               selectedType === key
                 ? "border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-900/20"
-                : "border-gray-200 hover:border-gray-300 dark:border-graphite-700 dark:hover:border-graphite-600"
+                : "border-gray-100 hover:border-gray-300 dark:border-white/[0.06] dark:hover:border-white/[0.12]"
             }`}
           >
             <div className="mb-1 flex items-center gap-2">
-              <span className={`flex h-8 w-8 items-center justify-center rounded-md text-xs font-bold ${
+              <span className={`flex h-8 w-8 items-center justify-center rounded-lg text-xs font-bold ${
                 selectedType === key
                   ? "bg-brand-500 text-white"
-                  : "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400"
+                  : "bg-gray-50/80 text-gray-600 dark:bg-white/[0.03] dark:text-gray-500"
               }`}>
                 {cfg.icon}
               </span>
               <span className="text-sm font-semibold text-graphite-900 dark:text-white">{cfg.label}</span>
             </div>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.description}</p>
+            <p className="text-xs text-graphite-400 dark:text-gray-500">{cfg.description}</p>
           </button>
         ))}
       </div>
@@ -447,19 +430,19 @@ function TabRelatorios({
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">{config.label}</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">{config.description}</p>
+            <h3 className="text-lg font-semibold tracking-tight text-graphite-900 dark:text-white">{config.label}</h3>
+            <p className="text-sm text-graphite-400 dark:text-gray-500">{config.description}</p>
           </div>
           <div className="flex items-center gap-3">
-            <div className="flex rounded-lg border border-gray-200 dark:border-graphite-700">
+            <div className="flex rounded-xl border border-gray-100 dark:border-white/[0.06]">
               {formats.map(([key, cfg]) => (
                 <button
                   key={key}
                   onClick={() => onSelectFormat(key)}
-                  className={`px-4 py-2 text-sm font-medium transition-colors first:rounded-l-lg last:rounded-r-lg ${
+                  className={`px-4 py-2 text-sm font-medium transition-colors first:rounded-l-xl last:rounded-r-xl ${
                     selectedFormat === key
                       ? "bg-brand-500 text-white"
-                      : "text-gray-600 hover:bg-gray-50 dark:text-gray-400 dark:hover:bg-graphite-800"
+                      : "text-gray-600 hover:bg-gray-50/80 dark:text-gray-500 dark:hover:bg-white/[0.06]"
                   }`}
                 >
                   {cfg.label}
@@ -468,7 +451,7 @@ function TabRelatorios({
             </div>
             <button
               disabled={!hasData}
-              className="rounded-lg bg-brand-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="rounded-xl bg-brand-600 px-6 py-2 text-sm font-semibold text-white transition-colors hover:bg-brand-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Gerar Relatório
             </button>
@@ -478,7 +461,7 @@ function TabRelatorios({
 
       {hasData ? (
         <Card>
-          <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          <h3 className="mb-5 text-sm font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
             Pré-visualização — {config.label}
           </h3>
           <ReportPreview
@@ -512,6 +495,7 @@ function ReportPreview({
   byCulture: ReturnType<typeof aggregateByCulture>;
   recommendations: Recommendation[];
 }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, PieChart, Pie, Cell } = useRecharts()!;
   if (!farmTotals && !balanceSummary && recommendations.length === 0) {
     return <p className="py-8 text-center text-sm text-gray-400">Sem dados disponíveis para este tipo de relatório.</p>;
   }
@@ -523,7 +507,7 @@ function ReportPreview({
         return <p className="py-8 text-center text-sm text-gray-400">Sem dados de consumo energético por pivô.</p>;
       }
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniKPI label="Pivôs operando" value={`${byPivot.length}`} />
             <MiniKPI label="Volume total" value={`${formatNumber(farmTotals.totalVolumeM3)} m³`} />
@@ -533,17 +517,17 @@ function ReportPreview({
           <div className="overflow-x-auto">
             <table className="w-full min-w-[600px] text-sm">
               <thead>
-                <tr className="border-b border-gray-200 dark:border-graphite-700">
-                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-gray-500">Pivô</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">kWh</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">Custo</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">m³</th>
-                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-gray-500">Horas</th>
+                <tr className="border-b border-gray-100 dark:border-white/[0.06]">
+                  <th className="px-3 py-2 text-left text-xs font-semibold uppercase text-graphite-400">Pivô</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">kWh</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">Custo</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">m³</th>
+                  <th className="px-3 py-2 text-right text-xs font-semibold uppercase text-graphite-400">Horas</th>
                 </tr>
               </thead>
               <tbody>
                 {byPivot.slice(0, 10).map((p) => (
-                  <tr key={p.groupKey} className="border-b border-gray-100 dark:border-graphite-800">
+                  <tr key={p.groupKey} className="border-b border-gray-100/80 dark:border-white/[0.04]">
                     <td className="px-3 py-2 font-medium text-graphite-900 dark:text-white">{p.groupLabel}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{formatNumber(p.totalKwh)}</td>
                     <td className="px-3 py-2 text-right text-gray-700 dark:text-gray-300">{formatBRL(p.totalCost)}</td>
@@ -560,7 +544,7 @@ function ReportPreview({
     case "semanal":
     case "mensal":
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <MiniKPI label="Registros" value={`${balanceSummary?.days ?? 0}`} />
             <MiniKPI label="Precipitação" value={`${formatNumber(balanceSummary?.totalPrecipitation ?? 0, 1)} mm`} />
@@ -590,7 +574,7 @@ function ReportPreview({
         return <p className="py-8 text-center text-sm text-gray-400">Sem dados de consumo por cultura.</p>;
       }
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {byCulture.map((c) => (
               <MiniKPI key={c.groupKey} label={c.groupLabel} value={formatBRL(c.totalCost)} />
@@ -617,7 +601,7 @@ function ReportPreview({
         return <p className="py-8 text-center text-sm text-gray-400">Sem dados energéticos/financeiros.</p>;
       }
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
             <MiniKPI label="Total kWh" value={formatNumber(farmTotals.totalKwh)} />
             <MiniKPI label="Ponta" value={`${formatPercent(farmTotals.peakPct)}`} />
@@ -644,7 +628,7 @@ function ReportPreview({
 
     case "executivo":
       return (
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             <MiniKPI label="Efic. irrigação" value={kpis ? formatPercent(kpis.irrigationEfficiency) : "—"} />
             <MiniKPI label="ARM médio" value={kpis ? formatPercent(kpis.avgArm) : "—"} />
@@ -653,11 +637,11 @@ function ReportPreview({
           </div>
           {recommendations.length > 0 && (
             <div>
-              <p className="mb-2 text-xs font-semibold uppercase text-gray-500 dark:text-gray-400">Top 5 — Prioridade</p>
+              <p className="mb-2 text-xs font-semibold uppercase text-graphite-400 dark:text-gray-500">Top 5 — Prioridade</p>
               {rankRecommendations(recommendations).slice(0, 5).map((r) => (
-                <div key={r.pivotId} className="flex items-center justify-between border-b border-gray-100 py-2 dark:border-graphite-800">
+                <div key={r.pivotId} className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-white/[0.04]">
                   <span className="text-sm text-graphite-900 dark:text-white">{r.pivotName}</span>
-                  <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
+                  <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
                     {PRIORITY_CONFIG[r.priority].label} ({r.priorityScore.toFixed(0)})
                   </span>
                 </div>
@@ -674,9 +658,9 @@ function ReportPreview({
 
 function MiniKPI({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg border border-gray-200 p-3 dark:border-graphite-700">
-      <p className="text-xs text-gray-500 dark:text-gray-400">{label}</p>
-      <p className="text-lg font-bold text-graphite-900 dark:text-white">{value}</p>
+    <div className="rounded-xl border border-gray-100 p-3 dark:border-white/[0.06]">
+      <p className="text-xs text-graphite-400 dark:text-gray-500">{label}</p>
+      <p className="text-lg font-bold tracking-tight text-graphite-900 dark:text-white">{value}</p>
     </div>
   );
 }
@@ -695,16 +679,16 @@ function TabHistorico({
   const dimensions = Object.entries(HISTORY_DIMENSION_CONFIG) as Array<[HistoryDimension, typeof HISTORY_DIMENSION_CONFIG[HistoryDimension]]>;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap gap-2">
         {dimensions.map(([key, cfg]) => (
           <button
             key={key}
             onClick={() => onChangeDimension(key)}
-            className={`rounded-lg px-4 py-2 text-sm font-medium transition-colors ${
+            className={`rounded-xl px-4 py-2 text-sm font-medium transition-colors ${
               dimension === key
                 ? "bg-brand-500 text-white"
-                : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-400 dark:hover:bg-graphite-600"
+                : "bg-gray-50/80 text-gray-600 hover:bg-gray-200 dark:bg-white/[0.03] dark:text-gray-500 dark:hover:bg-white/[0.08]"
             }`}
           >
             {cfg.label}
@@ -713,11 +697,11 @@ function TabHistorico({
       </div>
 
       <Card>
-        <div className="mb-4">
-          <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">
+        <div className="mb-5">
+          <h3 className="text-lg font-semibold tracking-tight text-graphite-900 dark:text-white">
             {HISTORY_DIMENSION_CONFIG[dimension].label}
           </h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">
+          <p className="text-sm text-graphite-400 dark:text-gray-500">
             {HISTORY_DIMENSION_CONFIG[dimension].description}
           </p>
         </div>
@@ -767,7 +751,7 @@ function HistoricoIrrigacao({ balanceRows }: { balanceRows: DailyBalanceRow[] })
     { header: "Déficit", render: (r) => formatNumber(r.deficit, 1), align: "right" },
     { header: "ETc", render: (r) => formatNumber(r.etc, 1), align: "right" },
     { header: "Status", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
         {WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.label ?? r.status}
       </span>
     )},
@@ -786,19 +770,19 @@ function HistoricoRecomendacoes({ recommendations }: { recommendations: Recommen
   const columns: Column<Recommendation>[] = [
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivotName}</span> },
     { header: "Prioridade", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${PRIORITY_CONFIG[r.priority].bgClass}`}>
         {PRIORITY_CONFIG[r.priority].label}
       </span>
     )},
     { header: "Score", render: (r) => formatNumber(r.priorityScore, 1), align: "right" },
     { header: "Status", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${OPERATIONAL_STATUS_CONFIG[r.operationalStatus].bgClass}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${OPERATIONAL_STATUS_CONFIG[r.operationalStatus].bgClass}`}>
         {OPERATIONAL_STATUS_CONFIG[r.operationalStatus].label}
       </span>
     )},
     { header: "Lâmina (mm)", render: (r) => formatNumber(r.grossDepth, 1), align: "right" },
     { header: "Volume (m³)", render: (r) => formatNumber(r.volumeM3), align: "right" },
-    { header: "Motivo", render: (r) => <span className="max-w-xs truncate text-xs text-gray-500">{r.reason}</span> },
+    { header: "Motivo", render: (r) => <span className="max-w-xs truncate text-xs text-graphite-400">{r.reason}</span> },
   ];
 
   return <Table columns={columns} data={ranked} getKey={(r) => r.pivotId} />;
@@ -837,7 +821,7 @@ function HistoricoAgua({ balanceRows }: { balanceRows: DailyBalanceRow[] }) {
     { header: "ARM/CAD", render: (r) => `${formatNumber(r.arm, 1)}/${formatNumber(r.cad)}`, align: "right" },
     { header: "ARM%", render: (r) => formatPercent(r.armPct), align: "right" },
     { header: "Status", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.bgClass ?? ""}`}>
         {WATER_STATUS_CONFIG[r.status as keyof typeof WATER_STATUS_CONFIG]?.label ?? r.status}
       </span>
     )},
@@ -914,6 +898,7 @@ function TabIndicadores({
   byPivot: ReturnType<typeof aggregateByPivot>;
   byCulture: ReturnType<typeof aggregateByCulture>;
 }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   if (!kpis || (!farmTotals && !balanceSummary)) {
     return <EmptyState title="Sem indicadores disponíveis" description="Registre dados operacionais para visualizar indicadores de desempenho." />;
   }
@@ -929,7 +914,7 @@ function TabIndicadores({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         {kpiCards.map((m) => (
           <StatCard key={m.id} metric={m} />
@@ -938,7 +923,7 @@ function TabIndicadores({
 
       {balanceSummary && (
         <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Resumo do Período</h4>
+          <h4 className="mb-3 text-sm font-semibold uppercase tracking-tight text-graphite-400 dark:text-gray-500">Resumo do Período</h4>
           <div className="space-y-3">
             <SummaryRow label="Dias no período" value={`${balanceSummary.days}`} />
             <SummaryRow label="ETc média diária" value={`${formatNumber(balanceSummary.avgETc, 2)} mm/dia`} />
@@ -961,7 +946,7 @@ function TabIndicadores({
 
       {byPivot.length > 0 && (
         <Card>
-          <h4 className="mb-3 text-sm font-semibold uppercase text-gray-500 dark:text-gray-400">Indicadores por Pivô</h4>
+          <h4 className="mb-3 text-sm font-semibold uppercase tracking-tight text-graphite-400 dark:text-gray-500">Indicadores por Pivô</h4>
           <div style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={byPivot}>
@@ -984,8 +969,8 @@ function TabIndicadores({
 
 function SummaryRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
-    <div className="flex items-center justify-between border-b border-gray-100 py-2 dark:border-graphite-800">
-      <span className="text-sm text-gray-600 dark:text-gray-400">{label}</span>
+    <div className="flex items-center justify-between border-b border-gray-100/80 py-2 dark:border-white/[0.04]">
+      <span className="text-sm text-gray-600 dark:text-gray-500">{label}</span>
       <span className={`text-sm font-semibold ${
         highlight ? "text-red-600 dark:text-red-400" : "text-graphite-900 dark:text-white"
       }`}>
@@ -1021,19 +1006,19 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
 
   const columns: Column<AuditLogEntry>[] = [
     { header: "Data/Hora", render: (r) => (
-      <span className="text-xs text-gray-600 dark:text-gray-400">
+      <span className="text-xs text-gray-600 dark:text-gray-500">
         {new Date(r.createdAt).toLocaleString("pt-BR")}
       </span>
     )},
     { header: "Usuário", render: (r) => <span className="font-medium text-graphite-900 dark:text-white">{r.userName}</span> },
     { header: "Ação", render: (r) => (
-      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${AUDIT_ACTION_CONFIG[r.action].bgClass}`}>
+      <span className={`rounded-lg px-2 py-0.5 text-xs font-medium ${AUDIT_ACTION_CONFIG[r.action].bgClass}`}>
         {AUDIT_ACTION_CONFIG[r.action].label}
       </span>
     )},
     { header: "Entidade", render: (r) => (
       <div>
-        <span className="text-xs uppercase text-gray-500 dark:text-gray-400">{r.entityType}</span>
+        <span className="text-xs uppercase text-graphite-400 dark:text-gray-500">{r.entityType}</span>
         <p className="text-sm text-graphite-900 dark:text-white">{r.entityName}</p>
       </div>
     )},
@@ -1043,7 +1028,7 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
       return (
         <div className="max-w-xs">
           {keys.slice(0, 2).map((k) => (
-            <p key={k} className="truncate text-xs text-gray-500 dark:text-gray-400">
+            <p key={k} className="truncate text-xs text-graphite-400 dark:text-gray-500">
               <span className="font-medium">{k}:</span> {String((r.changes[k] as Record<string, unknown>).from)} → {String((r.changes[k] as Record<string, unknown>).to)}
             </p>
           ))}
@@ -1054,36 +1039,36 @@ function TabAuditoria({ auditLog }: { auditLog: AuditLogEntry[] }) {
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="grid grid-cols-3 gap-3 sm:grid-cols-6">
         {actions.slice(0, 6).map(([key, cfg]) => (
           <button
             key={key}
             onClick={() => setFilterAction(filterAction === key ? "all" : key)}
-            className={`rounded-lg border p-3 text-center transition-all ${
+            className={`rounded-xl border p-3 text-center transition-all ${
               filterAction === key
                 ? "border-brand-500 bg-brand-50 dark:border-brand-400 dark:bg-brand-900/20"
-                : "border-gray-200 hover:border-gray-300 dark:border-graphite-700 dark:hover:border-graphite-600"
+                : "border-gray-100 hover:border-gray-300 dark:border-white/[0.06] dark:hover:border-white/[0.12]"
             }`}
           >
-            <p className="text-lg font-bold text-graphite-900 dark:text-white">{actionStats[key] ?? 0}</p>
-            <p className="text-xs text-gray-500 dark:text-gray-400">{cfg.label}</p>
+            <p className="text-lg font-bold tracking-tight text-graphite-900 dark:text-white">{actionStats[key] ?? 0}</p>
+            <p className="text-xs text-graphite-400 dark:text-gray-500">{cfg.label}</p>
           </button>
         ))}
       </div>
 
       <Card>
-        <div className="mb-4 flex items-center justify-between">
+        <div className="mb-5 flex items-center justify-between">
           <div>
-            <h3 className="text-lg font-semibold text-graphite-900 dark:text-white">Log de Auditoria</h3>
-            <p className="text-sm text-gray-500 dark:text-gray-400">
+            <h3 className="text-lg font-semibold tracking-tight text-graphite-900 dark:text-white">Log de Auditoria</h3>
+            <p className="text-sm text-graphite-400 dark:text-gray-500">
               {filtered.length} registro(s) {filterAction !== "all" ? `— filtrado por: ${AUDIT_ACTION_CONFIG[filterAction].label}` : ""}
             </p>
           </div>
           {filterAction !== "all" && (
             <button
               onClick={() => setFilterAction("all")}
-              className="rounded-lg border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50 dark:border-graphite-600 dark:text-gray-400 dark:hover:bg-graphite-800"
+              className="rounded-xl border border-gray-300 px-3 py-1.5 text-sm text-gray-600 transition-colors hover:bg-gray-50/80 dark:border-white/[0.08] dark:text-gray-500 dark:hover:bg-white/[0.06]"
             >
               Limpar filtro
             </button>

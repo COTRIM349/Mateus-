@@ -4,7 +4,7 @@ import { useState, useMemo } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, Table, type Column, ChartCard, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
-import { useCrud } from "@/lib/hooks";
+import { useCrud, useRecharts } from "@/lib/hooks";
 import {
   type ApportionmentResult,
   type ApportionmentInput,
@@ -14,19 +14,6 @@ import {
   aggregateApportionmentByModule,
   APPORTIONMENT_METHOD_CONFIG,
 } from "@/modules/energy/services";
-import {
-  ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  PieChart,
-  Pie,
-  Cell,
-} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────────────────
 
@@ -102,13 +89,14 @@ export default function RateioPage() {
 
   const byCulture = useMemo(() => results.length > 0 ? aggregateApportionmentByCulture(results) : [], [results]);
   const byModule = useMemo(() => results.length > 0 ? aggregateApportionmentByModule(results) : [], [results]);
+  const recharts = useRecharts();
 
-  if (loading) {
+  if (loading || !recharts) {
     return (
       <div>
         <PageHeader titulo="Rateio de Custos" descricao="Rateio automático de energia por pivô, cultura, safra e módulo" />
         <div className="mt-8 flex items-center justify-center py-20">
-          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-200 border-t-brand-600" />
+          <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
         </div>
       </div>
     );
@@ -144,7 +132,7 @@ export default function RateioPage() {
     <div>
       <PageHeader titulo="Rateio de Custos" descricao="Rateio automático de energia por pivô, cultura, safra e módulo" />
 
-      <div className="mt-6 space-y-6">
+      <div className="mt-6 space-y-8">
         <div className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-6">
           {metrics.map((m) => (
             <StatCard key={m.id} metric={m} />
@@ -152,18 +140,18 @@ export default function RateioPage() {
         </div>
 
         <Card>
-          <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Método de Rateio</h3>
-          <div className="flex flex-wrap gap-2">
+          <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Método de Rateio</h3>
+          <div className="flex flex-wrap gap-3">
             {(Object.entries(APPORTIONMENT_METHOD_CONFIG) as [ApportionmentMethod, { label: string; description: string }][]).map(
               ([key, conf]) => (
                 <button
                   key={key}
                   type="button"
                   onClick={() => setMethod(key)}
-                  className={`rounded-lg px-4 py-2 text-xs font-medium transition-colors ${
+                  className={`rounded-xl px-4 py-2 text-xs font-medium transition-colors ${
                     method === key
                       ? "bg-brand-500 text-white"
-                      : "bg-gray-100 text-gray-600 hover:bg-gray-200 dark:bg-graphite-700 dark:text-gray-300 dark:hover:bg-graphite-600"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200/70 dark:bg-white/[0.06] dark:text-gray-300 dark:hover:bg-white/[0.08]"
                   }`}
                 >
                   <div className="font-semibold">{conf.label}</div>
@@ -176,11 +164,11 @@ export default function RateioPage() {
 
         <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-        {activeTab === "pivot" && <PivotTab results={results} />}
-        {activeTab === "cultura" && <CulturaTab results={byCulture} />}
-        {activeTab === "modulo" && <ModuloTab results={byModule} />}
+        {activeTab === "pivot" && <div className="animate-in"><PivotTab results={results} /></div>}
+        {activeTab === "cultura" && <div className="animate-in"><CulturaTab results={byCulture} /></div>}
+        {activeTab === "modulo" && <div className="animate-in"><ModuloTab results={byModule} /></div>}
         {activeTab === "comparativo" && (
-          <ComparativoTab results={results} byCulture={byCulture} byModule={byModule} />
+          <div className="animate-in"><ComparativoTab results={results} byCulture={byCulture} byModule={byModule} /></div>
         )}
       </div>
     </div>
@@ -190,6 +178,7 @@ export default function RateioPage() {
 // ── Pivot Tab ──────────────────────────────────────────────────────────
 
 function PivotTab({ results }: { results: ApportionmentResult[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip } = useRecharts()!;
   const columns: Column<ApportionmentResult>[] = [
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivotName}</span> },
     { header: "Cultura", render: (r) => r.cultureName },
@@ -198,7 +187,7 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
     { header: "Volume (m³)", render: (r) => r.volumeM3.toLocaleString("pt-BR"), align: "right" },
     { header: "% Rateio", render: (r) => (
       <div className="flex items-center gap-2">
-        <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
+        <div className="h-2 w-16 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
           <div className="h-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
         </div>
         <span className="text-xs">{r.sharePct.toFixed(1)}%</span>
@@ -214,7 +203,7 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Rateio por Pivô</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Rateio por Pivô</h3>
         <Table columns={columns} data={results} getKey={(r) => r.pivotId} />
       </Card>
 
@@ -236,6 +225,7 @@ function PivotTab({ results }: { results: ApportionmentResult[] }) {
 // ── Cultura Tab ────────────────────────────────────────────────────────
 
 function CulturaTab({ results }: { results: ApportionmentResult[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend, PieChart, Pie, Cell } = useRecharts()!;
   if (results.length === 0) {
     return <EmptyState title="Sem dados por cultura" description="Nenhum rateio por cultura disponível." />;
   }
@@ -255,7 +245,7 @@ function CulturaTab({ results }: { results: ApportionmentResult[] }) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Rateio por Cultura</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Rateio por Cultura</h3>
         <Table columns={columns} data={results} getKey={(r) => r.cultureId} />
       </Card>
 
@@ -302,6 +292,7 @@ function CulturaTab({ results }: { results: ApportionmentResult[] }) {
 // ── Módulo Tab ─────────────────────────────────────────────────────────
 
 function ModuloTab({ results }: { results: ApportionmentResult[] }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = useRecharts()!;
   if (results.length === 0) {
     return <EmptyState title="Sem dados por módulo" description="Nenhum rateio por módulo disponível." />;
   }
@@ -320,7 +311,7 @@ function ModuloTab({ results }: { results: ApportionmentResult[] }) {
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">Rateio por Módulo</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Rateio por Módulo</h3>
         <Table columns={columns} data={results} getKey={(r) => r.moduleName} />
       </Card>
 
@@ -353,41 +344,42 @@ function ComparativoTab({
   byCulture: ApportionmentResult[];
   byModule: ApportionmentResult[];
 }) {
+  const { ResponsiveContainer, BarChart, Bar, CartesianGrid, XAxis, YAxis, Tooltip, Cell } = useRecharts()!;
   return (
     <div className="space-y-6">
       <Card>
-        <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Análise Comparativa de Eficiência</h3>
+        <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Análise Comparativa de Eficiência</h3>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {results.map((r) => (
-            <div key={r.pivotId} className="rounded-xl border border-gray-200 p-4 dark:border-graphite-700">
+            <div key={r.pivotId} className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.06]">
               <h4 className="mb-1 text-sm font-semibold text-graphite-900 dark:text-white">{r.pivotName}</h4>
-              <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">{r.cultureName} — {r.moduleName}</p>
+              <p className="mb-3 text-xs text-graphite-400 dark:text-gray-500">{r.cultureName} — {r.moduleName}</p>
 
               <div className="space-y-2">
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Custo rateado:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Custo rateado:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">
                     R$ {r.apportionedCost.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                   </span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">Participação:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">Participação:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">{r.sharePct.toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">R$/ha:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">R$/ha:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">R$ {r.costPerHa.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between text-xs">
-                  <span className="text-gray-500 dark:text-gray-400">kWh/m³:</span>
+                  <span className="text-graphite-400 dark:text-gray-500">kWh/m³:</span>
                   <span className="font-medium text-graphite-900 dark:text-white">{r.kwhPerM3.toFixed(3)}</span>
                 </div>
               </div>
 
               <div className="mt-3">
-                <div className="text-xs text-gray-500 dark:text-gray-400">Participação</div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-200 dark:bg-graphite-700">
+                <div className="text-xs text-graphite-400 dark:text-gray-500">Participação</div>
+                <div className="mt-1 h-2 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
                   <div className="h-full rounded-full bg-brand-500" style={{ width: `${r.sharePct}%` }} />
                 </div>
               </div>

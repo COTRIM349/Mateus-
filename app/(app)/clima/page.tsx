@@ -59,19 +59,19 @@ export default function ClimaPage() {
   const [activeTab, setActiveTab] = useState("virtual");
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <PageHeader titulo="Clima" descricao="Estações meteorológicas, dados climáticos e histórico" />
       <Tabs tabs={climaTabs} activeTab={activeTab} onChange={setActiveTab} />
-      <div className="mt-6">
-        {activeTab === "virtual" && <VirtualStationTab />}
-        {activeTab === "estacoes" && <StationsTab />}
-        {activeTab === "lancamento" && <ManualEntryTab />}
-        {activeTab === "historico" && <HistoryTab />}
-        {activeTab === "previsao" && <ForecastTab />}
-        {activeTab === "fonte" && <DailySelectionTab />}
-        {activeTab === "sync" && <IngestionRunsTab />}
+      <div className="mt-8">
+        {activeTab === "virtual" && <div className="animate-in"><VirtualStationTab /></div>}
+        {activeTab === "estacoes" && <div className="animate-in"><StationsTab /></div>}
+        {activeTab === "lancamento" && <div className="animate-in"><ManualEntryTab /></div>}
+        {activeTab === "historico" && <div className="animate-in"><HistoryTab /></div>}
+        {activeTab === "previsao" && <div className="animate-in"><ForecastTab /></div>}
+        {activeTab === "fonte" && <div className="animate-in"><DailySelectionTab /></div>}
+        {activeTab === "sync" && <div className="animate-in"><IngestionRunsTab /></div>}
       </div>
-      <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+      <p className="mt-6 text-xs text-graphite-400 dark:text-gray-500">
         Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
       </p>
     </div>
@@ -113,10 +113,10 @@ function StationsTab() {
     {
       header: "Status",
       render: (r) => (
-        <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${
+        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${
           r.active
             ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-            : "bg-gray-100 text-gray-500 dark:bg-gray-700/30 dark:text-gray-400"
+            : "bg-gray-100 text-graphite-400 dark:bg-gray-700/30 dark:text-gray-500"
         }`}>
           {r.active ? "Ativa" : "Inativa"}
         </span>
@@ -172,7 +172,7 @@ function StationsTab() {
   };
 
   if (!activeFarmId) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma fazenda ativa para gerenciar estações.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma fazenda ativa para gerenciar estações.</p></Card>;
   }
 
   return (
@@ -183,16 +183,16 @@ function StationsTab() {
 
       <Card>
         {loading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeStations.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhuma estação cadastrada para esta fazenda.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma estação cadastrada para esta fazenda.</p>
         ) : (
           <Table columns={columns} data={activeStations} getKey={(r) => r.id} />
         )}
       </Card>
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar estação" : "Nova estação"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="name" name="name" label="Nome" required defaultValue={editing?.name} placeholder="Estação Central" />
             <Input id="model" name="model" label="Modelo/Fabricante" defaultValue={editing?.model ?? ""} placeholder="Davis Vantage Pro2" />
@@ -204,8 +204,8 @@ function StationsTab() {
             <Input id="longitude" name="longitude" label="Longitude" type="number" step="any" required defaultValue={editing?.longitude} placeholder="-43.3089" />
             <Input id="altitude" name="altitude" label="Altitude (m)" type="number" step="any" defaultValue={editing?.altitude ?? 0} />
           </div>
-          {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-2">
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+          <div className="flex justify-end gap-3 pt-4">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
@@ -318,11 +318,11 @@ function ManualEntryTab() {
   };
 
   if (!activeFarmId) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma fazenda ativa para lançar dados climáticos.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma fazenda ativa para lançar dados climáticos.</p></Card>;
   }
 
   if (stations.length === 0) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Cadastre uma estação meteorológica primeiro na aba &quot;Estações&quot;.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Cadastre uma estação meteorológica primeiro na aba &quot;Estações&quot;.</p></Card>;
   }
 
   const fieldWarning = (fieldName: string) => {
@@ -334,8 +334,8 @@ function ManualEntryTab() {
 
   return (
     <Card>
-      <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">Lançamento de dados climáticos</h3>
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Lançamento de dados climáticos</h3>
+      <form onSubmit={handleSubmit} className="space-y-5">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <Select
             id="station_select"
@@ -381,10 +381,10 @@ function ManualEntryTab() {
           </div>
         </div>
 
-        {formError && <p className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-        {successMsg && <p className="text-sm text-green-600 dark:text-green-400">{successMsg}</p>}
+        {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+        {successMsg && <p role="alert" className="rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400">{successMsg}</p>}
 
-        <div className="flex justify-end gap-3 pt-2">
+        <div className="flex justify-end gap-3 pt-4">
           <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar dados"}</Button>
         </div>
       </form>
@@ -538,7 +538,7 @@ function HistoryTab() {
   ];
 
   if (!activeFarmId) {
-    return <Card><p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Selecione uma fazenda ativa para ver o histórico.</p></Card>;
+    return <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma fazenda ativa para ver o histórico.</p></Card>;
   }
 
   return (
@@ -565,46 +565,46 @@ function HistoryTab() {
         </div>
 
         {summary && (
-          <div className="mb-4 grid gap-3 rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-graphite-700 dark:bg-graphite-800 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-white/[0.06] dark:bg-white/[0.03] sm:grid-cols-2 lg:grid-cols-4">
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Período</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Período</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.days} dias</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Temp. média</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Temp. média</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgTemp}°C</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Chuva total</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Chuva total</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.totalPrecip} mm</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">ET₀ média</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">ET₀ média</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgET0} mm/dia</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">ET₀ acumulada</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">ET₀ acumulada</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.totalET0} mm</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Chuva efetiva</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Chuva efetiva</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.totalEffPrecip} mm</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">UR média</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">UR média</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgHumidity}%</p>
             </div>
             <div>
-              <p className="text-xs text-gray-500 dark:text-gray-400">Vento médio</p>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Vento médio</p>
               <p className="text-sm font-semibold text-graphite-900 dark:text-white">{summary.avgWind} m/s</p>
             </div>
           </div>
         )}
 
         {loading ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : readings.length === 0 ? (
-          <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Nenhum dado climático encontrado para o período selecionado.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum dado climático encontrado para o período selecionado.</p>
         ) : (
           <Table columns={columns} data={readings} getKey={(r) => r.id} />
         )}
@@ -672,7 +672,7 @@ function ForecastTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para ver a previsão.
         </p>
       </Card>
@@ -694,13 +694,13 @@ function ForecastTab() {
 
   return (
     <Card>
-      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <div className="mb-3 text-xs text-graphite-400 dark:text-gray-500">
         Previsão meteorológica é armazenada separadamente das observações e nunca as sobrescreve.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
         </p>
       ) : (
@@ -757,7 +757,7 @@ function DailySelectionTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para ver a seleção diária.
         </p>
       </Card>
@@ -775,13 +775,13 @@ function DailySelectionTab() {
 
   return (
     <Card>
-      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <div className="mb-3 text-xs text-graphite-400 dark:text-gray-500">
         A fonte utilizada pelo balanço hídrico em cada dia é registrada aqui para auditoria.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma seleção registrada ainda. As seleções são criadas quando a ingestão climática executa.
         </p>
       ) : (
@@ -830,7 +830,7 @@ function IngestionRunsTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para ver as sincronizações.
         </p>
       </Card>
@@ -844,7 +844,7 @@ function IngestionRunsTab() {
         : s === "partial"
           ? "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400"
           : "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400";
-    return <span className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{s}</span>;
+    return <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${cls}`}>{s}</span>;
   };
 
   const columns: Column<IngestionRunRow>[] = [
@@ -860,13 +860,13 @@ function IngestionRunsTab() {
 
   return (
     <Card>
-      <div className="mb-3 text-xs text-gray-500 dark:text-gray-400">
+      <div className="mb-3 text-xs text-graphite-400 dark:text-gray-500">
         Log das execuções de ingestão climática automática.
       </div>
       {loading ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       ) : rows.length === 0 ? (
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Nenhuma execução registrada ainda.
         </p>
       ) : (
@@ -881,13 +881,13 @@ function IngestionRunsTab() {
 
 function StatBox({ label, value, unit }: { label: string; value: string; unit?: string }) {
   return (
-    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-graphite-700 dark:bg-graphite-800">
-      <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+    <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
         {label}
       </p>
       <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
         {value}
-        {unit ? <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">{unit}</span> : null}
+        {unit ? <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">{unit}</span> : null}
       </p>
     </div>
   );
@@ -951,7 +951,7 @@ function VirtualStationTab() {
   if (!activeFarmId) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
           Selecione uma fazenda ativa para visualizar a estação virtual.
         </p>
       </Card>
@@ -961,7 +961,7 @@ function VirtualStationTab() {
   if (loading) {
     return (
       <Card>
-        <p className="py-8 text-center text-sm text-gray-500 dark:text-gray-400">Carregando...</p>
+        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
       </Card>
     );
   }
@@ -969,18 +969,18 @@ function VirtualStationTab() {
   if (!snapshot) {
     return (
       <Card>
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div>
-            <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">
+            <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
               Nenhuma estação virtual cadastrada
             </h3>
-            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-sm text-graphite-400 dark:text-gray-500">
               A estação virtual usa as coordenadas da fazenda para buscar dados climáticos automaticamente
               via Open-Meteo, servindo de fallback quando não há estação física com dados para o dia.
             </p>
           </div>
           {message && (
-            <p className={message.type === "success" ? "text-sm text-green-600 dark:text-green-400" : "text-sm text-red-600 dark:text-red-400"}>
+            <p role="alert" className={message.type === "success" ? "rounded-xl bg-green-50 p-3.5 text-sm text-green-600 dark:bg-green-900/20 dark:text-green-400" : "rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400"}>
               {message.text}
             </p>
           )}
@@ -1005,21 +1005,21 @@ function VirtualStationTab() {
         ? "text-yellow-700 bg-yellow-100 dark:text-yellow-400 dark:bg-yellow-900/30"
         : st.sync_status === "failed"
           ? "text-red-700 bg-red-100 dark:text-red-400 dark:bg-red-900/30"
-          : "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-graphite-700";
+          : "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-white/[0.08]";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Card>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h3 className="text-base font-semibold text-graphite-900 dark:text-white">{st.name}</h3>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            <h3 className="text-base font-semibold tracking-tight text-graphite-900 dark:text-white">{st.name}</h3>
+            <p className="mt-0.5 text-xs text-graphite-400 dark:text-gray-500">
               Fonte: <span className="font-medium">{st.data_source}</span> · Prioridade: {st.source_priority}
               {" · "}Fuso: {st.timezone}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColor}`}>
+            <span className={`inline-flex rounded-lg px-3 py-1 text-xs font-medium ${statusColor}`}>
               {st.sync_status === "idle" ? "Não sincronizada" : `Status: ${st.sync_status}`}
             </span>
             <Button variant="secondary" disabled={busy} onClick={() => callSync(false)}>
@@ -1029,7 +1029,7 @@ function VirtualStationTab() {
         </div>
 
         {message && (
-          <p className={`mb-3 text-sm ${message.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+          <p className={`mb-3 rounded-xl p-3.5 text-sm ${message.type === "success" ? "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"}`}>
             {message.text}
           </p>
         )}
@@ -1037,13 +1037,13 @@ function VirtualStationTab() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatBox label="Latitude" value={fmt(st.latitude, 4)} unit="°" />
           <StatBox label="Longitude" value={fmt(st.longitude, 4)} unit="°" />
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-graphite-700 dark:bg-graphite-800">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Altitude</p>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Altitude</p>
             <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
               {fmt(st.altitude, 0)}
-              <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">m</span>
+              <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">m</span>
             </p>
-            <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">
               origem: <span className={st.altitude_origin === "unknown" ? "font-semibold text-yellow-700 dark:text-yellow-400" : "font-medium"}>{st.altitude_origin}</span>
             </p>
           </div>
@@ -1054,23 +1054,23 @@ function VirtualStationTab() {
         </div>
 
         {st.altitude_origin === "unknown" && (
-          <p className="mt-3 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-800 dark:border-yellow-900/30 dark:bg-yellow-900/20 dark:text-yellow-300">
+          <p className="mt-3 rounded-xl border border-yellow-300 bg-yellow-50 p-3.5 text-xs text-yellow-800 dark:border-yellow-900/30 dark:bg-yellow-900/20 dark:text-yellow-300">
             Altitude não determinada. O cálculo local de ET₀ está usando 0 m e a qualidade dos dados foi marcada como degradada. Informe a altitude da fazenda ou execute uma nova sincronização — a Open-Meteo retornará a elevação real da grade.
           </p>
         )}
 
         {st.sync_error && (
-          <p className="mt-3 rounded-md border border-red-200 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
+          <p className="mt-3 rounded-xl border border-red-200 bg-red-50 p-3.5 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
             Último erro: {st.sync_error}
           </p>
         )}
       </Card>
 
       <Card>
-        <div className="mb-3 flex items-center justify-between">
-          <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">Última leitura observada</h4>
+        <div className="mb-5 flex items-center justify-between">
+          <h4 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Última leitura observada</h4>
           {r && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
+            <span className="text-xs text-graphite-400 dark:text-gray-500">
               {new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}
               {" · qualidade: "}
               <span className={r.data_quality === "ok" ? "text-green-700 dark:text-green-400" : "text-yellow-700 dark:text-yellow-400"}>
@@ -1086,17 +1086,17 @@ function VirtualStationTab() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <StatBox label="ET₀ (Cotrim)" value={fmt(r.et0_calculated, 2)} unit="mm/dia" />
               <StatBox label="ET₀ (Open-Meteo)" value={fmt(r.et0_source, 2)} unit="mm/dia" />
-              <div className={`rounded-md border p-3 ${
+              <div className={`rounded-xl border p-3 ${
                 r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10
                   ? "border-red-300 bg-red-50 dark:border-red-900/30 dark:bg-red-900/20"
-                  : "border-gray-200 bg-gray-50 dark:border-graphite-700 dark:bg-graphite-800"
+                  : "border-gray-100 bg-gray-50/80 dark:border-white/[0.06] dark:bg-white/[0.03]"
               }`}>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Diferença ET₀</p>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Diferença ET₀</p>
                 <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
                   {r.et0_delta_pct != null ? `${r.et0_delta_pct >= 0 ? "+" : ""}${r.et0_delta_pct.toFixed(1)}` : "—"}
-                  {r.et0_delta_pct != null && <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">%</span>}
+                  {r.et0_delta_pct != null && <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">%</span>}
                 </p>
-                <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+                <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">
                   Δ absoluto: {fmt(r.et0_delta, 2)} mm/dia
                 </p>
               </div>
@@ -1110,13 +1110,13 @@ function VirtualStationTab() {
               <StatBox label="Radiação" value={fmt(r.solar_radiation, 1)} unit="MJ/m²" />
             </div>
             {r.et0_delta_pct != null && Math.abs(r.et0_delta_pct) > 10 && (
-              <p className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
+              <p className="mt-3 rounded-xl border border-red-300 bg-red-50 p-3.5 text-xs text-red-700 dark:border-red-900/30 dark:bg-red-900/20 dark:text-red-300">
                 Divergência acima de 10% entre ET₀ Cotrim e ET₀ Open-Meteo. Possíveis causas: altitude imprecisa, dados de radiação/umidade instáveis ou coordenada com contraste micrometeorológico local. Verifique a altitude e as leituras de radiação.
               </p>
             )}
           </>
         ) : (
-          <p className="py-6 text-center text-sm text-gray-500 dark:text-gray-400">
+          <p className="py-6 text-center text-sm text-graphite-400 dark:text-gray-500">
             Nenhuma leitura observada ainda. Clique em &quot;Sincronizar agora&quot; para trazer os últimos 7 dias.
           </p>
         )}
@@ -1126,29 +1126,29 @@ function VirtualStationTab() {
 
       {run && (
         <Card>
-          <h4 className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">Última execução de ingestão (Open-Meteo)</h4>
+          <h4 className="mb-2 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Última execução de ingestão (Open-Meteo)</h4>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5 text-sm">
-            <div><span className="text-xs text-gray-500 dark:text-gray-400">Quando</span><br />{new Date(run.run_at).toLocaleString("pt-BR")}</div>
-            <div><span className="text-xs text-gray-500 dark:text-gray-400">Status</span><br />{run.status}</div>
-            <div><span className="text-xs text-gray-500 dark:text-gray-400">Inseridas / Atualizadas / Ignoradas</span><br />{run.rows_inserted} / {run.rows_updated} / {run.rows_skipped}</div>
-            <div><span className="text-xs text-gray-500 dark:text-gray-400">Duração</span><br />{run.duration_ms != null ? `${run.duration_ms} ms` : "—"}</div>
-            <div><span className="text-xs text-gray-500 dark:text-gray-400">Erro</span><br />{run.error_message ?? "—"}</div>
+            <div><span className="text-xs text-graphite-400 dark:text-gray-500">Quando</span><br />{new Date(run.run_at).toLocaleString("pt-BR")}</div>
+            <div><span className="text-xs text-graphite-400 dark:text-gray-500">Status</span><br />{run.status}</div>
+            <div><span className="text-xs text-graphite-400 dark:text-gray-500">Inseridas / Atualizadas / Ignoradas</span><br />{run.rows_inserted} / {run.rows_updated} / {run.rows_skipped}</div>
+            <div><span className="text-xs text-graphite-400 dark:text-gray-500">Duração</span><br />{run.duration_ms != null ? `${run.duration_ms} ms` : "—"}</div>
+            <div><span className="text-xs text-graphite-400 dark:text-gray-500">Erro</span><br />{run.error_message ?? "—"}</div>
           </div>
 
-          <div className="mt-4 border-t border-gray-200 pt-4 dark:border-graphite-700">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Contexto da requisição</p>
+          <div className="mt-4 border-t border-gray-100 pt-4 dark:border-white/[0.06]">
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Contexto da requisição</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-              <div><span className="text-xs text-gray-500 dark:text-gray-400">Latitude enviada</span><br />{fmt(run.request_latitude, 4)}°</div>
-              <div><span className="text-xs text-gray-500 dark:text-gray-400">Longitude enviada</span><br />{fmt(run.request_longitude, 4)}°</div>
-              <div><span className="text-xs text-gray-500 dark:text-gray-400">Timezone</span><br />{run.request_timezone ?? "—"}</div>
-              <div><span className="text-xs text-gray-500 dark:text-gray-400">Altitude usada</span><br />{fmt(run.altitude_used, 0)} m <span className="text-xs text-gray-500 dark:text-gray-400">({run.altitude_origin ?? "—"})</span></div>
-              <div><span className="text-xs text-gray-500 dark:text-gray-400">Elevation Open-Meteo</span><br />{fmt(run.response_elevation, 0)} m</div>
-              <div><span className="text-xs text-gray-500 dark:text-gray-400">Δ ET₀ médio (7d)</span><br />{run.et0_delta_pct_avg != null ? `${run.et0_delta_pct_avg.toFixed(1)}%` : "—"}</div>
+              <div><span className="text-xs text-graphite-400 dark:text-gray-500">Latitude enviada</span><br />{fmt(run.request_latitude, 4)}°</div>
+              <div><span className="text-xs text-graphite-400 dark:text-gray-500">Longitude enviada</span><br />{fmt(run.request_longitude, 4)}°</div>
+              <div><span className="text-xs text-graphite-400 dark:text-gray-500">Timezone</span><br />{run.request_timezone ?? "—"}</div>
+              <div><span className="text-xs text-graphite-400 dark:text-gray-500">Altitude usada</span><br />{fmt(run.altitude_used, 0)} m <span className="text-xs text-graphite-400 dark:text-gray-500">({run.altitude_origin ?? "—"})</span></div>
+              <div><span className="text-xs text-graphite-400 dark:text-gray-500">Elevation Open-Meteo</span><br />{fmt(run.response_elevation, 0)} m</div>
+              <div><span className="text-xs text-graphite-400 dark:text-gray-500">Δ ET₀ médio (7d)</span><br />{run.et0_delta_pct_avg != null ? `${run.et0_delta_pct_avg.toFixed(1)}%` : "—"}</div>
             </div>
             {run.request_url && (
               <details className="mt-3 text-xs">
-                <summary className="cursor-pointer text-gray-500 dark:text-gray-400 hover:text-graphite-900 dark:hover:text-white">URL requisitada</summary>
-                <p className="mt-1 break-all rounded-md border border-gray-200 bg-gray-50 p-2 font-mono text-[11px] dark:border-graphite-700 dark:bg-graphite-800">
+                <summary className="cursor-pointer text-graphite-400 dark:text-gray-500 hover:text-graphite-900 dark:hover:text-white">URL requisitada</summary>
+                <p className="mt-1 break-all rounded-xl border border-gray-100 bg-gray-50/80 p-2 font-mono text-[11px] dark:border-white/[0.06] dark:bg-white/[0.03]">
                   {run.request_url}
                 </p>
               </details>
@@ -1364,7 +1364,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
     const abs = Math.abs(v);
     if (abs >= 3) return "text-red-600 dark:text-red-400 font-semibold";
     if (abs >= 1.5) return "text-yellow-700 dark:text-yellow-400";
-    return "text-gray-500 dark:text-gray-400";
+    return "text-graphite-400 dark:text-gray-500";
   };
 
   const fmtN = (v: number | null, digits = 1) => (v == null ? "—" : v.toFixed(digits));
@@ -1373,10 +1373,10 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
 
   return (
     <Card>
-      <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h4 className="text-sm font-semibold text-graphite-900 dark:text-white">Comparação meteoblue</h4>
-          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+          <h4 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Comparação meteoblue</h4>
+          <p className="mt-1 text-xs text-graphite-400 dark:text-gray-500">
             Fonte secundária de comparação. Open-Meteo (P5) continua como principal do balanço hídrico. meteoblue entra como P6 apenas para comparação.
           </p>
         </div>
@@ -1391,22 +1391,32 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
       </div>
 
       {message && (
-        <p className={`mb-3 text-sm ${message.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+        <p className={`mb-3 rounded-xl p-3.5 text-sm ${message.type === "success" ? "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"}`}>
           {message.text}
         </p>
       )}
 
       {diagnostic && (
-        <div className="mb-4 rounded-md border border-gray-200 bg-gray-50 p-3 text-xs dark:border-graphite-700 dark:bg-graphite-800">
+        <div className="mb-4 rounded-xl border border-gray-100 bg-gray-50/80 p-3 text-xs dark:border-white/[0.06] dark:bg-white/[0.03]">
           <div className="grid gap-2 sm:grid-cols-3">
-            <div><span className="text-gray-500 dark:text-gray-400">Chave configurada:</span> {diagnostic.keyPresent ? "sim" : "não"}</div>
-            <div><span className="text-gray-500 dark:text-gray-400">Status:</span> {diagnostic.status}</div>
-            <div><span className="text-gray-500 dark:text-gray-400">Latência:</span> {diagnostic.latencyMs} ms</div>
+            <div><span className="text-graphite-400 dark:text-gray-500">Chave configurada:</span> {diagnostic.keyPresent ? "sim" : "não"}</div>
+            <div><span className="text-graphite-400 dark:text-gray-500">Status:</span> {diagnostic.status}</div>
+            <div><span className="text-graphite-400 dark:text-gray-500">Latência:</span> {diagnostic.latencyMs} ms</div>
             {diagnostic.httpStatus != null && (
-              <div><span className="text-gray-500 dark:text-gray-400">HTTP:</span> {diagnostic.httpStatus}</div>
+              <div><span className="text-graphite-400 dark:text-gray-500">HTTP:</span> {diagnostic.httpStatus}</div>
             )}
             {diagnostic.error && (
-              <div className="sm:col-span-3 text-red-600 dark:text-red-400"><span className="text-gray-500 dark:text-gray-400">Erro:</span> {diagnostic.error}</div>
+              <div className="sm:col-span-3 text-red-600 dark:text-red-400"><span className="text-graphite-400 dark:text-gray-500">Erro:</span> {diagnostic.error}</div>
+            )}
+            {diagnostic.envDebug && (
+              <>
+                <div><span className="text-graphite-400 dark:text-gray-500">Env var existe:</span> {diagnostic.envDebug.envVarExists ? "sim" : "não"}</div>
+                <div><span className="text-graphite-400 dark:text-gray-500">Tamanho:</span> {diagnostic.envDebug.trimmedLength} chars</div>
+                <div><span className="text-graphite-400 dark:text-gray-500">Prefixo:</span> {diagnostic.envDebug.prefix}</div>
+                {diagnostic.envDebug.hasWhitespace && (
+                  <div className="sm:col-span-3 text-yellow-600 dark:text-yellow-400">⚠ A chave contém espaços extras (foram removidos automaticamente)</div>
+                )}
+              </>
             )}
             {diagnostic.envDebug && (
               <>
@@ -1423,11 +1433,11 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
       )}
 
       {loadingComparison && comparison.length === 0 && (
-        <p className="py-4 text-center text-xs text-gray-500 dark:text-gray-400">Carregando comparação (últimos 7 dias)...</p>
+        <div className="flex items-center justify-center gap-2 py-4"><div className="h-4 w-4 animate-spin rounded-full border-[2px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-xs text-graphite-400 dark:text-gray-500">Carregando comparação (últimos 7 dias)...</span></div>
       )}
 
       {!loadingComparison && mbStationExists === false && !message && (
-        <p className="py-4 text-center text-sm text-gray-500 dark:text-gray-400">
+        <p className="py-4 text-center text-sm text-graphite-400 dark:text-gray-500">
           Clique em &quot;Testar meteoblue&quot; para criar a estação virtual e importar os primeiros 7 dias.
         </p>
       )}
@@ -1435,7 +1445,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
       {comparison.length > 0 && (
         <div className="overflow-x-auto">
           <table className="min-w-full text-xs">
-            <thead className="bg-gray-50 dark:bg-graphite-800">
+            <thead className="bg-gray-50/80 dark:bg-white/[0.03]">
               <tr>
                 <th className="px-2 py-2 text-left">Data</th>
                 <th className="px-2 py-2 text-right">T_max OM</th>
@@ -1459,7 +1469,7 @@ function MeteoblueCompareCard({ farmId }: { farmId: string | null }) {
                 const dRain = diff(r.om?.precipitation ?? null, r.mb?.precipitation ?? null);
                 const dWind = diff(r.om?.wind_speed ?? null, r.mb?.wind_speed ?? null);
                 return (
-                  <tr key={r.date} className="border-t border-gray-100 dark:border-graphite-700">
+                  <tr key={r.date} className="border-t border-gray-100 dark:border-white/[0.06]">
                     <td className="px-2 py-1.5">{new Date(r.date + "T12:00:00").toLocaleDateString("pt-BR")}</td>
                     <td className="px-2 py-1.5 text-right">{fmtN(r.om?.temp_max ?? null)}</td>
                     <td className="px-2 py-1.5 text-right">{fmtN(r.mb?.temp_max ?? null)}</td>

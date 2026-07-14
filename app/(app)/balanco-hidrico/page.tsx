@@ -24,6 +24,7 @@ import {
   type HydricStatus,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
+import { useRecharts } from "@/lib/hooks";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -32,19 +33,6 @@ const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
   vermelho: "deficit_critico",
   cinza: "ideal",
 };
-import {
-  ResponsiveContainer,
-  ComposedChart,
-  Area,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  Legend,
-  ReferenceLine,
-} from "recharts";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -548,7 +536,7 @@ export default function BalancoHidricoPage() {
           </div>
         </div>
         {assignment && culture && soil && (
-          <div className="mt-3 flex flex-wrap gap-4 text-xs text-gray-500 dark:text-gray-400">
+          <div className="mt-3 flex flex-wrap gap-4 text-xs text-graphite-400 dark:text-gray-500">
             <span>Cultura: <strong className="text-graphite-900 dark:text-white">{culture.name}</strong></span>
             <span>Solo: <strong className="text-graphite-900 dark:text-white">{soil.name}</strong></span>
             <span>Plantio: <strong className="text-graphite-900 dark:text-white">{assignment.planting_date}</strong></span>
@@ -557,24 +545,24 @@ export default function BalancoHidricoPage() {
           </div>
         )}
         {!assignment && selectedPivotId && (
-          <p className="mt-3 text-xs text-amber-600 dark:text-amber-400">
+          <p className="mt-3 rounded-xl bg-amber-50 p-3.5 text-xs text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
             Nenhuma associação ativa (pivô↔safra↔cultura↔solo) encontrada para este pivô.
           </p>
         )}
-        {error && <p className="mt-3 text-xs text-red-600 dark:text-red-400">{error}</p>}
+        {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3.5 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
       </Card>
 
       <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
-      <div className="mt-4">
+      <div className="mt-5">
         {activeTab === "balanco" && (
-          <BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} />
+          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} /></div>
         )}
         {activeTab === "graficos" && (
-          <ChartsTab rows={balanceRows} />
+          <div className="animate-in"><ChartsTab rows={balanceRows} /></div>
         )}
         {activeTab === "lancamento" && (
-          <LancamentoTab
+          <div className="animate-in"><LancamentoTab
             pivotId={selectedPivotId}
             pivots={pivots}
             date={lancDate}
@@ -584,7 +572,7 @@ export default function BalancoHidricoPage() {
             onDateChange={setLancDate}
             onDepthChange={setLancDepth}
             onSave={handleLancamento}
-          />
+          /></div>
         )}
       </div>
     </div>
@@ -605,7 +593,7 @@ function BalanceTab({
   if (rows.length === 0 && !loading) {
     return (
       <Card className="py-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="text-graphite-400 dark:text-gray-500">
           Selecione um pivô e clique em &quot;Calcular Balanço&quot; para gerar o balanço hídrico diário.
         </p>
       </Card>
@@ -630,7 +618,7 @@ function BalanceTab({
       render: (r) => {
         const cfg = WATER_STATUS_CONFIG[r.waterStatus];
         return (
-          <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>
+          <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>
             <span className="h-1.5 w-1.5 rounded-full bg-current" />
             {cfg.label}
           </span>
@@ -640,7 +628,7 @@ function BalanceTab({
   ];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Summary cards */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
         <StatCard metric={{ id: "etc", title: "ETc Total", value: `${summary.totalETc.toFixed(1)} mm`, description: `Média: ${summary.avgETc.toFixed(1)} mm/dia` }} />
@@ -652,7 +640,10 @@ function BalanceTab({
       </div>
 
       {loading ? (
-        <Card className="py-8 text-center text-sm text-gray-500">Carregando...</Card>
+        <Card className="flex items-center justify-center gap-3 py-8">
+          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+          <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+        </Card>
       ) : (
         <Card className="overflow-x-auto">
           <Table columns={columns} data={rows} getKey={(r) => r.date} />
@@ -665,15 +656,27 @@ function BalanceTab({
 // ── Charts Tab ──────────────────────────────────────────────────────────
 
 function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
+  const recharts = useRecharts();
+
   if (rows.length === 0) {
     return (
       <Card className="py-12 text-center">
-        <p className="text-gray-500 dark:text-gray-400">
+        <p className="text-graphite-400 dark:text-gray-500">
           Calcule o balanço hídrico para visualizar os gráficos.
         </p>
       </Card>
     );
   }
+
+  if (!recharts) {
+    return (
+      <Card className="flex items-center justify-center py-12">
+        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+      </Card>
+    );
+  }
+
+  const { ResponsiveContainer, ComposedChart, Area, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = recharts;
 
   const chartData = rows.map((r) => ({
     date: r.date.slice(5),
@@ -696,7 +699,7 @@ function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
   }));
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {/* Chart 1: Water storage evolution */}
       <ChartCard title="Evolução da Água no Solo" subtitle="Armazenamento (ARM) vs CAD e limiar de estresse (mm)">
         <ResponsiveContainer width="100%" height="100%">
@@ -767,7 +770,7 @@ function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
           </div>
           <div className="mt-3 flex flex-wrap gap-3">
             {(Object.entries(WATER_STATUS_CONFIG) as [WaterStatus, typeof WATER_STATUS_CONFIG[WaterStatus]][]).map(([key, cfg]) => (
-              <div key={key} className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400">
+              <div key={key} className="flex items-center gap-1.5 text-xs text-graphite-400 dark:text-gray-500">
                 <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: cfg.color }} />
                 {cfg.label}
               </div>
@@ -806,15 +809,15 @@ function LancamentoTab({
 
   return (
     <Card>
-      <h3 className="mb-4 text-sm font-semibold text-graphite-900 dark:text-white">
+      <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
         Lançar Irrigação Aplicada
       </h3>
       {!pivotId ? (
-        <p className="text-sm text-gray-500 dark:text-gray-400">
+        <p className="text-sm text-graphite-400 dark:text-gray-500">
           Selecione um pivô acima para lançar irrigação.
         </p>
       ) : (
-        <div className="grid max-w-lg grid-cols-1 gap-4 sm:grid-cols-2">
+        <div className="grid max-w-lg grid-cols-1 gap-5 sm:grid-cols-2">
           <Input
             label="Data"
             type="date"
@@ -830,7 +833,7 @@ function LancamentoTab({
             onChange={(e) => onDepthChange(e.target.value)}
           />
           {pivot && depth && parseFloat(depth) > 0 && (
-            <div className="col-span-full text-xs text-gray-500 dark:text-gray-400">
+            <div className="col-span-full text-xs text-graphite-400 dark:text-gray-500">
               Volume estimado: <strong>{(parseFloat(depth) * pivot.area * 10).toFixed(0)} m³</strong>
               {" | "}Tempo estimado: <strong>{(parseFloat(depth) * pivot.area * 10 / pivot.flow_rate).toFixed(1)} h</strong>
             </div>
@@ -841,7 +844,7 @@ function LancamentoTab({
             </Button>
           </div>
           {message && (
-            <p className={`col-span-full text-xs ${message.includes("sucesso") ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+            <p role="alert" className={`col-span-full rounded-xl p-3.5 text-xs ${message.includes("sucesso") ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"}`}>
               {message}
             </p>
           )}

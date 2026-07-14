@@ -13,21 +13,21 @@ export function Select({
   options: { value: string; label: string }[];
 } & React.SelectHTMLAttributes<HTMLSelectElement>) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       {label && (
-        <label htmlFor={id} className="block text-sm font-medium text-graphite-900 dark:text-gray-200">
+        <label htmlFor={id} className="block text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
           {label}
         </label>
       )}
       <select
         id={id}
         className={cn(
-          "w-full rounded-lg border px-3 py-2 text-sm outline-none transition-colors",
-          "border-gray-200 bg-gray-50 text-graphite-900",
-          "focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-100",
-          "dark:border-graphite-600 dark:bg-graphite-800 dark:text-gray-100",
-          "dark:focus:border-brand-500 dark:focus:bg-graphite-800 dark:focus:ring-brand-900/30",
-          error && "border-red-400 dark:border-red-500",
+          "w-full rounded-xl border bg-white px-4 py-2.5 text-sm outline-none transition-all duration-150",
+          "border-gray-200 text-graphite-800",
+          "focus:border-brand-400 focus:ring-2 focus:ring-brand-100",
+          "dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-100",
+          "dark:focus:border-brand-500/50 dark:focus:bg-white/[0.06] dark:focus:ring-brand-900/30",
+          error && "border-red-300 dark:border-red-500/60",
           className,
         )}
         {...props}
@@ -37,7 +37,7 @@ export function Select({
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
-      {error && <p className="text-xs text-red-600 dark:text-red-400">{error}</p>}
+      {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
     </div>
   );
 }

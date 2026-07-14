@@ -2,7 +2,7 @@ import type { AIRecommendation } from "@/modules/ai/services/ai.service";
 
 export function CotrimAICard({ recommendation }: { recommendation: AIRecommendation }) {
   return (
-    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-graphite-900 to-graphite-800 p-6 text-white shadow-sm">
+    <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-graphite-900 to-graphite-800 p-6 text-white shadow-soft">
       <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-brand-500/20 blur-3xl" />
 
       <div className="relative flex items-start gap-4">
@@ -16,7 +16,7 @@ export function CotrimAICard({ recommendation }: { recommendation: AIRecommendat
         <div className="flex-1">
           <div className="flex items-center gap-2">
             <h3 className="text-base font-semibold">Cotrim AI</h3>
-            <span className="rounded-full bg-brand-500/20 px-2 py-0.5 text-xs font-medium text-brand-300">
+            <span className="rounded-lg bg-brand-500/20 px-2 py-0.5 text-xs font-medium text-brand-300">
               Recomendação do dia
             </span>
           </div>
