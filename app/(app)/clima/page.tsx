@@ -1008,18 +1008,18 @@ function VirtualStationTab() {
           : "text-gray-600 bg-gray-100 dark:text-gray-400 dark:bg-graphite-700";
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       <Card>
-        <div className="mb-4 flex flex-wrap items-start justify-between gap-4">
+        <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
           <div>
-            <h3 className="text-base font-semibold text-graphite-900 dark:text-white">{st.name}</h3>
-            <p className="mt-0.5 text-xs text-gray-500 dark:text-gray-400">
+            <h3 className="text-base font-semibold tracking-tight text-graphite-900 dark:text-white">{st.name}</h3>
+            <p className="mt-0.5 text-xs text-graphite-400 dark:text-gray-500">
               Fonte: <span className="font-medium">{st.data_source}</span> · Prioridade: {st.source_priority}
               {" · "}Fuso: {st.timezone}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${statusColor}`}>
+            <span className={`inline-flex rounded-lg px-3 py-1 text-xs font-medium ${statusColor}`}>
               {st.sync_status === "idle" ? "Não sincronizada" : `Status: ${st.sync_status}`}
             </span>
             <Button variant="secondary" disabled={busy} onClick={() => callSync(false)}>
@@ -1029,7 +1029,7 @@ function VirtualStationTab() {
         </div>
 
         {message && (
-          <p className={`mb-3 text-sm ${message.type === "success" ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}`}>
+          <p className={`mb-3 rounded-xl p-3.5 text-sm ${message.type === "success" ? "bg-green-50 text-green-600 dark:bg-green-900/20 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-900/20 dark:text-red-400"}`}>
             {message.text}
           </p>
         )}
@@ -1037,13 +1037,13 @@ function VirtualStationTab() {
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatBox label="Latitude" value={fmt(st.latitude, 4)} unit="°" />
           <StatBox label="Longitude" value={fmt(st.longitude, 4)} unit="°" />
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-graphite-700 dark:bg-graphite-800">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">Altitude</p>
+          <div className="rounded-xl border border-gray-100 bg-gray-50/80 p-3 dark:border-graphite-700/50 dark:bg-graphite-800/60">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">Altitude</p>
             <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
               {fmt(st.altitude, 0)}
-              <span className="ml-1 text-xs font-normal text-gray-500 dark:text-gray-400">m</span>
+              <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">m</span>
             </p>
-            <p className="mt-1 text-[10px] text-gray-500 dark:text-gray-400">
+            <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">
               origem: <span className={st.altitude_origin === "unknown" ? "font-semibold text-yellow-700 dark:text-yellow-400" : "font-medium"}>{st.altitude_origin}</span>
             </p>
           </div>
@@ -1054,7 +1054,7 @@ function VirtualStationTab() {
         </div>
 
         {st.altitude_origin === "unknown" && (
-          <p className="mt-3 rounded-md border border-yellow-300 bg-yellow-50 p-3 text-xs text-yellow-800 dark:border-yellow-900/30 dark:bg-yellow-900/20 dark:text-yellow-300">
+          <p className="mt-3 rounded-xl border border-yellow-300 bg-yellow-50 p-3.5 text-xs text-yellow-800 dark:border-yellow-900/30 dark:bg-yellow-900/20 dark:text-yellow-300">
             Altitude não determinada. O cálculo local de ET₀ está usando 0 m e a qualidade dos dados foi marcada como degradada. Informe a altitude da fazenda ou execute uma nova sincronização — a Open-Meteo retornará a elevação real da grade.
           </p>
         )}
