@@ -18,11 +18,19 @@ import {
   OPEN_METEO_PROVIDER,
 } from "@/modules/weather/providers/open-meteo";
 import {
+  METEOBLUE_PROVIDER,
+  METEOBLUE_ATTRIBUTION,
+} from "@/modules/weather/providers/meteoblue";
+import {
   ingestOpenMeteoObservations,
   ingestOpenMeteoForecast,
   type IngestionStation,
   type ObservationIngestionResult,
 } from "./ingestion.service";
+import {
+  ingestMeteoblueObservations,
+  ingestMeteoblueForecast,
+} from "./meteoblue-ingest";
 
 export type ClimateDataKind = "observed" | "historical_grid";
 
@@ -70,6 +78,14 @@ registerProvider({
   attribution: "Weather data by Open-Meteo.com (CC-BY 4.0)",
   ingestObservations: ingestOpenMeteoObservations,
   ingestForecast: ingestOpenMeteoForecast,
+});
+
+registerProvider({
+  key: METEOBLUE_PROVIDER,
+  dataKind: "observed",
+  attribution: METEOBLUE_ATTRIBUTION,
+  ingestObservations: ingestMeteoblueObservations,
+  ingestForecast: ingestMeteoblueForecast,
 });
 
 // Sprint 5.3 registrará aqui:
