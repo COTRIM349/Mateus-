@@ -23,14 +23,14 @@ export function Table<T>({
 }) {
   return (
     <div className="overflow-x-auto rounded-xl">
-      <table className="w-full min-w-[640px] border-collapse text-sm">
+      <table className="w-full min-w-[640px] border-collapse text-sm tabular-nums">
         <thead>
           <tr className="border-b border-gray-100 dark:border-white/[0.06]">
             {columns.map((col, i) => (
               <th
                 key={i}
                 className={cn(
-                  "px-4 py-3.5 text-xs font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500",
+                  "bg-gray-50/40 px-4 py-3 text-[11px] font-semibold uppercase tracking-wider text-graphite-400 first:rounded-l-lg last:rounded-r-lg dark:bg-white/[0.02] dark:text-gray-500",
                   alignClass[col.align ?? "left"],
                 )}
               >
@@ -43,7 +43,7 @@ export function Table<T>({
           {data.map((row) => (
             <tr
               key={getKey(row)}
-              className="border-b border-gray-50 transition-colors duration-100 hover:bg-gray-50/80 dark:border-white/[0.04] dark:hover:bg-white/[0.04]"
+              className="border-b border-gray-50 transition-colors duration-150 last:border-b-0 hover:bg-brand-50/40 dark:border-white/[0.04] dark:hover:bg-white/[0.03]"
             >
               {columns.map((col, i) => (
                 <td

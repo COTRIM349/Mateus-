@@ -43,10 +43,10 @@ export function Modal({
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-graphite-950/40 p-4 pt-[8vh] backdrop-blur-sm"
+      className="fixed inset-0 z-[60] flex items-start justify-center overflow-y-auto bg-graphite-950/50 p-4 pt-[8vh] backdrop-blur-md"
       onClick={(e) => { if (e.target === overlayRef.current) onClose(); }}
     >
-      <div className={cn("w-full rounded-2xl border border-gray-100 bg-white shadow-modal dark:border-white/[0.06] dark:bg-graphite-900", sizeClass)}>
+      <div className={cn("animate-in w-full rounded-2xl border border-gray-100 bg-white shadow-modal dark:border-white/[0.06] dark:bg-graphite-900 dark:shadow-dark-elevated", sizeClass)}>
         <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5 dark:border-white/[0.06]">
           <h2 className="text-lg font-semibold tracking-tight text-graphite-900 dark:text-white">{title}</h2>
           <button

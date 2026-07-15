@@ -46,9 +46,10 @@ export function Topbar() {
   };
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-100 bg-white/95 px-4 shadow-sm backdrop-blur-xl dark:border-white/[0.06] dark:bg-graphite-900/95 dark:shadow-none sm:px-6 lg:px-8">
-      <div className="flex items-center gap-3 pl-12 lg:pl-0">
-        <span className="text-sm font-semibold text-graphite-800 dark:text-white">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-gray-100 bg-white/80 px-4 backdrop-blur-xl dark:border-white/[0.06] dark:bg-graphite-900/80 sm:px-6 lg:px-8">
+      <div className="flex items-center gap-2.5 pl-12 lg:pl-0">
+        <span className="h-1.5 w-1.5 rounded-full bg-brand-500 shadow-glow" />
+        <span className="text-sm font-semibold tracking-tight text-graphite-800 dark:text-white">
           {activeFarm?.name ?? profile?.companyName ?? "Cotrim Irrigação Pro"}
         </span>
       </div>
