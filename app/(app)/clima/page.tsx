@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -109,53 +109,80 @@ function MetricCard({ icon, label, value, unit, gauge, accentColor, sub }: {
   );
 }
 
-function WeatherIcon({ precipitation, radiation, size = 36 }: {
-  precipitation?: number | null;
-  radiation?: number | null;
-  size?: number;
-}) {
-  const precip = precipitation ?? 0;
-  const rad = radiation ?? 20;
+// ── Instrumentos (linha visual iCrop) ──────────────────────────────────────
 
-  if (precip > 5) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <path d="M10.8 20a7.2 7.2 0 01-.53-14.4A9.9 9.9 0 0128.8 15.8h.72a5 5 0 01.18 10H10.8z" className="fill-gray-300 dark:fill-gray-600" />
-        <path d="M13 27l-1.5 4M18 27l-1.5 4M23 27l-1.5 4" className="stroke-blue-500 dark:stroke-blue-400" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  if (precip > 0) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <path d="M10.8 22a7.2 7.2 0 01-.53-14.4A9.9 9.9 0 0128.8 17.8h.72a5 5 0 01.18 10H10.8z" className="fill-gray-300 dark:fill-gray-600" />
-        <path d="M15.5 29l-1 3M20.5 29l-1 3" className="stroke-blue-400 dark:stroke-blue-300" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  if (rad < 12) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <path d="M9 24a8.1 8.1 0 01-.6-16.2A11.25 11.25 0 0130.6 19h.9a5.6 5.6 0 010 11.2H9z" className="fill-gray-300 dark:fill-gray-600" />
-      </svg>
-    );
-  }
-  if (rad < 20) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <circle cx="14" cy="12" r="6" className="fill-amber-400 dark:fill-amber-300" />
-        <path d="M8.5 8l-1.5-1.5M14 4V2M19.5 8l1.5-1.5M8.5 16l-1.5 1.5" className="stroke-amber-400 dark:stroke-amber-300" strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M12 26a6.3 6.3 0 01-.46-12.6A8.7 8.7 0 0127 20.6h.63a4.4 4.4 0 010 8.8H12z" className="fill-gray-300 dark:fill-gray-600" />
-      </svg>
-    );
-  }
+/** Termômetro vertical com faixa mín/máx e bulbo. */
+function Thermometer({ min, max, scaleMin = 6, scaleMax = 34 }: {
+  min: number | null;
+  max: number | null;
+  scaleMin?: number;
+  scaleMax?: number;
+}) {
+  const gid = useId();
+  const w = 44, H = 72, tx = w / 2, top = 6, bot = 52, by = 60, br = 7.5, tw = 6.5;
+  const clamp = (v: number) => Math.min(scaleMax, Math.max(scaleMin, v));
+  const map = (v: number) => bot - ((clamp(v) - scaleMin) / (scaleMax - scaleMin)) * (bot - top);
+  const has = min != null && max != null;
+  const yTop = has ? map(Math.max(min!, max!)) : bot;
+  const yBot = has ? map(Math.min(min!, max!)) : bot;
   return (
-    <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-      <circle cx="18" cy="18" r="7" className="fill-amber-400 dark:fill-amber-300" />
-      <path d="M18 5v3M18 28v3M5 18h3M28 18h3M9.4 9.4l2.1 2.1M24.5 24.5l2.1 2.1M9.4 26.6l2.1-2.1M24.5 11.5l2.1-2.1" className="stroke-amber-400 dark:stroke-amber-300" strokeWidth="2" strokeLinecap="round" />
+    <svg viewBox={`0 0 ${w} ${H}`} width={w} height={H} className="mx-auto">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#3b9fd6" />
+          <stop offset="0.5" stopColor="#f5b301" />
+          <stop offset="1" stopColor="#ef4444" />
+        </linearGradient>
+      </defs>
+      <rect x={tx - tw / 2} y={top} width={tw} height={bot - top} rx={tw / 2} className="fill-gray-100 dark:fill-white/[0.08]" />
+      {has && <rect x={tx - tw / 2} y={yTop} width={tw} height={Math.max(yBot - yTop, 2)} fill={`url(#${gid})`} />}
+      <circle cx={tx} cy={by} r={br} fill="#ef4444" />
+      <rect x={tx - 2.5} y={by - 13} width="5" height="14" fill="#ef4444" />
     </svg>
   );
 }
+
+/** Gauge em arco (semicircular) com gradiente verde→amarelo→vermelho. */
+function ArcGauge({ value, max, size = 74 }: { value: number | null; max: number; size?: number }) {
+  const gid = useId();
+  const r = 40, len = Math.PI * r;
+  const frac = value == null ? 0 : Math.max(0, Math.min(1, value / max));
+  return (
+    <svg viewBox="0 0 100 64" width={size} height={size * 0.62} className="mx-auto">
+      <defs>
+        <linearGradient id={gid} x1="0" x2="1">
+          <stop offset="0" stopColor="#57c98a" />
+          <stop offset="0.5" stopColor="#f5b301" />
+          <stop offset="1" stopColor="#ef4444" />
+        </linearGradient>
+      </defs>
+      <path d="M10 52 A40 40 0 0 1 90 52" fill="none" strokeWidth="9" strokeLinecap="round" className="stroke-gray-100 dark:stroke-white/[0.08]" />
+      <path d="M10 52 A40 40 0 0 1 90 52" fill="none" stroke={`url(#${gid})`} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(frac * len).toFixed(1)} ${len.toFixed(1)}`} />
+    </svg>
+  );
+}
+
+const fmt1 = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(1).replace(".", ","));
+const fmt0 = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(0));
+
+function FcMetric({ colorClass, icon, value, unit }: {
+  colorClass: string;
+  icon: React.ReactNode;
+  value: string;
+  unit: string;
+}) {
+  return (
+    <div className={`flex items-center justify-center gap-1.5 text-[12.5px] font-bold ${colorClass}`}>
+      {icon}
+      <span>{value} <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{unit}</span></span>
+    </div>
+  );
+}
+
+const IcDrop = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" /></svg>;
+const IcRain = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M7 15a4 4 0 0 1 .5-8 5 5 0 0 1 9.5 1.5A3.5 3.5 0 0 1 17 15" /><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" /></svg>;
+const IcEto = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 0 1-7 0C8.5 11.8 12 8 12 8z" /><path d="M12 6V3M9 5l3-2 3 2" /></svg>;
+const IcWind = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M3 8h9a2.5 2.5 0 1 0-2.5-2.5" /><path d="M3 12h13a2.5 2.5 0 1 1-2.5 2.5" /><path d="M3 16h7a2 2 0 1 1-2 2" /></svg>;
 
 export default function ClimaPage() {
   const [activeTab, setActiveTab] = useState("virtual");
@@ -817,58 +844,41 @@ function ForecastTab() {
                 key={f.id}
                 className={`relative overflow-hidden rounded-2xl border p-4 text-center transition-shadow hover:shadow-card ${
                   isToday
-                    ? "border-brand-200 bg-brand-50/50 dark:border-brand-700/30 dark:bg-brand-900/10"
+                    ? "border-brand-200 bg-brand-50/40 dark:border-brand-700/30 dark:bg-brand-900/10"
                     : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"
                 } dark:hover:shadow-none`}
               >
                 {isToday && <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-brand-400/60 to-transparent" />}
-                <p className="text-[11px] font-bold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
+                <p className="text-[13px] font-extrabold uppercase tracking-wider text-graphite-800 dark:text-white">
                   {dayNames[date.getDay()]}
                 </p>
-                <p className="text-[10px] text-graphite-300 dark:text-gray-600">
+                <p className="mb-1.5 text-[11px] font-bold text-brand-600 dark:text-brand-400">
                   {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
                 </p>
-                <div className="my-2.5 flex justify-center">
-                  <WeatherIcon precipitation={f.precipitation} radiation={f.solar_radiation} size={32} />
+
+                <Thermometer min={f.temp_min} max={f.temp_max} />
+                <div className="mt-1 flex items-center justify-center gap-2.5">
+                  <span className="text-[12px] font-extrabold text-blue-500 dark:text-blue-400">{fmt1(f.temp_min)}°</span>
+                  <span className="text-[12px] font-extrabold text-red-500 dark:text-red-400">{fmt1(f.temp_max)}°</span>
                 </div>
-                <div className="flex items-baseline justify-center gap-1.5">
-                  <span className="text-lg font-extrabold text-graphite-900 dark:text-white">
-                    {f.temp_max?.toFixed(0) ?? "—"}°
-                  </span>
-                  <span className="text-sm font-medium text-graphite-400 dark:text-gray-500">
-                    {f.temp_min?.toFixed(0) ?? "—"}°
-                  </span>
+
+                <div className="mt-2"><ArcGauge value={f.solar_radiation} max={400} /></div>
+                <div className="-mt-0.5 text-[12.5px] font-extrabold text-orange-600 dark:text-orange-400">
+                  {fmt1(f.solar_radiation)} <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">w/m²</span>
                 </div>
-                <div className="mx-auto mt-2 h-1.5 w-4/5 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-400 via-amber-300 to-red-400"
-                    style={{ width: `${Math.min(Math.max(((f.temp_max ?? 30) - (f.temp_min ?? 15)) / 25 * 100, 20), 100)}%` }}
-                  />
-                </div>
-                <div className="mt-3 space-y-1.5">
-                  {f.precipitation != null && (
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-graphite-500 dark:text-gray-400">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M5 1s-3 3.5-3 5.5a3 3 0 006 0C8 4.5 5 1 5 1z" className="fill-blue-400 dark:fill-blue-300" />
-                      </svg>
-                      {f.precipitation.toFixed(1)} mm
-                      {f.precipitation_probability != null && (
-                        <span className="text-graphite-300 dark:text-gray-600">({f.precipitation_probability.toFixed(0)}%)</span>
-                      )}
-                    </div>
+
+                <div className="mt-2.5 space-y-1.5">
+                  {f.humidity != null && (
+                    <FcMetric colorClass="text-blue-500 dark:text-blue-400" icon={IcDrop} value={fmt0(f.humidity)} unit="%" />
                   )}
-                  {f.wind_speed != null && (
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-graphite-500 dark:text-gray-400">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M1.5 3.5h5.5a1.5 1.5 0 000-3M1.5 6.5h4a1.2 1.2 0 010 2.4" className="stroke-cyan-500 dark:stroke-cyan-400" strokeWidth="1" strokeLinecap="round" fill="none" />
-                      </svg>
-                      {f.wind_speed.toFixed(1)} m/s
-                    </div>
+                  {f.precipitation != null && (
+                    <FcMetric colorClass="text-blue-500 dark:text-blue-400" icon={IcRain} value={fmt1(f.precipitation)} unit="mm" />
                   )}
                   {(f.et0_calculated ?? f.et0_source) != null && (
-                    <div className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">
-                      ET₀ {((f.et0_calculated ?? f.et0_source) as number).toFixed(1)}
-                    </div>
+                    <FcMetric colorClass="text-brand-600 dark:text-brand-400" icon={IcEto} value={fmt1(f.et0_calculated ?? f.et0_source)} unit="mm" />
+                  )}
+                  {f.wind_speed != null && (
+                    <FcMetric colorClass="text-graphite-500 dark:text-gray-400" icon={IcWind} value={fmt1(f.wind_speed)} unit="m/s" />
                   )}
                 </div>
               </div>
