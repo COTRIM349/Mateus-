@@ -43,7 +43,7 @@ function KpiCard({
   icon: React.ReactNode;
 }) {
   return (
-    <Card className="relative overflow-hidden p-5">
+    <Card className="interactive-surface relative overflow-hidden p-5 hover:shadow-elevated dark:hover:shadow-dark-elevated">
       <div
         className="absolute inset-x-0 top-0 h-1"
         style={{ background: accent ?? "#1ea85b" }}

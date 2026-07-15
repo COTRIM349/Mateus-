@@ -44,12 +44,21 @@ const config: Config = {
         "2xl": "1rem",
         "3xl": "1.25rem",
       },
+      // Sombras em base slate (16 24 40) em vez de preto puro → aspecto mais
+      // suave e premium, com escala de elevação consistente.
       boxShadow: {
-        soft: "0 1px 3px 0 rgb(0 0 0 / 0.04), 0 1px 2px -1px rgb(0 0 0 / 0.04)",
-        card: "0 2px 8px -2px rgb(0 0 0 / 0.06), 0 1px 3px -1px rgb(0 0 0 / 0.04)",
-        elevated: "0 4px 16px -4px rgb(0 0 0 / 0.08), 0 2px 6px -2px rgb(0 0 0 / 0.04)",
-        modal: "0 20px 60px -12px rgb(0 0 0 / 0.15), 0 8px 24px -8px rgb(0 0 0 / 0.08)",
-        glow: "0 0 20px -4px rgb(30 168 91 / 0.15)",
+        xs: "0 1px 2px 0 rgb(16 24 40 / 0.04)",
+        soft: "0 1px 2px 0 rgb(16 24 40 / 0.05), 0 1px 3px -1px rgb(16 24 40 / 0.04)",
+        card: "0 1px 2px 0 rgb(16 24 40 / 0.04), 0 6px 16px -6px rgb(16 24 40 / 0.08)",
+        elevated: "0 8px 24px -8px rgb(16 24 40 / 0.12), 0 2px 6px -2px rgb(16 24 40 / 0.06)",
+        modal: "0 24px 64px -16px rgb(16 24 40 / 0.28), 0 8px 24px -8px rgb(16 24 40 / 0.12)",
+        glow: "0 0 0 1px rgb(30 168 91 / 0.18), 0 10px 28px -10px rgb(30 168 91 / 0.40)",
+        // Elevação sutil para superfícies no modo escuro (realce interno + drop).
+        "dark-card": "inset 0 1px 0 0 rgb(255 255 255 / 0.03), 0 8px 24px -14px rgb(0 0 0 / 0.7)",
+        "dark-elevated": "inset 0 1px 0 0 rgb(255 255 255 / 0.05), 0 16px 40px -16px rgb(0 0 0 / 0.8)",
+      },
+      transitionTimingFunction: {
+        premium: "cubic-bezier(0.22, 1, 0.36, 1)",
       },
     },
   },

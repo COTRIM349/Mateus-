@@ -9,6 +9,27 @@
   .dark * {
     border-color: rgb(255 255 255 / 0.06);
   }
+
+  /* Renderização premium do texto: hinting mais fino e números tabulares
+     consistentes em métricas/KPIs. */
+  body {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+
+  /* Seleção com o verde da marca — toque de identidade. */
+  ::selection {
+    background-color: rgb(30 168 91 / 0.18);
+  }
+
+  /* Números alinhados verticalmente em qualquer contexto tabular. */
+  .tabular-nums,
+  table,
+  [data-metric] {
+    font-variant-numeric: tabular-nums;
+  }
 }
 
 html,
@@ -47,11 +68,28 @@ body {
 }
 
 .animate-in {
-  animation: fadeIn 0.25s ease-out;
+  animation: fadeIn 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Card/superfície interativa: leve elevação e subida no hover. */
+.interactive-surface {
+  transition:
+    transform 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 0.2s cubic-bezier(0.22, 1, 0.36, 1),
+    border-color 0.2s ease;
+  will-change: transform;
+}
+.interactive-surface:hover {
+  transform: translateY(-2px);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-in {
+  .animate-in,
+  .interactive-surface {
     animation: none;
+    transition: none;
+  }
+  .interactive-surface:hover {
+    transform: none;
   }
 }

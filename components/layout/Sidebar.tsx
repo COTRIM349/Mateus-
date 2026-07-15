@@ -28,11 +28,11 @@ function NavLink({
       href={href}
       onClick={onClick}
       className={cn(
-        "flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-150",
+        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
         indent && "pl-9",
         active
-          ? "bg-brand-600 text-white shadow-glow"
-          : "text-gray-500 hover:bg-white/[0.06] hover:text-gray-300",
+          ? "bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-glow"
+          : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-200",
       )}
     >
       <svg className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
@@ -95,20 +95,20 @@ export function Sidebar() {
           "lg:translate-x-0",
         )}
       >
-        <div className="flex items-center gap-3 px-5 py-6">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-brand-600 text-white shadow-glow">
-            <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24">
+        <div className="flex h-16 items-center gap-3 border-b border-white/[0.04] px-5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-glow">
+            <svg className="h-[18px] w-[18px]" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
             </svg>
           </div>
           <div>
-            <p className="text-sm font-bold text-white tracking-tight">Cotrim Irrigação</p>
-            <p className="text-[10px] font-bold uppercase tracking-widest text-brand-400">Pro</p>
+            <p className="text-[13px] font-bold leading-tight tracking-tight text-white">Cotrim Irrigação</p>
+            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-brand-400">Pro</p>
           </div>
         </div>
 
         {farms.length > 1 && (
-          <div className="mx-4 mb-4">
+          <div className="mx-4 mb-3 mt-4">
             <select
               value={activeFarmId ?? ""}
               onChange={(e) => setActiveFarm(e.target.value)}
@@ -124,7 +124,7 @@ export function Sidebar() {
         )}
 
         {farms.length === 1 && activeFarm && (
-          <div className="mx-4 mb-4 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
+          <div className="mx-4 mb-3 mt-4 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
             <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Fazenda</p>
             <p className="mt-0.5 text-sm font-medium text-white">{activeFarm.name}</p>
           </div>
