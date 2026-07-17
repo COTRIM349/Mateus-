@@ -36,6 +36,14 @@ const config: Config = {
           900: "#111518",
           950: "#0a0d10",
         },
+        // Verde escuro da sidebar (redesign light premium)
+        forest: {
+          950: "#08281c",
+          900: "#0c3525",
+          800: "#10442f",
+          700: "#155a3e",
+          600: "#1a704e",
+        },
       },
       fontFamily: {
         sans: ["var(--font-sans)", "system-ui", "sans-serif"],

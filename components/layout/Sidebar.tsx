@@ -14,28 +14,31 @@ function NavLink({
   label,
   active,
   onClick,
-  indent,
 }: {
   href: string;
   icon: string;
   label: string;
   active: boolean;
   onClick?: () => void;
-  indent?: boolean;
 }) {
   return (
     <Link
       href={href}
       onClick={onClick}
       className={cn(
-        "group relative flex items-center gap-3 rounded-xl px-3 py-2.5 text-[13px] font-medium transition-all duration-200",
-        indent && "pl-9",
+        "group flex items-center gap-3.5 rounded-xl px-3.5 py-2.5 text-[13.5px] font-medium transition-all duration-150",
         active
-          ? "bg-gradient-to-r from-brand-600 to-brand-500 text-white shadow-glow"
-          : "text-gray-500 hover:bg-white/[0.05] hover:text-gray-200",
+          ? "bg-white/[0.12] text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06)]"
+          : "text-white/60 hover:bg-white/[0.06] hover:text-white/90",
       )}
     >
-      <svg className="h-[18px] w-[18px] shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
+      <svg
+        className={cn("h-[19px] w-[19px] shrink-0 transition-colors", active ? "text-brand-300" : "text-white/50 group-hover:text-white/80")}
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.7}
+        viewBox="0 0 24 24"
+      >
         <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
       </svg>
       <span>{label}</span>
@@ -47,7 +50,6 @@ export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const { farms, activeFarmId, setActiveFarm, profile } = useAuth();
-  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
   const activeFarm = farms.find((f) => f.id === activeFarmId);
 
@@ -61,19 +63,13 @@ export function Sidebar() {
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
-  const isGroupActive = (items: { href: string }[]) =>
-    items.some((item) => isActive(item.href));
-
-  const toggle = (label: string) =>
-    setCollapsed((prev) => ({ ...prev, [label]: !prev[label] }));
-
   return (
     <>
       <button
         type="button"
         aria-label="Abrir menu"
         onClick={() => setOpen(true)}
-        className="fixed left-4 top-4 z-40 rounded-xl bg-graphite-900 p-2.5 text-white shadow-elevated lg:hidden"
+        className="fixed left-4 top-4 z-40 rounded-xl bg-forest-900 p-2.5 text-white shadow-elevated lg:hidden"
       >
         <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -82,7 +78,7 @@ export function Sidebar() {
 
       {open && (
         <div
-          className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-sm lg:hidden"
           onClick={() => setOpen(false)}
           aria-hidden="true"
         />
@@ -90,32 +86,34 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-white/[0.04] bg-graphite-950 text-gray-400 transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-forest-900 text-white transition-transform duration-200",
           open ? "translate-x-0" : "-translate-x-full",
           "lg:translate-x-0",
         )}
       >
-        <div className="flex h-16 items-center gap-3 border-b border-white/[0.04] px-5">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-glow">
+        {/* Logo */}
+        <div className="flex items-center gap-3 px-6 py-6">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-500/90 text-white">
             <svg className="h-[18px] w-[18px]" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
             </svg>
           </div>
           <div>
-            <p className="text-[13px] font-bold leading-tight tracking-tight text-white">Cotrim Irrigação</p>
-            <p className="text-[9px] font-bold uppercase tracking-[0.2em] text-brand-400">Pro</p>
+            <p className="text-[15px] font-extrabold leading-none tracking-tight text-white">Cotrim</p>
+            <p className="mt-1 text-[9px] font-bold uppercase tracking-[0.22em] text-brand-300">Irrigação Pro</p>
           </div>
         </div>
 
+        {/* Farm selector (quando há mais de uma fazenda) */}
         {farms.length > 1 && (
-          <div className="mx-4 mb-3 mt-4">
+          <div className="mx-4 mb-3">
             <select
               value={activeFarmId ?? ""}
               onChange={(e) => setActiveFarm(e.target.value)}
-              className="w-full rounded-xl border border-white/[0.06] bg-white/[0.04] px-3 py-2.5 text-xs text-gray-300 outline-none transition-colors focus:border-brand-500/50 focus:bg-white/[0.06]"
+              className="w-full rounded-xl border border-white/10 bg-white/[0.06] px-3 py-2.5 text-xs font-medium text-white/90 outline-none transition-colors focus:border-white/20 focus:bg-white/[0.1]"
             >
               {farms.map((farm) => (
-                <option key={farm.id} value={farm.id}>
+                <option key={farm.id} value={farm.id} className="text-graphite-900">
                   {farm.name}
                 </option>
               ))}
@@ -123,105 +121,46 @@ export function Sidebar() {
           </div>
         )}
 
-        {farms.length === 1 && activeFarm && (
-          <div className="mx-4 mb-3 mt-4 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-600">Fazenda</p>
-            <p className="mt-0.5 text-sm font-medium text-white">{activeFarm.name}</p>
-          </div>
-        )}
-
-        <nav className="flex-1 space-y-0.5 overflow-y-auto px-3 py-2">
+        {/* Nav */}
+        <nav className="flex-1 space-y-0.5 overflow-y-auto px-4 py-2">
           {topLevelItems.map((item) => (
-            <NavLink
-              key={item.href}
-              href={item.href}
-              icon={item.icon}
-              label={item.label}
-              active={isActive(item.href)}
-              onClick={() => setOpen(false)}
-            />
+            <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} onClick={() => setOpen(false)} />
           ))}
 
-          {navGroups.map((group) => {
-            const groupActive = isGroupActive(group.items);
-            const isCollapsed = collapsed[group.label] && !groupActive;
-
-            return (
-              <div key={group.label} className="mt-3">
-                <button
-                  type="button"
-                  onClick={() => toggle(group.label)}
-                  className={cn(
-                    "flex w-full items-center gap-3 rounded-xl px-3 py-2 text-[11px] font-semibold uppercase tracking-wider transition-colors",
-                    groupActive
-                      ? "text-brand-400"
-                      : "text-gray-600 hover:text-gray-400",
-                  )}
-                >
-                  <svg className="h-4 w-4 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" d={group.icon} />
-                  </svg>
-                  <span className="flex-1 text-left">{group.label}</span>
-                  <svg
-                    className={cn("h-3.5 w-3.5 transition-transform", isCollapsed && "-rotate-90")}
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={2}
-                    viewBox="0 0 24 24"
-                  >
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                  </svg>
-                </button>
-
-                {!isCollapsed && (
-                  <div className="mt-0.5 space-y-0.5">
-                    {group.items.map((item) => (
-                      <NavLink
-                        key={item.href}
-                        href={item.href}
-                        icon={item.icon}
-                        label={item.label}
-                        active={isActive(item.href)}
-                        onClick={() => setOpen(false)}
-                        indent
-                      />
-                    ))}
-                  </div>
-                )}
+          {navGroups.map((group, gi) => (
+            <div key={group.label} className={cn(gi === 0 ? "mt-2" : "mt-5")}>
+              <p className="px-3.5 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-[0.14em] text-white/35">
+                {group.label}
+              </p>
+              <div className="space-y-0.5">
+                {group.items.map((item) => (
+                  <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} onClick={() => setOpen(false)} />
+                ))}
               </div>
-            );
-          })}
+            </div>
+          ))}
 
-          <div className="mt-3 border-t border-white/[0.04] pt-3">
+          <div className="mt-5 space-y-0.5 border-t border-white/[0.08] pt-4">
             {bottomItems.map((item) => (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                icon={item.icon}
-                label={item.label}
-                active={isActive(item.href)}
-                onClick={() => setOpen(false)}
-              />
+              <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} onClick={() => setOpen(false)} />
             ))}
           </div>
         </nav>
 
-        <div className="border-t border-white/[0.04] px-4 py-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-600/20 text-xs font-bold text-brand-400">
+        {/* User footer */}
+        <div className="border-t border-white/[0.08] px-4 py-4">
+          <div className="flex items-center gap-3 rounded-xl px-2 py-1.5">
+            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-500/20 text-xs font-bold text-brand-200">
               {profile?.name
                 ? profile.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
                 : "?"}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium text-white">{profile?.name ?? "Usuário"}</p>
-              <p className="text-[10px] text-gray-600">{roleLabels[profile?.role ?? "viewer"]}</p>
+              <p className="truncate text-[13px] font-semibold text-white">{profile?.name ?? "Usuário"}</p>
+              <p className="truncate text-[11px] text-white/45">{activeFarm?.name ?? roleLabels[profile?.role ?? "viewer"]}</p>
             </div>
           </div>
-        </div>
-
-        <div className="px-5 pb-4 text-[10px] text-graphite-700">
-          v{APP_VERSION}
+          <p className="mt-2 px-2 text-[10px] text-white/25">v{APP_VERSION}</p>
         </div>
       </aside>
     </>

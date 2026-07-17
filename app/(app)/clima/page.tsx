@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useId } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -45,12 +45,18 @@ interface WeatherStation {
   installed_at: string | null;
 }
 
+// Aba de Clima = somente dados (condições + previsão). A gestão de estações
+// fica isolada na aba "Estação".
 const climaTabs = [
+  { id: "clima", label: "Clima" },
+  { id: "historico", label: "Histórico" },
+  { id: "estacao", label: "Estação" },
+];
+
+const estacaoSubTabs = [
   { id: "virtual", label: "Estação Virtual" },
   { id: "estacoes", label: "Estações" },
   { id: "lancamento", label: "Lançamento Manual" },
-  { id: "historico", label: "Histórico Climático" },
-  { id: "previsao", label: "Previsão" },
   { id: "fonte", label: "Fonte Diária" },
   { id: "sync", label: "Sincronizações" },
 ];
@@ -109,69 +115,110 @@ function MetricCard({ icon, label, value, unit, gauge, accentColor, sub }: {
   );
 }
 
-function WeatherIcon({ precipitation, radiation, size = 36 }: {
-  precipitation?: number | null;
-  radiation?: number | null;
-  size?: number;
-}) {
-  const precip = precipitation ?? 0;
-  const rad = radiation ?? 20;
+// ── Instrumentos (linha visual iCrop) ──────────────────────────────────────
 
-  if (precip > 5) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <path d="M10.8 20a7.2 7.2 0 01-.53-14.4A9.9 9.9 0 0128.8 15.8h.72a5 5 0 01.18 10H10.8z" className="fill-gray-300 dark:fill-gray-600" />
-        <path d="M13 27l-1.5 4M18 27l-1.5 4M23 27l-1.5 4" className="stroke-blue-500 dark:stroke-blue-400" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  if (precip > 0) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <path d="M10.8 22a7.2 7.2 0 01-.53-14.4A9.9 9.9 0 0128.8 17.8h.72a5 5 0 01.18 10H10.8z" className="fill-gray-300 dark:fill-gray-600" />
-        <path d="M15.5 29l-1 3M20.5 29l-1 3" className="stroke-blue-400 dark:stroke-blue-300" strokeWidth="1.5" strokeLinecap="round" />
-      </svg>
-    );
-  }
-  if (rad < 12) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <path d="M9 24a8.1 8.1 0 01-.6-16.2A11.25 11.25 0 0130.6 19h.9a5.6 5.6 0 010 11.2H9z" className="fill-gray-300 dark:fill-gray-600" />
-      </svg>
-    );
-  }
-  if (rad < 20) {
-    return (
-      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-        <circle cx="14" cy="12" r="6" className="fill-amber-400 dark:fill-amber-300" />
-        <path d="M8.5 8l-1.5-1.5M14 4V2M19.5 8l1.5-1.5M8.5 16l-1.5 1.5" className="stroke-amber-400 dark:stroke-amber-300" strokeWidth="1.5" strokeLinecap="round" />
-        <path d="M12 26a6.3 6.3 0 01-.46-12.6A8.7 8.7 0 0127 20.6h.63a4.4 4.4 0 010 8.8H12z" className="fill-gray-300 dark:fill-gray-600" />
-      </svg>
-    );
-  }
+/** Termômetro vertical com faixa mín/máx e bulbo. */
+function Thermometer({ min, max, scaleMin = 6, scaleMax = 34 }: {
+  min: number | null;
+  max: number | null;
+  scaleMin?: number;
+  scaleMax?: number;
+}) {
+  const gid = useId();
+  const w = 44, H = 72, tx = w / 2, top = 6, bot = 52, by = 60, br = 7.5, tw = 6.5;
+  const clamp = (v: number) => Math.min(scaleMax, Math.max(scaleMin, v));
+  const map = (v: number) => bot - ((clamp(v) - scaleMin) / (scaleMax - scaleMin)) * (bot - top);
+  const has = min != null && max != null;
+  const yTop = has ? map(Math.max(min!, max!)) : bot;
+  const yBot = has ? map(Math.min(min!, max!)) : bot;
   return (
-    <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
-      <circle cx="18" cy="18" r="7" className="fill-amber-400 dark:fill-amber-300" />
-      <path d="M18 5v3M18 28v3M5 18h3M28 18h3M9.4 9.4l2.1 2.1M24.5 24.5l2.1 2.1M9.4 26.6l2.1-2.1M24.5 11.5l2.1-2.1" className="stroke-amber-400 dark:stroke-amber-300" strokeWidth="2" strokeLinecap="round" />
+    <svg viewBox={`0 0 ${w} ${H}`} width={w} height={H} className="mx-auto">
+      <defs>
+        <linearGradient id={gid} x1="0" y1="1" x2="0" y2="0">
+          <stop offset="0" stopColor="#3b9fd6" />
+          <stop offset="0.5" stopColor="#f5b301" />
+          <stop offset="1" stopColor="#ef4444" />
+        </linearGradient>
+      </defs>
+      <rect x={tx - tw / 2} y={top} width={tw} height={bot - top} rx={tw / 2} className="fill-gray-100 dark:fill-white/[0.08]" />
+      {has && <rect x={tx - tw / 2} y={yTop} width={tw} height={Math.max(yBot - yTop, 2)} fill={`url(#${gid})`} />}
+      <circle cx={tx} cy={by} r={br} fill="#ef4444" />
+      <rect x={tx - 2.5} y={by - 13} width="5" height="14" fill="#ef4444" />
     </svg>
   );
 }
 
+/** Gauge em arco (semicircular) com gradiente verde→amarelo→vermelho. */
+function ArcGauge({ value, max, size = 74 }: { value: number | null; max: number; size?: number }) {
+  const gid = useId();
+  const r = 40, len = Math.PI * r;
+  const frac = value == null ? 0 : Math.max(0, Math.min(1, value / max));
+  return (
+    <svg viewBox="0 0 100 64" width={size} height={size * 0.62} className="mx-auto">
+      <defs>
+        <linearGradient id={gid} x1="0" x2="1">
+          <stop offset="0" stopColor="#57c98a" />
+          <stop offset="0.5" stopColor="#f5b301" />
+          <stop offset="1" stopColor="#ef4444" />
+        </linearGradient>
+      </defs>
+      <path d="M10 52 A40 40 0 0 1 90 52" fill="none" strokeWidth="9" strokeLinecap="round" className="stroke-gray-100 dark:stroke-white/[0.08]" />
+      <path d="M10 52 A40 40 0 0 1 90 52" fill="none" stroke={`url(#${gid})`} strokeWidth="9" strokeLinecap="round" strokeDasharray={`${(frac * len).toFixed(1)} ${len.toFixed(1)}`} />
+    </svg>
+  );
+}
+
+const fmt1 = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(1).replace(".", ","));
+const fmt0 = (v: number | null | undefined) => (v == null ? "—" : v.toFixed(0));
+
+function FcMetric({ colorClass, icon, value, unit }: {
+  colorClass: string;
+  icon: React.ReactNode;
+  value: string;
+  unit: string;
+}) {
+  return (
+    <div className={`flex items-center justify-center gap-1.5 text-[12.5px] font-bold ${colorClass}`}>
+      {icon}
+      <span>{value} <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{unit}</span></span>
+    </div>
+  );
+}
+
+const IcDrop = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z" /></svg>;
+const IcRain = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M7 15a4 4 0 0 1 .5-8 5 5 0 0 1 9.5 1.5A3.5 3.5 0 0 1 17 15" /><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" /></svg>;
+const IcEto = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 0 1-7 0C8.5 11.8 12 8 12 8z" /><path d="M12 6V3M9 5l3-2 3 2" /></svg>;
+const IcWind = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M3 8h9a2.5 2.5 0 1 0-2.5-2.5" /><path d="M3 12h13a2.5 2.5 0 1 1-2.5 2.5" /><path d="M3 16h7a2 2 0 1 1-2 2" /></svg>;
+
+// Aba "Estação" — reúne toda a gestão de estações em sub-abas, mantendo a
+// aba Clima limpa (somente dados).
+function EstacaoTab() {
+  const [sub, setSub] = useState("virtual");
+  return (
+    <div className="space-y-5">
+      <Tabs tabs={estacaoSubTabs} activeTab={sub} onChange={setSub} />
+      <div className="mt-4">
+        {sub === "virtual" && <div className="animate-in"><VirtualStationTab /></div>}
+        {sub === "estacoes" && <div className="animate-in"><StationsTab /></div>}
+        {sub === "lancamento" && <div className="animate-in"><ManualEntryTab /></div>}
+        {sub === "fonte" && <div className="animate-in"><DailySelectionTab /></div>}
+        {sub === "sync" && <div className="animate-in"><IngestionRunsTab /></div>}
+      </div>
+    </div>
+  );
+}
+
 export default function ClimaPage() {
-  const [activeTab, setActiveTab] = useState("virtual");
+  const [activeTab, setActiveTab] = useState("clima");
 
   return (
-    <div className="space-y-8">
-      <PageHeader titulo="Clima" descricao="Estações meteorológicas, dados climáticos e histórico" />
+    <div className="space-y-6">
+      <PageHeader titulo="Clima" descricao="Condições atuais, previsão e dados climáticos" />
       <Tabs tabs={climaTabs} activeTab={activeTab} onChange={setActiveTab} />
-      <div className="mt-8">
-        {activeTab === "virtual" && <div className="animate-in"><VirtualStationTab /></div>}
-        {activeTab === "estacoes" && <div className="animate-in"><StationsTab /></div>}
-        {activeTab === "lancamento" && <div className="animate-in"><ManualEntryTab /></div>}
+      <div className="mt-6">
+        {activeTab === "clima" && <div className="animate-in"><ForecastTab /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTab /></div>}
-        {activeTab === "previsao" && <div className="animate-in"><ForecastTab /></div>}
-        {activeTab === "fonte" && <div className="animate-in"><DailySelectionTab /></div>}
-        {activeTab === "sync" && <div className="animate-in"><IngestionRunsTab /></div>}
+        {activeTab === "estacao" && <div className="animate-in"><EstacaoTab /></div>}
       </div>
       <p className="mt-6 text-xs text-graphite-400 dark:text-gray-500">
         Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
@@ -745,6 +792,97 @@ interface ForecastRow {
   et0_calculated: number | null;
 }
 
+// Ícone de clima do dia (a partir de chuva / probabilidade) — apresentação.
+function DayGlyph({ precip, prob, size = 40 }: { precip: number | null; prob: number | null; size?: number }) {
+  const p = precip ?? 0;
+  const pr = prob ?? 0;
+  if (p >= 5 || pr >= 60) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <path d="M10 21a6.5 6.5 0 01-.5-13 8.5 8.5 0 0116 2.5A5 5 0 0125 21z" className="fill-slate-300 dark:fill-slate-500" />
+        <path d="M13 24l-1.5 4M18 24l-1.5 4M23 24l-1.5 4" className="stroke-blue-500" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (p > 0 || pr >= 30) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <circle cx="14" cy="12" r="5.5" className="fill-amber-400" />
+        <path d="M8.8 8l-1.3-1.3M14 4.5V2.6M19.2 8l1.3-1.3" className="stroke-amber-400" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M12 26a6 6 0 01-.5-12 7.5 7.5 0 0114 2A4.5 4.5 0 0126 26z" className="fill-slate-300 dark:fill-slate-500" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <circle cx="18" cy="18" r="7.5" className="fill-amber-400" />
+      <path d="M18 4.5v3M18 28.5v3M4.5 18h3M28.5 18h3M9 9l2.1 2.1M24.9 24.9l2.1 2.1M9 27l2.1-2.1M24.9 11.1L27 9" className="stroke-amber-400" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Chip de ação orientativo do dia — heurística visual sobre chuva vs ETo.
+// Não altera o motor do balanço; é apenas um indicador de leitura rápida.
+function classifyDay(saldo: number, precip: number): { label: string; cls: string } {
+  if (precip >= 8) return { label: "Suspender", cls: "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400" };
+  if (saldo <= -3) return { label: "Irrigar", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400" };
+  if (saldo < 0) return { label: "Monitorar", cls: "bg-amber-50/70 text-amber-600 dark:bg-amber-900/10 dark:text-amber-400/90" };
+  return { label: "Reavaliar", cls: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" };
+}
+
+function InfoRow({ icon, label, value, valueClass }: { icon: React.ReactNode; label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="flex items-center justify-between text-[11.5px]">
+      <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400">
+        <span className="text-graphite-300 dark:text-gray-600">{icon}</span>
+        {label}
+      </span>
+      <span className={`font-semibold tabular-nums ${valueClass ?? "text-graphite-700 dark:text-gray-200"}`}>{value}</span>
+    </div>
+  );
+}
+
+// Gráfico "Demanda atmosférica e chuva prevista" (chuva em barras + ETo em linha).
+function DemandaChart({ days, dayNames }: { days: ForecastRow[]; dayNames: Record<number, string> }) {
+  const W = 720, H = 260, padL = 34, padR = 34, padT = 26, padB = 40;
+  const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  const n = days.length || 1;
+  const eto = (d: ForecastRow) => d.et0_calculated ?? d.et0_source ?? 0;
+  const chuvaMax = Math.max(...days.map((d) => d.precipitation ?? 0), 20);
+  const etoMax = Math.max(...days.map(eto), 6);
+  const band = (x1 - x0) / n;
+  const cx = (i: number) => x0 + band * i + band / 2;
+  const chuvaY = (v: number) => y1 - (v / chuvaMax) * (y1 - y0);
+  const etoY = (v: number) => y1 - (v / etoMax) * (y1 - y0);
+  const barW = Math.min(band * 0.42, 28);
+  const pts = days.map((d, i) => `${cx(i)},${etoY(eto(d))}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
+      {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+        <line key={f} x1={x0} x2={x1} y1={y1 - f * (y1 - y0)} y2={y1 - f * (y1 - y0)} className="stroke-gray-100 dark:stroke-white/[0.06]" strokeWidth={1} />
+      ))}
+      {days.map((d, i) => {
+        const v = d.precipitation ?? 0;
+        return <rect key={i} x={cx(i) - barW / 2} y={chuvaY(v)} width={barW} height={Math.max(y1 - chuvaY(v), v > 0 ? 2 : 0)} rx={3} className="fill-blue-400/80 dark:fill-blue-500/70" />;
+      })}
+      {days.map((d, i) => (
+        <text key={i} x={cx(i)} y={chuvaY(d.precipitation ?? 0) - 5} textAnchor="middle" className="fill-blue-500 text-[10px] font-bold dark:fill-blue-400">{fmt1(d.precipitation)}</text>
+      ))}
+      <polyline points={pts} fill="none" className="stroke-brand-600 dark:stroke-brand-400" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {days.map((d, i) => (
+        <g key={i}>
+          <circle cx={cx(i)} cy={etoY(eto(d))} r={3.5} className="fill-brand-600 dark:fill-brand-400" />
+          <text x={cx(i)} y={etoY(eto(d)) - 9} textAnchor="middle" className="fill-brand-700 text-[10px] font-bold dark:fill-brand-300">{fmt1(eto(d))}</text>
+        </g>
+      ))}
+      {days.map((d, i) => {
+        const date = new Date(d.target_date + "T12:00:00");
+        return <text key={i} x={cx(i)} y={H - 14} textAnchor="middle" className="fill-graphite-400 text-[10px] dark:fill-gray-500">{dayNames[date.getDay()]}</text>;
+      })}
+    </svg>
+  );
+}
+
 function ForecastTab() {
   const { activeFarmId } = useAuth();
   const supabase = createClient();
@@ -794,89 +932,175 @@ function ForecastTab() {
 
   const dayNames: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
 
+  const hoje = dailyForecasts[0];
+
+  const totEto = dailyForecasts.reduce((a, d) => a + (d.et0_calculated ?? d.et0_source ?? 0), 0);
+  const totChuva = dailyForecasts.reduce((a, d) => a + (d.precipitation ?? 0), 0);
+  const saldo7 = totChuva - totEto;
+  const impacto = saldo7 < -5
+    ? "Chuva com baixa probabilidade de compensar a demanda hídrica. Manter irrigação programada e reavaliar no fim da tarde."
+    : saldo7 < 0
+      ? "Chuva prevista supre parte da demanda. Ajustar a lâmina e monitorar a evolução."
+      : "Chuva prevista tende a suprir a demanda. Reavaliar a necessidade de irrigação nos próximos dias.";
+  const maxVento = Math.max(0, ...dailyForecasts.map((d) => d.wind_speed ?? 0));
+  const maxProb = Math.max(0, ...dailyForecasts.map((d) => d.precipitation_probability ?? 0));
+  const maxEto = Math.max(0, ...dailyForecasts.map((d) => d.et0_calculated ?? d.et0_source ?? 0));
+  const alertas: { icon: React.ReactNode; tone: string; title: string; desc: string }[] = [];
+  if (maxVento >= 18) alertas.push({ icon: IcWind, tone: "amber", title: "Vento forte previsto", desc: `Rajadas de até ${fmt0(maxVento)} km/h em algum dia da semana.` });
+  if (maxProb >= 70) alertas.push({ icon: IcRain, tone: "blue", title: "Alta chance de chuva", desc: `Probabilidade de ${fmt0(maxProb)}% com acúmulos significativos.` });
+  if (maxEto >= 4) alertas.push({ icon: IcEto, tone: "amber", title: "Alta demanda hídrica", desc: "ETo acima de 4 mm/dia. Atenção ao manejo." });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+        <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      </div>
+    );
+  }
+  if (dailyForecasts.length === 0) {
+    return (
+      <Card>
+        <p className="py-10 text-center text-sm text-graphite-400 dark:text-gray-500">
+          Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
+        </p>
+      </Card>
+    );
+  }
+
   return (
-    <>
-      <p className="mb-4 text-xs text-graphite-400 dark:text-gray-500">
-        Previsão meteorológica · Dados separados das observações
-      </p>
-      {loading ? (
-        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-      ) : dailyForecasts.length === 0 ? (
-        <Card>
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-            Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
-          </p>
+    <div className="space-y-5">
+      {/* Próximas 24 horas + Impacto no manejo */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+        {hoje && (
+          <Card className="p-0">
+            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+              <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Próximas 24 horas</p>
+            </div>
+            <div className="grid grid-cols-2 gap-y-5 p-6 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="flex items-center gap-3">
+                <DayGlyph precip={hoje.precipitation} prob={hoje.precipitation_probability} size={46} />
+                <div>
+                  <p className="text-[22px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{fmt1(hoje.temp_max)}<span className="text-sm">°</span></p>
+                  <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">máx · mín {fmt1(hoje.temp_min)}°</p>
+                </div>
+              </div>
+              {[
+                { label: "Umidade", value: `${fmt0(hoje.humidity)}%`, note: "relativa" },
+                { label: "Vento", value: `${fmt1(hoje.wind_speed)} km/h`, note: "médio" },
+                { label: "Chuva prevista", value: `${fmt1(hoje.precipitation)} mm`, note: `${fmt0(hoje.precipitation_probability)}% prob.` },
+                { label: "ETo", value: `${fmt1(hoje.et0_calculated ?? hoje.et0_source)} mm`, note: "demanda" },
+              ].map((m) => (
+                <div key={m.label}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
+                  <p className="mt-1 text-[18px] font-bold tabular-nums text-graphite-900 dark:text-white">{m.value}</p>
+                  <p className="text-[10px] text-graphite-400 dark:text-gray-500">{m.note}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        <Card className="p-6">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Impacto no manejo</p>
+          <div className="mt-4 flex gap-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" viewBox="0 0 24 24"><path d="M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 0 1-7 0C8.5 11.8 12 8 12 8z" /><path d="M12 6V3M9 5l3-2 3 2" /></svg>
+            </div>
+            <p className="text-[13px] leading-relaxed text-graphite-600 dark:text-gray-300">{impacto}</p>
+          </div>
         </Card>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      </div>
+
+      {/* Previsão 7 dias */}
+      <div>
+        <p className="mb-3 text-[15px] font-bold text-graphite-900 dark:text-white">Previsão para os próximos 7 dias</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {dailyForecasts.map((f) => {
             const date = new Date(f.target_date + "T12:00:00");
             const isToday = f.target_date === new Date().toISOString().slice(0, 10);
+            const eto = f.et0_calculated ?? f.et0_source ?? 0;
+            const precip = f.precipitation ?? 0;
+            const saldo = precip - eto;
+            const chip = classifyDay(saldo, precip);
             return (
               <div
                 key={f.id}
-                className={`relative overflow-hidden rounded-2xl border p-4 text-center transition-shadow hover:shadow-card ${
+                className={`flex flex-col rounded-2xl border p-4 transition-shadow hover:shadow-card ${
                   isToday
-                    ? "border-brand-200 bg-brand-50/50 dark:border-brand-700/30 dark:bg-brand-900/10"
+                    ? "border-brand-200 bg-brand-50/30 dark:border-brand-700/30 dark:bg-brand-900/10"
                     : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"
                 } dark:hover:shadow-none`}
               >
-                {isToday && <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-brand-400/60 to-transparent" />}
-                <p className="text-[11px] font-bold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
-                  {dayNames[date.getDay()]}
-                </p>
-                <p className="text-[10px] text-graphite-300 dark:text-gray-600">
-                  {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-                </p>
-                <div className="my-2.5 flex justify-center">
-                  <WeatherIcon precipitation={f.precipitation} radiation={f.solar_radiation} size={32} />
+                <div className="text-center">
+                  <p className={`text-[14px] font-extrabold ${isToday ? "text-brand-600 dark:text-brand-400" : "text-graphite-800 dark:text-white"}`}>
+                    {isToday ? "Hoje" : dayNames[date.getDay()]}
+                  </p>
+                  <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+                    {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                  </p>
                 </div>
-                <div className="flex items-baseline justify-center gap-1.5">
-                  <span className="text-lg font-extrabold text-graphite-900 dark:text-white">
-                    {f.temp_max?.toFixed(0) ?? "—"}°
-                  </span>
-                  <span className="text-sm font-medium text-graphite-400 dark:text-gray-500">
-                    {f.temp_min?.toFixed(0) ?? "—"}°
+                <div className="my-2.5 flex items-center justify-center gap-2">
+                  <DayGlyph precip={f.precipitation} prob={f.precipitation_probability} />
+                  <span className="text-[15px] font-extrabold tabular-nums">
+                    <span className="text-red-500 dark:text-red-400">{fmt1(f.temp_max)}°</span>
+                    <span className="mx-0.5 text-graphite-300 dark:text-gray-600">/</span>
+                    <span className="text-blue-500 dark:text-blue-400">{fmt1(f.temp_min)}°</span>
                   </span>
                 </div>
-                <div className="mx-auto mt-2 h-1.5 w-4/5 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
-                  <div
-                    className="h-full rounded-full bg-gradient-to-r from-blue-400 via-amber-300 to-red-400"
-                    style={{ width: `${Math.min(Math.max(((f.temp_max ?? 30) - (f.temp_min ?? 15)) / 25 * 100, 20), 100)}%` }}
-                  />
+                <div className="mt-1 space-y-1.5 border-t border-gray-100 pt-2.5 dark:border-white/[0.06]">
+                  <InfoRow icon={IcRain} label="Chuva" value={`${fmt1(f.precipitation)} mm`} valueClass="text-blue-500 dark:text-blue-400" />
+                  <InfoRow icon={IcDrop} label="Prob." value={`${fmt0(f.precipitation_probability)}%`} />
+                  <InfoRow icon={IcEto} label="ETo" value={`${fmt1(eto)} mm`} valueClass="text-brand-600 dark:text-brand-400" />
+                  <InfoRow icon={IcWind} label="Vento" value={`${fmt1(f.wind_speed)} km/h`} />
+                  <InfoRow icon={IcDrop} label="Saldo" value={`${saldo >= 0 ? "+" : ""}${fmt1(saldo)} mm`} valueClass={saldo < 0 ? "text-red-500 dark:text-red-400" : "text-green-600 dark:text-green-400"} />
                 </div>
-                <div className="mt-3 space-y-1.5">
-                  {f.precipitation != null && (
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-graphite-500 dark:text-gray-400">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M5 1s-3 3.5-3 5.5a3 3 0 006 0C8 4.5 5 1 5 1z" className="fill-blue-400 dark:fill-blue-300" />
-                      </svg>
-                      {f.precipitation.toFixed(1)} mm
-                      {f.precipitation_probability != null && (
-                        <span className="text-graphite-300 dark:text-gray-600">({f.precipitation_probability.toFixed(0)}%)</span>
-                      )}
-                    </div>
-                  )}
-                  {f.wind_speed != null && (
-                    <div className="flex items-center justify-center gap-1 text-[11px] text-graphite-500 dark:text-gray-400">
-                      <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
-                        <path d="M1.5 3.5h5.5a1.5 1.5 0 000-3M1.5 6.5h4a1.2 1.2 0 010 2.4" className="stroke-cyan-500 dark:stroke-cyan-400" strokeWidth="1" strokeLinecap="round" fill="none" />
-                      </svg>
-                      {f.wind_speed.toFixed(1)} m/s
-                    </div>
-                  )}
-                  {(f.et0_calculated ?? f.et0_source) != null && (
-                    <div className="text-[11px] font-semibold text-brand-600 dark:text-brand-400">
-                      ET₀ {((f.et0_calculated ?? f.et0_source) as number).toFixed(1)}
-                    </div>
-                  )}
+                <div className={`mt-3 rounded-lg py-2 text-center text-[12px] font-bold ${chip.cls}`}>
+                  {chip.label}
                 </div>
               </div>
             );
           })}
         </div>
-      )}
-    </>
+      </div>
+
+      {/* Demanda atmosférica + Alertas climáticos */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+        <Card className="p-0">
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Demanda atmosférica e chuva prevista</p>
+            <div className="flex items-center gap-4 text-[11px] font-medium">
+              <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400" />Chuva (mm)</span>
+              <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-0.5 w-3.5 rounded bg-brand-600" />ETo (mm)</span>
+            </div>
+          </div>
+          <div className="p-5">
+            <DemandaChart days={dailyForecasts} dayNames={dayNames} />
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <p className="mb-3 text-[15px] font-bold text-graphite-900 dark:text-white">Alertas climáticos</p>
+          {alertas.length === 0 ? (
+            <p className="py-6 text-center text-[12px] text-graphite-400 dark:text-gray-500">Nenhum alerta relevante nos próximos dias.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {alertas.map((a, i) => (
+                <div key={i} className="flex gap-3 rounded-xl border border-gray-100 p-3 dark:border-white/[0.06]">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${a.tone === "blue" ? "bg-blue-50 text-blue-500 dark:bg-blue-900/20 dark:text-blue-400" : "bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400"}`}>
+                    {a.icon}
+                  </div>
+                  <div>
+                    <p className="text-[12.5px] font-bold text-graphite-800 dark:text-white">{a.title}</p>
+                    <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">{a.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+      </div>
+    </div>
   );
 }
 
@@ -1255,28 +1479,24 @@ function VirtualStationTab() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-800">
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-400 via-amber-400 to-red-500" />
-                <div className="mb-2 flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <rect x="5.5" y="1" width="3" height="9" rx="1.5" className="fill-red-400" />
-                    <circle cx="7" cy="11.5" r="2" className="fill-red-500" />
-                  </svg>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-graphite-400 dark:text-gray-500">Temperatura</span>
-                </div>
-                <p className="text-[22px] font-extrabold leading-none tracking-tight text-graphite-900 dark:text-white">
-                  {fmt(r.temp_mean, 1)}<span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">°C</span>
-                </p>
-                <div className="relative mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
-                  <div
-                    className="absolute inset-y-0 rounded-full bg-gradient-to-r from-blue-400 via-amber-300 to-red-400"
-                    style={{
-                      left: `${Math.max(((r.temp_min ?? 0) / 50) * 100, 0)}%`,
-                      width: `${Math.min((((r.temp_max ?? 40) - (r.temp_min ?? 0)) / 50) * 100, 100)}%`,
-                    }}
-                  />
-                </div>
-                <div className="mt-1.5 flex justify-between text-[10px]">
-                  <span className="font-semibold text-blue-500 dark:text-blue-400">{fmt(r.temp_min, 1)}° min</span>
-                  <span className="font-semibold text-red-500 dark:text-red-400">{fmt(r.temp_max, 1)}° máx</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <rect x="5.5" y="1" width="3" height="9" rx="1.5" className="fill-red-400" />
+                        <circle cx="7" cy="11.5" r="2" className="fill-red-500" />
+                      </svg>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-graphite-400 dark:text-gray-500">Temperatura</span>
+                    </div>
+                    <p className="text-[22px] font-extrabold leading-none tracking-tight text-graphite-900 dark:text-white">
+                      {fmt(r.temp_mean, 1)}<span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">°C</span>
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-2.5">
+                      <span className="text-[11px] font-bold text-blue-500 dark:text-blue-400">{fmt(r.temp_min, 1)}° mín</span>
+                      <span className="text-[11px] font-bold text-red-500 dark:text-red-400">{fmt(r.temp_max, 1)}° máx</span>
+                    </div>
+                  </div>
+                  <Thermometer min={r.temp_min} max={r.temp_max} scaleMin={0} scaleMax={45} />
                 </div>
               </div>
 

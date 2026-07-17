@@ -517,83 +517,156 @@ export default function DecisaoPage() {
     );
   }
 
+  // ── Dados derivados para o resumo e a tabela ──────────────────────────
+  const ranked = [...states].sort((a, b) => (b.current?.depletion ?? -1) - (a.current?.depletion ?? -1));
+  const needing = states.filter((s) => s.current?.shouldIrrigate);
+  const laminaMedia = needing.length > 0
+    ? needing.reduce((a, s) => a + (s.current?.recommendedGrossDepth ?? 0), 0) / needing.length
+    : 0;
+  const areaRec = needing.reduce((a, s) => a + s.area, 0);
+  const culturasPrio = Array.from(new Set(needing.map((s) => s.cultureName))).slice(0, 3).join(" · ") || "—";
+  const recomendacaoHoje = needing.length === 0
+    ? "Sem necessidade"
+    : needing.length >= Math.ceil(states.length / 2)
+      ? "Irrigação prioritária"
+      : "Irrigação moderada";
+
+  const fmtTempo = (h: number | undefined) => {
+    if (!h || h <= 0) return "—";
+    const H = Math.floor(h);
+    const M = Math.round((h - H) * 60);
+    return H > 0 ? `${H}h ${M.toString().padStart(2, "0")}min` : `${M}min`;
+  };
+  const prioridade = (s: PivotHydricState): { label: string; cls: string } => {
+    if (s.current?.shouldIrrigate) return { label: "Alta", cls: "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400" };
+    if (s.current?.status === "amarelo") return { label: "Média", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400" };
+    if (s.current?.status === "verde") return { label: "Baixa", cls: "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400" };
+    return { label: "—", cls: "bg-gray-100 text-graphite-400 dark:bg-white/[0.06] dark:text-gray-500" };
+  };
+
+  const summary = [
+    { label: "Recomendação para hoje", value: recomendacaoHoje, note: `${needing.length} de ${states.length} pivôs`, accent: needing.length > 0 ? "text-brand-600 dark:text-brand-400" : "text-graphite-800 dark:text-white" },
+    { label: "Lâmina recomendada", value: `${laminaMedia.toFixed(1)} mm`, note: "média ponderada" },
+    { label: "Área recomendada", value: `${areaRec.toFixed(1)} ha`, note: "a irrigar hoje" },
+    { label: "Prioridade", value: culturasPrio, note: "culturas em déficit" },
+    { label: "Melhor janela", value: "05:00 – 10:00", note: "menor demanda e vento" },
+  ];
+
   return (
     <div className="space-y-6">
       <PageHeader
         titulo="Decisão de Irrigação"
-        descricao={
-          activeFarm
-            ? `${activeFarm.name} · ${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}`
-            : "Painel de decisão"
+        descricao="Recomendações para hoje e próximos dias"
+        acao={
+          <button
+            type="button"
+            onClick={() => refresh()}
+            className="inline-flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 py-2 text-[13px] font-semibold text-graphite-700 shadow-soft transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-200 dark:hover:bg-white/[0.08]"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M20 9A8 8 0 006 5.3M4 15a8 8 0 0014 3.7" /></svg>
+            Atualizar recomendações
+          </button>
         }
       />
 
-      <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
-        {/* Left: pivot selector */}
-        <PivotSelector
-          states={states}
-          selectedId={selectedPivotId}
-          onSelect={(id) => {
-            setSelectedPivotId(id);
-            setMessage("");
-            setActiveTab("resumo");
-          }}
-        />
-
-        {/* Right: detail + decision */}
-        <div className="space-y-4">
-          {!selectedPivot ? (
-            <Card className="flex min-h-[300px] items-center justify-center p-10">
-              <div className="text-center">
-                <svg
-                  className="mx-auto mb-3 h-10 w-10 text-graphite-200 dark:text-graphite-600"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={1.4}
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M15 15l-2 5L9 9l11 4-5 2zm0 0l5 5M7.188 2.239l.777 2.897M5.136 7.965l-2.898-.777M13.95 4.05l-2.122 2.122m-5.657 5.656l-2.12 2.122"
-                  />
-                </svg>
-                <p className="text-[13px] font-medium text-graphite-400 dark:text-gray-500">
-                  Selecione um pivô à esquerda
-                </p>
-              </div>
-            </Card>
-          ) : !selectedPivot.current ? (
-            <Card className="p-5">
-              <p className="text-sm font-semibold text-graphite-800 dark:text-white">
-                {selectedPivot.pivotName}
-              </p>
-              <p className="mt-2 text-[12px] text-graphite-400 dark:text-gray-500">
-                Sem dados de balanço hídrico. Verifique o vínculo de cultura, solo e dados climáticos.
-              </p>
-            </Card>
-          ) : (
-            <>
-              {/* Tabs + content */}
-              <Card className="p-5">
-                <Tabs tabs={DETAIL_TABS} activeTab={activeTab} onChange={setActiveTab} />
-                <div className="mt-4">
-                  {activeTab === "resumo" && <SummaryTab pivot={selectedPivot} />}
-                  {activeTab === "historico" && <HistoryTab pivot={selectedPivot} />}
-                </div>
-              </Card>
-
-              {/* Decision */}
-              <DecisionPanel
-                pivot={selectedPivot}
-                onApply={handleApplyIrrigation}
-                applying={applying}
-                message={message}
-              />
-            </>
-          )}
+      {/* Resumo da recomendação */}
+      <Card className="p-0">
+        <div className="grid grid-cols-2 divide-x divide-gray-100 md:grid-cols-3 lg:grid-cols-5 dark:divide-white/[0.06]">
+          {summary.map((s, i) => (
+            <div key={i} className="px-5 py-4">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{s.label}</p>
+              <p className={`mt-1.5 truncate text-[17px] font-extrabold tracking-tight ${s.accent ?? "text-graphite-900 dark:text-white"}`}>{s.value}</p>
+              <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">{s.note}</p>
+            </div>
+          ))}
         </div>
-      </div>
+      </Card>
+
+      {/* Tabela de recomendações por pivô */}
+      <Card className="p-0">
+        <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Recomendações por pivô</p>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[820px] text-sm">
+            <thead>
+              <tr className="border-b border-gray-100 text-left text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:border-white/[0.06] dark:text-gray-500">
+                <th className="px-6 py-3">Pivô</th>
+                <th className="px-3 py-3">Cultura</th>
+                <th className="px-3 py-3 text-right">Déficit</th>
+                <th className="px-3 py-3 text-right">Lâmina rec.</th>
+                <th className="px-3 py-3 text-right">Tempo</th>
+                <th className="px-3 py-3 text-center">Prioridade</th>
+                <th className="px-6 py-3 text-right">Ação</th>
+              </tr>
+            </thead>
+            <tbody>
+              {ranked.map((s) => {
+                const day = s.current;
+                const prio = prioridade(s);
+                const sel = s.pivotId === selectedPivotId;
+                return (
+                  <tr
+                    key={s.pivotId}
+                    className={`cursor-pointer border-b border-gray-50 transition-colors last:border-b-0 dark:border-white/[0.04] ${sel ? "bg-brand-50/50 dark:bg-brand-900/10" : "hover:bg-gray-50/70 dark:hover:bg-white/[0.03]"}`}
+                    onClick={() => { setSelectedPivotId(s.pivotId); setMessage(""); setActiveTab("resumo"); }}
+                  >
+                    <td className="px-6 py-3.5">
+                      <div className="flex items-center gap-2.5">
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: HYDRIC_STATUS_CONFIG[day?.status ?? "cinza"].color }} />
+                        <span className="font-semibold text-graphite-800 dark:text-white">{s.pivotName}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-3.5 text-graphite-500 dark:text-gray-400">{s.cultureName}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-graphite-700 dark:text-gray-200">{day ? `${day.deficit.toFixed(1)} mm` : "—"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums font-semibold text-graphite-800 dark:text-white">{day && day.shouldIrrigate ? `${day.recommendedGrossDepth.toFixed(1)} mm` : "0,0 mm"}</td>
+                    <td className="px-3 py-3.5 text-right tabular-nums text-graphite-500 dark:text-gray-400">{fmtTempo(day?.shouldIrrigate ? day.estimatedIrrigationTime : 0)}</td>
+                    <td className="px-3 py-3.5 text-center">
+                      <span className={`inline-flex rounded-lg px-2.5 py-1 text-[11px] font-bold ${prio.cls}`}>{prio.label}</span>
+                    </td>
+                    <td className="px-6 py-3.5 text-right">
+                      {day?.shouldIrrigate ? (
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setSelectedPivotId(s.pivotId); setActiveTab("resumo"); setMessage(""); }}
+                          className="rounded-lg bg-brand-600 px-3.5 py-1.5 text-[12px] font-semibold text-white shadow-soft transition-colors hover:bg-brand-700"
+                        >
+                          Recomendar
+                        </button>
+                      ) : day?.status === "amarelo" ? (
+                        <span className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">Monitorar</span>
+                      ) : day?.status === "verde" ? (
+                        <span className="text-[12px] font-medium text-green-600 dark:text-green-400">Adequado</span>
+                      ) : (
+                        <span className="text-[12px] text-graphite-400 dark:text-gray-500">Sem dados</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+
+      {/* Detalhe do pivô selecionado (abre ao clicar na linha) */}
+      {selectedPivot && selectedPivot.current && (
+        <div className="grid gap-4 lg:grid-cols-[1fr_400px]">
+          <Card className="p-5">
+            <Tabs tabs={DETAIL_TABS} activeTab={activeTab} onChange={setActiveTab} />
+            <div className="mt-4">
+              {activeTab === "resumo" && <SummaryTab pivot={selectedPivot} />}
+              {activeTab === "historico" && <HistoryTab pivot={selectedPivot} />}
+            </div>
+          </Card>
+          <DecisionPanel
+            pivot={selectedPivot}
+            onApply={handleApplyIrrigation}
+            applying={applying}
+            message={message}
+          />
+        </div>
+      )}
     </div>
   );
 }

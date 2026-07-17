@@ -19,11 +19,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-gray-50/70 dark:bg-graphite-950">
+    <div className="flex min-h-screen bg-[#f4f7f5] dark:bg-graphite-950">
       <Sidebar />
-      <div className="flex flex-1 flex-col lg:pl-64">
+      <div className="flex flex-1 flex-col lg:pl-[264px]">
         <Topbar />
-        <main className="flex-1 px-4 py-8 sm:px-6 lg:px-10">
+        <main className="flex-1 px-5 py-8 sm:px-8 lg:px-10 lg:py-10">
           <div className="mx-auto w-full max-w-[1600px] animate-in">{children}</div>
         </main>
       </div>

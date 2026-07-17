@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -19,12 +20,27 @@ import {
   calculateSummary,
   computePivotBalanceSeries,
   WATER_STATUS_CONFIG,
+  HYDRIC_STATUS_CONFIG,
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
-import { useRecharts } from "@/lib/hooks";
+import { useRecharts, useFarmHydricState } from "@/lib/hooks";
+import { radiusFromArea } from "@/utils/geo";
+import { cn } from "@/utils/cn";
+
+const PivotMap = dynamic(
+  () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex h-full min-h-[360px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800">
+        <p className="text-sm text-graphite-400">Carregando mapa...</p>
+      </div>
+    ),
+  },
+);
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -152,6 +168,24 @@ export default function BalancoHidricoPage() {
   const [lancDepth, setLancDepth] = useState("");
   const [lancSaving, setLancSaving] = useState(false);
   const [lancMsg, setLancMsg] = useState("");
+
+  // Estado hídrico atual de todos os pivôs — apenas para colorir o mapa
+  // seletor. Não altera o cálculo detalhado (que continua sob demanda).
+  const { states: hydricStates } = useFarmHydricState();
+  const mapPivots = useMemo(
+    () =>
+      hydricStates
+        .filter((s) => s.latitude && s.longitude)
+        .map((s) => ({
+          id: s.pivotId,
+          name: s.pivotName,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          radiusMeters: radiusFromArea(s.area),
+          color: HYDRIC_STATUS_CONFIG[s.current?.status ?? "cinza"].color,
+        })),
+    [hydricStates],
+  );
 
   // Load pivots
   useEffect(() => {
@@ -504,6 +538,35 @@ export default function BalancoHidricoPage() {
         titulo="Balanço Hídrico"
         descricao="Motor FAO-56 — Acompanhamento diário de déficit e armazenamento"
       />
+
+      {/* Mapa seletor de pivô (por status hídrico) */}
+      {mapPivots.length > 0 && (
+        <Card className="mb-4 overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
+            <div className="flex items-center gap-2">
+              <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
+              </svg>
+              <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Mapa Operacional</p>
+              <span className="text-[11px] text-graphite-400 dark:text-gray-500">· toque em um pivô para selecionar</span>
+            </div>
+            <div className="flex items-center gap-3.5">
+              {(["verde", "amarelo", "vermelho", "cinza"] as HydricStatus[]).map((s) => (
+                <div key={s} className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: HYDRIC_STATUS_CONFIG[s].color }} />
+                  <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{HYDRIC_STATUS_CONFIG[s].label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <PivotMap
+            pivots={mapPivots}
+            highlightId={selectedPivotId || undefined}
+            onSelect={setSelectedPivotId}
+            className="h-[420px] w-full"
+          />
+        </Card>
+      )}
 
       {/* Pivot / Date selectors */}
       <Card className="mb-4">
