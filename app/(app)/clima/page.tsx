@@ -842,6 +842,47 @@ function InfoRow({ icon, label, value, valueClass }: { icon: React.ReactNode; la
   );
 }
 
+// Gráfico "Demanda atmosférica e chuva prevista" (chuva em barras + ETo em linha).
+function DemandaChart({ days, dayNames }: { days: ForecastRow[]; dayNames: Record<number, string> }) {
+  const W = 720, H = 260, padL = 34, padR = 34, padT = 26, padB = 40;
+  const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  const n = days.length || 1;
+  const eto = (d: ForecastRow) => d.et0_calculated ?? d.et0_source ?? 0;
+  const chuvaMax = Math.max(...days.map((d) => d.precipitation ?? 0), 20);
+  const etoMax = Math.max(...days.map(eto), 6);
+  const band = (x1 - x0) / n;
+  const cx = (i: number) => x0 + band * i + band / 2;
+  const chuvaY = (v: number) => y1 - (v / chuvaMax) * (y1 - y0);
+  const etoY = (v: number) => y1 - (v / etoMax) * (y1 - y0);
+  const barW = Math.min(band * 0.42, 28);
+  const pts = days.map((d, i) => `${cx(i)},${etoY(eto(d))}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
+      {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+        <line key={f} x1={x0} x2={x1} y1={y1 - f * (y1 - y0)} y2={y1 - f * (y1 - y0)} className="stroke-gray-100 dark:stroke-white/[0.06]" strokeWidth={1} />
+      ))}
+      {days.map((d, i) => {
+        const v = d.precipitation ?? 0;
+        return <rect key={i} x={cx(i) - barW / 2} y={chuvaY(v)} width={barW} height={Math.max(y1 - chuvaY(v), v > 0 ? 2 : 0)} rx={3} className="fill-blue-400/80 dark:fill-blue-500/70" />;
+      })}
+      {days.map((d, i) => (
+        <text key={i} x={cx(i)} y={chuvaY(d.precipitation ?? 0) - 5} textAnchor="middle" className="fill-blue-500 text-[10px] font-bold dark:fill-blue-400">{fmt1(d.precipitation)}</text>
+      ))}
+      <polyline points={pts} fill="none" className="stroke-brand-600 dark:stroke-brand-400" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" />
+      {days.map((d, i) => (
+        <g key={i}>
+          <circle cx={cx(i)} cy={etoY(eto(d))} r={3.5} className="fill-brand-600 dark:fill-brand-400" />
+          <text x={cx(i)} y={etoY(eto(d)) - 9} textAnchor="middle" className="fill-brand-700 text-[10px] font-bold dark:fill-brand-300">{fmt1(eto(d))}</text>
+        </g>
+      ))}
+      {days.map((d, i) => {
+        const date = new Date(d.target_date + "T12:00:00");
+        return <text key={i} x={cx(i)} y={H - 14} textAnchor="middle" className="fill-graphite-400 text-[10px] dark:fill-gray-500">{dayNames[date.getDay()]}</text>;
+      })}
+    </svg>
+  );
+}
+
 function ForecastTab() {
   const { activeFarmId } = useAuth();
   const supabase = createClient();
@@ -893,6 +934,22 @@ function ForecastTab() {
 
   const hoje = dailyForecasts[0];
 
+  const totEto = dailyForecasts.reduce((a, d) => a + (d.et0_calculated ?? d.et0_source ?? 0), 0);
+  const totChuva = dailyForecasts.reduce((a, d) => a + (d.precipitation ?? 0), 0);
+  const saldo7 = totChuva - totEto;
+  const impacto = saldo7 < -5
+    ? "Chuva com baixa probabilidade de compensar a demanda hídrica. Manter irrigação programada e reavaliar no fim da tarde."
+    : saldo7 < 0
+      ? "Chuva prevista supre parte da demanda. Ajustar a lâmina e monitorar a evolução."
+      : "Chuva prevista tende a suprir a demanda. Reavaliar a necessidade de irrigação nos próximos dias.";
+  const maxVento = Math.max(0, ...dailyForecasts.map((d) => d.wind_speed ?? 0));
+  const maxProb = Math.max(0, ...dailyForecasts.map((d) => d.precipitation_probability ?? 0));
+  const maxEto = Math.max(0, ...dailyForecasts.map((d) => d.et0_calculated ?? d.et0_source ?? 0));
+  const alertas: { icon: React.ReactNode; tone: string; title: string; desc: string }[] = [];
+  if (maxVento >= 18) alertas.push({ icon: IcWind, tone: "amber", title: "Vento forte previsto", desc: `Rajadas de até ${fmt0(maxVento)} km/h em algum dia da semana.` });
+  if (maxProb >= 70) alertas.push({ icon: IcRain, tone: "blue", title: "Alta chance de chuva", desc: `Probabilidade de ${fmt0(maxProb)}% com acúmulos significativos.` });
+  if (maxEto >= 4) alertas.push({ icon: IcEto, tone: "amber", title: "Alta demanda hídrica", desc: "ETo acima de 4 mm/dia. Atenção ao manejo." });
+
   if (loading) {
     return (
       <div className="flex items-center justify-center gap-3 py-16">
@@ -913,35 +970,47 @@ function ForecastTab() {
 
   return (
     <div className="space-y-5">
-      {/* Próximas 24 horas */}
-      {hoje && (
-        <Card className="p-0">
-          <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Próximas 24 horas</p>
-          </div>
-          <div className="grid grid-cols-2 gap-y-5 p-6 sm:grid-cols-3 lg:grid-cols-5">
-            <div className="flex items-center gap-3">
-              <DayGlyph precip={hoje.precipitation} prob={hoje.precipitation_probability} size={46} />
-              <div>
-                <p className="text-[22px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{fmt1(hoje.temp_max)}<span className="text-sm">°</span></p>
-                <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">máx · mín {fmt1(hoje.temp_min)}°</p>
-              </div>
+      {/* Próximas 24 horas + Impacto no manejo */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+        {hoje && (
+          <Card className="p-0">
+            <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+              <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Próximas 24 horas</p>
             </div>
-            {[
-              { label: "Umidade", value: `${fmt0(hoje.humidity)}%`, note: "relativa" },
-              { label: "Vento", value: `${fmt1(hoje.wind_speed)} km/h`, note: "médio" },
-              { label: "Chuva prevista", value: `${fmt1(hoje.precipitation)} mm`, note: `${fmt0(hoje.precipitation_probability)}% prob.` },
-              { label: "ETo", value: `${fmt1(hoje.et0_calculated ?? hoje.et0_source)} mm`, note: "demanda" },
-            ].map((m) => (
-              <div key={m.label}>
-                <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
-                <p className="mt-1 text-[18px] font-bold tabular-nums text-graphite-900 dark:text-white">{m.value}</p>
-                <p className="text-[10px] text-graphite-400 dark:text-gray-500">{m.note}</p>
+            <div className="grid grid-cols-2 gap-y-5 p-6 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="flex items-center gap-3">
+                <DayGlyph precip={hoje.precipitation} prob={hoje.precipitation_probability} size={46} />
+                <div>
+                  <p className="text-[22px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{fmt1(hoje.temp_max)}<span className="text-sm">°</span></p>
+                  <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">máx · mín {fmt1(hoje.temp_min)}°</p>
+                </div>
               </div>
-            ))}
+              {[
+                { label: "Umidade", value: `${fmt0(hoje.humidity)}%`, note: "relativa" },
+                { label: "Vento", value: `${fmt1(hoje.wind_speed)} km/h`, note: "médio" },
+                { label: "Chuva prevista", value: `${fmt1(hoje.precipitation)} mm`, note: `${fmt0(hoje.precipitation_probability)}% prob.` },
+                { label: "ETo", value: `${fmt1(hoje.et0_calculated ?? hoje.et0_source)} mm`, note: "demanda" },
+              ].map((m) => (
+                <div key={m.label}>
+                  <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
+                  <p className="mt-1 text-[18px] font-bold tabular-nums text-graphite-900 dark:text-white">{m.value}</p>
+                  <p className="text-[10px] text-graphite-400 dark:text-gray-500">{m.note}</p>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+
+        <Card className="p-6">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Impacto no manejo</p>
+          <div className="mt-4 flex gap-3.5">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400">
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" viewBox="0 0 24 24"><path d="M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 0 1-7 0C8.5 11.8 12 8 12 8z" /><path d="M12 6V3M9 5l3-2 3 2" /></svg>
+            </div>
+            <p className="text-[13px] leading-relaxed text-graphite-600 dark:text-gray-300">{impacto}</p>
           </div>
         </Card>
-      )}
+      </div>
 
       {/* Previsão 7 dias */}
       <div>
@@ -993,6 +1062,43 @@ function ForecastTab() {
             );
           })}
         </div>
+      </div>
+
+      {/* Demanda atmosférica + Alertas climáticos */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+        <Card className="p-0">
+          <div className="flex items-center justify-between border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Demanda atmosférica e chuva prevista</p>
+            <div className="flex items-center gap-4 text-[11px] font-medium">
+              <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400" />Chuva (mm)</span>
+              <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-0.5 w-3.5 rounded bg-brand-600" />ETo (mm)</span>
+            </div>
+          </div>
+          <div className="p-5">
+            <DemandaChart days={dailyForecasts} dayNames={dayNames} />
+          </div>
+        </Card>
+
+        <Card className="p-5">
+          <p className="mb-3 text-[15px] font-bold text-graphite-900 dark:text-white">Alertas climáticos</p>
+          {alertas.length === 0 ? (
+            <p className="py-6 text-center text-[12px] text-graphite-400 dark:text-gray-500">Nenhum alerta relevante nos próximos dias.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {alertas.map((a, i) => (
+                <div key={i} className="flex gap-3 rounded-xl border border-gray-100 p-3 dark:border-white/[0.06]">
+                  <div className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${a.tone === "blue" ? "bg-blue-50 text-blue-500 dark:bg-blue-900/20 dark:text-blue-400" : "bg-amber-50 text-amber-500 dark:bg-amber-900/20 dark:text-amber-400"}`}>
+                    {a.icon}
+                  </div>
+                  <div>
+                    <p className="text-[12.5px] font-bold text-graphite-800 dark:text-white">{a.title}</p>
+                    <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">{a.desc}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
       </div>
     </div>
   );
