@@ -4,6 +4,7 @@ import { useState, useMemo } from "react";
 import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, EmptyState } from "@/components/ui";
+import { ProgressRing } from "@/components/ui/instruments";
 import { useAuth } from "@/components/providers";
 import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
@@ -13,6 +14,7 @@ import {
   type HydricStatus,
   type PivotHydricState,
   type FarmHydricSummary,
+  type BalanceDay,
 } from "@/modules/water-balance/services";
 
 const PivotMap = dynamic(
@@ -33,38 +35,39 @@ function KpiCard({
   label,
   value,
   sub,
-  accent,
+  accent = "#1ea85b",
   icon,
+  ring,
 }: {
   label: string;
   value: string | number;
   sub?: string;
   accent?: string;
   icon: React.ReactNode;
+  ring: { value: number; max: number };
 }) {
   return (
     <Card className="interactive-surface relative overflow-hidden p-5 hover:shadow-elevated dark:hover:shadow-dark-elevated">
-      <div
-        className="absolute inset-x-0 top-0 h-1"
-        style={{ background: accent ?? "#1ea85b" }}
-      />
-      <div className="flex items-start justify-between">
-        <div>
+      <div className="absolute inset-x-0 top-0 h-1" style={{ background: accent }} />
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0">
           <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
             {label}
           </p>
-          <p className="mt-1.5 text-[28px] font-extrabold tabular-nums tracking-tight text-graphite-900 dark:text-white">
+          <p className="mt-1.5 text-[28px] font-extrabold leading-none tabular-nums tracking-tight text-graphite-900 dark:text-white">
             {value}
           </p>
           {sub && (
-            <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
+            <p className="mt-1.5 truncate text-[11px] text-graphite-400 dark:text-gray-500">
               {sub}
             </p>
           )}
         </div>
-        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-gray-100 text-graphite-400 dark:bg-white/[0.06] dark:text-gray-500">
-          {icon}
-        </div>
+        <ProgressRing value={ring.value} max={ring.max} color={accent} size={54} thickness={6}>
+          <span className="flex items-center justify-center" style={{ color: accent }}>
+            {icon}
+          </span>
+        </ProgressRing>
       </div>
     </Card>
   );
@@ -351,13 +354,84 @@ function PivotSideDetail({ pivot }: { pivot: PivotHydricState }) {
   );
 }
 
+// ── Greeting header + weather chips ─────────────────────────────────────
+
+function Chip({ label, value, icon, bg, color }: {
+  label: string;
+  value: string;
+  icon: React.ReactNode;
+  bg: string;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5 rounded-2xl border border-gray-100 bg-white px-3.5 py-2 shadow-card dark:border-white/[0.06] dark:bg-graphite-800 dark:shadow-dark-card">
+      <div className="flex h-8 w-8 items-center justify-center rounded-lg" style={{ background: bg, color }}>
+        {icon}
+      </div>
+      <div>
+        <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{label}</p>
+        <p className="text-[13px] font-bold leading-tight tabular-nums text-graphite-800 dark:text-white">{value}</p>
+      </div>
+    </div>
+  );
+}
+
+function GreetingHeader({ firstName, farmName, weather, totalPivots, irrigatedArea }: {
+  firstName: string | null;
+  farmName: string | null;
+  weather: BalanceDay | null;
+  totalPivots: number;
+  irrigatedArea: number;
+}) {
+  const h = new Date().getHours();
+  const greet = h < 12 ? "Bom dia" : h < 18 ? "Boa tarde" : "Boa noite";
+  const dateStr = new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" });
+
+  return (
+    <div className="mb-1 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+      <div className="min-w-0">
+        <h1 className="text-[22px] font-extrabold leading-tight tracking-[-0.02em] text-graphite-900 dark:text-white">
+          {greet}{firstName ? `, ${firstName}` : ""} <span aria-hidden>👋</span>
+        </h1>
+        <p className="mt-1 text-[13px] text-graphite-400 first-letter:uppercase dark:text-gray-500">
+          {farmName ? `${farmName} · ` : ""}{dateStr}
+        </p>
+      </div>
+      <div className="flex flex-wrap gap-2.5">
+        <Chip
+          label="ETo hoje" value={weather ? `${weather.et0.toFixed(1)} mm` : "—"}
+          bg="rgba(30,168,91,.12)" color="#1ea85b"
+          icon={<svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" viewBox="0 0 24 24"><path d="M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 0 1-7 0C8.5 11.8 12 8 12 8z" /><path d="M12 6V3M9 5l3-2 3 2" /></svg>}
+        />
+        <Chip
+          label="Chuva hoje" value={weather ? `${weather.precipitation.toFixed(1)} mm` : "—"}
+          bg="rgba(47,143,216,.12)" color="#2f8fd8"
+          icon={<svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" viewBox="0 0 24 24"><path d="M7 15a4 4 0 0 1 .5-8 5 5 0 0 1 9.5 1.5A3.5 3.5 0 0 1 17 15" /><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" /></svg>}
+        />
+        <Chip
+          label="Pivôs ativos" value={`${totalPivots}`}
+          bg="rgba(30,168,91,.12)" color="#1ea85b"
+          icon={<svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m0-9a9 9 0 100 .001" /></svg>}
+        />
+        <Chip
+          label="Área irrigada" value={`${irrigatedArea.toFixed(0)} ha`}
+          bg="rgba(124,92,255,.12)" color="#7c5cff"
+          icon={<svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2m0 0L9 4" /></svg>}
+        />
+      </div>
+    </div>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────
 
 export default function VisaoGeralPage() {
-  const { farms, activeFarmId } = useAuth();
+  const { farms, activeFarmId, profile } = useAuth();
   const activeFarm = farms.find((f) => f.id === activeFarmId);
   const { states, summary, loading } = useFarmHydricState();
   const [selectedPivotId, setSelectedPivotId] = useState<string | null>(null);
+
+  const latestWeather = states.find((s) => s.current)?.current ?? null;
 
   const mapPivots = useMemo(
     () =>
@@ -416,13 +490,12 @@ export default function VisaoGeralPage() {
 
   return (
     <div className="space-y-6">
-      <PageHeader
-        titulo="Visão Geral"
-        descricao={
-          activeFarm
-            ? `${activeFarm.name} · ${new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}`
-            : "Centro operacional"
-        }
+      <GreetingHeader
+        firstName={profile?.name?.split(" ")[0] ?? null}
+        farmName={activeFarm?.name ?? null}
+        weather={latestWeather}
+        totalPivots={summary.totalPivots}
+        irrigatedArea={summary.totalIrrigatedArea}
       />
 
       {/* ── KPIs ─────────────────────────────────────────────────────── */}
@@ -430,10 +503,11 @@ export default function VisaoGeralPage() {
         <KpiCard
           label="Pivôs"
           value={summary.totalPivots}
-          sub={`${summary.totalIrrigatedArea.toFixed(0)} ha irrigados`}
+          sub={`${summary.adequate} adequados · ${summary.totalIrrigatedArea.toFixed(0)} ha`}
           accent="#1ea85b"
+          ring={{ value: summary.adequate, max: summary.totalPivots }}
           icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m0-9a9 9 0 100 .001" />
             </svg>
           }
@@ -443,8 +517,9 @@ export default function VisaoGeralPage() {
           value={summary.needIrrigationToday}
           sub={`${summary.areaInDeficit.toFixed(0)} ha em déficit`}
           accent="#ef4444"
+          ring={{ value: summary.needIrrigationToday, max: summary.totalPivots }}
           icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01" />
             </svg>
           }
@@ -454,8 +529,9 @@ export default function VisaoGeralPage() {
           value={`${(summary.totalRecommendedVolume / 1000).toFixed(0)}`}
           sub="mil m³ recomendados"
           accent="#3b82f6"
+          ring={{ value: summary.areaInDeficit, max: summary.totalIrrigatedArea }}
           icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l5 7a5 5 0 11-10 0l5-7z" />
             </svg>
           }
@@ -465,8 +541,9 @@ export default function VisaoGeralPage() {
           value={`${summary.avgDeficit.toFixed(1)}`}
           sub="mm na fazenda"
           accent="#f59e0b"
+          ring={{ value: summary.avgDeficit, max: 40 }}
           icon={
-            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.6} viewBox="0 0 24 24">
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
             </svg>
           }
@@ -477,33 +554,29 @@ export default function VisaoGeralPage() {
       <div className="grid gap-6 lg:grid-cols-3">
         <div className="lg:col-span-2">
           <Card className="overflow-hidden p-0">
-            <div className="border-b border-gray-100 px-5 py-3 dark:border-white/[0.06]">
-              <div className="flex items-center justify-between">
-                <p className="text-[13px] font-semibold text-graphite-800 dark:text-white">
-                  Mapa de Pivôs
-                </p>
-                <div className="flex items-center gap-3">
-                  {(["verde", "amarelo", "vermelho", "cinza"] as HydricStatus[]).map(
-                    (s) => (
-                      <div key={s} className="flex items-center gap-1">
-                        <span
-                          className="h-2 w-2 rounded-full"
-                          style={{ background: HYDRIC_STATUS_CONFIG[s].color }}
-                        />
-                        <span className="text-[10px] text-graphite-400 dark:text-gray-500">
-                          {HYDRIC_STATUS_CONFIG[s].label}
-                        </span>
-                      </div>
-                    ),
-                  )}
-                </div>
+            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
+              <div className="flex items-center gap-2">
+                <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
+                </svg>
+                <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Mapa Operacional</p>
+              </div>
+              <div className="flex items-center gap-3.5">
+                {(["verde", "amarelo", "vermelho", "cinza"] as HydricStatus[]).map((s) => (
+                  <div key={s} className="flex items-center gap-1.5">
+                    <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: HYDRIC_STATUS_CONFIG[s].color }} />
+                    <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">
+                      {HYDRIC_STATUS_CONFIG[s].label}
+                    </span>
+                  </div>
+                ))}
               </div>
             </div>
             <PivotMap
               pivots={mapPivots}
               highlightId={selectedPivotId ?? undefined}
               onSelect={setSelectedPivotId}
-              className="h-[440px] w-full"
+              className="h-[540px] w-full"
             />
           </Card>
         </div>
