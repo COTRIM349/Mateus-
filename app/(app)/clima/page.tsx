@@ -772,6 +772,56 @@ interface ForecastRow {
   et0_calculated: number | null;
 }
 
+// Ícone de clima do dia (a partir de chuva / probabilidade) — apresentação.
+function DayGlyph({ precip, prob, size = 40 }: { precip: number | null; prob: number | null; size?: number }) {
+  const p = precip ?? 0;
+  const pr = prob ?? 0;
+  if (p >= 5 || pr >= 60) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <path d="M10 21a6.5 6.5 0 01-.5-13 8.5 8.5 0 0116 2.5A5 5 0 0125 21z" className="fill-slate-300 dark:fill-slate-500" />
+        <path d="M13 24l-1.5 4M18 24l-1.5 4M23 24l-1.5 4" className="stroke-blue-500" strokeWidth="1.8" strokeLinecap="round" />
+      </svg>
+    );
+  }
+  if (p > 0 || pr >= 30) {
+    return (
+      <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+        <circle cx="14" cy="12" r="5.5" className="fill-amber-400" />
+        <path d="M8.8 8l-1.3-1.3M14 4.5V2.6M19.2 8l1.3-1.3" className="stroke-amber-400" strokeWidth="1.6" strokeLinecap="round" />
+        <path d="M12 26a6 6 0 01-.5-12 7.5 7.5 0 0114 2A4.5 4.5 0 0126 26z" className="fill-slate-300 dark:fill-slate-500" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={size} height={size} viewBox="0 0 36 36" fill="none">
+      <circle cx="18" cy="18" r="7.5" className="fill-amber-400" />
+      <path d="M18 4.5v3M18 28.5v3M4.5 18h3M28.5 18h3M9 9l2.1 2.1M24.9 24.9l2.1 2.1M9 27l2.1-2.1M24.9 11.1L27 9" className="stroke-amber-400" strokeWidth="2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+// Chip de ação orientativo do dia — heurística visual sobre chuva vs ETo.
+// Não altera o motor do balanço; é apenas um indicador de leitura rápida.
+function classifyDay(saldo: number, precip: number): { label: string; cls: string } {
+  if (precip >= 8) return { label: "Suspender", cls: "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400" };
+  if (saldo <= -3) return { label: "Irrigar", cls: "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400" };
+  if (saldo < 0) return { label: "Monitorar", cls: "bg-amber-50/70 text-amber-600 dark:bg-amber-900/10 dark:text-amber-400/90" };
+  return { label: "Reavaliar", cls: "bg-blue-50 text-blue-600 dark:bg-blue-900/20 dark:text-blue-400" };
+}
+
+function InfoRow({ icon, label, value, valueClass }: { icon: React.ReactNode; label: string; value: string; valueClass?: string }) {
+  return (
+    <div className="flex items-center justify-between text-[11.5px]">
+      <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400">
+        <span className="text-graphite-300 dark:text-gray-600">{icon}</span>
+        {label}
+      </span>
+      <span className={`font-semibold tabular-nums ${valueClass ?? "text-graphite-700 dark:text-gray-200"}`}>{value}</span>
+    </div>
+  );
+}
+
 function ForecastTab() {
   const { activeFarmId } = useAuth();
   const supabase = createClient();
@@ -821,72 +871,110 @@ function ForecastTab() {
 
   const dayNames: Record<number, string> = { 0: "Dom", 1: "Seg", 2: "Ter", 3: "Qua", 4: "Qui", 5: "Sex", 6: "Sáb" };
 
+  const hoje = dailyForecasts[0];
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center gap-3 py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+        <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      </div>
+    );
+  }
+  if (dailyForecasts.length === 0) {
+    return (
+      <Card>
+        <p className="py-10 text-center text-sm text-graphite-400 dark:text-gray-500">
+          Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
+        </p>
+      </Card>
+    );
+  }
+
   return (
-    <>
-      <p className="mb-4 text-xs text-graphite-400 dark:text-gray-500">
-        Previsão meteorológica · Dados separados das observações
-      </p>
-      {loading ? (
-        <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-      ) : dailyForecasts.length === 0 ? (
-        <Card>
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-            Nenhuma previsão disponível. Cadastre uma estação com fonte Open-Meteo e execute a ingestão.
-          </p>
+    <div className="space-y-5">
+      {/* Próximas 24 horas */}
+      {hoje && (
+        <Card className="p-0">
+          <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Próximas 24 horas</p>
+          </div>
+          <div className="grid grid-cols-2 gap-y-5 p-6 sm:grid-cols-3 lg:grid-cols-5">
+            <div className="flex items-center gap-3">
+              <DayGlyph precip={hoje.precipitation} prob={hoje.precipitation_probability} size={46} />
+              <div>
+                <p className="text-[22px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{fmt1(hoje.temp_max)}<span className="text-sm">°</span></p>
+                <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">máx · mín {fmt1(hoje.temp_min)}°</p>
+              </div>
+            </div>
+            {[
+              { label: "Umidade", value: `${fmt0(hoje.humidity)}%`, note: "relativa" },
+              { label: "Vento", value: `${fmt1(hoje.wind_speed)} km/h`, note: "médio" },
+              { label: "Chuva prevista", value: `${fmt1(hoje.precipitation)} mm`, note: `${fmt0(hoje.precipitation_probability)}% prob.` },
+              { label: "ETo", value: `${fmt1(hoje.et0_calculated ?? hoje.et0_source)} mm`, note: "demanda" },
+            ].map((m) => (
+              <div key={m.label}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
+                <p className="mt-1 text-[18px] font-bold tabular-nums text-graphite-900 dark:text-white">{m.value}</p>
+                <p className="text-[10px] text-graphite-400 dark:text-gray-500">{m.note}</p>
+              </div>
+            ))}
+          </div>
         </Card>
-      ) : (
-        <div className="grid gap-3 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-7">
+      )}
+
+      {/* Previsão 7 dias */}
+      <div>
+        <p className="mb-3 text-[15px] font-bold text-graphite-900 dark:text-white">Previsão para os próximos 7 dias</p>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
           {dailyForecasts.map((f) => {
             const date = new Date(f.target_date + "T12:00:00");
             const isToday = f.target_date === new Date().toISOString().slice(0, 10);
+            const eto = f.et0_calculated ?? f.et0_source ?? 0;
+            const precip = f.precipitation ?? 0;
+            const saldo = precip - eto;
+            const chip = classifyDay(saldo, precip);
             return (
               <div
                 key={f.id}
-                className={`relative overflow-hidden rounded-2xl border p-4 text-center transition-shadow hover:shadow-card ${
+                className={`flex flex-col rounded-2xl border p-4 transition-shadow hover:shadow-card ${
                   isToday
-                    ? "border-brand-200 bg-brand-50/40 dark:border-brand-700/30 dark:bg-brand-900/10"
+                    ? "border-brand-200 bg-brand-50/30 dark:border-brand-700/30 dark:bg-brand-900/10"
                     : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"
                 } dark:hover:shadow-none`}
               >
-                {isToday && <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-brand-500 via-brand-400/60 to-transparent" />}
-                <p className="text-[13px] font-extrabold uppercase tracking-wider text-graphite-800 dark:text-white">
-                  {dayNames[date.getDay()]}
-                </p>
-                <p className="mb-1.5 text-[11px] font-bold text-brand-600 dark:text-brand-400">
-                  {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
-                </p>
-
-                <Thermometer min={f.temp_min} max={f.temp_max} />
-                <div className="mt-1 flex items-center justify-center gap-2.5">
-                  <span className="text-[12px] font-extrabold text-blue-500 dark:text-blue-400">{fmt1(f.temp_min)}°</span>
-                  <span className="text-[12px] font-extrabold text-red-500 dark:text-red-400">{fmt1(f.temp_max)}°</span>
+                <div className="text-center">
+                  <p className={`text-[14px] font-extrabold ${isToday ? "text-brand-600 dark:text-brand-400" : "text-graphite-800 dark:text-white"}`}>
+                    {isToday ? "Hoje" : dayNames[date.getDay()]}
+                  </p>
+                  <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+                    {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+                  </p>
                 </div>
-
-                <div className="mt-2"><ArcGauge value={f.solar_radiation} max={400} /></div>
-                <div className="-mt-0.5 text-[12.5px] font-extrabold text-orange-600 dark:text-orange-400">
-                  {fmt1(f.solar_radiation)} <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">w/m²</span>
+                <div className="my-2.5 flex items-center justify-center gap-2">
+                  <DayGlyph precip={f.precipitation} prob={f.precipitation_probability} />
+                  <span className="text-[15px] font-extrabold tabular-nums">
+                    <span className="text-red-500 dark:text-red-400">{fmt1(f.temp_max)}°</span>
+                    <span className="mx-0.5 text-graphite-300 dark:text-gray-600">/</span>
+                    <span className="text-blue-500 dark:text-blue-400">{fmt1(f.temp_min)}°</span>
+                  </span>
                 </div>
-
-                <div className="mt-2.5 space-y-1.5">
-                  {f.humidity != null && (
-                    <FcMetric colorClass="text-blue-500 dark:text-blue-400" icon={IcDrop} value={fmt0(f.humidity)} unit="%" />
-                  )}
-                  {f.precipitation != null && (
-                    <FcMetric colorClass="text-blue-500 dark:text-blue-400" icon={IcRain} value={fmt1(f.precipitation)} unit="mm" />
-                  )}
-                  {(f.et0_calculated ?? f.et0_source) != null && (
-                    <FcMetric colorClass="text-brand-600 dark:text-brand-400" icon={IcEto} value={fmt1(f.et0_calculated ?? f.et0_source)} unit="mm" />
-                  )}
-                  {f.wind_speed != null && (
-                    <FcMetric colorClass="text-graphite-500 dark:text-gray-400" icon={IcWind} value={fmt1(f.wind_speed)} unit="m/s" />
-                  )}
+                <div className="mt-1 space-y-1.5 border-t border-gray-100 pt-2.5 dark:border-white/[0.06]">
+                  <InfoRow icon={IcRain} label="Chuva" value={`${fmt1(f.precipitation)} mm`} valueClass="text-blue-500 dark:text-blue-400" />
+                  <InfoRow icon={IcDrop} label="Prob." value={`${fmt0(f.precipitation_probability)}%`} />
+                  <InfoRow icon={IcEto} label="ETo" value={`${fmt1(eto)} mm`} valueClass="text-brand-600 dark:text-brand-400" />
+                  <InfoRow icon={IcWind} label="Vento" value={`${fmt1(f.wind_speed)} km/h`} />
+                  <InfoRow icon={IcDrop} label="Saldo" value={`${saldo >= 0 ? "+" : ""}${fmt1(saldo)} mm`} valueClass={saldo < 0 ? "text-red-500 dark:text-red-400" : "text-green-600 dark:text-green-400"} />
+                </div>
+                <div className={`mt-3 rounded-lg py-2 text-center text-[12px] font-bold ${chip.cls}`}>
+                  {chip.label}
                 </div>
               </div>
             );
           })}
         </div>
-      )}
-    </>
+      </div>
+    </div>
   );
 }
 
