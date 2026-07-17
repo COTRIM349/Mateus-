@@ -643,122 +643,187 @@ export default function BalancoHidricoPage() {
   );
 }
 
-// ── Gráfico de manejo: umidade do solo (% da CC) ────────────────────────────
-// Enquadra a umidade em % da capacidade de campo, dentro das faixas
-// Excesso / Ideal / Atenção delimitadas por CC (100%), Segurança (RAW, em
-// degraus conforme a profundidade radicular) e PM (0%). Barras de chuva e
-// irrigação num eixo secundário em mm; linhas opcionais de Kc e ETc.
+// ── Gráfico de manejo (multi-séries, estilo técnico) ─────────────────────────
+// Estrutura inspirada no gráfico de manejo do setor (faixa de KPIs + séries por
+// categoria + linhas/barras num quadro de umidade %CC × mm), com identidade
+// própria. Usa apenas os dados que o motor FAO-56 já calcula.
 
-export interface ManejoSeries {
-  umidade: boolean;
-  chuva: boolean;
-  irrig: boolean;
-  kc: boolean;
-  etc: boolean;
+const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
+
+type SKey = "umidade" | "cc" | "seg" | "pm" | "chuva" | "irrig" | "kc" | "eto" | "etc" | "deficit";
+interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar"; axis: "pct" | "mm"; }
+
+const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
+  { cat: "Solo", items: [
+    { k: "umidade", label: "Umidade", color: "#a15a1e", kind: "line", axis: "pct" },
+    { k: "cc", label: "CC", color: "#2563eb", kind: "line", axis: "pct" },
+    { k: "seg", label: "Umid. Segurança", color: "#dc2626", kind: "dash", axis: "pct" },
+    { k: "pm", label: "PM", color: "#334155", kind: "line", axis: "pct" },
+  ] },
+  { cat: "Irrigação", items: [
+    { k: "chuva", label: "Chuva", color: "#3b82f6", kind: "bar", axis: "mm" },
+    { k: "irrig", label: "Irrigação", color: "#06b6d4", kind: "bar", axis: "mm" },
+    { k: "deficit", label: "Déficit", color: "#ef4444", kind: "dash", axis: "mm" },
+  ] },
+  { cat: "Cultura", items: [
+    { k: "kc", label: "Kc (×100)", color: "#22c55e", kind: "dash", axis: "pct" },
+  ] },
+  { cat: "Clima", items: [
+    { k: "eto", label: "ETo", color: "#0ea5e9", kind: "line", axis: "mm" },
+    { k: "etc", label: "ETc", color: "#f59e0b", kind: "line", axis: "mm" },
+  ] },
+];
+const MANEJO_ALL: SeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
+const MANEJO_DEF = (k: SKey) => MANEJO_ALL.find((s) => s.k === k)!;
+
+function sVal(k: SKey, r: DailyBalanceRow): number {
+  switch (k) {
+    case "umidade": return r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0;
+    case "cc": return 100;
+    case "seg": return r.cad > 0 ? ((r.cad - r.afd) / r.cad) * 100 : 0;
+    case "pm": return 0;
+    case "kc": return r.kc * 100;
+    case "chuva": return r.precipitation;
+    case "irrig": return r.irrigationApplied;
+    case "eto": return r.et0;
+    case "etc": return r.etc;
+    case "deficit": return r.deficit;
+  }
+}
+const sFmt = (k: SKey, r: DailyBalanceRow): string =>
+  k === "kc" ? r.kc.toFixed(2)
+    : MANEJO_DEF(k).axis === "pct" ? `${sVal(k, r).toFixed(0)}%`
+      : `${sVal(k, r).toFixed(1)} mm`;
+
+/** Faixa de KPIs do período (topo). */
+function ManejoKpiStrip({ rows, summary }: { rows: DailyBalanceRow[]; summary: ReturnType<typeof calculateSummary> }) {
+  const chuvaEf = summary.totalEffPrecipitation;
+  const efPct = summary.totalPrecipitation > 0 ? (chuvaEf / summary.totalPrecipitation) * 100 : 0;
+  const etp = rows.reduce((a, r) => a + r.et0, 0);
+  const stress = summary.days > 0 ? (summary.daysInDeficit / summary.days) * 100 : 0;
+  const kpis = [
+    { label: "Dias manejados", value: `${summary.days}`, unit: "" },
+    { label: "Irrigação", value: summary.totalIrrigation.toFixed(0), unit: "mm" },
+    { label: "Chuva", value: summary.totalPrecipitation.toFixed(0), unit: "mm" },
+    { label: "Chuva efetiva", value: chuvaEf.toFixed(0), unit: "mm", extra: `${efPct.toFixed(0)}%` },
+    { label: "ETo", value: etp.toFixed(0), unit: "mm" },
+    { label: "ETc", value: summary.totalETc.toFixed(0), unit: "mm" },
+    { label: "Índice de estresse", value: stress.toFixed(1), unit: "%" },
+  ];
+  return (
+    <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 lg:grid-cols-7 lg:divide-y-0 dark:divide-white/[0.06]">
+      {kpis.map((m) => (
+        <div key={m.label} className="px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
+          <p className="mt-1 text-[19px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">
+            {m.value}{m.unit && <span className="ml-0.5 text-[11px] font-semibold text-graphite-400">{m.unit}</span>}
+            {m.extra && <span className="ml-1.5 text-[12px] font-bold text-brand-600 dark:text-brand-400">{m.extra}</span>}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
 }
 
-function ManejoChart({ rows, show }: { rows: DailyBalanceRow[]; show: ManejoSeries }) {
-  const W = 900, H = 340, padL = 46, padR = 56, padT = 20, padB = 46;
+function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean> }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 940, H = 350, padL = 40, padR = 52, padT = 20, padB = 42;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
   const n = rows.length || 1;
   const band = (x1 - x0) / n;
   const cx = (i: number) => x0 + band * i + band / 2;
 
-  // eixo esquerdo: % da CC (0..125) · eixo direito: mm (0..mmMax)
-  const yP = (p: number) => y1 - (Math.max(0, Math.min(p, 125)) / 125) * (y1 - y0);
-  const mmMax = Math.max(20, Math.ceil(Math.max(1, ...rows.map((r) => Math.max(r.precipitation, r.irrigationApplied))) / 10) * 10);
-  const yM = (v: number) => y1 - (Math.max(0, Math.min(v, mmMax)) / mmMax) * (y1 - y0);
+  const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
+  const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit])) / 10) * 10);
+  const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
+  const yFor = (s: SeriesDef, v: number) => (s.axis === "pct" ? yP(v) : yM(v));
 
-  const pct = (r: DailyBalanceRow) => (r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0);
-  const seg = (r: DailyBalanceRow) => (r.cad > 0 ? ((r.cad - r.afd) / r.cad) * 100 : 0);
-
-  const umidPts = rows.map((r, i) => `${cx(i)},${yP(pct(r))}`).join(" ");
-  const kcPts = rows.map((r, i) => `${cx(i)},${yP(r.kc * 100)}`).join(" ");
-  const etcPts = rows.map((r, i) => `${cx(i)},${yM(r.etc)}`).join(" ");
-
-  // linha de Segurança estendida às bordas (para preencher as faixas)
-  const segEdge: [number, number][] = rows.length
-    ? [[x0, seg(rows[0])], ...rows.map((r, i): [number, number] => [cx(i), seg(r)]), [x1, seg(rows[rows.length - 1])]]
-    : [];
-  const segLinePts = segEdge.map(([x, p]) => `${x},${yP(p)}`).join(" ");
-  const idealPath = `M ${x0},${yP(100)} L ${x1},${yP(100)} ${segEdge.slice().reverse().map(([x, p]) => `L ${x},${yP(p)}`).join(" ")} Z`;
-  const atencaoPath = `M ${segEdge.map(([x, p]) => `${x},${yP(p)}`).join(" L ")} L ${x1},${yP(0)} L ${x0},${yP(0)} Z`;
-
+  const bw = Math.min(4, band * 0.28);
+  const lineKeys: SKey[] = ["cc", "seg", "pm", "kc", "eto", "etc", "deficit", "umidade"]; // umidade por último (topo)
   const step = Math.max(1, Math.ceil(n / 9));
 
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * W;
+    setHover(clampN(Math.round((svgX - x0) / band - 0.5), 0, n - 1));
+  };
+  const activeVisible = MANEJO_ALL.filter((s) => visible[s.k]);
+
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
-      {/* faixas */}
-      <rect x={x0} y={yP(125)} width={x1 - x0} height={yP(100) - yP(125)} className="fill-sky-400/10" />
-      <path d={idealPath} className="fill-brand-500/[0.09]" />
-      <path d={atencaoPath} className="fill-amber-400/[0.10]" />
+    <div className="relative" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
+        {/* grade + eixos */}
+        {[0, 25, 50, 75, 100, 125].map((p) => (
+          <g key={p}>
+            <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-100 dark:stroke-white/[0.05]" strokeWidth={1} />
+            <text x={x0 - 6} y={yP(p) + 3} textAnchor="end" className="fill-graphite-300 text-[9px] dark:fill-gray-600">{p}</text>
+          </g>
+        ))}
+        <text x={x0 - 6} y={y0 - 7} textAnchor="end" className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">%CC</text>
+        {[0, mmMax / 2, mmMax].map((v) => (
+          <text key={v} x={x1 + 7} y={yM(v) + 3} className="fill-graphite-300 text-[9px] dark:fill-gray-600">{Math.round(v)}</text>
+        ))}
+        <text x={x1 + 7} y={y0 - 7} className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">mm</text>
 
-      {/* grade + eixo esquerdo (%CC) */}
-      {[0, 25, 50, 75, 100, 125].map((p) => (
-        <g key={p}>
-          <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-100 dark:stroke-white/[0.05]" strokeWidth={1} />
-          <text x={x0 - 7} y={yP(p) + 3} textAnchor="end" className="fill-graphite-300 text-[9px] dark:fill-gray-600">{p}</text>
-        </g>
-      ))}
-      <text x={x0 - 7} y={y0 - 7} textAnchor="end" className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">%CC</text>
-      {/* eixo direito (mm) */}
-      {[0, mmMax / 2, mmMax].map((v) => (
-        <text key={v} x={x1 + 8} y={yM(v) + 3} className="fill-sky-500/80 text-[9px] dark:fill-sky-400/70">{Math.round(v)}</text>
-      ))}
-      <text x={x1 + 8} y={y0 - 7} className="fill-sky-500/80 text-[9px] font-semibold dark:fill-sky-400/70">mm</text>
+        {/* barras chuva + irrigação */}
+        {rows.map((r, i) => (
+          <g key={i}>
+            {visible.chuva && r.precipitation > 0 && <rect x={cx(i) - bw - 0.6} y={yM(r.precipitation)} width={bw} height={y1 - yM(r.precipitation)} rx={1} fill={MANEJO_DEF("chuva").color} opacity={0.85} />}
+            {visible.irrig && r.irrigationApplied > 0 && <rect x={cx(i) + 0.6} y={yM(r.irrigationApplied)} width={bw} height={y1 - yM(r.irrigationApplied)} rx={1} fill={MANEJO_DEF("irrig").color} opacity={0.9} />}
+          </g>
+        ))}
 
-      {/* barras chuva + irrigação (eixo mm) */}
-      {rows.map((r, i) => (
-        <g key={i}>
-          {show.chuva && r.precipitation > 0 && <rect x={cx(i) - 4.5} y={yM(r.precipitation)} width={3.6} height={y1 - yM(r.precipitation)} rx={1} className="fill-sky-500/75" />}
-          {show.irrig && r.irrigationApplied > 0 && <rect x={cx(i) + 0.9} y={yM(r.irrigationApplied)} width={3.6} height={y1 - yM(r.irrigationApplied)} rx={1} className="fill-cyan-400/85" />}
-        </g>
-      ))}
+        {/* linhas */}
+        {lineKeys.filter((k) => visible[k]).map((k) => {
+          const s = MANEJO_DEF(k);
+          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r))}`).join(" ");
+          return (
+            <polyline key={k} points={pts} fill="none" stroke={s.color} strokeWidth={k === "umidade" ? 2.3 : 1.5}
+              strokeDasharray={s.kind === "dash" ? "5 3" : undefined} strokeLinejoin="round" strokeLinecap="round"
+              opacity={k === "umidade" ? 1 : 0.9} />
+          );
+        })}
 
-      {/* ETc (eixo mm) */}
-      {show.etc && <polyline points={etcPts} fill="none" className="stroke-amber-500/80" strokeWidth={1.4} strokeDasharray="1 3" strokeLinecap="round" />}
+        {/* eixo x + datas */}
+        <line x1={x0} x2={x1} y1={y1} y2={y1} className="stroke-gray-200 dark:stroke-white/[0.1]" strokeWidth={1} />
+        {rows.map((r, i) => (i % step === 0 || i === n - 1) && (
+          <text key={`d${i}`} x={cx(i)} y={H - 12} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{fmtDia(r.date)}</text>
+        ))}
 
-      {/* linhas de referência */}
-      <line x1={x0} x2={x1} y1={yP(100)} y2={yP(100)} className="stroke-brand-600" strokeWidth={1.4} />
-      <text x={x1 + 4} y={yP(100) - 3} className="fill-brand-600 text-[9px] font-bold dark:fill-brand-400">CC</text>
-      <polyline points={segLinePts} fill="none" className="stroke-amber-500" strokeWidth={1.4} strokeDasharray="5 3" />
-      <text x={x1 + 4} y={yP(seg(rows[rows.length - 1] ?? rows[0])) + 11} className="fill-amber-600 text-[9px] font-bold dark:fill-amber-400">Seg.</text>
-      <line x1={x0} x2={x1} y1={yP(0)} y2={yP(0)} className="stroke-rose-400" strokeWidth={1.4} />
-      <text x={x1 + 4} y={yP(0) + 3} className="fill-rose-500 text-[9px] font-bold dark:fill-rose-400">PM</text>
+        {/* crosshair */}
+        {hover != null && (
+          <g>
+            <line x1={cx(hover)} x2={cx(hover)} y1={y0} y2={y1} className="stroke-graphite-300 dark:stroke-white/20" strokeWidth={1} strokeDasharray="3 3" />
+            {activeVisible.map((s) => (
+              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover]))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
+            ))}
+          </g>
+        )}
+      </svg>
 
-      {/* Kc (mapeado ×100 no eixo %CC) */}
-      {show.kc && <polyline points={kcPts} fill="none" className="stroke-emerald-400" strokeWidth={1.6} strokeDasharray="4 2" strokeLinecap="round" strokeLinejoin="round" />}
-
-      {/* umidade (linha principal) */}
-      {show.umidade && (
-        <>
-          <polyline points={umidPts} fill="none" className="stroke-brand-700 dark:stroke-brand-300" strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />
-          {rows.length > 0 && <circle cx={cx(n - 1)} cy={yP(pct(rows[n - 1]))} r={3.2} className="fill-brand-700 dark:fill-brand-300" />}
-        </>
+      {/* tooltip */}
+      {hover != null && rows[hover] && (
+        <div
+          className="pointer-events-none absolute top-1 z-10 min-w-[150px] -translate-x-1/2 rounded-xl border border-gray-100 bg-white/95 p-2.5 shadow-elevated backdrop-blur dark:border-white/[0.1] dark:bg-graphite-800/95"
+          style={{ left: `${(cx(hover) / W) * 100}%` }}
+        >
+          <p className="mb-1.5 text-[11px] font-bold text-graphite-800 dark:text-white">{fmtDia(rows[hover].date)} <span className="font-normal text-graphite-400">· {rows[hover].phase}</span></p>
+          <div className="space-y-1">
+            {activeVisible.map((s) => (
+              <div key={s.k} className="flex items-center justify-between gap-4 text-[11px]">
+                <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />{s.label}</span>
+                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover])}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       )}
-
-      {/* marcadores de irrigação no eixo */}
-      {show.irrig && rows.map((r, i) => r.irrigationApplied > 0 && (
-        <circle key={`m${i}`} cx={cx(i)} cy={y1 + 6} r={1.7} className="fill-cyan-500/80" />
-      ))}
-
-      {/* datas */}
-      {rows.map((r, i) => (i % step === 0 || i === n - 1) && (
-        <text key={`d${i}`} x={cx(i)} y={H - 12} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{r.date.slice(8, 10)}/{r.date.slice(5, 7)}</text>
-      ))}
-    </svg>
+    </div>
   );
 }
 
 // ── Balance Tab ─────────────────────────────────────────────────────────
-
-const BAL_KPI_ICONS: Record<string, string> = {
-  arm: "M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zm-1 9c3 0 3 2 6 2s3-2 6-2 3 2 4 2",
-  def: "M12 9v4m0 4h.01M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z",
-  chuva: "M7 15a4 4 0 01.5-8 5 5 0 019.5 1.5A3.5 3.5 0 0117 15M8 19l-1 2M12 19l-1 2M16 19l-1 2",
-  eto: "M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 01-7 0C8.5 11.8 12 8 12 8zM12 6V3M9 5l3-2 3 2",
-  irrig: "M4 8c2 0 2-1.5 4-1.5S12 8 14 8s2-1.5 4-1.5S20 8 22 8M2 14c2 0 2-1.5 4-1.5S10 14 12 14s2-1.5 4-1.5S18 14 20 14",
-};
 
 function BalanceTab({
   rows,
@@ -769,8 +834,11 @@ function BalanceTab({
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
 }) {
-  const [series, setSeries] = useState<ManejoSeries>({ umidade: true, chuva: true, irrig: true, kc: false, etc: false });
-  const toggle = (k: keyof ManejoSeries) => setSeries((s) => ({ ...s, [k]: !s[k] }));
+  const [visible, setVisible] = useState<Record<SKey, boolean>>({
+    umidade: true, cc: true, seg: true, pm: false, chuva: true, irrig: true, kc: true, eto: false, etc: false, deficit: false,
+  });
+  const [activeCat, setActiveCat] = useState("Solo");
+  const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
 
   if (rows.length === 0 && !loading) {
     return (
@@ -791,14 +859,6 @@ function BalanceTab({
   const classificacao = arm >= raw ? { label: "Adequado", color: "#22c55e" } : arm >= raw * 0.5 ? { label: "Atenção", color: "#f59e0b" } : { label: "Crítico", color: "#ef4444" };
   const entradas = summary.totalEffPrecipitation + summary.totalIrrigation;
   const variacao = (last?.storedWater ?? 0) - (first?.storedWater ?? 0);
-
-  const kpis = rows.length > 0 ? [
-    { k: "arm", label: "Armazenamento atual", value: `${arm.toFixed(1)} mm`, note: `${armPct}% da CAD`, color: "#1ea85b" },
-    { k: "def", label: "Déficit atual", value: `${(last?.deficit ?? 0).toFixed(1)} mm`, note: "média ponderada", color: "#ef4444" },
-    { k: "chuva", label: "Chuva (período)", value: `${summary.totalEffPrecipitation.toFixed(1)} mm`, note: "efetiva", color: "#2f8fd8" },
-    { k: "eto", label: "ETc (período)", value: `${summary.totalETc.toFixed(1)} mm`, note: "demanda", color: "#f59e0b" },
-    { k: "irrig", label: "Irrigação (período)", value: `${summary.totalIrrigation.toFixed(1)} mm`, note: `${summary.days} dias`, color: "#7c5cff" },
-  ] : [];
 
   const columns: Column<DailyBalanceRow>[] = [
     { header: "Data", render: (r) => r.date },
@@ -838,80 +898,82 @@ function BalanceTab({
 
   return (
     <div className="space-y-5">
-      {/* KPIs */}
-      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
-        {kpis.map((m) => (
-          <Card key={m.k} className="p-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
-                <p className="mt-2 text-[22px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{m.value}</p>
-                <p className="mt-1.5 text-[11px] text-graphite-400 dark:text-gray-500">{m.note}</p>
-              </div>
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: `${m.color}14`, color: m.color }}>
-                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d={BAL_KPI_ICONS[m.k]} /></svg>
-              </div>
-            </div>
-          </Card>
-        ))}
-      </div>
+      {/* Faixa de KPIs do período */}
+      <Card className="p-0">
+        <ManejoKpiStrip rows={rows} summary={summary} />
+      </Card>
 
-      {/* Gráfico grande + Situação do solo */}
-      <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
-        <Card className="p-0">
-          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-            <div>
-              <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Umidade do solo no manejo</p>
-              <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">% da capacidade de campo · faixas Excesso · Ideal · Atenção</p>
+      {/* Gráfico de manejo (legenda por categoria + multi-séries) */}
+      <Card className="p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <div>
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Gráfico de manejo</p>
+            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">umidade do solo × água aplicada · selecione as séries por categoria</p>
+          </div>
+        </div>
+        <div className="flex flex-col lg:flex-row">
+          {/* painel de séries por categoria */}
+          <div className="border-b border-gray-100 p-4 lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r dark:border-white/[0.06]">
+            <div className="flex gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
+              {MANEJO_GROUPS.map((g) => (
+                <button
+                  key={g.cat}
+                  type="button"
+                  onClick={() => setActiveCat(g.cat)}
+                  className={`flex-1 rounded-md px-1.5 py-1 text-[11px] font-semibold transition-colors ${activeCat === g.cat ? "bg-white text-graphite-800 shadow-xs dark:bg-white/[0.1] dark:text-white" : "text-graphite-400 hover:text-graphite-600 dark:text-gray-500"}`}
+                >
+                  {g.cat}
+                </button>
+              ))}
             </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {([
-                { k: "umidade", label: "Umidade", cls: "bg-brand-700 dark:bg-brand-300" },
-                { k: "chuva", label: "Chuva", cls: "bg-sky-500" },
-                { k: "irrig", label: "Irrigação", cls: "bg-cyan-400" },
-                { k: "kc", label: "Kc", cls: "bg-emerald-400" },
-                { k: "etc", label: "ETc", cls: "bg-amber-500" },
-              ] as const).map((it) => {
-                const on = series[it.k];
+            <div className="mt-3 space-y-0.5">
+              {MANEJO_GROUPS.find((g) => g.cat === activeCat)!.items.map((s) => {
+                const on = visible[s.k];
                 return (
                   <button
-                    key={it.k}
+                    key={s.k}
                     type="button"
-                    onClick={() => toggle(it.k)}
+                    onClick={() => toggleSeries(s.k)}
                     aria-pressed={on}
-                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors ${on ? "border-gray-200 bg-white text-graphite-700 shadow-xs dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-gray-200" : "border-transparent bg-gray-50 text-graphite-300 dark:bg-white/[0.02] dark:text-gray-600"}`}
+                    className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.04]"
                   >
-                    <span className={`h-2 w-2 rounded-sm ${it.cls} ${on ? "" : "opacity-30"}`} />
-                    {it.label}
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border" style={{ borderColor: s.color, background: on ? s.color : "transparent" }}>
+                      {on && <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                    </span>
+                    <span className={`text-[12px] ${on ? "font-semibold text-graphite-700 dark:text-gray-200" : "text-graphite-400 dark:text-gray-500"}`}>{s.label}</span>
                   </button>
                 );
               })}
             </div>
-          </div>
-          <div className="p-5"><ManejoChart rows={rows} show={series} /></div>
-        </Card>
-
-        <Card className="p-6">
-          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Situação do solo</p>
-          <div className="mt-4 flex flex-col items-center">
-            <ProgressRing value={arm} max={cad} color={classificacao.color} size={132} thickness={13}>
-              <div className="text-center">
-                <span className="text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{armPct}%</span>
-                <span className="mt-0.5 block text-[10px] text-graphite-400 dark:text-gray-500">da CAD</span>
-              </div>
-            </ProgressRing>
-            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Classificação</p>
-            <p className="text-[18px] font-extrabold" style={{ color: classificacao.color }}>{classificacao.label}</p>
-            <p className="mt-2 text-center text-[12px] leading-relaxed text-graphite-500 dark:text-gray-400">
-              {classificacao.label === "Adequado"
-                ? "O armazenamento está adequado. Manter o manejo atual."
-                : classificacao.label === "Atenção"
-                  ? "Armazenamento próximo do limite. Preparar irrigação."
-                  : "Déficit relevante. Irrigar para repor a água do solo."}
+            <p className="mt-3 border-t border-gray-100 pt-2.5 text-[10px] leading-relaxed text-graphite-300 dark:border-white/[0.06] dark:text-gray-600">
+              Passe o mouse no gráfico para ver os valores do dia.
             </p>
           </div>
-        </Card>
-      </div>
+          {/* gráfico */}
+          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} /></div>
+        </div>
+      </Card>
+
+      {/* Situação do solo */}
+      <Card className="flex flex-col items-center gap-5 p-6 sm:flex-row sm:items-center sm:gap-8">
+        <ProgressRing value={arm} max={cad} color={classificacao.color} size={116} thickness={12}>
+          <div className="text-center">
+            <span className="text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{armPct}%</span>
+            <span className="mt-0.5 block text-[10px] text-graphite-400 dark:text-gray-500">da CAD</span>
+          </div>
+        </ProgressRing>
+        <div className="text-center sm:text-left">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Situação do solo</p>
+          <p className="text-[22px] font-extrabold" style={{ color: classificacao.color }}>{classificacao.label}</p>
+          <p className="mt-1 max-w-md text-[13px] leading-relaxed text-graphite-500 dark:text-gray-400">
+            {classificacao.label === "Adequado"
+              ? "O armazenamento está adequado. Manter o manejo atual."
+              : classificacao.label === "Atenção"
+                ? "Armazenamento próximo do limite de segurança. Preparar irrigação."
+                : "Déficit relevante. Irrigar para repor a água do solo."}
+          </p>
+        </div>
+      </Card>
 
       {/* Resumo do período */}
       <Card className="p-0">
