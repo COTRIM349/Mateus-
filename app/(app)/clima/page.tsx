@@ -45,12 +45,18 @@ interface WeatherStation {
   installed_at: string | null;
 }
 
+// Aba de Clima = somente dados (condições + previsão). A gestão de estações
+// fica isolada na aba "Estação".
 const climaTabs = [
+  { id: "clima", label: "Clima" },
+  { id: "historico", label: "Histórico" },
+  { id: "estacao", label: "Estação" },
+];
+
+const estacaoSubTabs = [
   { id: "virtual", label: "Estação Virtual" },
   { id: "estacoes", label: "Estações" },
   { id: "lancamento", label: "Lançamento Manual" },
-  { id: "historico", label: "Histórico Climático" },
-  { id: "previsao", label: "Previsão" },
   { id: "fonte", label: "Fonte Diária" },
   { id: "sync", label: "Sincronizações" },
 ];
@@ -184,21 +190,35 @@ const IcRain = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" strok
 const IcEto = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 0 1-7 0C8.5 11.8 12 8 12 8z" /><path d="M12 6V3M9 5l3-2 3 2" /></svg>;
 const IcWind = <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"><path d="M3 8h9a2.5 2.5 0 1 0-2.5-2.5" /><path d="M3 12h13a2.5 2.5 0 1 1-2.5 2.5" /><path d="M3 16h7a2 2 0 1 1-2 2" /></svg>;
 
+// Aba "Estação" — reúne toda a gestão de estações em sub-abas, mantendo a
+// aba Clima limpa (somente dados).
+function EstacaoTab() {
+  const [sub, setSub] = useState("virtual");
+  return (
+    <div className="space-y-5">
+      <Tabs tabs={estacaoSubTabs} activeTab={sub} onChange={setSub} />
+      <div className="mt-4">
+        {sub === "virtual" && <div className="animate-in"><VirtualStationTab /></div>}
+        {sub === "estacoes" && <div className="animate-in"><StationsTab /></div>}
+        {sub === "lancamento" && <div className="animate-in"><ManualEntryTab /></div>}
+        {sub === "fonte" && <div className="animate-in"><DailySelectionTab /></div>}
+        {sub === "sync" && <div className="animate-in"><IngestionRunsTab /></div>}
+      </div>
+    </div>
+  );
+}
+
 export default function ClimaPage() {
-  const [activeTab, setActiveTab] = useState("virtual");
+  const [activeTab, setActiveTab] = useState("clima");
 
   return (
-    <div className="space-y-8">
-      <PageHeader titulo="Clima" descricao="Estações meteorológicas, dados climáticos e histórico" />
+    <div className="space-y-6">
+      <PageHeader titulo="Clima" descricao="Condições atuais, previsão e dados climáticos" />
       <Tabs tabs={climaTabs} activeTab={activeTab} onChange={setActiveTab} />
-      <div className="mt-8">
-        {activeTab === "virtual" && <div className="animate-in"><VirtualStationTab /></div>}
-        {activeTab === "estacoes" && <div className="animate-in"><StationsTab /></div>}
-        {activeTab === "lancamento" && <div className="animate-in"><ManualEntryTab /></div>}
+      <div className="mt-6">
+        {activeTab === "clima" && <div className="animate-in"><ForecastTab /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTab /></div>}
-        {activeTab === "previsao" && <div className="animate-in"><ForecastTab /></div>}
-        {activeTab === "fonte" && <div className="animate-in"><DailySelectionTab /></div>}
-        {activeTab === "sync" && <div className="animate-in"><IngestionRunsTab /></div>}
+        {activeTab === "estacao" && <div className="animate-in"><EstacaoTab /></div>}
       </div>
       <p className="mt-6 text-xs text-graphite-400 dark:text-gray-500">
         Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
