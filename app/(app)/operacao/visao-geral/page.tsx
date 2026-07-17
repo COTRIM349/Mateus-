@@ -34,6 +34,7 @@ const PivotMap = dynamic(
 function KpiCard({
   label,
   value,
+  unit,
   sub,
   accent = "#1ea85b",
   icon,
@@ -41,33 +42,39 @@ function KpiCard({
 }: {
   label: string;
   value: string | number;
-  sub?: string;
+  unit?: string;
+  sub?: React.ReactNode;
   accent?: string;
   icon: React.ReactNode;
-  ring: { value: number; max: number };
+  ring?: { value: number; max: number };
 }) {
   return (
-    <Card className="interactive-surface relative overflow-hidden p-5 hover:shadow-elevated dark:hover:shadow-dark-elevated">
-      <div className="absolute inset-x-0 top-0 h-1" style={{ background: accent }} />
-      <div className="flex items-center justify-between gap-3">
+    <Card className="interactive-surface p-5 hover:shadow-elevated dark:hover:shadow-dark-elevated">
+      <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <p className="text-[11px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
+          <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-wide text-graphite-400 dark:text-gray-500">
             {label}
           </p>
-          <p className="mt-1.5 text-[28px] font-extrabold leading-none tabular-nums tracking-tight text-graphite-900 dark:text-white">
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums tracking-tight text-graphite-900 dark:text-white">
             {value}
+            {unit && <span className="ml-1 text-[13px] font-semibold text-graphite-400 dark:text-gray-500">{unit}</span>}
           </p>
           {sub && (
-            <p className="mt-1.5 truncate text-[11px] text-graphite-400 dark:text-gray-500">
-              {sub}
-            </p>
+            <p className="mt-2 text-[11px] leading-tight text-graphite-400 dark:text-gray-500">{sub}</p>
           )}
         </div>
-        <ProgressRing value={ring.value} max={ring.max} color={accent} size={54} thickness={6}>
-          <span className="flex items-center justify-center" style={{ color: accent }}>
+        {ring ? (
+          <ProgressRing value={ring.value} max={ring.max} color={accent} size={52} thickness={5.5}>
+            <span className="flex items-center justify-center" style={{ color: accent }}>{icon}</span>
+          </ProgressRing>
+        ) : (
+          <div
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl"
+            style={{ background: `${accent}14`, color: accent }}
+          >
             {icon}
-          </span>
-        </ProgressRing>
+          </div>
+        )}
       </div>
     </Card>
   );
@@ -423,6 +430,145 @@ function GreetingHeader({ firstName, farmName, weather, totalPivots, irrigatedAr
   );
 }
 
+// ── Situação do manejo (lista + donut) ─────────────────────────────────────
+
+function StatusDonut({ summary, size = 132 }: { summary: FarmHydricSummary; size?: number }) {
+  const total = summary.totalPivots || 1;
+  const thickness = 15;
+  const r = (size - thickness) / 2;
+  const c = 2 * Math.PI * r;
+  const segs = [
+    { v: summary.adequate, color: HYDRIC_STATUS_CONFIG.verde.color },
+    { v: summary.attention, color: HYDRIC_STATUS_CONFIG.amarelo.color },
+    { v: summary.needIrrigationToday, color: HYDRIC_STATUS_CONFIG.vermelho.color },
+    { v: summary.noData, color: HYDRIC_STATUS_CONFIG.cinza.color },
+  ].filter((s) => s.v > 0);
+  let offset = 0;
+  return (
+    <div className="relative shrink-0" style={{ width: size, height: size }}>
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="-rotate-90">
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" strokeWidth={thickness} className="stroke-gray-100 dark:stroke-white/[0.06]" />
+        {segs.map((s, i) => {
+          const dash = (s.v / total) * c;
+          const el = (
+            <circle key={i} cx={size / 2} cy={size / 2} r={r} fill="none" stroke={s.color} strokeWidth={thickness}
+              strokeDasharray={`${Math.max(dash - 3, 0)} ${c - Math.max(dash - 3, 0)}`} strokeDashoffset={-offset} strokeLinecap="round" />
+          );
+          offset += dash;
+          return el;
+        })}
+      </svg>
+      <div className="absolute inset-0 flex flex-col items-center justify-center">
+        <span className="text-[24px] font-extrabold tabular-nums leading-none text-graphite-900 dark:text-white">{summary.totalPivots}</span>
+        <span className="mt-0.5 text-[10px] text-graphite-400 dark:text-gray-500">Pivôs totais</span>
+      </div>
+    </div>
+  );
+}
+
+function SituacaoManejo({ summary }: { summary: FarmHydricSummary }) {
+  const total = summary.totalPivots || 1;
+  const rows = [
+    { color: HYDRIC_STATUS_CONFIG.verde.color, label: "Dentro do ideal", count: summary.adequate },
+    { color: HYDRIC_STATUS_CONFIG.amarelo.color, label: "Atenção (déficit leve)", count: summary.attention },
+    { color: HYDRIC_STATUS_CONFIG.vermelho.color, label: "Déficit alto", count: summary.needIrrigationToday },
+    { color: HYDRIC_STATUS_CONFIG.cinza.color, label: "Sem dados", count: summary.noData },
+  ];
+  return (
+    <Card className="p-0">
+      <div className="border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
+        <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Situação do manejo hoje</p>
+      </div>
+      <div className="flex items-center gap-5 p-5">
+        <ul className="flex-1 space-y-3.5">
+          {rows.map((r) => (
+            <li key={r.label} className="flex items-center justify-between gap-2">
+              <span className="flex items-center gap-2.5">
+                <span className="h-2.5 w-2.5 rounded-full" style={{ background: r.color }} />
+                <span className="text-[12.5px] font-medium text-graphite-700 dark:text-gray-300">{r.label}</span>
+              </span>
+              <span className="shrink-0 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">
+                <b className="text-graphite-800 dark:text-white">{r.count}</b> · {Math.round((r.count / total) * 100)}%
+              </span>
+            </li>
+          ))}
+        </ul>
+        <StatusDonut summary={summary} />
+      </div>
+    </Card>
+  );
+}
+
+// ── Consumo / água recomendada (números + mini-barras) ──────────────────────
+
+function MiniBars({ data, color = "#1ea85b" }: { data: { label: string; value: number }[]; color?: string }) {
+  const max = Math.max(...data.map((d) => d.value), 1);
+  return (
+    <div>
+      <div className="flex h-24 items-end gap-2">
+        {data.map((d) => (
+          <div key={d.label} className="flex h-full min-w-0 flex-1 flex-col items-center justify-end">
+            <span className="mb-1 text-[9px] font-semibold tabular-nums text-graphite-500 dark:text-gray-400">
+              {d.value > 0 ? d.value.toFixed(0) : ""}
+            </span>
+            <div
+              className="w-full rounded-t-md"
+              style={{ height: `${Math.max((d.value / max) * 100, 4)}%`, background: color, opacity: d.value > 0 ? 0.85 : 0.2 }}
+            />
+          </div>
+        ))}
+      </div>
+      <div className="mt-1.5 flex gap-2">
+        {data.map((d) => (
+          <span key={d.label} className="min-w-0 flex-1 truncate text-center text-[9px] text-graphite-400 dark:text-gray-500">{d.label}</span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function ConsumoAgua({ summary, states }: { summary: FarmHydricSummary; states: PivotHydricState[] }) {
+  const totalVol = summary.totalRecommendedVolume;
+  const mediaHa = summary.totalIrrigatedArea > 0 ? totalVol / summary.totalIrrigatedArea : 0;
+  const bars = states
+    .filter((s) => s.current)
+    .slice(0, 8)
+    .map((s) => ({ label: s.pivotName.replace(/^Piv[oô]\s*/i, "PC"), value: s.current!.deficit }));
+  return (
+    <Card className="p-0">
+      <div className="border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
+        <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Água recomendada hoje</p>
+      </div>
+      <div className="space-y-4 p-5">
+        <div className="grid grid-cols-3 gap-3">
+          <div>
+            <p className="text-[19px] font-extrabold tabular-nums leading-none text-graphite-900 dark:text-white">
+              {(totalVol / 1000).toFixed(1)}<span className="ml-0.5 text-[11px] font-semibold text-graphite-400">mil m³</span>
+            </p>
+            <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">Total recomendado</p>
+          </div>
+          <div>
+            <p className="text-[19px] font-extrabold tabular-nums leading-none text-graphite-900 dark:text-white">
+              {mediaHa.toFixed(0)}<span className="ml-0.5 text-[11px] font-semibold text-graphite-400">m³/ha</span>
+            </p>
+            <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">Média por hectare</p>
+          </div>
+          <div>
+            <p className="text-[19px] font-extrabold tabular-nums leading-none text-graphite-900 dark:text-white">
+              {summary.avgRecommendedDepth.toFixed(1)}<span className="ml-0.5 text-[11px] font-semibold text-graphite-400">mm</span>
+            </p>
+            <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">Lâmina média</p>
+          </div>
+        </div>
+        <div>
+          <p className="mb-2 text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Déficit por pivô (mm)</p>
+          <MiniBars data={bars} color="#1ea85b" />
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 // ── Page ─────────────────────────────────────────────────────────────────
 
 export default function VisaoGeralPage() {
@@ -490,114 +636,97 @@ export default function VisaoGeralPage() {
 
   return (
     <div className="space-y-6">
-      <GreetingHeader
-        firstName={profile?.name?.split(" ")[0] ?? null}
-        farmName={activeFarm?.name ?? null}
-        weather={latestWeather}
-        totalPivots={summary.totalPivots}
-        irrigatedArea={summary.totalIrrigatedArea}
-      />
+      <PageHeader titulo="Visão Geral" descricao={activeFarm?.name ?? "Centro operacional"} />
 
-      {/* ── KPIs ─────────────────────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+      {/* ── KPIs (6) ─────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard
           label="Pivôs"
           value={summary.totalPivots}
-          sub={`${summary.adequate} adequados · ${summary.totalIrrigatedArea.toFixed(0)} ha`}
+          sub={`${summary.adequate} adequados`}
           accent="#1ea85b"
           ring={{ value: summary.adequate, max: summary.totalPivots }}
-          icon={
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m0-9a9 9 0 100 .001" />
-            </svg>
-          }
+          icon={<svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v18m0-9a9 9 0 100 .001" /></svg>}
         />
         <KpiCard
-          label="Irrigar Hoje"
-          value={summary.needIrrigationToday}
+          label="Área irrigada"
+          value={summary.totalIrrigatedArea.toFixed(0)}
+          unit="ha"
           sub={`${summary.areaInDeficit.toFixed(0)} ha em déficit`}
-          accent="#ef4444"
-          ring={{ value: summary.needIrrigationToday, max: summary.totalPivots }}
-          icon={
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01" />
-            </svg>
-          }
+          accent="#1ea85b"
+          icon={<svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 2v20m0 0c-4 0-7-3-7-7 3 0 5 1 7 4 2-3 4-4 7-4 0 4-3 7-7 7z" /></svg>}
         />
         <KpiCard
-          label="Volume Total"
-          value={`${(summary.totalRecommendedVolume / 1000).toFixed(0)}`}
-          sub="mil m³ recomendados"
+          label="Lâmina rec."
+          value={summary.avgRecommendedDepth.toFixed(1)}
+          unit="mm"
+          sub="média a irrigar"
           accent="#3b82f6"
-          ring={{ value: summary.areaInDeficit, max: summary.totalIrrigatedArea }}
-          icon={
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 3l5 7a5 5 0 11-10 0l5-7z" />
-            </svg>
-          }
+          icon={<svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 8c2 0 2-1.5 4-1.5S12 8 14 8s2-1.5 4-1.5S20 8 22 8M2 14c2 0 2-1.5 4-1.5S10 14 12 14s2-1.5 4-1.5S18 14 20 14" /></svg>}
         />
         <KpiCard
-          label="Déficit Médio"
-          value={`${summary.avgDeficit.toFixed(1)}`}
-          sub="mm na fazenda"
+          label="Déficit médio"
+          value={summary.avgDeficit.toFixed(1)}
+          unit="mm"
+          sub="na fazenda"
           accent="#f59e0b"
-          ring={{ value: summary.avgDeficit, max: 40 }}
-          icon={
-            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" />
-            </svg>
-          }
+          icon={<svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z" /></svg>}
+        />
+        <KpiCard
+          label="Chuva hoje"
+          value={(latestWeather?.precipitation ?? 0).toFixed(1)}
+          unit="mm"
+          sub="registrada"
+          accent="#2f8fd8"
+          icon={<svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" viewBox="0 0 24 24"><path d="M7 15a4 4 0 0 1 .5-8 5 5 0 0 1 9.5 1.5A3.5 3.5 0 0 1 17 15" /><path d="M8 19l-1 2M12 19l-1 2M16 19l-1 2" /></svg>}
+        />
+        <KpiCard
+          label="ETo hoje"
+          value={(latestWeather?.et0 ?? 0).toFixed(1)}
+          unit="mm"
+          sub="demanda atmosférica"
+          accent="#f59e0b"
+          icon={<svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4" /><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5" /></svg>}
         />
       </div>
 
-      {/* ── Map + Side Panel ─────────────────────────────────────────── */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <Card className="overflow-hidden p-0">
-            <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
-              <div className="flex items-center gap-2">
-                <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
-                </svg>
-                <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Mapa Operacional</p>
-              </div>
-              <div className="flex items-center gap-3.5">
-                {(["verde", "amarelo", "vermelho", "cinza"] as HydricStatus[]).map((s) => (
-                  <div key={s} className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: HYDRIC_STATUS_CONFIG[s].color }} />
-                    <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">
-                      {HYDRIC_STATUS_CONFIG[s].label}
-                    </span>
-                  </div>
-                ))}
-              </div>
+      {/* ── Mapa · Manejo · Consumo ─────────────────────────────────── */}
+      <div className="grid gap-5 xl:grid-cols-[1.35fr_1fr_1fr]">
+        <Card className="overflow-hidden p-0">
+          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
+            <div className="flex items-center gap-2">
+              <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
+              </svg>
+              <p className="whitespace-nowrap text-[13px] font-bold text-graphite-800 dark:text-white">Mapa dos pivôs</p>
             </div>
-            <PivotMap
-              pivots={mapPivots}
-              highlightId={selectedPivotId ?? undefined}
-              onSelect={setSelectedPivotId}
-              className="h-[540px] w-full"
-            />
-          </Card>
-        </div>
+            <div className="hidden shrink-0 items-center gap-2.5 xl:flex">
+              {(["verde", "amarelo", "vermelho"] as HydricStatus[]).map((s) => (
+                <div key={s} className="flex items-center gap-1.5">
+                  <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: HYDRIC_STATUS_CONFIG[s].color }} />
+                  <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{HYDRIC_STATUS_CONFIG[s].label}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <PivotMap
+            pivots={mapPivots}
+            highlightId={selectedPivotId ?? undefined}
+            onSelect={setSelectedPivotId}
+            className="h-[420px] w-full"
+          />
+        </Card>
 
-        {/* Side panel */}
-        <div className="space-y-4">
-          {/* Status ring */}
-          <Card className="p-5">
-            <p className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-graphite-400 dark:text-gray-500">
-              Distribuição
-            </p>
-            <StatusRing summary={summary} />
-          </Card>
-
-          {/* Weather */}
-          <WeatherSummaryCard states={states} />
-
-          {/* Selected pivot detail */}
-          {selectedPivot && <PivotSideDetail pivot={selectedPivot} />}
-        </div>
+        <SituacaoManejo summary={summary} />
+        <ConsumoAgua summary={summary} states={states} />
       </div>
+
+      {/* Selected pivot detail (ao clicar no mapa) */}
+      {selectedPivot && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          <PivotSideDetail pivot={selectedPivot} />
+        </div>
+      )}
 
       {/* ── Recommendations ──────────────────────────────────────────── */}
       {irrigationNeeded.length > 0 && (
