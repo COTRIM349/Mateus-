@@ -59,6 +59,7 @@ interface Pivot {
   flow_rate: number;
   efficiency: number;
   farm_id: string;
+  specific_consumption: number | null;
 }
 
 interface CropAssignment {
@@ -193,7 +194,7 @@ export default function BalancoHidricoPage() {
     (async () => {
       const { data } = await supabase
         .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, farm_id")
+        .select("id, name, area, flow_rate, efficiency, farm_id, specific_consumption")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("name");
@@ -497,6 +498,22 @@ export default function BalancoHidricoPage() {
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
+  // presets de período — apenas ajustam o intervalo (o carregamento é automático)
+  const [activePeriod, setActivePeriod] = useState<number | "safra" | null>(null);
+  const applyPeriod = (kind: number | "safra") => {
+    const today = new Date();
+    const end = today.toISOString().slice(0, 10);
+    let start: string;
+    if (kind === "safra" && assignment?.planting_date) start = assignment.planting_date;
+    else {
+      const d = typeof kind === "number" ? kind : 30;
+      start = new Date(today.getTime() - (d - 1) * 86400000).toISOString().slice(0, 10);
+    }
+    setDateStart(start);
+    setDateEnd(end);
+    setActivePeriod(kind);
+  };
+
   // ── Lançamento handler ──────────────────────────────────────────────────
   const handleLancamento = async () => {
     if (!selectedPivotId || !lancDate || !lancDepth) return;
@@ -542,6 +559,7 @@ export default function BalancoHidricoPage() {
     efficiency: selPivot ? selPivot.efficiency * 100 : null,
     plantingDate: assignment?.planting_date ?? null,
     statusLabel: selPivot ? "Operando" : null,
+    energiaEspecifica: selPivot?.specific_consumption ?? null,
   };
 
   return (
@@ -609,6 +627,21 @@ export default function BalancoHidricoPage() {
               {calculating ? "Calculando..." : "Calcular Balanço"}
             </Button>
           </div>
+        </div>
+        {/* presets de período */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
+          {([7, 15, 30, 60, "safra"] as const).map((p) => (
+            <button
+              key={String(p)}
+              type="button"
+              onClick={() => applyPeriod(p)}
+              disabled={p === "safra" && !assignment?.planting_date}
+              className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${activePeriod === p ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}
+            >
+              {p === "safra" ? "Safra" : `${p}d`}
+            </button>
+          ))}
         </div>
         {assignment && culture && soil && (
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-graphite-400 dark:text-gray-500">
@@ -852,6 +885,7 @@ interface CentroHead {
   efficiency: number | null;
   plantingDate: string | null;
   statusLabel: string | null;
+  energiaEspecifica: number | null;
 }
 
 const fmtTempoH = (h: number) => {
@@ -886,6 +920,30 @@ function BalanceTab({
   });
   const [activeCat, setActiveCat] = useState("Água no solo");
   const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
+  const [tblFilter, setTblFilter] = useState("");
+  const [showFilter, setShowFilter] = useState(false);
+
+  const filteredRows = tblFilter.trim()
+    ? rows.filter((r) => {
+        const q = tblFilter.toLowerCase();
+        return r.date.includes(q) || fmtDia(r.date).includes(q) || r.phase.toLowerCase().includes(q);
+      })
+    : rows;
+
+  const exportCsv = () => {
+    const headers = ["Data", "Fase", "Kc", "ETo", "ETc", "Chuva", "ChuvaEf", "Irrigacao", "Entradas", "Saidas", "Saldo", "AguaDisp", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const lines = filteredRows.map((r) => {
+      const entr = r.effectivePrecipitation + r.irrigationApplied;
+      const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
+      const lam = r.deficit >= r.afd && r.afd > 0 ? r.grossDepth : 0;
+      return [r.date, r.phase, r.kc.toFixed(2), r.et0.toFixed(1), r.etc.toFixed(1), r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1), entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1), r.storedWater.toFixed(1), depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label].join(";");
+    });
+    const csv = "﻿" + [headers.join(";"), ...lines].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `balanco-hidrico-${rows[0]?.date ?? ""}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   if (rows.length === 0 && !loading) {
     return (
@@ -1179,7 +1237,9 @@ function BalanceTab({
             { l: "Dias em estresse", v: `${summary.daysInDeficit}` },
             { l: "Eficiência média", v: `${efPct.toFixed(0)}%` },
             { l: "Uniformidade (CUC)", v: "pendente", pend: true },
-            { l: "Energia específica", v: "pendente", pend: true },
+            head.energiaEspecifica != null
+              ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` }
+              : { l: "Energia específica", v: "pendente", pend: true },
             { l: "Volume acumulado", v: "pendente", pend: true },
             { l: "Variação armaz.", v: `${variacao >= 0 ? "+" : ""}${variacao.toFixed(1)} mm` },
           ].map((s, i) => (
@@ -1194,15 +1254,25 @@ function BalanceTab({
       {/* 9 · Tabela técnica */}
       <Card className="p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Dados diários do balanço hídrico</p>
-          <div className="flex gap-2">
-            {["Filtros", "Excel", "PDF"].map((t) => (
-              <button key={t} type="button" className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]">{t}</button>
-            ))}
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Dados diários do balanço hídrico <span className="font-normal text-graphite-400 dark:text-gray-500">({filteredRows.length} de {rows.length})</span></p>
+          <div className="flex items-center gap-2">
+            {showFilter && (
+              <input
+                type="text"
+                autoFocus
+                value={tblFilter}
+                onChange={(e) => setTblFilter(e.target.value)}
+                placeholder="Filtrar data ou fase…"
+                className="h-8 w-40 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] text-graphite-700 outline-none focus:border-brand-400 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-200"
+              />
+            )}
+            <button type="button" onClick={() => { setShowFilter((s) => !s); if (showFilter) setTblFilter(""); }} className={`rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${showFilter ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}>Filtros</button>
+            <button type="button" onClick={exportCsv} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]">Excel</button>
+            <button type="button" onClick={() => window.print()} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]">PDF</button>
           </div>
         </div>
         <div className="overflow-x-auto px-2 pb-2">
-          <Table columns={columns} data={rows} getKey={(r) => r.date} />
+          <Table columns={columns} data={filteredRows} getKey={(r) => r.date} />
         </div>
       </Card>
 
