@@ -1265,28 +1265,24 @@ function VirtualStationTab() {
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
               <div className="relative overflow-hidden rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-800">
                 <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-blue-400 via-amber-400 to-red-500" />
-                <div className="mb-2 flex items-center gap-1.5">
-                  <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-                    <rect x="5.5" y="1" width="3" height="9" rx="1.5" className="fill-red-400" />
-                    <circle cx="7" cy="11.5" r="2" className="fill-red-500" />
-                  </svg>
-                  <span className="text-[10px] font-bold uppercase tracking-widest text-graphite-400 dark:text-gray-500">Temperatura</span>
-                </div>
-                <p className="text-[22px] font-extrabold leading-none tracking-tight text-graphite-900 dark:text-white">
-                  {fmt(r.temp_mean, 1)}<span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">°C</span>
-                </p>
-                <div className="relative mt-3 h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
-                  <div
-                    className="absolute inset-y-0 rounded-full bg-gradient-to-r from-blue-400 via-amber-300 to-red-400"
-                    style={{
-                      left: `${Math.max(((r.temp_min ?? 0) / 50) * 100, 0)}%`,
-                      width: `${Math.min((((r.temp_max ?? 40) - (r.temp_min ?? 0)) / 50) * 100, 100)}%`,
-                    }}
-                  />
-                </div>
-                <div className="mt-1.5 flex justify-between text-[10px]">
-                  <span className="font-semibold text-blue-500 dark:text-blue-400">{fmt(r.temp_min, 1)}° min</span>
-                  <span className="font-semibold text-red-500 dark:text-red-400">{fmt(r.temp_max, 1)}° máx</span>
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-2 flex items-center gap-1.5">
+                      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                        <rect x="5.5" y="1" width="3" height="9" rx="1.5" className="fill-red-400" />
+                        <circle cx="7" cy="11.5" r="2" className="fill-red-500" />
+                      </svg>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-graphite-400 dark:text-gray-500">Temperatura</span>
+                    </div>
+                    <p className="text-[22px] font-extrabold leading-none tracking-tight text-graphite-900 dark:text-white">
+                      {fmt(r.temp_mean, 1)}<span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">°C</span>
+                    </p>
+                    <div className="mt-2.5 flex items-center gap-2.5">
+                      <span className="text-[11px] font-bold text-blue-500 dark:text-blue-400">{fmt(r.temp_min, 1)}° mín</span>
+                      <span className="text-[11px] font-bold text-red-500 dark:text-red-400">{fmt(r.temp_max, 1)}° máx</span>
+                    </div>
+                  </div>
+                  <Thermometer min={r.temp_min} max={r.temp_max} scaleMin={0} scaleMax={45} />
                 </div>
               </div>
 
