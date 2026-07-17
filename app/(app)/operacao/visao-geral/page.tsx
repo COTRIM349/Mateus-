@@ -641,7 +641,7 @@ export default function VisaoGeralPage() {
       {/* ── KPIs (6) ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-6">
         <KpiCard
-          label="Pivôs"
+          label="Pivôs em operação"
           value={summary.totalPivots}
           sub={`${summary.adequate} adequados`}
           accent="#1ea85b"
