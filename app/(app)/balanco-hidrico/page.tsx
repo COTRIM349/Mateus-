@@ -643,53 +643,108 @@ export default function BalancoHidricoPage() {
   );
 }
 
-// ── Gráfico grande: armazenamento de água no solo (CC/RAW/PMP) ──────────────
+// ── Gráfico de manejo: umidade do solo (% da CC) ────────────────────────────
+// Enquadra a umidade em % da capacidade de campo, dentro das faixas
+// Excesso / Ideal / Atenção delimitadas por CC (100%), Segurança (RAW, em
+// degraus conforme a profundidade radicular) e PM (0%). Barras de chuva e
+// irrigação num eixo secundário em mm; linhas opcionais de Kc e ETc.
 
-function BalanceChart({ rows }: { rows: DailyBalanceRow[] }) {
-  const W = 780, H = 320, padL = 40, padR = 42, padT = 18, padB = 44;
+export interface ManejoSeries {
+  umidade: boolean;
+  chuva: boolean;
+  irrig: boolean;
+  kc: boolean;
+  etc: boolean;
+}
+
+function ManejoChart({ rows, show }: { rows: DailyBalanceRow[]; show: ManejoSeries }) {
+  const W = 900, H = 340, padL = 46, padR = 56, padT = 20, padB = 46;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
   const n = rows.length || 1;
-  const last = rows[rows.length - 1];
-  const cad = Math.max(...rows.map((r) => r.cad), 1);
-  const raw = last ? Math.max(last.cad - last.afd, 0) : 0;
-  const yMax = cad * 1.12;
-  const ymap = (v: number) => y1 - (Math.max(0, Math.min(v, yMax)) / yMax) * (y1 - y0);
   const band = (x1 - x0) / n;
   const cx = (i: number) => x0 + band * i + band / 2;
-  const storagePts = rows.map((r, i) => `${cx(i)},${ymap(r.storedWater)}`).join(" ");
+
+  // eixo esquerdo: % da CC (0..125) · eixo direito: mm (0..mmMax)
+  const yP = (p: number) => y1 - (Math.max(0, Math.min(p, 125)) / 125) * (y1 - y0);
+  const mmMax = Math.max(20, Math.ceil(Math.max(1, ...rows.map((r) => Math.max(r.precipitation, r.irrigationApplied))) / 10) * 10);
+  const yM = (v: number) => y1 - (Math.max(0, Math.min(v, mmMax)) / mmMax) * (y1 - y0);
+
+  const pct = (r: DailyBalanceRow) => (r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0);
+  const seg = (r: DailyBalanceRow) => (r.cad > 0 ? ((r.cad - r.afd) / r.cad) * 100 : 0);
+
+  const umidPts = rows.map((r, i) => `${cx(i)},${yP(pct(r))}`).join(" ");
+  const kcPts = rows.map((r, i) => `${cx(i)},${yP(r.kc * 100)}`).join(" ");
+  const etcPts = rows.map((r, i) => `${cx(i)},${yM(r.etc)}`).join(" ");
+
+  // linha de Segurança estendida às bordas (para preencher as faixas)
+  const segEdge: [number, number][] = rows.length
+    ? [[x0, seg(rows[0])], ...rows.map((r, i): [number, number] => [cx(i), seg(r)]), [x1, seg(rows[rows.length - 1])]]
+    : [];
+  const segLinePts = segEdge.map(([x, p]) => `${x},${yP(p)}`).join(" ");
+  const idealPath = `M ${x0},${yP(100)} L ${x1},${yP(100)} ${segEdge.slice().reverse().map(([x, p]) => `L ${x},${yP(p)}`).join(" ")} Z`;
+  const atencaoPath = `M ${segEdge.map(([x, p]) => `${x},${yP(p)}`).join(" L ")} L ${x1},${yP(0)} L ${x0},${yP(0)} Z`;
+
+  const step = Math.max(1, Math.ceil(n / 9));
+
   return (
     <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
-      {/* bandas: verde (RAW→CC), âmbar (RAW/2→RAW), vermelho (0→RAW/2) */}
-      <rect x={x0} y={ymap(cad)} width={x1 - x0} height={ymap(raw) - ymap(cad)} className="fill-green-500/10 dark:fill-green-500/10" />
-      <rect x={x0} y={ymap(raw)} width={x1 - x0} height={ymap(raw / 2) - ymap(raw)} className="fill-amber-400/10 dark:fill-amber-400/10" />
-      <rect x={x0} y={ymap(raw / 2)} width={x1 - x0} height={ymap(0) - ymap(raw / 2)} className="fill-red-500/10 dark:fill-red-500/10" />
-      {/* y ticks */}
-      {[0, 0.25, 0.5, 0.75, 1].map((f) => (
-        <g key={f}>
-          <line x1={x0} x2={x1} y1={ymap(f * yMax)} y2={ymap(f * yMax)} className="stroke-gray-100 dark:stroke-white/[0.05]" strokeWidth={1} />
-          <text x={x0 - 6} y={ymap(f * yMax) + 3} textAnchor="end" className="fill-graphite-300 text-[9px] dark:fill-gray-600">{Math.round(f * yMax)}</text>
+      {/* faixas */}
+      <rect x={x0} y={yP(125)} width={x1 - x0} height={yP(100) - yP(125)} className="fill-sky-400/10" />
+      <path d={idealPath} className="fill-brand-500/[0.09]" />
+      <path d={atencaoPath} className="fill-amber-400/[0.10]" />
+
+      {/* grade + eixo esquerdo (%CC) */}
+      {[0, 25, 50, 75, 100, 125].map((p) => (
+        <g key={p}>
+          <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-100 dark:stroke-white/[0.05]" strokeWidth={1} />
+          <text x={x0 - 7} y={yP(p) + 3} textAnchor="end" className="fill-graphite-300 text-[9px] dark:fill-gray-600">{p}</text>
         </g>
       ))}
-      {/* barras chuva efetiva (azul) + irrigação (verde) */}
+      <text x={x0 - 7} y={y0 - 7} textAnchor="end" className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">%CC</text>
+      {/* eixo direito (mm) */}
+      {[0, mmMax / 2, mmMax].map((v) => (
+        <text key={v} x={x1 + 8} y={yM(v) + 3} className="fill-sky-500/80 text-[9px] dark:fill-sky-400/70">{Math.round(v)}</text>
+      ))}
+      <text x={x1 + 8} y={y0 - 7} className="fill-sky-500/80 text-[9px] font-semibold dark:fill-sky-400/70">mm</text>
+
+      {/* barras chuva + irrigação (eixo mm) */}
       {rows.map((r, i) => (
         <g key={i}>
-          {r.effectivePrecipitation > 0 && <rect x={cx(i) - 5} y={ymap(r.effectivePrecipitation)} width={4} height={ymap(0) - ymap(r.effectivePrecipitation)} rx={1} className="fill-blue-400/70" />}
-          {r.irrigationApplied > 0 && <rect x={cx(i) + 1} y={ymap(r.irrigationApplied)} width={4} height={ymap(0) - ymap(r.irrigationApplied)} rx={1} className="fill-brand-500/70" />}
+          {show.chuva && r.precipitation > 0 && <rect x={cx(i) - 4.5} y={yM(r.precipitation)} width={3.6} height={y1 - yM(r.precipitation)} rx={1} className="fill-sky-500/75" />}
+          {show.irrig && r.irrigationApplied > 0 && <rect x={cx(i) + 0.9} y={yM(r.irrigationApplied)} width={3.6} height={y1 - yM(r.irrigationApplied)} rx={1} className="fill-cyan-400/85" />}
         </g>
       ))}
-      {/* linhas CC / RAW / PMP */}
-      <line x1={x0} x2={x1} y1={ymap(cad)} y2={ymap(cad)} className="stroke-green-500" strokeWidth={1.5} />
-      <text x={x1 + 4} y={ymap(cad) + 3} className="fill-green-600 text-[9px] font-bold dark:fill-green-400">CC</text>
-      <line x1={x0} x2={x1} y1={ymap(raw)} y2={ymap(raw)} className="stroke-amber-500" strokeWidth={1.5} strokeDasharray="4 3" />
-      <text x={x1 + 4} y={ymap(raw) + 3} className="fill-amber-600 text-[9px] font-bold dark:fill-amber-400">RAW</text>
-      <line x1={x0} x2={x1} y1={ymap(0)} y2={ymap(0)} className="stroke-red-500" strokeWidth={1.5} />
-      <text x={x1 + 4} y={ymap(0) + 3} className="fill-red-600 text-[9px] font-bold dark:fill-red-400">PMP</text>
-      {/* linha de armazenamento */}
-      <polyline points={storagePts} fill="none" className="stroke-brand-700 dark:stroke-brand-400" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
-      {rows.map((r, i) => <circle key={i} cx={cx(i)} cy={ymap(r.storedWater)} r={2.6} className="fill-brand-700 dark:fill-brand-400" />)}
+
+      {/* ETc (eixo mm) */}
+      {show.etc && <polyline points={etcPts} fill="none" className="stroke-amber-500/80" strokeWidth={1.4} strokeDasharray="1 3" strokeLinecap="round" />}
+
+      {/* linhas de referência */}
+      <line x1={x0} x2={x1} y1={yP(100)} y2={yP(100)} className="stroke-brand-600" strokeWidth={1.4} />
+      <text x={x1 + 4} y={yP(100) - 3} className="fill-brand-600 text-[9px] font-bold dark:fill-brand-400">CC</text>
+      <polyline points={segLinePts} fill="none" className="stroke-amber-500" strokeWidth={1.4} strokeDasharray="5 3" />
+      <text x={x1 + 4} y={yP(seg(rows[rows.length - 1] ?? rows[0])) + 11} className="fill-amber-600 text-[9px] font-bold dark:fill-amber-400">Seg.</text>
+      <line x1={x0} x2={x1} y1={yP(0)} y2={yP(0)} className="stroke-rose-400" strokeWidth={1.4} />
+      <text x={x1 + 4} y={yP(0) + 3} className="fill-rose-500 text-[9px] font-bold dark:fill-rose-400">PM</text>
+
+      {/* Kc (mapeado ×100 no eixo %CC) */}
+      {show.kc && <polyline points={kcPts} fill="none" className="stroke-emerald-400" strokeWidth={1.6} strokeDasharray="4 2" strokeLinecap="round" strokeLinejoin="round" />}
+
+      {/* umidade (linha principal) */}
+      {show.umidade && (
+        <>
+          <polyline points={umidPts} fill="none" className="stroke-brand-700 dark:stroke-brand-300" strokeWidth={2.4} strokeLinejoin="round" strokeLinecap="round" />
+          {rows.length > 0 && <circle cx={cx(n - 1)} cy={yP(pct(rows[n - 1]))} r={3.2} className="fill-brand-700 dark:fill-brand-300" />}
+        </>
+      )}
+
+      {/* marcadores de irrigação no eixo */}
+      {show.irrig && rows.map((r, i) => r.irrigationApplied > 0 && (
+        <circle key={`m${i}`} cx={cx(i)} cy={y1 + 6} r={1.7} className="fill-cyan-500/80" />
+      ))}
+
       {/* datas */}
-      {rows.map((r, i) => (i % Math.ceil(n / 8) === 0 || i === n - 1) && (
-        <text key={i} x={cx(i)} y={H - 14} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{r.date.slice(8, 10)}/{r.date.slice(5, 7)}</text>
+      {rows.map((r, i) => (i % step === 0 || i === n - 1) && (
+        <text key={`d${i}`} x={cx(i)} y={H - 12} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{r.date.slice(8, 10)}/{r.date.slice(5, 7)}</text>
       ))}
     </svg>
   );
@@ -714,6 +769,9 @@ function BalanceTab({
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
 }) {
+  const [series, setSeries] = useState<ManejoSeries>({ umidade: true, chuva: true, irrig: true, kc: false, etc: false });
+  const toggle = (k: keyof ManejoSeries) => setSeries((s) => ({ ...s, [k]: !s[k] }));
+
   if (rows.length === 0 && !loading) {
     return (
       <Card className="py-12 text-center">
@@ -802,14 +860,35 @@ function BalanceTab({
       <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
         <Card className="p-0">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Armazenamento de água no solo</p>
-            <div className="flex flex-wrap items-center gap-3.5 text-[11px] font-medium text-graphite-500 dark:text-gray-400">
-              <span className="flex items-center gap-1.5"><span className="h-0.5 w-3.5 rounded bg-brand-700 dark:bg-brand-400" />Armazenamento</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400/70" />Chuva efetiva</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-brand-500/70" />Irrigação</span>
+            <div>
+              <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Umidade do solo no manejo</p>
+              <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">% da capacidade de campo · faixas Excesso · Ideal · Atenção</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {([
+                { k: "umidade", label: "Umidade", cls: "bg-brand-700 dark:bg-brand-300" },
+                { k: "chuva", label: "Chuva", cls: "bg-sky-500" },
+                { k: "irrig", label: "Irrigação", cls: "bg-cyan-400" },
+                { k: "kc", label: "Kc", cls: "bg-emerald-400" },
+                { k: "etc", label: "ETc", cls: "bg-amber-500" },
+              ] as const).map((it) => {
+                const on = series[it.k];
+                return (
+                  <button
+                    key={it.k}
+                    type="button"
+                    onClick={() => toggle(it.k)}
+                    aria-pressed={on}
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11px] font-semibold transition-colors ${on ? "border-gray-200 bg-white text-graphite-700 shadow-xs dark:border-white/[0.1] dark:bg-white/[0.06] dark:text-gray-200" : "border-transparent bg-gray-50 text-graphite-300 dark:bg-white/[0.02] dark:text-gray-600"}`}
+                  >
+                    <span className={`h-2 w-2 rounded-sm ${it.cls} ${on ? "" : "opacity-30"}`} />
+                    {it.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
-          <div className="p-5"><BalanceChart rows={rows} /></div>
+          <div className="p-5"><ManejoChart rows={rows} show={series} /></div>
         </Card>
 
         <Card className="p-6">
