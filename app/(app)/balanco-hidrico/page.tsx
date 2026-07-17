@@ -27,6 +27,7 @@ import {
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
 import { useRecharts, useFarmHydricState } from "@/lib/hooks";
+import { ProgressRing } from "@/components/ui/instruments";
 import { radiusFromArea } from "@/utils/geo";
 import { cn } from "@/utils/cn";
 
@@ -642,7 +643,67 @@ export default function BalancoHidricoPage() {
   );
 }
 
+// ── Gráfico grande: armazenamento de água no solo (CC/RAW/PMP) ──────────────
+
+function BalanceChart({ rows }: { rows: DailyBalanceRow[] }) {
+  const W = 780, H = 320, padL = 40, padR = 42, padT = 18, padB = 44;
+  const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  const n = rows.length || 1;
+  const last = rows[rows.length - 1];
+  const cad = Math.max(...rows.map((r) => r.cad), 1);
+  const raw = last ? Math.max(last.cad - last.afd, 0) : 0;
+  const yMax = cad * 1.12;
+  const ymap = (v: number) => y1 - (Math.max(0, Math.min(v, yMax)) / yMax) * (y1 - y0);
+  const band = (x1 - x0) / n;
+  const cx = (i: number) => x0 + band * i + band / 2;
+  const storagePts = rows.map((r, i) => `${cx(i)},${ymap(r.storedWater)}`).join(" ");
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
+      {/* bandas: verde (RAW→CC), âmbar (RAW/2→RAW), vermelho (0→RAW/2) */}
+      <rect x={x0} y={ymap(cad)} width={x1 - x0} height={ymap(raw) - ymap(cad)} className="fill-green-500/10 dark:fill-green-500/10" />
+      <rect x={x0} y={ymap(raw)} width={x1 - x0} height={ymap(raw / 2) - ymap(raw)} className="fill-amber-400/10 dark:fill-amber-400/10" />
+      <rect x={x0} y={ymap(raw / 2)} width={x1 - x0} height={ymap(0) - ymap(raw / 2)} className="fill-red-500/10 dark:fill-red-500/10" />
+      {/* y ticks */}
+      {[0, 0.25, 0.5, 0.75, 1].map((f) => (
+        <g key={f}>
+          <line x1={x0} x2={x1} y1={ymap(f * yMax)} y2={ymap(f * yMax)} className="stroke-gray-100 dark:stroke-white/[0.05]" strokeWidth={1} />
+          <text x={x0 - 6} y={ymap(f * yMax) + 3} textAnchor="end" className="fill-graphite-300 text-[9px] dark:fill-gray-600">{Math.round(f * yMax)}</text>
+        </g>
+      ))}
+      {/* barras chuva efetiva (azul) + irrigação (verde) */}
+      {rows.map((r, i) => (
+        <g key={i}>
+          {r.effectivePrecipitation > 0 && <rect x={cx(i) - 5} y={ymap(r.effectivePrecipitation)} width={4} height={ymap(0) - ymap(r.effectivePrecipitation)} rx={1} className="fill-blue-400/70" />}
+          {r.irrigationApplied > 0 && <rect x={cx(i) + 1} y={ymap(r.irrigationApplied)} width={4} height={ymap(0) - ymap(r.irrigationApplied)} rx={1} className="fill-brand-500/70" />}
+        </g>
+      ))}
+      {/* linhas CC / RAW / PMP */}
+      <line x1={x0} x2={x1} y1={ymap(cad)} y2={ymap(cad)} className="stroke-green-500" strokeWidth={1.5} />
+      <text x={x1 + 4} y={ymap(cad) + 3} className="fill-green-600 text-[9px] font-bold dark:fill-green-400">CC</text>
+      <line x1={x0} x2={x1} y1={ymap(raw)} y2={ymap(raw)} className="stroke-amber-500" strokeWidth={1.5} strokeDasharray="4 3" />
+      <text x={x1 + 4} y={ymap(raw) + 3} className="fill-amber-600 text-[9px] font-bold dark:fill-amber-400">RAW</text>
+      <line x1={x0} x2={x1} y1={ymap(0)} y2={ymap(0)} className="stroke-red-500" strokeWidth={1.5} />
+      <text x={x1 + 4} y={ymap(0) + 3} className="fill-red-600 text-[9px] font-bold dark:fill-red-400">PMP</text>
+      {/* linha de armazenamento */}
+      <polyline points={storagePts} fill="none" className="stroke-brand-700 dark:stroke-brand-400" strokeWidth={2.2} strokeLinejoin="round" strokeLinecap="round" />
+      {rows.map((r, i) => <circle key={i} cx={cx(i)} cy={ymap(r.storedWater)} r={2.6} className="fill-brand-700 dark:fill-brand-400" />)}
+      {/* datas */}
+      {rows.map((r, i) => (i % Math.ceil(n / 8) === 0 || i === n - 1) && (
+        <text key={i} x={cx(i)} y={H - 14} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{r.date.slice(8, 10)}/{r.date.slice(5, 7)}</text>
+      ))}
+    </svg>
+  );
+}
+
 // ── Balance Tab ─────────────────────────────────────────────────────────
+
+const BAL_KPI_ICONS: Record<string, string> = {
+  arm: "M5 4h14a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V5a1 1 0 011-1zm-1 9c3 0 3 2 6 2s3-2 6-2 3 2 4 2",
+  def: "M12 9v4m0 4h.01M10.29 3.86L1.82 18a1 1 0 00.86 1.5h18.64a1 1 0 00.86-1.5L13.71 3.86a1 1 0 00-1.72 0z",
+  chuva: "M7 15a4 4 0 01.5-8 5 5 0 019.5 1.5A3.5 3.5 0 0117 15M8 19l-1 2M12 19l-1 2M16 19l-1 2",
+  eto: "M12 8s3.5 3.8 3.5 6.5a3.5 3.5 0 01-7 0C8.5 11.8 12 8 12 8zM12 6V3M9 5l3-2 3 2",
+  irrig: "M4 8c2 0 2-1.5 4-1.5S12 8 14 8s2-1.5 4-1.5S20 8 22 8M2 14c2 0 2-1.5 4-1.5S10 14 12 14s2-1.5 4-1.5S18 14 20 14",
+};
 
 function BalanceTab({
   rows,
@@ -662,6 +723,24 @@ function BalanceTab({
       </Card>
     );
   }
+
+  const last = rows[rows.length - 1];
+  const first = rows[0];
+  const cad = last?.cad ?? 0;
+  const arm = last?.storedWater ?? 0;
+  const armPct = cad > 0 ? Math.round((arm / cad) * 100) : 0;
+  const raw = last ? Math.max(last.cad - last.afd, 0) : 0;
+  const classificacao = arm >= raw ? { label: "Adequado", color: "#22c55e" } : arm >= raw * 0.5 ? { label: "Atenção", color: "#f59e0b" } : { label: "Crítico", color: "#ef4444" };
+  const entradas = summary.totalEffPrecipitation + summary.totalIrrigation;
+  const variacao = (last?.storedWater ?? 0) - (first?.storedWater ?? 0);
+
+  const kpis = rows.length > 0 ? [
+    { k: "arm", label: "Armazenamento atual", value: `${arm.toFixed(1)} mm`, note: `${armPct}% da CAD`, color: "#1ea85b" },
+    { k: "def", label: "Déficit atual", value: `${(last?.deficit ?? 0).toFixed(1)} mm`, note: "média ponderada", color: "#ef4444" },
+    { k: "chuva", label: "Chuva (período)", value: `${summary.totalEffPrecipitation.toFixed(1)} mm`, note: "efetiva", color: "#2f8fd8" },
+    { k: "eto", label: "ETc (período)", value: `${summary.totalETc.toFixed(1)} mm`, note: "demanda", color: "#f59e0b" },
+    { k: "irrig", label: "Irrigação (período)", value: `${summary.totalIrrigation.toFixed(1)} mm`, note: `${summary.days} dias`, color: "#7c5cff" },
+  ] : [];
 
   const columns: Column<DailyBalanceRow>[] = [
     { header: "Data", render: (r) => r.date },
@@ -690,28 +769,97 @@ function BalanceTab({
     },
   ];
 
+  if (loading) {
+    return (
+      <Card className="flex items-center justify-center gap-3 py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+        <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard metric={{ id: "etc", title: "ETc Total", value: `${summary.totalETc.toFixed(1)} mm`, description: `Média: ${summary.avgETc.toFixed(1)} mm/dia` }} />
-        <StatCard metric={{ id: "precip", title: "Chuva Total", value: `${summary.totalPrecipitation.toFixed(1)} mm`, description: `Efetiva: ${summary.totalEffPrecipitation.toFixed(1)} mm` }} />
-        <StatCard metric={{ id: "irrig", title: "Irrigação", value: `${summary.totalIrrigation.toFixed(1)} mm`, description: `${summary.days} dias` }} />
-        <StatCard metric={{ id: "arm", title: "ARM Médio", value: `${summary.avgStoredWater.toFixed(1)} mm`, description: `Mín: ${summary.minStoredWater.toFixed(1)} mm` }} />
-        <StatCard metric={{ id: "deficit", title: "Dias em Déficit", value: `${summary.daysInDeficit}`, description: `Crítico: ${summary.daysInCritical}`, trend: summary.daysInDeficit > 0 ? "negative" : "positive", variation: summary.daysInDeficit === 0 ? "OK" : `${((summary.daysInDeficit / Math.max(summary.days, 1)) * 100).toFixed(0)}%` }} />
-        <StatCard metric={{ id: "surplus", title: "Excedente Total", value: `${summary.totalSurplus.toFixed(1)} mm`, description: "Percolação/escoamento" }} />
+      {/* KPIs */}
+      <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-5">
+        {kpis.map((m) => (
+          <Card key={m.k} className="p-5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <p className="text-[10.5px] font-semibold uppercase leading-tight tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
+                <p className="mt-2 text-[22px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{m.value}</p>
+                <p className="mt-1.5 text-[11px] text-graphite-400 dark:text-gray-500">{m.note}</p>
+              </div>
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl" style={{ background: `${m.color}14`, color: m.color }}>
+                <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round" strokeLinejoin="round" viewBox="0 0 24 24"><path d={BAL_KPI_ICONS[m.k]} /></svg>
+              </div>
+            </div>
+          </Card>
+        ))}
       </div>
 
-      {loading ? (
-        <Card className="flex items-center justify-center gap-3 py-8">
-          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-          <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      {/* Gráfico grande + Situação do solo */}
+      <div className="grid gap-5 xl:grid-cols-[1fr_320px]">
+        <Card className="p-0">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Armazenamento de água no solo</p>
+            <div className="flex flex-wrap items-center gap-3.5 text-[11px] font-medium text-graphite-500 dark:text-gray-400">
+              <span className="flex items-center gap-1.5"><span className="h-0.5 w-3.5 rounded bg-brand-700 dark:bg-brand-400" />Armazenamento</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-blue-400/70" />Chuva efetiva</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-brand-500/70" />Irrigação</span>
+            </div>
+          </div>
+          <div className="p-5"><BalanceChart rows={rows} /></div>
         </Card>
-      ) : (
-        <Card className="overflow-x-auto">
-          <Table columns={columns} data={rows} getKey={(r) => r.date} />
+
+        <Card className="p-6">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Situação do solo</p>
+          <div className="mt-4 flex flex-col items-center">
+            <ProgressRing value={arm} max={cad} color={classificacao.color} size={132} thickness={13}>
+              <div className="text-center">
+                <span className="text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{armPct}%</span>
+                <span className="mt-0.5 block text-[10px] text-graphite-400 dark:text-gray-500">da CAD</span>
+              </div>
+            </ProgressRing>
+            <p className="mt-4 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Classificação</p>
+            <p className="text-[18px] font-extrabold" style={{ color: classificacao.color }}>{classificacao.label}</p>
+            <p className="mt-2 text-center text-[12px] leading-relaxed text-graphite-500 dark:text-gray-400">
+              {classificacao.label === "Adequado"
+                ? "O armazenamento está adequado. Manter o manejo atual."
+                : classificacao.label === "Atenção"
+                  ? "Armazenamento próximo do limite. Preparar irrigação."
+                  : "Déficit relevante. Irrigar para repor a água do solo."}
+            </p>
+          </div>
         </Card>
-      )}
+      </div>
+
+      {/* Resumo do período */}
+      <Card className="p-0">
+        <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Resumo do período <span className="font-normal text-graphite-400 dark:text-gray-500">({first?.date.slice(8, 10)}/{first?.date.slice(5, 7)} – {last?.date.slice(8, 10)}/{last?.date.slice(5, 7)})</span></p>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-gray-100 md:grid-cols-3 lg:grid-cols-5 dark:divide-white/[0.06]">
+          {[
+            { label: "Déficit inicial", value: `${(first?.deficit ?? 0).toFixed(1)} mm` },
+            { label: "Entradas de água", value: `${entradas.toFixed(1)} mm`, cls: "text-blue-600 dark:text-blue-400" },
+            { label: "Saídas de água", value: `${summary.totalETc.toFixed(1)} mm`, cls: "text-amber-600 dark:text-amber-400" },
+            { label: "Déficit final", value: `${(last?.deficit ?? 0).toFixed(1)} mm` },
+            { label: "Variação do armazenamento", value: `${variacao >= 0 ? "+" : ""}${variacao.toFixed(1)} mm`, cls: variacao >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400" },
+          ].map((s, i) => (
+            <div key={i} className="px-5 py-4">
+              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{s.label}</p>
+              <p className={`mt-1.5 text-[18px] font-extrabold tabular-nums ${s.cls ?? "text-graphite-900 dark:text-white"}`}>{s.value}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Tabela detalhada (mantida) */}
+      <Card className="overflow-x-auto">
+        <p className="mb-3 text-[13px] font-bold text-graphite-800 dark:text-white">Balanço diário detalhado</p>
+        <Table columns={columns} data={rows} getKey={(r) => r.date} />
+      </Card>
     </div>
   );
 }
