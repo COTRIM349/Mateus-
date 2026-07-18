@@ -50,6 +50,15 @@ const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
   cinza: "ideal",
 };
 
+// distância aproximada entre dois pontos (km) — Haversine
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 interface Pivot {
@@ -59,6 +68,9 @@ interface Pivot {
   flow_rate: number;
   efficiency: number;
   farm_id: string;
+  specific_consumption: number | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface CropAssignment {
@@ -146,7 +158,7 @@ const TABS = [
 // ── Main Page ─────────────────────────────────────────────────────────────
 
 export default function BalancoHidricoPage() {
-  const { activeFarmId } = useAuth();
+  const { activeFarmId, farms } = useAuth();
   const supabase = createClient();
 
   const [activeTab, setActiveTab] = useState("balanco");
@@ -193,7 +205,7 @@ export default function BalancoHidricoPage() {
     (async () => {
       const { data } = await supabase
         .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, farm_id")
+        .select("id, name, area, flow_rate, efficiency, farm_id, specific_consumption, latitude, longitude")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("name");
@@ -497,6 +509,88 @@ export default function BalancoHidricoPage() {
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
+  // rastreabilidade (estação climática) + operação (eventos de irrigação)
+  const [trace, setTrace] = useState<{ stationName: string | null; distanceKm: number | null; lastSync: string | null; qualityPct: number | null }>({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
+  const [ops, setOps] = useState<{ volumeM3: number | null; hours: number | null; energyKwh: number | null }>({ volumeM3: null, hours: null, energyKwh: null });
+
+  useEffect(() => {
+    if (!activeFarmId || !selectedPivotId || !dateStart || !dateEnd) {
+      setTrace({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
+      setOps({ volumeM3: null, hours: null, energyKwh: null });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const pivot = pivots.find((p) => p.id === selectedPivotId);
+      // estação ativa da fazenda
+      const { data: st } = await supabase
+        .from("weather_stations")
+        .select("id, name, latitude, longitude")
+        .eq("farm_id", activeFarmId)
+        .eq("active", true)
+        .order("name")
+        .limit(1)
+        .maybeSingle();
+
+      let lastSync: string | null = null;
+      let qualityPct: number | null = null;
+      if (st?.id) {
+        const { data: reads } = await supabase
+          .from("weather_readings")
+          .select("imported_at, data_quality")
+          .eq("station_id", st.id as string)
+          .gte("date", dateStart)
+          .lte("date", dateEnd);
+        if (reads && reads.length > 0) {
+          lastSync = reads.reduce((m: string, r: { imported_at: string }) => (r.imported_at > m ? r.imported_at : m), reads[0].imported_at as string);
+          const ok = reads.filter((r: { data_quality: string }) => r.data_quality === "ok").length;
+          qualityPct = Math.round((ok / reads.length) * 100);
+        }
+      }
+      const distanceKm = st && pivot?.latitude != null && pivot?.longitude != null
+        ? haversineKm(pivot.latitude, pivot.longitude, st.latitude as number, st.longitude as number)
+        : null;
+
+      // eventos de irrigação do pivô no período
+      const { data: evs } = await supabase
+        .from("irrigation_events")
+        .select("started_at, ended_at, volume_m3, energy_kwh")
+        .eq("pivot_id", selectedPivotId)
+        .gte("started_at", dateStart + "T00:00:00")
+        .lte("started_at", dateEnd + "T23:59:59");
+      let volumeM3: number | null = null, hours: number | null = null, energyKwh: number | null = null;
+      if (evs && evs.length > 0) {
+        volumeM3 = evs.reduce((a: number, e: { volume_m3: number }) => a + (e.volume_m3 ?? 0), 0);
+        const withEnd = evs.filter((e: { ended_at: string | null }) => e.ended_at);
+        hours = withEnd.length > 0 ? withEnd.reduce((a: number, e: { started_at: string; ended_at: string }) => a + (new Date(e.ended_at).getTime() - new Date(e.started_at).getTime()) / 3600000, 0) : null;
+        const en = evs.reduce((a: number, e: { energy_kwh: number | null }) => a + (e.energy_kwh ?? 0), 0);
+        energyKwh = en > 0 ? en : null;
+      }
+
+      if (!cancelled) {
+        setTrace({ stationName: st?.name ?? null, distanceKm, lastSync, qualityPct });
+        setOps({ volumeM3, hours, energyKwh });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeFarmId, selectedPivotId, dateStart, dateEnd, pivots, supabase]);
+
+  // presets de período — apenas ajustam o intervalo (o carregamento é automático)
+  const [activePeriod, setActivePeriod] = useState<number | "safra" | null>(null);
+  const applyPeriod = (kind: number | "safra") => {
+    const today = new Date();
+    const end = today.toISOString().slice(0, 10);
+    let start: string;
+    if (kind === "safra" && assignment?.planting_date) start = assignment.planting_date;
+    else {
+      const d = typeof kind === "number" ? kind : 30;
+      start = new Date(today.getTime() - (d - 1) * 86400000).toISOString().slice(0, 10);
+    }
+    setDateStart(start);
+    setDateEnd(end);
+    setActivePeriod(kind);
+  };
+
   // ── Lançamento handler ──────────────────────────────────────────────────
   const handleLancamento = async () => {
     if (!selectedPivotId || !lancDate || !lancDepth) return;
@@ -532,11 +626,30 @@ export default function BalancoHidricoPage() {
 
   // ── Render ──────────────────────────────────────────────────────────────
 
+  const selPivot = pivots.find((p) => p.id === selectedPivotId);
+  const centroHead = {
+    pivotName: selPivot?.name ?? null,
+    cultureName: culture?.name ?? null,
+    seasonName: null as string | null,
+    farmName: farms.find((f) => f.id === activeFarmId)?.name ?? null,
+    area: selPivot?.area ?? null,
+    efficiency: selPivot ? selPivot.efficiency * 100 : null,
+    plantingDate: assignment?.planting_date ?? null,
+    statusLabel: selPivot ? "Operando" : null,
+    energiaEspecifica: selPivot?.specific_consumption ?? null,
+    stationName: trace.stationName,
+    distanceKm: trace.distanceKm,
+    lastSync: trace.lastSync,
+    qualityPct: trace.qualityPct,
+    volumeM3: ops.volumeM3,
+    horasOperadas: ops.hours,
+  };
+
   return (
     <div>
       <PageHeader
-        titulo="Balanço Hídrico"
-        descricao="Motor FAO-56 — Acompanhamento diário de déficit e armazenamento"
+        titulo="Centro de Decisão Hídrica"
+        descricao="Motor FAO-56 — condição da água no solo, recomendação e rastreabilidade"
       />
 
       {/* Mapa seletor de pivô (por status hídrico) */}
@@ -598,6 +711,21 @@ export default function BalancoHidricoPage() {
             </Button>
           </div>
         </div>
+        {/* presets de período */}
+        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
+          {([7, 15, 30, 60, "safra"] as const).map((p) => (
+            <button
+              key={String(p)}
+              type="button"
+              onClick={() => applyPeriod(p)}
+              disabled={p === "safra" && !assignment?.planting_date}
+              className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${activePeriod === p ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}
+            >
+              {p === "safra" ? "Safra" : `${p}d`}
+            </button>
+          ))}
+        </div>
         {assignment && culture && soil && (
           <div className="mt-3 flex flex-wrap gap-4 text-xs text-graphite-400 dark:text-gray-500">
             <span>Cultura: <strong className="text-graphite-900 dark:text-white">{culture.name}</strong></span>
@@ -619,7 +747,7 @@ export default function BalancoHidricoPage() {
 
       <div className="mt-5">
         {activeTab === "balanco" && (
-          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} /></div>
+          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} /></div>
         )}
         {activeTab === "graficos" && (
           <div className="animate-in"><ChartsTab rows={balanceRows} /></div>
@@ -642,40 +770,314 @@ export default function BalancoHidricoPage() {
   );
 }
 
+// ── Gráfico de manejo (multi-séries, estilo técnico) ─────────────────────────
+// Estrutura inspirada no gráfico de manejo do setor (faixa de KPIs + séries por
+// categoria + linhas/barras num quadro de umidade %CC × mm), com identidade
+// própria. Usa apenas os dados que o motor FAO-56 já calcula.
+
+const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
+const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
+
+type SKey = "umidade" | "cc" | "seg" | "pm" | "chuva" | "irrig" | "kc" | "eto" | "etc" | "deficit";
+interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar"; axis: "pct" | "mm"; }
+
+const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
+  { cat: "Água no solo", items: [
+    { k: "umidade", label: "Água disponível", color: "#0c3d2b", kind: "line", axis: "pct" },
+    { k: "cc", label: "Capacidade de campo", color: "#2f6bff", kind: "dash", axis: "pct" },
+    { k: "seg", label: "Umid. de segurança", color: "#e5484d", kind: "dash", axis: "pct" },
+    { k: "pm", label: "Ponto de murcha", color: "#8a998f", kind: "dash", axis: "pct" },
+  ] },
+  { cat: "Manejo", items: [
+    { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm" },
+    { k: "irrig", label: "Irrigação", color: "#0bb4c9", kind: "bar", axis: "mm" },
+    { k: "deficit", label: "Déficit", color: "#e5484d", kind: "dash", axis: "mm" },
+  ] },
+  { cat: "Cultura", items: [
+    { k: "kc", label: "Kc (×100)", color: "#4ade80", kind: "dash", axis: "pct" },
+  ] },
+  { cat: "Clima", items: [
+    { k: "eto", label: "ETo", color: "#f97316", kind: "line", axis: "mm" },
+    { k: "etc", label: "ETc", color: "#f59e0b", kind: "line", axis: "mm" },
+  ] },
+];
+const MANEJO_ALL: SeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
+const MANEJO_DEF = (k: SKey) => MANEJO_ALL.find((s) => s.k === k)!;
+
+function sVal(k: SKey, r: DailyBalanceRow): number {
+  switch (k) {
+    case "umidade": return r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0;
+    case "cc": return 100;
+    case "seg": return r.cad > 0 ? ((r.cad - r.afd) / r.cad) * 100 : 0;
+    case "pm": return 0;
+    case "kc": return r.kc * 100;
+    case "chuva": return r.precipitation;
+    case "irrig": return r.irrigationApplied;
+    case "eto": return r.et0;
+    case "etc": return r.etc;
+    case "deficit": return r.deficit;
+  }
+}
+const sFmt = (k: SKey, r: DailyBalanceRow): string =>
+  k === "kc" ? r.kc.toFixed(2)
+    : MANEJO_DEF(k).axis === "pct" ? `${sVal(k, r).toFixed(0)}%`
+      : `${sVal(k, r).toFixed(1)} mm`;
+
+/** Faixa de KPIs do período (topo). */
+function ManejoKpiStrip({ rows, summary }: { rows: DailyBalanceRow[]; summary: ReturnType<typeof calculateSummary> }) {
+  const chuvaEf = summary.totalEffPrecipitation;
+  const efPct = summary.totalPrecipitation > 0 ? (chuvaEf / summary.totalPrecipitation) * 100 : 0;
+  const etp = rows.reduce((a, r) => a + r.et0, 0);
+  const stress = summary.days > 0 ? (summary.daysInDeficit / summary.days) * 100 : 0;
+  const kpis = [
+    { label: "Dias manejados", value: `${summary.days}`, unit: "" },
+    { label: "Irrigação", value: summary.totalIrrigation.toFixed(0), unit: "mm" },
+    { label: "Chuva", value: summary.totalPrecipitation.toFixed(0), unit: "mm" },
+    { label: "Chuva efetiva", value: chuvaEf.toFixed(0), unit: "mm", extra: `${efPct.toFixed(0)}%` },
+    { label: "ETo", value: etp.toFixed(0), unit: "mm" },
+    { label: "ETc", value: summary.totalETc.toFixed(0), unit: "mm" },
+    { label: "Índice de estresse", value: stress.toFixed(1), unit: "%" },
+  ];
+  return (
+    <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 lg:grid-cols-7 lg:divide-y-0 dark:divide-white/[0.06]">
+      {kpis.map((m) => (
+        <div key={m.label} className="px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
+          <p className="mt-1 text-[19px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">
+            {m.value}{m.unit && <span className="ml-0.5 text-[11px] font-semibold text-graphite-400">{m.unit}</span>}
+            {m.extra && <span className="ml-1.5 text-[12px] font-bold text-brand-600 dark:text-brand-400">{m.extra}</span>}
+          </p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean> }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const W = 940, H = 350, padL = 40, padR = 52, padT = 20, padB = 42;
+  const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
+  const n = rows.length || 1;
+  const band = (x1 - x0) / n;
+  const cx = (i: number) => x0 + band * i + band / 2;
+
+  const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
+  const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit])) / 10) * 10);
+  const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
+  const yFor = (s: SeriesDef, v: number) => (s.axis === "pct" ? yP(v) : yM(v));
+
+  const bw = Math.min(4, band * 0.28);
+  const lineKeys: SKey[] = ["cc", "seg", "pm", "kc", "eto", "etc", "deficit", "umidade"]; // umidade por último (topo)
+  const step = Math.max(1, Math.ceil(n / 9));
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * W;
+    setHover(clampN(Math.round((svgX - x0) / band - 0.5), 0, n - 1));
+  };
+  const activeVisible = MANEJO_ALL.filter((s) => visible[s.k]);
+
+  // faixas suaves (adequada / atenção / crítica) usando a segurança do último dia
+  const segPct = rows.length && rows[n - 1].cad > 0 ? ((rows[n - 1].cad - rows[n - 1].afd) / rows[n - 1].cad) * 100 : 50;
+
+  return (
+    <div className="relative" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
+        {/* faixas discretas: adequada (verde), atenção (âmbar), crítica (vermelho) */}
+        <rect x={x0} y={yP(100)} width={x1 - x0} height={yP(segPct) - yP(100)} fill="#1ea85b" opacity={0.05} />
+        <rect x={x0} y={yP(segPct)} width={x1 - x0} height={yP(segPct * 0.6) - yP(segPct)} fill="#f97316" opacity={0.05} />
+        <rect x={x0} y={yP(segPct * 0.6)} width={x1 - x0} height={yP(0) - yP(segPct * 0.6)} fill="#e5484d" opacity={0.05} />
+        {/* grade + eixos */}
+        {[0, 25, 50, 75, 100, 125].map((p) => (
+          <g key={p}>
+            <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-100 dark:stroke-white/[0.05]" strokeWidth={1} />
+            <text x={x0 - 6} y={yP(p) + 3} textAnchor="end" className="fill-graphite-300 text-[9px] dark:fill-gray-600">{p}</text>
+          </g>
+        ))}
+        <text x={x0 - 6} y={y0 - 7} textAnchor="end" className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">%CC</text>
+        {[0, mmMax / 2, mmMax].map((v) => (
+          <text key={v} x={x1 + 7} y={yM(v) + 3} className="fill-graphite-300 text-[9px] dark:fill-gray-600">{Math.round(v)}</text>
+        ))}
+        <text x={x1 + 7} y={y0 - 7} className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">mm</text>
+
+        {/* barras chuva + irrigação */}
+        {rows.map((r, i) => (
+          <g key={i}>
+            {visible.chuva && r.precipitation > 0 && <rect x={cx(i) - bw - 0.6} y={yM(r.precipitation)} width={bw} height={y1 - yM(r.precipitation)} rx={1} fill={MANEJO_DEF("chuva").color} opacity={0.85} />}
+            {visible.irrig && r.irrigationApplied > 0 && <rect x={cx(i) + 0.6} y={yM(r.irrigationApplied)} width={bw} height={y1 - yM(r.irrigationApplied)} rx={1} fill={MANEJO_DEF("irrig").color} opacity={0.9} />}
+          </g>
+        ))}
+
+        {/* linhas */}
+        {lineKeys.filter((k) => visible[k]).map((k) => {
+          const s = MANEJO_DEF(k);
+          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r))}`).join(" ");
+          return (
+            <polyline key={k} points={pts} fill="none" stroke={s.color} strokeWidth={k === "umidade" ? 2.3 : 1.5}
+              strokeDasharray={s.kind === "dash" ? "5 3" : undefined} strokeLinejoin="round" strokeLinecap="round"
+              opacity={k === "umidade" ? 1 : 0.9} />
+          );
+        })}
+
+        {/* eixo x + datas */}
+        <line x1={x0} x2={x1} y1={y1} y2={y1} className="stroke-gray-200 dark:stroke-white/[0.1]" strokeWidth={1} />
+        {rows.map((r, i) => (i % step === 0 || i === n - 1) && (
+          <text key={`d${i}`} x={cx(i)} y={H - 12} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{fmtDia(r.date)}</text>
+        ))}
+
+        {/* crosshair */}
+        {hover != null && (
+          <g>
+            <line x1={cx(hover)} x2={cx(hover)} y1={y0} y2={y1} className="stroke-graphite-300 dark:stroke-white/20" strokeWidth={1} strokeDasharray="3 3" />
+            {activeVisible.map((s) => (
+              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover]))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
+            ))}
+          </g>
+        )}
+      </svg>
+
+      {/* tooltip */}
+      {hover != null && rows[hover] && (
+        <div
+          className="pointer-events-none absolute top-1 z-10 min-w-[150px] -translate-x-1/2 rounded-xl border border-gray-100 bg-white/95 p-2.5 shadow-elevated backdrop-blur dark:border-white/[0.1] dark:bg-graphite-800/95"
+          style={{ left: `${(cx(hover) / W) * 100}%` }}
+        >
+          <p className="mb-1.5 text-[11px] font-bold text-graphite-800 dark:text-white">{fmtDia(rows[hover].date)} <span className="font-normal text-graphite-400">· {rows[hover].phase}</span></p>
+          <div className="space-y-1">
+            {activeVisible.map((s) => (
+              <div key={s.k} className="flex items-center justify-between gap-4 text-[11px]">
+                <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />{s.label}</span>
+                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover])}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Balance Tab ─────────────────────────────────────────────────────────
+
+interface CentroHead {
+  pivotName: string | null;
+  cultureName: string | null;
+  seasonName: string | null;
+  farmName: string | null;
+  area: number | null;
+  efficiency: number | null;
+  plantingDate: string | null;
+  statusLabel: string | null;
+  energiaEspecifica: number | null;
+  stationName: string | null;
+  distanceKm: number | null;
+  lastSync: string | null;
+  qualityPct: number | null;
+  volumeM3: number | null;
+  horasOperadas: number | null;
+}
+
+const fmtTempoH = (h: number) => {
+  if (!h || h <= 0) return "—";
+  const H = Math.floor(h);
+  const M = Math.round((h - H) * 60);
+  return H > 0 ? `${H}h${M.toString().padStart(2, "0")}` : `${M}min`;
+};
+
+// verdicts derivados do status hídrico do motor (sem inventar dado)
+const VERDICT: Record<WaterStatus, { label: string; color: string; irrigar: boolean; texto: (mm: string) => string }> = {
+  saturado: { label: "Suspender irrigação", color: "#2f6bff", irrigar: false, texto: () => "Solo saturado — suspender irrigação para evitar drenagem." },
+  ideal: { label: "Não irrigar", color: "#1ea85b", irrigar: false, texto: () => "Água disponível dentro da faixa ideal. Manter o manejo." },
+  atencao: { label: "Monitorar", color: "#f97316", irrigar: false, texto: () => "Água disponível próxima do limite de segurança. Acompanhar de perto." },
+  deficit: { label: "Irrigar", color: "#e5484d", irrigar: true, texto: (mm) => `Aplicar ${mm} para repor a água do solo.` },
+  deficit_critico: { label: "Irrigação urgente", color: "#c0353a", irrigar: true, texto: (mm) => `Déficit crítico — aplicar ${mm} com prioridade.` },
+};
 
 function BalanceTab({
   rows,
   summary,
   loading,
+  head,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
+  head: CentroHead;
 }) {
+  const [visible, setVisible] = useState<Record<SKey, boolean>>({
+    umidade: true, cc: true, seg: true, pm: false, chuva: true, irrig: true, kc: true, eto: false, etc: false, deficit: false,
+  });
+  const [activeCat, setActiveCat] = useState("Água no solo");
+  const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
+  const [tblFilter, setTblFilter] = useState("");
+  const [showFilter, setShowFilter] = useState(false);
+
+  const filteredRows = tblFilter.trim()
+    ? rows.filter((r) => {
+        const q = tblFilter.toLowerCase();
+        return r.date.includes(q) || fmtDia(r.date).includes(q) || r.phase.toLowerCase().includes(q);
+      })
+    : rows;
+
+  const exportCsv = () => {
+    const headers = ["Data", "Fase", "Kc", "ETo", "ETc", "Chuva", "ChuvaEf", "Irrigacao", "Entradas", "Saidas", "Saldo", "AguaDisp", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const lines = filteredRows.map((r) => {
+      const entr = r.effectivePrecipitation + r.irrigationApplied;
+      const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
+      const lam = r.deficit >= r.afd && r.afd > 0 ? r.grossDepth : 0;
+      return [r.date, r.phase, r.kc.toFixed(2), r.et0.toFixed(1), r.etc.toFixed(1), r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1), entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1), r.storedWater.toFixed(1), depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label].join(";");
+    });
+    const csv = "﻿" + [headers.join(";"), ...lines].join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
+    const a = document.createElement("a");
+    a.href = url; a.download = `balanco-hidrico-${rows[0]?.date ?? ""}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
+
   if (rows.length === 0 && !loading) {
     return (
-      <Card className="py-12 text-center">
-        <p className="text-graphite-400 dark:text-gray-500">
-          Selecione um pivô e clique em &quot;Calcular Balanço&quot; para gerar o balanço hídrico diário.
-        </p>
+      <Card className="py-16 text-center">
+        <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400">
+          <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z" /></svg>
+        </div>
+        <p className="text-graphite-500 dark:text-gray-400">Selecione um pivô e clique em <strong className="text-graphite-800 dark:text-white">Calcular Balanço</strong> para abrir o Centro de Decisão Hídrica.</p>
       </Card>
     );
   }
 
+  const last = rows[rows.length - 1];
+  const first = rows[0];
+  const cad = last?.cad ?? 0;
+  const arm = last?.storedWater ?? 0;
+  const armPct = cad > 0 ? Math.round((arm / cad) * 100) : 0;
+  const raw = last ? Math.max(last.cad - last.afd, 0) : 0;
+  const depletPct = cad > 0 ? Math.round(((cad - arm) / cad) * 100) : 0;
+  const untilSafety = arm - raw; // >0 acima do limite; <0 abaixo
+  const classificacao = arm >= raw ? { label: "Adequado", color: "#1ea85b" } : arm >= raw * 0.5 ? { label: "Atenção", color: "#f97316" } : { label: "Crítico", color: "#e5484d" };
+  const variacao = (last?.storedWater ?? 0) - (first?.storedWater ?? 0);
+  const tendencia = variacao < -0.5 ? { label: "queda", down: true } : variacao > 0.5 ? { label: "alta", down: false } : { label: "estável", down: false };
+  const efPct = head.efficiency ?? (last ? (last.grossDepth > 0 ? (last.netDepth / last.grossDepth) * 100 : 85) : 85);
+  const etoTotal = rows.reduce((a, r) => a + r.et0, 0);
+  const stressPct = summary.days > 0 ? (summary.daysInDeficit / summary.days) * 100 : 0;
+  const verdict = VERDICT[last?.waterStatus ?? "ideal"];
+  const laminaBruta = last?.grossDepth ?? 0;
+
   const columns: Column<DailyBalanceRow>[] = [
-    { header: "Data", render: (r) => r.date },
+    { header: "Data", render: (r) => fmtDia(r.date) },
     { header: "Fase", render: (r) => <span className="text-xs">{r.phase}</span> },
-    { header: "ET₀", render: (r) => r.et0.toFixed(1) },
     { header: "Kc", render: (r) => r.kc.toFixed(2) },
+    { header: "ETo", render: (r) => r.et0.toFixed(1) },
     { header: "ETc", render: (r) => r.etc.toFixed(1) },
     { header: "Chuva", render: (r) => r.precipitation.toFixed(1) },
-    { header: "Chuva Ef.", render: (r) => r.effectivePrecipitation.toFixed(1) },
-    { header: "Irrigação", render: (r) => r.irrigationApplied > 0 ? <span className="text-brand-600 dark:text-brand-400">{r.irrigationApplied.toFixed(1)}</span> : "0.0" },
-    { header: "CAD", render: (r) => r.cad.toFixed(1) },
-    { header: "ARM", render: (r) => r.storedWater.toFixed(1) },
+    { header: "Ch. ef.", render: (r) => r.effectivePrecipitation.toFixed(1) },
+    { header: "Irrig.", render: (r) => r.irrigationApplied > 0 ? <span className="text-cyan-600 dark:text-cyan-400">{r.irrigationApplied.toFixed(1)}</span> : "0.0" },
+    { header: "Entradas", render: (r) => <span className="text-blue-600 dark:text-blue-400">{(r.effectivePrecipitation + r.irrigationApplied).toFixed(1)}</span> },
+    { header: "Saídas", render: (r) => <span className="text-amber-600 dark:text-amber-400">{r.etc.toFixed(1)}</span> },
+    { header: "Saldo", render: (r) => { const s = r.effectivePrecipitation + r.irrigationApplied - r.etc; return <span className={s >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{s >= 0 ? "+" : ""}{s.toFixed(1)}</span>; } },
+    { header: "Á. disp.", render: (r) => r.storedWater.toFixed(1) },
+    { header: "Depleção", render: (r) => `${r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0}%` },
     { header: "Déficit", render: (r) => r.deficit > 0 ? <span className="text-red-600 dark:text-red-400">{r.deficit.toFixed(1)}</span> : "0.0" },
-    { header: "Excedente", render: (r) => r.surplus > 0 ? <span className="text-blue-600 dark:text-blue-400">{r.surplus.toFixed(1)}</span> : "0.0" },
+    { header: "Lâm. rec.", render: (r) => r.deficit >= r.afd && r.afd > 0 ? r.grossDepth.toFixed(1) : "0.0" },
     {
       header: "Status",
       render: (r) => {
@@ -690,28 +1092,301 @@ function BalanceTab({
     },
   ];
 
+  if (loading) {
+    return (
+      <Card className="flex items-center justify-center gap-3 py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+        <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      {/* Summary cards */}
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-        <StatCard metric={{ id: "etc", title: "ETc Total", value: `${summary.totalETc.toFixed(1)} mm`, description: `Média: ${summary.avgETc.toFixed(1)} mm/dia` }} />
-        <StatCard metric={{ id: "precip", title: "Chuva Total", value: `${summary.totalPrecipitation.toFixed(1)} mm`, description: `Efetiva: ${summary.totalEffPrecipitation.toFixed(1)} mm` }} />
-        <StatCard metric={{ id: "irrig", title: "Irrigação", value: `${summary.totalIrrigation.toFixed(1)} mm`, description: `${summary.days} dias` }} />
-        <StatCard metric={{ id: "arm", title: "ARM Médio", value: `${summary.avgStoredWater.toFixed(1)} mm`, description: `Mín: ${summary.minStoredWater.toFixed(1)} mm` }} />
-        <StatCard metric={{ id: "deficit", title: "Dias em Déficit", value: `${summary.daysInDeficit}`, description: `Crítico: ${summary.daysInCritical}`, trend: summary.daysInDeficit > 0 ? "negative" : "positive", variation: summary.daysInDeficit === 0 ? "OK" : `${((summary.daysInDeficit / Math.max(summary.days, 1)) * 100).toFixed(0)}%` }} />
-        <StatCard metric={{ id: "surplus", title: "Excedente Total", value: `${summary.totalSurplus.toFixed(1)} mm`, description: "Percolação/escoamento" }} />
+      {/* 1 · Cabeçalho do pivô */}
+      <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-forest-900 to-forest-800 p-5 text-white shadow-elevated sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brand-300">Centro de Decisão Hídrica</p>
+            <h2 className="mt-1 text-[22px] font-extrabold tracking-tight sm:text-[26px]">
+              {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
+            </h2>
+            <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5 text-[12.5px] text-brand-100/90">
+              {head.farmName && <span>Fazenda <strong className="font-semibold text-white">{head.farmName}</strong></span>}
+              {head.area != null && <span>Área <strong className="font-semibold text-white">{head.area} ha</strong></span>}
+              {head.efficiency != null && <span>Eficiência <strong className="font-semibold text-white">{head.efficiency.toFixed(0)}%</strong></span>}
+              {head.statusLabel && <span className="inline-flex items-center gap-1.5">Status <span className="inline-flex items-center gap-1.5 font-semibold text-white"><span className="h-1.5 w-1.5 rounded-full bg-brand-300 ring-2 ring-brand-300/30" />{head.statusLabel}</span></span>}
+              <span>Atualizado <strong className="font-semibold text-white">{fmtDia(last?.date ?? "")}</strong></span>
+            </div>
+          </div>
+        </div>
       </div>
 
-      {loading ? (
-        <Card className="flex items-center justify-center gap-3 py-8">
-          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-          <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      {/* 2 · Cards de decisão */}
+      <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-6">
+        {/* Água disponível */}
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Água disponível</p>
+          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{armPct}<span className="text-[13px] text-graphite-400">%</span></p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{arm.toFixed(1)} mm da CC</p>
+          <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded" style={{ width: `${clampN(armPct, 0, 100)}%`, background: classificacao.color }} /></div>
+          <span className={`mt-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${tendencia.down ? "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400" : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"}`}>{tendencia.down ? "▼" : "▲"} {tendencia.label}</span>
         </Card>
-      ) : (
-        <Card className="overflow-x-auto">
-          <Table columns={columns} data={rows} getKey={(r) => r.date} />
+        {/* Depleção */}
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Depleção atual</p>
+          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{depletPct}<span className="text-[13px] text-graphite-400">%</span></p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{(last?.deficit ?? 0).toFixed(1)} mm consumidos</p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{untilSafety >= 0 ? `a ${untilSafety.toFixed(1)} mm da segurança` : "abaixo da segurança"}</p>
+          <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded bg-orange-500" style={{ width: `${clampN(depletPct, 0, 100)}%` }} /></div>
         </Card>
-      )}
+        {/* Lâmina recomendada */}
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Lâmina recomendada</p>
+          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{verdict.irrigar ? laminaBruta.toFixed(1) : "0,0"}<span className="text-[13px] text-graphite-400"> mm</span></p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">líquida {(last?.netDepth ?? 0).toFixed(1)} · bruta {laminaBruta.toFixed(1)}</p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">eficiência {efPct.toFixed(0)}%</p>
+        </Card>
+        {/* Próxima irrigação */}
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Próxima irrigação</p>
+          <p className="mt-2 text-[19px] font-extrabold leading-tight" style={{ color: verdict.color }}>{verdict.label}</p>
+          <p className="mt-1 text-[11.5px] text-graphite-400 dark:text-gray-500">janela e data: <span className="font-semibold">pendente</span></p>
+        </Card>
+        {/* Chuva acumulada */}
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Chuva acumulada</p>
+          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{summary.totalPrecipitation.toFixed(0)}<span className="text-[13px] text-graphite-400"> mm</span></p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">efetiva {summary.totalEffPrecipitation.toFixed(0)} mm</p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">período {summary.days} dias</p>
+        </Card>
+        {/* Irrigação acumulada */}
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Irrigação acumulada</p>
+          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{summary.totalIrrigation.toFixed(0)}<span className="text-[13px] text-graphite-400"> mm</span></p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">efetiva {(summary.totalIrrigation * efPct / 100).toFixed(0)} mm</p>
+          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">eficiência {efPct.toFixed(0)}%</p>
+        </Card>
+      </div>
+
+      {/* linha compacta de métricas */}
+      <Card className="p-0">
+        <ManejoKpiStrip rows={rows} summary={summary} />
+      </Card>
+
+      {/* 3 + 5 · Gráfico + Recomendação/Alertas */}
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]">
+      {/* Gráfico principal com painel de camadas */}
+      <Card className="p-0">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <div>
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Evolução do Balanço Hídrico</p>
+            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">água disponível (% CC) × água aplicada (mm) · faixas adequada · atenção · crítica</p>
+          </div>
+        </div>
+        <div className="flex flex-col lg:flex-row">
+          {/* painel de séries por categoria */}
+          <div className="border-b border-gray-100 p-4 lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r dark:border-white/[0.06]">
+            <div className="flex gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
+              {MANEJO_GROUPS.map((g) => (
+                <button
+                  key={g.cat}
+                  type="button"
+                  onClick={() => setActiveCat(g.cat)}
+                  className={`flex-1 rounded-md px-1.5 py-1 text-[11px] font-semibold transition-colors ${activeCat === g.cat ? "bg-white text-graphite-800 shadow-xs dark:bg-white/[0.1] dark:text-white" : "text-graphite-400 hover:text-graphite-600 dark:text-gray-500"}`}
+                >
+                  {g.cat}
+                </button>
+              ))}
+            </div>
+            <div className="mt-3 space-y-0.5">
+              {MANEJO_GROUPS.find((g) => g.cat === activeCat)!.items.map((s) => {
+                const on = visible[s.k];
+                return (
+                  <button
+                    key={s.k}
+                    type="button"
+                    onClick={() => toggleSeries(s.k)}
+                    aria-pressed={on}
+                    className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.04]"
+                  >
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border" style={{ borderColor: s.color, background: on ? s.color : "transparent" }}>
+                      {on && <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
+                    </span>
+                    <span className={`text-[12px] ${on ? "font-semibold text-graphite-700 dark:text-gray-200" : "text-graphite-400 dark:text-gray-500"}`}>{s.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+            <p className="mt-3 border-t border-gray-100 pt-2.5 text-[10px] leading-relaxed text-graphite-300 dark:border-white/[0.06] dark:text-gray-600">
+              Passe o mouse no gráfico para ver os valores do dia.
+            </p>
+          </div>
+          {/* gráfico */}
+          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} /></div>
+        </div>
+      </Card>
+
+      {/* Trilha: recomendação + justificativa + alertas */}
+      <div className="space-y-5">
+        {/* Recomendação de hoje */}
+        <Card className="overflow-hidden p-0">
+          <div className="bg-gradient-to-br from-forest-800 to-forest-900 p-4 text-white">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-brand-300">Recomendação de hoje</p>
+            <p className="mt-1.5 flex items-center gap-2 text-[20px] font-extrabold" style={{ color: "#eafaf1" }}>
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: verdict.color }} />{verdict.label}
+            </p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-brand-100/90">{verdict.texto(`${laminaBruta.toFixed(1)} mm`)}</p>
+          </div>
+          <div className="p-4">
+            {verdict.irrigar ? (
+              <div className="space-y-0">
+                {[
+                  { l: "Lâmina líquida", v: `${(last?.netDepth ?? 0).toFixed(1)} mm` },
+                  { l: "Lâmina bruta", v: `${laminaBruta.toFixed(1)} mm` },
+                  { l: "Eficiência", v: `${efPct.toFixed(0)}%` },
+                  { l: "Volume necessário", v: `${(last?.volumeNeeded ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³` },
+                  { l: "Tempo estimado", v: fmtTempoH(last?.irrigationTime ?? 0) },
+                  { l: "Velocidade recomendada", v: "pendente", pend: true },
+                ].map((r) => (
+                  <div key={r.l} className="flex items-center justify-between border-b border-dashed border-gray-100 py-1.5 text-[12.5px] last:border-0 dark:border-white/[0.06]">
+                    <span className="text-graphite-500 dark:text-gray-400">{r.l}</span>
+                    <span className={r.pend ? "font-semibold text-graphite-300 dark:text-gray-600" : "font-bold text-graphite-800 dark:text-white"}>{r.v}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[12.5px] text-graphite-500 dark:text-gray-400">Sem necessidade de irrigação para hoje. Acompanhar a evolução da umidade.</p>
+            )}
+          </div>
+        </Card>
+
+        {/* Por que esta recomendação? */}
+        <Card className="p-4">
+          <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
+            {arm < raw
+              ? "A água disponível está abaixo do limite de segurança e a demanda (ETc) supera as entradas recentes."
+              : "A água disponível está dentro da faixa segura; as entradas cobrem a demanda atual."}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {[
+              { l: "Água disp. atual", v: `${arm.toFixed(1)} mm` },
+              { l: "Limite segurança", v: `${raw.toFixed(1)} mm` },
+              { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
+              { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
+            ].map((f) => (
+              <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]">
+                <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{f.l}</p>
+                <p className="mt-1 text-[14px] font-extrabold tabular-nums" style={{ color: f.c ?? undefined }}>{f.v}</p>
+              </div>
+            ))}
+          </div>
+          <p className="mt-2.5 text-[10px] text-graphite-300 dark:text-gray-600">ETc/chuva previstas dependem de dados de previsão (pendente).</p>
+        </Card>
+
+        {/* Alertas e observações */}
+        <Card className="p-4">
+          <p className="mb-2.5 flex items-center gap-2 text-[13px] font-bold text-graphite-900 dark:text-white">
+            <svg className="h-4 w-4 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
+            Alertas e observações
+          </p>
+          {(() => {
+            const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
+            if (arm < raw) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `Água disponível em ${armPct}% da CC — repor para evitar estresse.` });
+            if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
+            if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
+            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: "Nenhum alerta ativo para o pivô no período." });
+            const sevCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
+            return items.map((a, i) => (
+              <div key={i} className="flex gap-3 border-t border-gray-100 py-2.5 first:border-0 dark:border-white/[0.06]">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sevCls[a.sev]}`} />
+                <div>
+                  <p className="text-[12.5px] font-bold text-graphite-800 dark:text-white">{a.title}</p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-400 dark:text-gray-500">{a.desc}</p>
+                </div>
+              </div>
+            ));
+          })()}
+        </Card>
+      </div>
+      </div>
+
+      {/* 8 · Resumo operacional */}
+      <Card className="p-0">
+        <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Resumo operacional</p>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-5 lg:divide-y-0 dark:divide-white/[0.06]">
+          {[
+            { l: "Próxima irrigação", v: verdict.irrigar ? verdict.label : "Não irrigar" },
+            { l: "Lâmina recomendada", v: verdict.irrigar ? `${laminaBruta.toFixed(1)} mm` : "0,0 mm" },
+            { l: "Data sugerida", v: "pendente", pend: true },
+            { l: "Janela ideal", v: "pendente", pend: true },
+            head.horasOperadas != null
+              ? { l: "Horas operadas", v: `${head.horasOperadas.toFixed(0)} h` }
+              : { l: "Horas operadas", v: "pendente", pend: true },
+            { l: "Eficiência média", v: `${efPct.toFixed(0)}%` },
+            { l: "Uniformidade (CUC)", v: "pendente", pend: true },
+            head.energiaEspecifica != null
+              ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` }
+              : { l: "Energia específica", v: "pendente", pend: true },
+            head.volumeM3 != null
+              ? { l: "Volume acumulado", v: `${(head.volumeM3 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil m³` }
+              : { l: "Volume acumulado", v: "pendente", pend: true },
+            { l: "Dias em estresse", v: `${summary.daysInDeficit}` },
+          ].map((s, i) => (
+            <div key={i} className="px-5 py-3.5">
+              <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{s.l}</p>
+              <p className={`mt-1 text-[16px] font-extrabold tabular-nums ${s.pend ? "text-graphite-300 dark:text-gray-600" : "text-graphite-900 dark:text-white"}`}>{s.v}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* 9 · Tabela técnica */}
+      <Card className="p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Dados diários do balanço hídrico <span className="font-normal text-graphite-400 dark:text-gray-500">({filteredRows.length} de {rows.length})</span></p>
+          <div className="flex items-center gap-2">
+            {showFilter && (
+              <input
+                type="text"
+                autoFocus
+                value={tblFilter}
+                onChange={(e) => setTblFilter(e.target.value)}
+                placeholder="Filtrar data ou fase…"
+                className="h-8 w-40 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] text-graphite-700 outline-none focus:border-brand-400 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-200"
+              />
+            )}
+            <button type="button" onClick={() => { setShowFilter((s) => !s); if (showFilter) setTblFilter(""); }} className={`rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${showFilter ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}>Filtros</button>
+            <button type="button" onClick={exportCsv} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]">Excel</button>
+            <button type="button" onClick={() => window.print()} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]">PDF</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto px-2 pb-2">
+          <Table columns={columns} data={filteredRows} getKey={(r) => r.date} />
+        </div>
+      </Card>
+
+      {/* 10 · Rastreabilidade */}
+      <div className="flex flex-wrap gap-x-7 gap-y-2 rounded-2xl border border-gray-100 bg-gray-50/60 px-6 py-4 text-[11.5px] text-graphite-500 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-gray-400">
+        <p className="w-full text-[10px] font-bold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Rastreabilidade</p>
+        <span>Método ETo <strong className="font-semibold text-graphite-800 dark:text-white">FAO Penman-Monteith</strong></span>
+        <span>Origem do Kc <strong className="font-semibold text-graphite-800 dark:text-white">Curva da cultura</strong></span>
+        <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">USDA-SCS</strong></span>
+        <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
+        <span>Motor <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56</strong></span>
+        <span>Fonte climática {head.stationName ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.stationName}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        <span>Distância estação {head.distanceKm != null ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.distanceKm.toFixed(1)} km</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        <span>Última sincronização {head.lastSync ? <strong className="font-semibold text-graphite-800 dark:text-white">{fmtDia(head.lastSync.slice(0, 10))} {head.lastSync.slice(11, 16)}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        {head.qualityPct != null && (
+          <span className="inline-flex items-center gap-2">Qualidade
+            <span className="inline-block h-1.5 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-white/[0.1]"><span className="block h-full rounded-full bg-brand-500" style={{ width: `${head.qualityPct}%` }} /></span>
+            <strong className="font-semibold text-graphite-800 dark:text-white">{head.qualityPct}%</strong>
+          </span>
+        )}
+      </div>
     </div>
   );
 }

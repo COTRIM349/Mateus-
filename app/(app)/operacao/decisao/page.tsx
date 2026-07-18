@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -633,6 +634,8 @@ export default function DecisaoPage() {
                         >
                           Recomendar
                         </button>
+                      ) : day && day.surplus > 0 ? (
+                        <span className="text-[12px] font-semibold text-blue-600 dark:text-blue-400">Excesso hídrico</span>
                       ) : day?.status === "amarelo" ? (
                         <span className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">Monitorar</span>
                       ) : day?.status === "verde" ? (
@@ -646,6 +649,22 @@ export default function DecisaoPage() {
               })}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <Link
+            href="/pivos"
+            className="inline-flex items-center gap-2 text-[13px] font-semibold text-graphite-600 transition-colors hover:text-graphite-900 dark:text-gray-300 dark:hover:text-white"
+          >
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>
+            Ver todos os pivôs
+          </Link>
+          <Link
+            href="/programacao"
+            className="inline-flex items-center gap-2 rounded-xl bg-brand-600 px-4 py-2 text-[13px] font-semibold text-white shadow-soft transition-colors hover:bg-brand-700"
+          >
+            Enviar recomendações para programação
+            <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.9} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 12h14M13 6l6 6-6 6" /></svg>
+          </Link>
         </div>
       </Card>
 
