@@ -10,8 +10,6 @@ import {
   Table,
   Tabs,
   Input,
-  StatCard,
-  ChartCard,
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -26,9 +24,8 @@ import {
   type HydricStatus,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
-import { useRecharts, useFarmHydricState } from "@/lib/hooks";
+import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
-import { cn } from "@/utils/cn";
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
@@ -58,6 +55,9 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+// séries climáticas extras (da estação) por data — para o gráfico
+type WeatherExtra = { tmax: number | null; tmin: number | null; tmean: number | null; rh: number | null; wind: number | null; rad: number | null };
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -151,7 +151,6 @@ interface StoredBalance {
 
 const TABS = [
   { id: "balanco", label: "Balanço Diário" },
-  { id: "graficos", label: "Gráficos" },
   { id: "lancamento", label: "Lançamento Irrigação" },
 ];
 
@@ -512,11 +511,13 @@ export default function BalancoHidricoPage() {
   // rastreabilidade (estação climática) + operação (eventos de irrigação)
   const [trace, setTrace] = useState<{ stationName: string | null; distanceKm: number | null; lastSync: string | null; qualityPct: number | null }>({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
   const [ops, setOps] = useState<{ volumeM3: number | null; hours: number | null; energyKwh: number | null }>({ volumeM3: null, hours: null, energyKwh: null });
+  const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherExtra>>({});
 
   useEffect(() => {
     if (!activeFarmId || !selectedPivotId || !dateStart || !dateEnd) {
       setTrace({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
       setOps({ volumeM3: null, hours: null, energyKwh: null });
+      setWeatherByDate({});
       return;
     }
     let cancelled = false;
@@ -534,10 +535,11 @@ export default function BalancoHidricoPage() {
 
       let lastSync: string | null = null;
       let qualityPct: number | null = null;
+      const wx: Record<string, WeatherExtra> = {};
       if (st?.id) {
         const { data: reads } = await supabase
           .from("weather_readings")
-          .select("imported_at, data_quality")
+          .select("date, imported_at, data_quality, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation")
           .eq("station_id", st.id as string)
           .gte("date", dateStart)
           .lte("date", dateEnd);
@@ -545,6 +547,9 @@ export default function BalancoHidricoPage() {
           lastSync = reads.reduce((m: string, r: { imported_at: string }) => (r.imported_at > m ? r.imported_at : m), reads[0].imported_at as string);
           const ok = reads.filter((r: { data_quality: string }) => r.data_quality === "ok").length;
           qualityPct = Math.round((ok / reads.length) * 100);
+          for (const r of reads as Array<{ date: string; temp_max: number | null; temp_min: number | null; temp_mean: number | null; humidity: number | null; wind_speed: number | null; solar_radiation: number | null }>) {
+            wx[r.date] = { tmax: r.temp_max, tmin: r.temp_min, tmean: r.temp_mean, rh: r.humidity, wind: r.wind_speed, rad: r.solar_radiation };
+          }
         }
       }
       const distanceKm = st && pivot?.latitude != null && pivot?.longitude != null
@@ -570,6 +575,7 @@ export default function BalancoHidricoPage() {
       if (!cancelled) {
         setTrace({ stationName: st?.name ?? null, distanceKm, lastSync, qualityPct });
         setOps({ volumeM3, hours, energyKwh });
+        setWeatherByDate(wx);
       }
     })();
     return () => { cancelled = true; };
@@ -747,10 +753,7 @@ export default function BalancoHidricoPage() {
 
       <div className="mt-5">
         {activeTab === "balanco" && (
-          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} /></div>
-        )}
-        {activeTab === "graficos" && (
-          <div className="animate-in"><ChartsTab rows={balanceRows} /></div>
+          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} weatherByDate={weatherByDate} /></div>
         )}
         {activeTab === "lancamento" && (
           <div className="animate-in"><LancamentoTab
@@ -778,8 +781,12 @@ export default function BalancoHidricoPage() {
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
-type SKey = "umidade" | "cc" | "seg" | "pm" | "chuva" | "irrig" | "kc" | "eto" | "etc" | "deficit";
-interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar"; axis: "pct" | "mm"; }
+type SKey = "umidade" | "cc" | "seg" | "pm" | "deficit" | "excesso"
+  | "chuva" | "irrig"
+  | "kc" | "rootdepth" | "fator"
+  | "eto" | "etc" | "tmax" | "tmean" | "tmin" | "rh" | "wind" | "rad";
+// axis: pct (% da CC) · mm · norm (escala relativa própria, valor real no tooltip)
+interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar"; axis: "pct" | "mm" | "norm"; norm?: [number, number]; unit?: string; }
 
 const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
   { cat: "Água no solo", items: [
@@ -792,52 +799,80 @@ const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
     { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm" },
     { k: "irrig", label: "Irrigação", color: "#0bb4c9", kind: "bar", axis: "mm" },
     { k: "deficit", label: "Déficit", color: "#e5484d", kind: "dash", axis: "mm" },
+    { k: "excesso", label: "Excesso", color: "#7c5cff", kind: "dash", axis: "mm" },
   ] },
   { cat: "Cultura", items: [
     { k: "kc", label: "Kc (×100)", color: "#4ade80", kind: "dash", axis: "pct" },
+    { k: "rootdepth", label: "Prof. da raiz", color: "#a15a1e", kind: "line", axis: "norm", norm: [0, 1.2], unit: "m" },
+    { k: "fator", label: "Fator disp. hídrica", color: "#22c55e", kind: "dash", axis: "norm", norm: [0, 1], unit: "" },
   ] },
   { cat: "Clima", items: [
     { k: "eto", label: "ETo", color: "#f97316", kind: "line", axis: "mm" },
     { k: "etc", label: "ETc", color: "#f59e0b", kind: "line", axis: "mm" },
+    { k: "tmax", label: "Temp. máxima", color: "#ef4444", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
+    { k: "tmean", label: "Temp. média", color: "#f59e0b", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
+    { k: "tmin", label: "Temp. mínima", color: "#8b5cf6", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
+    { k: "rh", label: "Umidade relativa", color: "#0ea5e9", kind: "line", axis: "norm", norm: [0, 100], unit: "%" },
+    { k: "wind", label: "Vento", color: "#64748b", kind: "line", axis: "norm", norm: [0, 15], unit: "m/s" },
+    { k: "rad", label: "Radiação", color: "#eab308", kind: "line", axis: "norm", norm: [0, 35], unit: "MJ/m²" },
   ] },
 ];
 const MANEJO_ALL: SeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
 const MANEJO_DEF = (k: SKey) => MANEJO_ALL.find((s) => s.k === k)!;
+const WEATHER_KEYS: SKey[] = ["tmax", "tmean", "tmin", "rh", "wind", "rad"];
 
-function sVal(k: SKey, r: DailyBalanceRow): number {
+function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): number {
   switch (k) {
     case "umidade": return r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0;
     case "cc": return 100;
     case "seg": return r.cad > 0 ? ((r.cad - r.afd) / r.cad) * 100 : 0;
     case "pm": return 0;
-    case "kc": return r.kc * 100;
+    case "deficit": return r.deficit;
+    case "excesso": return r.surplus;
     case "chuva": return r.precipitation;
     case "irrig": return r.irrigationApplied;
+    case "kc": return r.kc * 100;
+    case "rootdepth": return r.rootDepth;
+    case "fator": return r.depletionFactor;
     case "eto": return r.et0;
     case "etc": return r.etc;
-    case "deficit": return r.deficit;
+    case "tmax": return wx?.tmax ?? 0;
+    case "tmean": return wx?.tmean ?? 0;
+    case "tmin": return wx?.tmin ?? 0;
+    case "rh": return wx?.rh ?? 0;
+    case "wind": return wx?.wind ?? 0;
+    case "rad": return wx?.rad ?? 0;
   }
 }
-const sFmt = (k: SKey, r: DailyBalanceRow): string =>
-  k === "kc" ? r.kc.toFixed(2)
-    : MANEJO_DEF(k).axis === "pct" ? `${sVal(k, r).toFixed(0)}%`
-      : `${sVal(k, r).toFixed(1)} mm`;
+const sFmt = (k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): string => {
+  const def = MANEJO_DEF(k);
+  const v = sVal(k, r, wx);
+  if (k === "kc") return r.kc.toFixed(2);
+  if (def.axis === "pct") return `${v.toFixed(0)}%`;
+  if (def.axis === "mm") return `${v.toFixed(1)} mm`;
+  return `${v.toFixed(k === "wind" || k === "rootdepth" || k === "fator" ? 2 : 1)}${def.unit ? ` ${def.unit}` : ""}`;
+};
 
-function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean> }) {
+function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean>; weatherByDate: Record<string, WeatherExtra> }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 940, H = 350, padL = 40, padR = 52, padT = 20, padB = 42;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
   const n = rows.length || 1;
   const band = (x1 - x0) / n;
   const cx = (i: number) => x0 + band * i + band / 2;
+  const wxOf = (i: number) => weatherByDate[rows[i]?.date ?? ""];
 
   const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
-  const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit])) / 10) * 10);
+  const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit, r.surplus])) / 10) * 10);
   const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
-  const yFor = (s: SeriesDef, v: number) => (s.axis === "pct" ? yP(v) : yM(v));
+  const yFor = (s: SeriesDef, v: number) =>
+    s.axis === "pct" ? yP(v)
+      : s.axis === "mm" ? yM(v)
+        : yP(clampN(((v - s.norm![0]) / (s.norm![1] - s.norm![0])) * 100, 0, 100));
 
   const bw = Math.min(4, band * 0.28);
-  const lineKeys: SKey[] = ["cc", "seg", "pm", "kc", "eto", "etc", "deficit", "umidade"]; // umidade por último (topo)
+  // todas as séries de linha (barras à parte); umidade por último (fica no topo)
+  const lineKeys: SKey[] = [...MANEJO_ALL.filter((s) => s.kind !== "bar" && s.k !== "umidade").map((s) => s.k), "umidade"];
   const step = Math.max(1, Math.ceil(n / 9));
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -846,6 +881,7 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
     setHover(clampN(Math.round((svgX - x0) / band - 0.5), 0, n - 1));
   };
   const activeVisible = MANEJO_ALL.filter((s) => visible[s.k]);
+  const hasNorm = activeVisible.some((s) => s.axis === "norm");
 
   // faixas suaves (adequada / atenção / crítica) usando a segurança do último dia
   const segPct = rows.length && rows[n - 1].cad > 0 ? ((rows[n - 1].cad - rows[n - 1].afd) / rows[n - 1].cad) * 100 : 50;
@@ -881,7 +917,7 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
         {/* linhas */}
         {lineKeys.filter((k) => visible[k]).map((k) => {
           const s = MANEJO_DEF(k);
-          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r))}`).join(" ");
+          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r, wxOf(i)))}`).join(" ");
           return (
             <polyline key={k} points={pts} fill="none" stroke={s.color} strokeWidth={k === "umidade" ? 2.3 : 1.5}
               strokeDasharray={s.kind === "dash" ? "5 3" : undefined} strokeLinejoin="round" strokeLinecap="round"
@@ -899,8 +935,8 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
         {hover != null && (
           <g>
             <line x1={cx(hover)} x2={cx(hover)} y1={y0} y2={y1} className="stroke-graphite-300 dark:stroke-white/20" strokeWidth={1} strokeDasharray="3 3" />
-            {activeVisible.map((s) => (
-              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover]))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
+            {activeVisible.filter((s) => s.kind !== "bar").map((s) => (
+              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover], wxOf(hover)))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
             ))}
           </g>
         )}
@@ -917,11 +953,14 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
             {activeVisible.map((s) => (
               <div key={s.k} className="flex items-center justify-between gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />{s.label}</span>
-                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover])}</span>
+                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover], wxOf(hover))}</span>
               </div>
             ))}
           </div>
         </div>
+      )}
+      {hasNorm && (
+        <p className="mt-1 text-[10px] text-graphite-300 dark:text-gray-600">Séries de clima/cultura em escala relativa — valor real no tooltip.</p>
       )}
     </div>
   );
@@ -968,14 +1007,19 @@ function BalanceTab({
   summary,
   loading,
   head,
+  weatherByDate,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
   head: CentroHead;
+  weatherByDate: Record<string, WeatherExtra>;
 }) {
   const [visible, setVisible] = useState<Record<SKey, boolean>>({
-    umidade: true, cc: true, seg: true, pm: false, chuva: true, irrig: true, kc: true, eto: false, etc: false, deficit: false,
+    umidade: true, cc: true, seg: true, pm: false, deficit: false, excesso: false,
+    chuva: true, irrig: true,
+    kc: true, rootdepth: false, fator: false,
+    eto: false, etc: false, tmax: false, tmean: false, tmin: false, rh: false, wind: false, rad: false,
   });
   const [activeCat, setActiveCat] = useState("Água no solo");
   const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
@@ -1167,7 +1211,7 @@ function BalanceTab({
             </p>
           </div>
           {/* gráfico */}
-          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} /></div>
+          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} weatherByDate={weatherByDate} /></div>
         </div>
       </Card>
 
@@ -1328,135 +1372,6 @@ function BalanceTab({
           </span>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Charts Tab ──────────────────────────────────────────────────────────
-
-function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
-  const recharts = useRecharts();
-
-  if (rows.length === 0) {
-    return (
-      <Card className="py-12 text-center">
-        <p className="text-graphite-400 dark:text-gray-500">
-          Calcule o balanço hídrico para visualizar os gráficos.
-        </p>
-      </Card>
-    );
-  }
-
-  if (!recharts) {
-    return (
-      <Card className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-      </Card>
-    );
-  }
-
-  const { ResponsiveContainer, ComposedChart, Area, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = recharts;
-
-  const chartData = rows.map((r) => ({
-    date: r.date.slice(5),
-    arm: r.storedWater,
-    cad: r.cad,
-    afd_line: r.cad - r.afd,
-    etc: r.etc,
-    chuva: r.effectivePrecipitation,
-    irrigacao: r.irrigationApplied,
-    deficit: r.deficit,
-    rootDepth: r.rootDepth,
-    kc: r.kc,
-  }));
-
-  const statusData = rows.map((r) => ({
-    date: r.date.slice(5),
-    status: r.waterStatus,
-    color: WATER_STATUS_CONFIG[r.waterStatus].color,
-    value: 1,
-  }));
-
-  return (
-    <div className="space-y-5">
-      {/* Chart 1: Water storage evolution */}
-      <ChartCard title="Evolução da Água no Solo" subtitle="Armazenamento (ARM) vs CAD e limiar de estresse (mm)">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Area type="monotone" dataKey="cad" name="CAD" stroke="#93c5fd" fill="#dbeafe" fillOpacity={0.4} strokeDasharray="4 4" />
-            <Line type="monotone" dataKey="afd_line" name="Limiar Estresse" stroke="#f59e0b" strokeDasharray="6 3" dot={false} />
-            <Area type="monotone" dataKey="arm" name="ARM" stroke="#22c55e" fill="#86efac" fillOpacity={0.6} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartCard>
-
-      {/* Chart 2: ETc vs inputs */}
-      <ChartCard title="Demanda vs Entradas" subtitle="ETc, Chuva efetiva e Irrigação aplicada (mm/dia)">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="chuva" name="Chuva Efetiva" fill="#60a5fa" />
-            <Bar dataKey="irrigacao" name="Irrigação" fill="#34d399" />
-            <Line type="monotone" dataKey="etc" name="ETc" stroke="#ef4444" strokeWidth={2} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartCard>
-
-      {/* Chart 3: Kc and root depth evolution */}
-      <ChartCard title="Evolução Kc e Profundidade Radicular" subtitle="Coeficiente cultural e crescimento radicular ao longo do ciclo">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line yAxisId="left" type="monotone" dataKey="kc" name="Kc" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-            <Area yAxisId="right" type="monotone" dataKey="rootDepth" name="Raiz (m)" stroke="#f97316" fill="#fed7aa" fillOpacity={0.5} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartCard>
-
-      {/* Chart 4: Status timeline */}
-      <ChartCard title="Status Hídrico Diário" subtitle="Evolução do estado de água no solo">
-        <div className="flex h-full flex-col justify-center">
-          <div className="flex gap-0.5 overflow-x-auto">
-            {statusData.map((d, i) => (
-              <div
-                key={i}
-                className="flex flex-1 flex-col items-center"
-                title={`${rows[i].date}: ${WATER_STATUS_CONFIG[d.status].label}`}
-              >
-                <div
-                  className="h-8 w-full min-w-[4px] rounded-sm"
-                  style={{ backgroundColor: d.color }}
-                />
-                {i % Math.max(1, Math.floor(statusData.length / 10)) === 0 && (
-                  <span className="mt-1 text-[8px] text-gray-400">{d.date}</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {(Object.entries(WATER_STATUS_CONFIG) as [WaterStatus, typeof WATER_STATUS_CONFIG[WaterStatus]][]).map(([key, cfg]) => (
-              <div key={key} className="flex items-center gap-1.5 text-xs text-graphite-400 dark:text-gray-500">
-                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: cfg.color }} />
-                {cfg.label}
-              </div>
-            ))}
-          </div>
-        </div>
-      </ChartCard>
     </div>
   );
 }
