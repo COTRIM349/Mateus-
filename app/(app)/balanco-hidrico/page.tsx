@@ -50,6 +50,15 @@ const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
   cinza: "ideal",
 };
 
+// distância aproximada entre dois pontos (km) — Haversine
+function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ── Types ─────────────────────────────────────────────────────────────────
 
 interface Pivot {
@@ -60,6 +69,8 @@ interface Pivot {
   efficiency: number;
   farm_id: string;
   specific_consumption: number | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface CropAssignment {
@@ -194,7 +205,7 @@ export default function BalancoHidricoPage() {
     (async () => {
       const { data } = await supabase
         .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, farm_id, specific_consumption")
+        .select("id, name, area, flow_rate, efficiency, farm_id, specific_consumption, latitude, longitude")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("name");
@@ -498,6 +509,72 @@ export default function BalancoHidricoPage() {
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
+  // rastreabilidade (estação climática) + operação (eventos de irrigação)
+  const [trace, setTrace] = useState<{ stationName: string | null; distanceKm: number | null; lastSync: string | null; qualityPct: number | null }>({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
+  const [ops, setOps] = useState<{ volumeM3: number | null; hours: number | null; energyKwh: number | null }>({ volumeM3: null, hours: null, energyKwh: null });
+
+  useEffect(() => {
+    if (!activeFarmId || !selectedPivotId || !dateStart || !dateEnd) {
+      setTrace({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
+      setOps({ volumeM3: null, hours: null, energyKwh: null });
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const pivot = pivots.find((p) => p.id === selectedPivotId);
+      // estação ativa da fazenda
+      const { data: st } = await supabase
+        .from("weather_stations")
+        .select("id, name, latitude, longitude")
+        .eq("farm_id", activeFarmId)
+        .eq("active", true)
+        .order("name")
+        .limit(1)
+        .maybeSingle();
+
+      let lastSync: string | null = null;
+      let qualityPct: number | null = null;
+      if (st?.id) {
+        const { data: reads } = await supabase
+          .from("weather_readings")
+          .select("imported_at, data_quality")
+          .eq("station_id", st.id as string)
+          .gte("date", dateStart)
+          .lte("date", dateEnd);
+        if (reads && reads.length > 0) {
+          lastSync = reads.reduce((m: string, r: { imported_at: string }) => (r.imported_at > m ? r.imported_at : m), reads[0].imported_at as string);
+          const ok = reads.filter((r: { data_quality: string }) => r.data_quality === "ok").length;
+          qualityPct = Math.round((ok / reads.length) * 100);
+        }
+      }
+      const distanceKm = st && pivot?.latitude != null && pivot?.longitude != null
+        ? haversineKm(pivot.latitude, pivot.longitude, st.latitude as number, st.longitude as number)
+        : null;
+
+      // eventos de irrigação do pivô no período
+      const { data: evs } = await supabase
+        .from("irrigation_events")
+        .select("started_at, ended_at, volume_m3, energy_kwh")
+        .eq("pivot_id", selectedPivotId)
+        .gte("started_at", dateStart + "T00:00:00")
+        .lte("started_at", dateEnd + "T23:59:59");
+      let volumeM3: number | null = null, hours: number | null = null, energyKwh: number | null = null;
+      if (evs && evs.length > 0) {
+        volumeM3 = evs.reduce((a: number, e: { volume_m3: number }) => a + (e.volume_m3 ?? 0), 0);
+        const withEnd = evs.filter((e: { ended_at: string | null }) => e.ended_at);
+        hours = withEnd.length > 0 ? withEnd.reduce((a: number, e: { started_at: string; ended_at: string }) => a + (new Date(e.ended_at).getTime() - new Date(e.started_at).getTime()) / 3600000, 0) : null;
+        const en = evs.reduce((a: number, e: { energy_kwh: number | null }) => a + (e.energy_kwh ?? 0), 0);
+        energyKwh = en > 0 ? en : null;
+      }
+
+      if (!cancelled) {
+        setTrace({ stationName: st?.name ?? null, distanceKm, lastSync, qualityPct });
+        setOps({ volumeM3, hours, energyKwh });
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeFarmId, selectedPivotId, dateStart, dateEnd, pivots, supabase]);
+
   // presets de período — apenas ajustam o intervalo (o carregamento é automático)
   const [activePeriod, setActivePeriod] = useState<number | "safra" | null>(null);
   const applyPeriod = (kind: number | "safra") => {
@@ -560,6 +637,12 @@ export default function BalancoHidricoPage() {
     plantingDate: assignment?.planting_date ?? null,
     statusLabel: selPivot ? "Operando" : null,
     energiaEspecifica: selPivot?.specific_consumption ?? null,
+    stationName: trace.stationName,
+    distanceKm: trace.distanceKm,
+    lastSync: trace.lastSync,
+    qualityPct: trace.qualityPct,
+    volumeM3: ops.volumeM3,
+    horasOperadas: ops.hours,
   };
 
   return (
@@ -886,6 +969,12 @@ interface CentroHead {
   plantingDate: string | null;
   statusLabel: string | null;
   energiaEspecifica: number | null;
+  stationName: string | null;
+  distanceKm: number | null;
+  lastSync: string | null;
+  qualityPct: number | null;
+  volumeM3: number | null;
+  horasOperadas: number | null;
 }
 
 const fmtTempoH = (h: number) => {
@@ -1234,14 +1323,18 @@ function BalanceTab({
             { l: "Lâmina recomendada", v: verdict.irrigar ? `${laminaBruta.toFixed(1)} mm` : "0,0 mm" },
             { l: "Data sugerida", v: "pendente", pend: true },
             { l: "Janela ideal", v: "pendente", pend: true },
-            { l: "Dias em estresse", v: `${summary.daysInDeficit}` },
+            head.horasOperadas != null
+              ? { l: "Horas operadas", v: `${head.horasOperadas.toFixed(0)} h` }
+              : { l: "Horas operadas", v: "pendente", pend: true },
             { l: "Eficiência média", v: `${efPct.toFixed(0)}%` },
             { l: "Uniformidade (CUC)", v: "pendente", pend: true },
             head.energiaEspecifica != null
               ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` }
               : { l: "Energia específica", v: "pendente", pend: true },
-            { l: "Volume acumulado", v: "pendente", pend: true },
-            { l: "Variação armaz.", v: `${variacao >= 0 ? "+" : ""}${variacao.toFixed(1)} mm` },
+            head.volumeM3 != null
+              ? { l: "Volume acumulado", v: `${(head.volumeM3 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil m³` }
+              : { l: "Volume acumulado", v: "pendente", pend: true },
+            { l: "Dias em estresse", v: `${summary.daysInDeficit}` },
           ].map((s, i) => (
             <div key={i} className="px-5 py-3.5">
               <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{s.l}</p>
@@ -1284,8 +1377,15 @@ function BalanceTab({
         <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">USDA-SCS</strong></span>
         <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
         <span>Motor <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56</strong></span>
-        <span>Fonte climática <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong></span>
-        <span>Distância estação <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong></span>
+        <span>Fonte climática {head.stationName ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.stationName}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        <span>Distância estação {head.distanceKm != null ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.distanceKm.toFixed(1)} km</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        <span>Última sincronização {head.lastSync ? <strong className="font-semibold text-graphite-800 dark:text-white">{fmtDia(head.lastSync.slice(0, 10))} {head.lastSync.slice(11, 16)}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        {head.qualityPct != null && (
+          <span className="inline-flex items-center gap-2">Qualidade
+            <span className="inline-block h-1.5 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-white/[0.1]"><span className="block h-full rounded-full bg-brand-500" style={{ width: `${head.qualityPct}%` }} /></span>
+            <strong className="font-semibold text-graphite-800 dark:text-white">{head.qualityPct}%</strong>
+          </span>
+        )}
       </div>
     </div>
   );
