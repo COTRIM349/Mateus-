@@ -957,6 +957,15 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
           </g>
         ))}
 
+        {/* área sob a água disponível — leitura mais fácil */}
+        {visible.umidade && (
+          <polygon
+            points={`${cx(0)},${y1} ${rows.map((r, i) => `${cx(i)},${yP(sVal("umidade", r, wxOf(i)))}`).join(" ")} ${cx(n - 1)},${y1}`}
+            fill={MANEJO_DEF("umidade").color}
+            opacity={0.08}
+          />
+        )}
+
         {/* linhas */}
         {lineKeys.filter((k) => visible[k]).map((k) => {
           const s = MANEJO_DEF(k);
@@ -1066,10 +1075,13 @@ function BalanceTab({
   weatherByDate: Record<string, WeatherExtra>;
 }) {
   const [visible, setVisible] = useState<Record<SKey, boolean>>(() => {
-    const on = new Set<SKey>(["umidade", "cc", "seg", "pm", "chuva", "irrig", "kc", "justexc"]);
+    // Padrão enxuto: água disponível + limite de segurança + entradas + demanda.
+    // As demais séries ficam no painel "Mais séries".
+    const on = new Set<SKey>(["umidade", "seg", "chuva", "irrig", "etc"]);
     return Object.fromEntries(MANEJO_ALL.map((s) => [s.k, on.has(s.k)])) as Record<SKey, boolean>;
   });
   const [activeCat, setActiveCat] = useState("Solo");
+  const [showLayers, setShowLayers] = useState(false);
   const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
   const [tblFilter, setTblFilter] = useState("");
   const [showFilter, setShowFilter] = useState(false);
@@ -1219,9 +1231,27 @@ function BalanceTab({
             <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Evolução do Balanço Hídrico</p>
             <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">água disponível (% CC) × água aplicada (mm) · faixas adequada · atenção · crítica</p>
           </div>
+          <button
+            type="button"
+            onClick={() => setShowLayers((s) => !s)}
+            aria-pressed={showLayers}
+            className={`shrink-0 rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${showLayers ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}
+          >
+            {showLayers ? "Menos séries" : "Mais séries"}
+          </button>
+        </div>
+        {/* legenda simples das séries ativas */}
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 border-b border-gray-100 px-6 py-2.5 dark:border-white/[0.06]">
+          {MANEJO_ALL.filter((s) => visible[s.k] && !s.pendente).map((s) => (
+            <span key={s.k} className="inline-flex items-center gap-1.5 text-[11px] font-medium text-graphite-500 dark:text-gray-400">
+              <span className={`h-2 w-2 ${s.kind === "bar" ? "rounded-sm" : "rounded-full"}`} style={{ background: s.color }} />
+              {s.label}
+            </span>
+          ))}
         </div>
         <div className="flex flex-col lg:flex-row">
-          {/* painel de séries por categoria */}
+          {/* painel de séries por categoria (oculto por padrão) */}
+          {showLayers && (
           <div className="border-b border-gray-100 p-4 lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r dark:border-white/[0.06]">
             <div className="flex gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
               {MANEJO_GROUPS.map((g) => (
@@ -1261,6 +1291,7 @@ function BalanceTab({
               Passe o mouse no gráfico para ver os valores do dia.
             </p>
           </div>
+          )}
           {/* gráfico */}
           <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} weatherByDate={weatherByDate} /></div>
         </div>
