@@ -782,50 +782,82 @@ const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
 type SKey = "umidade" | "cc" | "seg" | "pm" | "deficit" | "excesso"
-  | "chuva" | "irrig"
+  | "chuva" | "irrig" | "justexc"
   | "kc" | "rootdepth" | "fator"
   | "eto" | "etc" | "tmax" | "tmean" | "tmin" | "rh" | "wind" | "rad"
-  // sem dado no sistema (mostrados desabilitados, como na referência)
-  | "sensorial" | "umidcalc" | "laminadisp" | "excirr" | "itn" | "tempoirr" | "grausdia" | "tbasal" | "etp";
-// axis: pct (% da CC) · mm · norm (escala relativa própria, valor real no tooltip)
-interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar"; axis: "pct" | "mm" | "norm"; norm?: [number, number]; unit?: string; pendente?: boolean; }
+  // sem dado no sistema (mostrados como "pendente", como na referência)
+  | "sensorial" | "umidimg" | "umidsensor" | "umidcalc" | "laminadisp" | "cta" | "aguadisp" | "umidmm" | "pmmm" | "cra" | "ks" | "dg" | "profabs"
+  | "excirr" | "itn" | "lammin" | "tempoirr" | "flag" | "atrasoirr" | "atrasochuva" | "atrasoumid"
+  | "diasmanej" | "diasplant" | "grausf" | "grausacf" | "grausc" | "grausacc" | "tbasal" | "preplantio" | "faseini" | "fasedes" | "faseflor" | "fasefin"
+  | "etp" | "kl" | "radw";
+// axis: pct (% da CC) · mm · norm (escala relativa própria, valor real no tooltip) · marker (evento)
+interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar" | "marker"; axis: "pct" | "mm" | "norm"; norm?: [number, number]; unit?: string; pendente?: boolean; }
+const P = true; // pendente (sem dado)
 
 const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
   { cat: "Solo", items: [
+    { k: "cc", label: "CC", color: "#2f6bff", kind: "line", axis: "pct" },
+    { k: "seg", label: "Umid. segurança", color: "#c0272d", kind: "line", axis: "pct" },
     { k: "umidade", label: "Umidade", color: "#8a5a2b", kind: "line", axis: "pct" },
-    { k: "cc", label: "Capacidade de campo", color: "#2f6bff", kind: "line", axis: "pct" },
-    { k: "seg", label: "Umid. de segurança", color: "#c0272d", kind: "line", axis: "pct" },
-    { k: "pm", label: "Ponto de murcha", color: "#111827", kind: "line", axis: "pct" },
-    { k: "sensorial", label: "Sensorial", color: "#a855f7", kind: "line", axis: "pct", pendente: true },
-    { k: "umidcalc", label: "Umidade calculada", color: "#8a5a2b", kind: "line", axis: "pct", pendente: true },
-    { k: "laminadisp", label: "Lâmina disponível", color: "#f472b6", kind: "line", axis: "mm", pendente: true },
+    { k: "sensorial", label: "Sensorial", color: "#a855f7", kind: "line", axis: "pct", pendente: P },
+    { k: "umidimg", label: "Umidade imageamento", color: "#8a5a2b", kind: "line", axis: "pct", pendente: P },
+    { k: "umidsensor", label: "Umidade sensor de solo — média", color: "#6b4423", kind: "line", axis: "pct", pendente: P },
+    { k: "pm", label: "PM", color: "#111827", kind: "line", axis: "pct" },
+    { k: "umidcalc", label: "Umidade calculada", color: "#6d28d9", kind: "line", axis: "pct", pendente: P },
+    { k: "laminadisp", label: "Lâmina disponível", color: "#f472b6", kind: "line", axis: "mm", pendente: P },
+    { k: "cta", label: "CTA", color: "#fca5a5", kind: "line", axis: "mm", pendente: P },
+    { k: "aguadisp", label: "Água disp.", color: "#9ca3af", kind: "line", axis: "mm", pendente: P },
+    { k: "umidmm", label: "Umidade (mm)", color: "#eab308", kind: "line", axis: "mm", pendente: P },
+    { k: "pmmm", label: "PM (mm)", color: "#111827", kind: "line", axis: "mm", pendente: P },
+    { k: "cra", label: "CRA", color: "#dc2626", kind: "line", axis: "mm", pendente: P },
+    { k: "ks", label: "Ks", color: "#15803d", kind: "line", axis: "norm", norm: [0, 1], pendente: P },
+    { k: "dg", label: "Dg (g/cm³)", color: "#ca8a04", kind: "line", axis: "norm", norm: [0, 2], pendente: P },
+    { k: "profabs", label: "Profundidade de absorção", color: "#0d9488", kind: "line", axis: "norm", norm: [0, 1.5], unit: "m", pendente: P },
   ] },
   { cat: "Irrigação", items: [
     { k: "irrig", label: "Irrigação", color: "#14b8c9", kind: "bar", axis: "mm" },
+    { k: "excirr", label: "Excesso de irrigação", color: "#ef4444", kind: "bar", axis: "mm", pendente: P },
     { k: "excesso", label: "Excesso", color: "#c026d3", kind: "dash", axis: "mm" },
     { k: "deficit", label: "Déficit", color: "#e5484d", kind: "dash", axis: "mm" },
-    { k: "excirr", label: "Excesso de irrigação", color: "#e5484d", kind: "bar", axis: "mm", pendente: true },
-    { k: "itn", label: "ITN", color: "#1e3a8a", kind: "line", axis: "mm", pendente: true },
-    { k: "tempoirr", label: "Tempo irrigação", color: "#86efac", kind: "line", axis: "norm", norm: [0, 24], unit: "h", pendente: true },
+    { k: "itn", label: "ITN", color: "#1e3a8a", kind: "line", axis: "mm", pendente: P },
+    { k: "lammin", label: "Lâm. mínima", color: "#3b82f6", kind: "line", axis: "mm", pendente: P },
+    { k: "tempoirr", label: "Tempo irrigação", color: "#86efac", kind: "line", axis: "norm", norm: [0, 24], unit: "h", pendente: P },
+    { k: "flag", label: "Flag", color: "#f59e0b", kind: "marker", axis: "mm", pendente: P },
+    { k: "justexc", label: "Justificativa de excesso", color: "#dc2626", kind: "marker", axis: "mm" },
+    { k: "atrasoirr", label: "Irrigação — lançamento em atraso", color: "#dc2626", kind: "marker", axis: "mm", pendente: P },
+    { k: "atrasochuva", label: "Chuva — lançamento em atraso", color: "#dc2626", kind: "marker", axis: "mm", pendente: P },
+    { k: "atrasoumid", label: "Umidade — lançamento em atraso", color: "#dc2626", kind: "marker", axis: "mm", pendente: P },
   ] },
   { cat: "Cultura", items: [
+    { k: "diasmanej", label: "Dias manejados", color: "#22c55e", kind: "line", axis: "norm", norm: [0, 200], pendente: P },
+    { k: "diasplant", label: "Dias plantados", color: "#16a34a", kind: "line", axis: "norm", norm: [0, 200], pendente: P },
     { k: "kc", label: "Kc (×100)", color: "#16a34a", kind: "dash", axis: "pct" },
     { k: "fator", label: "Fator disp. hídrica", color: "#4ade80", kind: "dash", axis: "norm", norm: [0, 1], unit: "" },
+    { k: "grausf", label: "Graus dia (°F)", color: "#374151", kind: "line", axis: "norm", norm: [0, 90], unit: "°F", pendente: P },
+    { k: "grausacf", label: "Graus dia acum. (°F)", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 5000], unit: "°F", pendente: P },
+    { k: "grausc", label: "Graus dia (°C)", color: "#374151", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: P },
+    { k: "grausacc", label: "Graus dia acum. (°C)", color: "#9ca3af", kind: "line", axis: "norm", norm: [0, 3000], unit: "°C", pendente: P },
+    { k: "tbasal", label: "Temperatura basal", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: P },
     { k: "rootdepth", label: "Profundidade da raiz", color: "#5eaa97", kind: "line", axis: "norm", norm: [0, 1.2], unit: "m" },
-    { k: "grausdia", label: "Graus dia", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: true },
-    { k: "tbasal", label: "Temperatura basal", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: true },
+    { k: "preplantio", label: "Pré-plantio", color: "#e5e7eb", kind: "marker", axis: "pct", pendente: P },
+    { k: "faseini", label: "Início", color: "#5eead4", kind: "marker", axis: "pct", pendente: P },
+    { k: "fasedes", label: "Desenvolvimento", color: "#22c55e", kind: "marker", axis: "pct", pendente: P },
+    { k: "faseflor", label: "Floração/maturação", color: "#fde047", kind: "marker", axis: "pct", pendente: P },
+    { k: "fasefin", label: "Final", color: "#f97316", kind: "marker", axis: "pct", pendente: P },
   ] },
   { cat: "Clima", items: [
     { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm" },
     { k: "etc", label: "ETc", color: "#22c55e", kind: "line", axis: "mm" },
     { k: "eto", label: "ETo", color: "#166534", kind: "line", axis: "mm" },
-    { k: "etp", label: "ETp", color: "#4d7c0f", kind: "line", axis: "mm", pendente: true },
+    { k: "etp", label: "ETp", color: "#4d7c0f", kind: "line", axis: "mm", pendente: P },
+    { k: "kl", label: "kl", color: "#4ade80", kind: "line", axis: "norm", norm: [0, 1.2], pendente: P },
     { k: "tmax", label: "Temperatura máxima", color: "#ef4444", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
     { k: "tmean", label: "Temperatura média", color: "#eab308", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
     { k: "tmin", label: "Temperatura mínima", color: "#8b5cf6", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
     { k: "rh", label: "Umidade relativa", color: "#1e40af", kind: "line", axis: "norm", norm: [0, 100], unit: "%" },
     { k: "wind", label: "Velocidade do vento", color: "#7dd3fc", kind: "line", axis: "norm", norm: [0, 15], unit: "m/s" },
-    { k: "rad", label: "Radiação", color: "#eab308", kind: "line", axis: "norm", norm: [0, 35], unit: "MJ/m²" },
+    { k: "rad", label: "Radiação (MJ/m²)", color: "#eab308", kind: "line", axis: "norm", norm: [0, 35], unit: "MJ/m²" },
+    { k: "radw", label: "Radiação (W/m²)", color: "#f59e0b", kind: "line", axis: "norm", norm: [0, 400], unit: "W/m²", pendente: P },
   ] },
 ];
 const MANEJO_ALL: SeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
@@ -882,8 +914,8 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
         : yP(clampN(((v - s.norm![0]) / (s.norm![1] - s.norm![0])) * 100, 0, 100));
 
   const bw = Math.min(4, band * 0.28);
-  // todas as séries de linha (barras/pendentes à parte); umidade por último (topo)
-  const lineKeys: SKey[] = [...MANEJO_ALL.filter((s) => s.kind !== "bar" && !s.pendente && s.k !== "umidade").map((s) => s.k), "umidade"];
+  // todas as séries de linha (barras/marcadores/pendentes à parte); umidade por último (topo)
+  const lineKeys: SKey[] = [...MANEJO_ALL.filter((s) => s.kind !== "bar" && s.kind !== "marker" && !s.pendente && s.k !== "umidade").map((s) => s.k), "umidade"];
   const step = Math.max(1, Math.ceil(n / 9));
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -939,7 +971,7 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
         {/* eixo x + datas */}
         <line x1={x0} x2={x1} y1={y1} y2={y1} className="stroke-gray-200 dark:stroke-white/[0.1]" strokeWidth={1} />
         {/* marcadores de justificativa de excesso (surplus > 0) — como na referência */}
-        {rows.map((r, i) => r.surplus > 0 && (
+        {visible.justexc && rows.map((r, i) => r.surplus > 0 && (
           <g key={`ex${i}`}>
             <circle cx={cx(i)} cy={y1} r={2.6} fill="none" stroke="#e5484d" strokeWidth={1.2} />
             <line x1={cx(i) - 1.8} x2={cx(i) + 1.8} y1={y1} y2={y1} stroke="#e5484d" strokeWidth={1.2} />
@@ -953,7 +985,7 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
         {hover != null && (
           <g>
             <line x1={cx(hover)} x2={cx(hover)} y1={y0} y2={y1} className="stroke-graphite-300 dark:stroke-white/20" strokeWidth={1} strokeDasharray="3 3" />
-            {activeVisible.filter((s) => s.kind !== "bar").map((s) => (
+            {activeVisible.filter((s) => s.kind !== "bar" && s.kind !== "marker").map((s) => (
               <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover], wxOf(hover)))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
             ))}
           </g>
@@ -968,7 +1000,7 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
         >
           <p className="mb-1.5 text-[11px] font-bold text-graphite-800 dark:text-white">{fmtDia(rows[hover].date)} <span className="font-normal text-graphite-400">· {rows[hover].phase}</span></p>
           <div className="space-y-1">
-            {activeVisible.map((s) => (
+            {activeVisible.filter((s) => s.kind !== "marker").map((s) => (
               <div key={s.k} className="flex items-center justify-between gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />{s.label}</span>
                 <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover], wxOf(hover))}</span>
@@ -1033,12 +1065,9 @@ function BalanceTab({
   head: CentroHead;
   weatherByDate: Record<string, WeatherExtra>;
 }) {
-  const [visible, setVisible] = useState<Record<SKey, boolean>>({
-    umidade: true, cc: true, seg: true, pm: true, deficit: false, excesso: false,
-    chuva: true, irrig: true,
-    kc: true, rootdepth: false, fator: false,
-    eto: false, etc: false, tmax: false, tmean: false, tmin: false, rh: false, wind: false, rad: false,
-    sensorial: false, umidcalc: false, laminadisp: false, excirr: false, itn: false, tempoirr: false, grausdia: false, tbasal: false, etp: false,
+  const [visible, setVisible] = useState<Record<SKey, boolean>>(() => {
+    const on = new Set<SKey>(["umidade", "cc", "seg", "pm", "chuva", "irrig", "kc", "justexc"]);
+    return Object.fromEntries(MANEJO_ALL.map((s) => [s.k, on.has(s.k)])) as Record<SKey, boolean>;
   });
   const [activeCat, setActiveCat] = useState("Solo");
   const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
@@ -1206,7 +1235,7 @@ function BalanceTab({
                 </button>
               ))}
             </div>
-            <div className="mt-3 space-y-0.5">
+            <div className="mt-3 max-h-[300px] space-y-0.5 overflow-y-auto pr-1">
               {MANEJO_GROUPS.find((g) => g.cat === activeCat)!.items.map((s) => {
                 const on = visible[s.k];
                 return (
