@@ -10,8 +10,6 @@ import {
   Table,
   Tabs,
   Input,
-  StatCard,
-  ChartCard,
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -26,9 +24,8 @@ import {
   type HydricStatus,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
-import { useRecharts, useFarmHydricState } from "@/lib/hooks";
+import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
-import { cn } from "@/utils/cn";
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
@@ -58,6 +55,9 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
+
+// séries climáticas extras (da estação) por data — para o gráfico
+type WeatherExtra = { tmax: number | null; tmin: number | null; tmean: number | null; rh: number | null; wind: number | null; rad: number | null };
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -151,7 +151,6 @@ interface StoredBalance {
 
 const TABS = [
   { id: "balanco", label: "Balanço Diário" },
-  { id: "graficos", label: "Gráficos" },
   { id: "lancamento", label: "Lançamento Irrigação" },
 ];
 
@@ -512,11 +511,13 @@ export default function BalancoHidricoPage() {
   // rastreabilidade (estação climática) + operação (eventos de irrigação)
   const [trace, setTrace] = useState<{ stationName: string | null; distanceKm: number | null; lastSync: string | null; qualityPct: number | null }>({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
   const [ops, setOps] = useState<{ volumeM3: number | null; hours: number | null; energyKwh: number | null }>({ volumeM3: null, hours: null, energyKwh: null });
+  const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherExtra>>({});
 
   useEffect(() => {
     if (!activeFarmId || !selectedPivotId || !dateStart || !dateEnd) {
       setTrace({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
       setOps({ volumeM3: null, hours: null, energyKwh: null });
+      setWeatherByDate({});
       return;
     }
     let cancelled = false;
@@ -534,10 +535,11 @@ export default function BalancoHidricoPage() {
 
       let lastSync: string | null = null;
       let qualityPct: number | null = null;
+      const wx: Record<string, WeatherExtra> = {};
       if (st?.id) {
         const { data: reads } = await supabase
           .from("weather_readings")
-          .select("imported_at, data_quality")
+          .select("date, imported_at, data_quality, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation")
           .eq("station_id", st.id as string)
           .gte("date", dateStart)
           .lte("date", dateEnd);
@@ -545,6 +547,9 @@ export default function BalancoHidricoPage() {
           lastSync = reads.reduce((m: string, r: { imported_at: string }) => (r.imported_at > m ? r.imported_at : m), reads[0].imported_at as string);
           const ok = reads.filter((r: { data_quality: string }) => r.data_quality === "ok").length;
           qualityPct = Math.round((ok / reads.length) * 100);
+          for (const r of reads as Array<{ date: string; temp_max: number | null; temp_min: number | null; temp_mean: number | null; humidity: number | null; wind_speed: number | null; solar_radiation: number | null }>) {
+            wx[r.date] = { tmax: r.temp_max, tmin: r.temp_min, tmean: r.temp_mean, rh: r.humidity, wind: r.wind_speed, rad: r.solar_radiation };
+          }
         }
       }
       const distanceKm = st && pivot?.latitude != null && pivot?.longitude != null
@@ -570,6 +575,7 @@ export default function BalancoHidricoPage() {
       if (!cancelled) {
         setTrace({ stationName: st?.name ?? null, distanceKm, lastSync, qualityPct });
         setOps({ volumeM3, hours, energyKwh });
+        setWeatherByDate(wx);
       }
     })();
     return () => { cancelled = true; };
@@ -747,10 +753,7 @@ export default function BalancoHidricoPage() {
 
       <div className="mt-5">
         {activeTab === "balanco" && (
-          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} /></div>
-        )}
-        {activeTab === "graficos" && (
-          <div className="animate-in"><ChartsTab rows={balanceRows} /></div>
+          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} weatherByDate={weatherByDate} /></div>
         )}
         {activeTab === "lancamento" && (
           <div className="animate-in"><LancamentoTab
@@ -778,96 +781,109 @@ export default function BalancoHidricoPage() {
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
-type SKey = "umidade" | "cc" | "seg" | "pm" | "chuva" | "irrig" | "kc" | "eto" | "etc" | "deficit";
-interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar"; axis: "pct" | "mm"; }
+type SKey = "umidade" | "cc" | "seg" | "pm" | "deficit" | "excesso"
+  | "chuva" | "irrig"
+  | "kc" | "rootdepth" | "fator"
+  | "eto" | "etc" | "tmax" | "tmean" | "tmin" | "rh" | "wind" | "rad"
+  // sem dado no sistema (mostrados desabilitados, como na referência)
+  | "sensorial" | "umidcalc" | "laminadisp" | "excirr" | "itn" | "tempoirr" | "grausdia" | "tbasal" | "etp";
+// axis: pct (% da CC) · mm · norm (escala relativa própria, valor real no tooltip)
+interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar"; axis: "pct" | "mm" | "norm"; norm?: [number, number]; unit?: string; pendente?: boolean; }
 
 const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
-  { cat: "Água no solo", items: [
-    { k: "umidade", label: "Água disponível", color: "#0c3d2b", kind: "line", axis: "pct" },
-    { k: "cc", label: "Capacidade de campo", color: "#2f6bff", kind: "dash", axis: "pct" },
-    { k: "seg", label: "Umid. de segurança", color: "#e5484d", kind: "dash", axis: "pct" },
-    { k: "pm", label: "Ponto de murcha", color: "#8a998f", kind: "dash", axis: "pct" },
+  { cat: "Solo", items: [
+    { k: "umidade", label: "Umidade", color: "#8a5a2b", kind: "line", axis: "pct" },
+    { k: "cc", label: "Capacidade de campo", color: "#2f6bff", kind: "line", axis: "pct" },
+    { k: "seg", label: "Umid. de segurança", color: "#c0272d", kind: "line", axis: "pct" },
+    { k: "pm", label: "Ponto de murcha", color: "#111827", kind: "line", axis: "pct" },
+    { k: "sensorial", label: "Sensorial", color: "#a855f7", kind: "line", axis: "pct", pendente: true },
+    { k: "umidcalc", label: "Umidade calculada", color: "#8a5a2b", kind: "line", axis: "pct", pendente: true },
+    { k: "laminadisp", label: "Lâmina disponível", color: "#f472b6", kind: "line", axis: "mm", pendente: true },
   ] },
-  { cat: "Manejo", items: [
-    { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm" },
-    { k: "irrig", label: "Irrigação", color: "#0bb4c9", kind: "bar", axis: "mm" },
+  { cat: "Irrigação", items: [
+    { k: "irrig", label: "Irrigação", color: "#14b8c9", kind: "bar", axis: "mm" },
+    { k: "excesso", label: "Excesso", color: "#c026d3", kind: "dash", axis: "mm" },
     { k: "deficit", label: "Déficit", color: "#e5484d", kind: "dash", axis: "mm" },
+    { k: "excirr", label: "Excesso de irrigação", color: "#e5484d", kind: "bar", axis: "mm", pendente: true },
+    { k: "itn", label: "ITN", color: "#1e3a8a", kind: "line", axis: "mm", pendente: true },
+    { k: "tempoirr", label: "Tempo irrigação", color: "#86efac", kind: "line", axis: "norm", norm: [0, 24], unit: "h", pendente: true },
   ] },
   { cat: "Cultura", items: [
-    { k: "kc", label: "Kc (×100)", color: "#4ade80", kind: "dash", axis: "pct" },
+    { k: "kc", label: "Kc (×100)", color: "#16a34a", kind: "dash", axis: "pct" },
+    { k: "fator", label: "Fator disp. hídrica", color: "#4ade80", kind: "dash", axis: "norm", norm: [0, 1], unit: "" },
+    { k: "rootdepth", label: "Profundidade da raiz", color: "#5eaa97", kind: "line", axis: "norm", norm: [0, 1.2], unit: "m" },
+    { k: "grausdia", label: "Graus dia", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: true },
+    { k: "tbasal", label: "Temperatura basal", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: true },
   ] },
   { cat: "Clima", items: [
-    { k: "eto", label: "ETo", color: "#f97316", kind: "line", axis: "mm" },
-    { k: "etc", label: "ETc", color: "#f59e0b", kind: "line", axis: "mm" },
+    { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm" },
+    { k: "etc", label: "ETc", color: "#22c55e", kind: "line", axis: "mm" },
+    { k: "eto", label: "ETo", color: "#166534", kind: "line", axis: "mm" },
+    { k: "etp", label: "ETp", color: "#4d7c0f", kind: "line", axis: "mm", pendente: true },
+    { k: "tmax", label: "Temperatura máxima", color: "#ef4444", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
+    { k: "tmean", label: "Temperatura média", color: "#eab308", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
+    { k: "tmin", label: "Temperatura mínima", color: "#8b5cf6", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
+    { k: "rh", label: "Umidade relativa", color: "#1e40af", kind: "line", axis: "norm", norm: [0, 100], unit: "%" },
+    { k: "wind", label: "Velocidade do vento", color: "#7dd3fc", kind: "line", axis: "norm", norm: [0, 15], unit: "m/s" },
+    { k: "rad", label: "Radiação", color: "#eab308", kind: "line", axis: "norm", norm: [0, 35], unit: "MJ/m²" },
   ] },
 ];
 const MANEJO_ALL: SeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
 const MANEJO_DEF = (k: SKey) => MANEJO_ALL.find((s) => s.k === k)!;
 
-function sVal(k: SKey, r: DailyBalanceRow): number {
+function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): number {
   switch (k) {
     case "umidade": return r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0;
     case "cc": return 100;
     case "seg": return r.cad > 0 ? ((r.cad - r.afd) / r.cad) * 100 : 0;
     case "pm": return 0;
-    case "kc": return r.kc * 100;
+    case "deficit": return r.deficit;
+    case "excesso": return r.surplus;
     case "chuva": return r.precipitation;
     case "irrig": return r.irrigationApplied;
+    case "kc": return r.kc * 100;
+    case "rootdepth": return r.rootDepth;
+    case "fator": return r.depletionFactor;
     case "eto": return r.et0;
     case "etc": return r.etc;
-    case "deficit": return r.deficit;
+    case "tmax": return wx?.tmax ?? 0;
+    case "tmean": return wx?.tmean ?? 0;
+    case "tmin": return wx?.tmin ?? 0;
+    case "rh": return wx?.rh ?? 0;
+    case "wind": return wx?.wind ?? 0;
+    case "rad": return wx?.rad ?? 0;
+    default: return 0; // séries pendentes (sem dado)
   }
 }
-const sFmt = (k: SKey, r: DailyBalanceRow): string =>
-  k === "kc" ? r.kc.toFixed(2)
-    : MANEJO_DEF(k).axis === "pct" ? `${sVal(k, r).toFixed(0)}%`
-      : `${sVal(k, r).toFixed(1)} mm`;
+const sFmt = (k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): string => {
+  const def = MANEJO_DEF(k);
+  const v = sVal(k, r, wx);
+  if (k === "kc") return r.kc.toFixed(2);
+  if (def.axis === "pct") return `${v.toFixed(0)}%`;
+  if (def.axis === "mm") return `${v.toFixed(1)} mm`;
+  return `${v.toFixed(k === "wind" || k === "rootdepth" || k === "fator" ? 2 : 1)}${def.unit ? ` ${def.unit}` : ""}`;
+};
 
-/** Faixa de KPIs do período (topo). */
-function ManejoKpiStrip({ rows, summary }: { rows: DailyBalanceRow[]; summary: ReturnType<typeof calculateSummary> }) {
-  const chuvaEf = summary.totalEffPrecipitation;
-  const efPct = summary.totalPrecipitation > 0 ? (chuvaEf / summary.totalPrecipitation) * 100 : 0;
-  const etp = rows.reduce((a, r) => a + r.et0, 0);
-  const stress = summary.days > 0 ? (summary.daysInDeficit / summary.days) * 100 : 0;
-  const kpis = [
-    { label: "Dias manejados", value: `${summary.days}`, unit: "" },
-    { label: "Irrigação", value: summary.totalIrrigation.toFixed(0), unit: "mm" },
-    { label: "Chuva", value: summary.totalPrecipitation.toFixed(0), unit: "mm" },
-    { label: "Chuva efetiva", value: chuvaEf.toFixed(0), unit: "mm", extra: `${efPct.toFixed(0)}%` },
-    { label: "ETo", value: etp.toFixed(0), unit: "mm" },
-    { label: "ETc", value: summary.totalETc.toFixed(0), unit: "mm" },
-    { label: "Índice de estresse", value: stress.toFixed(1), unit: "%" },
-  ];
-  return (
-    <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-4 lg:grid-cols-7 lg:divide-y-0 dark:divide-white/[0.06]">
-      {kpis.map((m) => (
-        <div key={m.label} className="px-4 py-3">
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.label}</p>
-          <p className="mt-1 text-[19px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">
-            {m.value}{m.unit && <span className="ml-0.5 text-[11px] font-semibold text-graphite-400">{m.unit}</span>}
-            {m.extra && <span className="ml-1.5 text-[12px] font-bold text-brand-600 dark:text-brand-400">{m.extra}</span>}
-          </p>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean> }) {
+function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean>; weatherByDate: Record<string, WeatherExtra> }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 940, H = 350, padL = 40, padR = 52, padT = 20, padB = 42;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
   const n = rows.length || 1;
   const band = (x1 - x0) / n;
   const cx = (i: number) => x0 + band * i + band / 2;
+  const wxOf = (i: number) => weatherByDate[rows[i]?.date ?? ""];
 
   const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
-  const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit])) / 10) * 10);
+  const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit, r.surplus])) / 10) * 10);
   const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
-  const yFor = (s: SeriesDef, v: number) => (s.axis === "pct" ? yP(v) : yM(v));
+  const yFor = (s: SeriesDef, v: number) =>
+    s.axis === "pct" ? yP(v)
+      : s.axis === "mm" ? yM(v)
+        : yP(clampN(((v - s.norm![0]) / (s.norm![1] - s.norm![0])) * 100, 0, 100));
 
   const bw = Math.min(4, band * 0.28);
-  const lineKeys: SKey[] = ["cc", "seg", "pm", "kc", "eto", "etc", "deficit", "umidade"]; // umidade por último (topo)
+  // todas as séries de linha (barras/pendentes à parte); umidade por último (topo)
+  const lineKeys: SKey[] = [...MANEJO_ALL.filter((s) => s.kind !== "bar" && !s.pendente && s.k !== "umidade").map((s) => s.k), "umidade"];
   const step = Math.max(1, Math.ceil(n / 9));
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -876,6 +892,7 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
     setHover(clampN(Math.round((svgX - x0) / band - 0.5), 0, n - 1));
   };
   const activeVisible = MANEJO_ALL.filter((s) => visible[s.k]);
+  const hasNorm = activeVisible.some((s) => s.axis === "norm");
 
   // faixas suaves (adequada / atenção / crítica) usando a segurança do último dia
   const segPct = rows.length && rows[n - 1].cad > 0 ? ((rows[n - 1].cad - rows[n - 1].afd) / rows[n - 1].cad) * 100 : 50;
@@ -911,7 +928,7 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
         {/* linhas */}
         {lineKeys.filter((k) => visible[k]).map((k) => {
           const s = MANEJO_DEF(k);
-          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r))}`).join(" ");
+          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r, wxOf(i)))}`).join(" ");
           return (
             <polyline key={k} points={pts} fill="none" stroke={s.color} strokeWidth={k === "umidade" ? 2.3 : 1.5}
               strokeDasharray={s.kind === "dash" ? "5 3" : undefined} strokeLinejoin="round" strokeLinecap="round"
@@ -921,6 +938,13 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
 
         {/* eixo x + datas */}
         <line x1={x0} x2={x1} y1={y1} y2={y1} className="stroke-gray-200 dark:stroke-white/[0.1]" strokeWidth={1} />
+        {/* marcadores de justificativa de excesso (surplus > 0) — como na referência */}
+        {rows.map((r, i) => r.surplus > 0 && (
+          <g key={`ex${i}`}>
+            <circle cx={cx(i)} cy={y1} r={2.6} fill="none" stroke="#e5484d" strokeWidth={1.2} />
+            <line x1={cx(i) - 1.8} x2={cx(i) + 1.8} y1={y1} y2={y1} stroke="#e5484d" strokeWidth={1.2} />
+          </g>
+        ))}
         {rows.map((r, i) => (i % step === 0 || i === n - 1) && (
           <text key={`d${i}`} x={cx(i)} y={H - 12} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{fmtDia(r.date)}</text>
         ))}
@@ -929,8 +953,8 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
         {hover != null && (
           <g>
             <line x1={cx(hover)} x2={cx(hover)} y1={y0} y2={y1} className="stroke-graphite-300 dark:stroke-white/20" strokeWidth={1} strokeDasharray="3 3" />
-            {activeVisible.map((s) => (
-              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover]))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
+            {activeVisible.filter((s) => s.kind !== "bar").map((s) => (
+              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover], wxOf(hover)))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
             ))}
           </g>
         )}
@@ -947,11 +971,14 @@ function ManejoChart({ rows, visible }: { rows: DailyBalanceRow[]; visible: Reco
             {activeVisible.map((s) => (
               <div key={s.k} className="flex items-center justify-between gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />{s.label}</span>
-                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover])}</span>
+                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover], wxOf(hover))}</span>
               </div>
             ))}
           </div>
         </div>
+      )}
+      {hasNorm && (
+        <p className="mt-1 text-[10px] text-graphite-300 dark:text-gray-600">Séries de clima/cultura em escala relativa — valor real no tooltip.</p>
       )}
     </div>
   );
@@ -998,16 +1025,22 @@ function BalanceTab({
   summary,
   loading,
   head,
+  weatherByDate,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
   head: CentroHead;
+  weatherByDate: Record<string, WeatherExtra>;
 }) {
   const [visible, setVisible] = useState<Record<SKey, boolean>>({
-    umidade: true, cc: true, seg: true, pm: false, chuva: true, irrig: true, kc: true, eto: false, etc: false, deficit: false,
+    umidade: true, cc: true, seg: true, pm: true, deficit: false, excesso: false,
+    chuva: true, irrig: true,
+    kc: true, rootdepth: false, fator: false,
+    eto: false, etc: false, tmax: false, tmean: false, tmin: false, rh: false, wind: false, rad: false,
+    sensorial: false, umidcalc: false, laminadisp: false, excirr: false, itn: false, tempoirr: false, grausdia: false, tbasal: false, etp: false,
   });
-  const [activeCat, setActiveCat] = useState("Água no solo");
+  const [activeCat, setActiveCat] = useState("Solo");
   const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
   const [tblFilter, setTblFilter] = useState("");
   const [showFilter, setShowFilter] = useState(false);
@@ -1122,60 +1155,34 @@ function BalanceTab({
         </div>
       </div>
 
-      {/* 2 · Cards de decisão */}
-      <div className="grid grid-cols-2 gap-3.5 md:grid-cols-3 xl:grid-cols-6">
+      {/* 2 · Situação atual (estado — cada dado uma vez) */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
         {/* Água disponível */}
         <Card className="p-4">
           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Água disponível</p>
-          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{armPct}<span className="text-[13px] text-graphite-400">%</span></p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{arm.toFixed(1)} mm da CC</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{armPct}<span className="text-[14px] text-graphite-400">%</span> <span className="text-[14px] font-bold text-graphite-400">· {arm.toFixed(1)} mm</span></p>
           <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded" style={{ width: `${clampN(armPct, 0, 100)}%`, background: classificacao.color }} /></div>
           <span className={`mt-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${tendencia.down ? "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400" : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"}`}>{tendencia.down ? "▼" : "▲"} {tendencia.label}</span>
         </Card>
         {/* Depleção */}
         <Card className="p-4">
           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Depleção atual</p>
-          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{depletPct}<span className="text-[13px] text-graphite-400">%</span></p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{(last?.deficit ?? 0).toFixed(1)} mm consumidos</p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{untilSafety >= 0 ? `a ${untilSafety.toFixed(1)} mm da segurança` : "abaixo da segurança"}</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{depletPct}<span className="text-[14px] text-graphite-400">%</span> <span className="text-[14px] font-bold text-graphite-400">· {(last?.deficit ?? 0).toFixed(1)} mm</span></p>
           <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded bg-orange-500" style={{ width: `${clampN(depletPct, 0, 100)}%` }} /></div>
+          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{untilSafety >= 0 ? `a ${untilSafety.toFixed(1)} mm do limite de segurança` : "abaixo do limite de segurança"}</p>
         </Card>
-        {/* Lâmina recomendada */}
+        {/* Situação do solo */}
         <Card className="p-4">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Lâmina recomendada</p>
-          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{verdict.irrigar ? laminaBruta.toFixed(1) : "0,0"}<span className="text-[13px] text-graphite-400"> mm</span></p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">líquida {(last?.netDepth ?? 0).toFixed(1)} · bruta {laminaBruta.toFixed(1)}</p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">eficiência {efPct.toFixed(0)}%</p>
-        </Card>
-        {/* Próxima irrigação */}
-        <Card className="p-4">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Próxima irrigação</p>
-          <p className="mt-2 text-[19px] font-extrabold leading-tight" style={{ color: verdict.color }}>{verdict.label}</p>
-          <p className="mt-1 text-[11.5px] text-graphite-400 dark:text-gray-500">janela e data: <span className="font-semibold">pendente</span></p>
-        </Card>
-        {/* Chuva acumulada */}
-        <Card className="p-4">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Chuva acumulada</p>
-          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{summary.totalPrecipitation.toFixed(0)}<span className="text-[13px] text-graphite-400"> mm</span></p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">efetiva {summary.totalEffPrecipitation.toFixed(0)} mm</p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">período {summary.days} dias</p>
-        </Card>
-        {/* Irrigação acumulada */}
-        <Card className="p-4">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Irrigação acumulada</p>
-          <p className="mt-2 text-[24px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{summary.totalIrrigation.toFixed(0)}<span className="text-[13px] text-graphite-400"> mm</span></p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">efetiva {(summary.totalIrrigation * efPct / 100).toFixed(0)} mm</p>
-          <p className="mt-1 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">eficiência {efPct.toFixed(0)}%</p>
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Situação do solo</p>
+          <p className="mt-2 text-[22px] font-extrabold leading-none" style={{ color: classificacao.color }}>{classificacao.label}</p>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-graphite-400 dark:text-gray-500">
+            {classificacao.label === "Adequado" ? "Umidade dentro da faixa ideal." : classificacao.label === "Atenção" ? "Próximo do limite de segurança." : "Déficit relevante — repor a água do solo."}
+          </p>
         </Card>
       </div>
 
-      {/* linha compacta de métricas */}
-      <Card className="p-0">
-        <ManejoKpiStrip rows={rows} summary={summary} />
-      </Card>
-
       {/* 3 + 5 · Gráfico + Recomendação/Alertas */}
-      <div className="grid gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]">
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]">
       {/* Gráfico principal com painel de camadas */}
       <Card className="p-0">
         <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
@@ -1206,14 +1213,17 @@ function BalanceTab({
                   <button
                     key={s.k}
                     type="button"
-                    onClick={() => toggleSeries(s.k)}
+                    onClick={() => !s.pendente && toggleSeries(s.k)}
                     aria-pressed={on}
-                    className="flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors hover:bg-gray-50 dark:hover:bg-white/[0.04]"
+                    disabled={s.pendente}
+                    title={s.pendente ? "Sem dado no sistema" : undefined}
+                    className={`flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors ${s.pendente ? "cursor-default opacity-50" : "hover:bg-gray-50 dark:hover:bg-white/[0.04]"}`}
                   >
-                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border" style={{ borderColor: s.color, background: on ? s.color : "transparent" }}>
+                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border" style={{ borderColor: s.pendente ? "#cbd5e1" : s.color, background: on ? s.color : "transparent" }}>
                       {on && <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
                     </span>
                     <span className={`text-[12px] ${on ? "font-semibold text-graphite-700 dark:text-gray-200" : "text-graphite-400 dark:text-gray-500"}`}>{s.label}</span>
+                    {s.pendente && <span className="ml-auto text-[9px] font-semibold uppercase tracking-wide text-graphite-300 dark:text-gray-600">pendente</span>}
                   </button>
                 );
               })}
@@ -1223,7 +1233,7 @@ function BalanceTab({
             </p>
           </div>
           {/* gráfico */}
-          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} /></div>
+          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} weatherByDate={weatherByDate} /></div>
         </div>
       </Card>
 
@@ -1312,33 +1322,30 @@ function BalanceTab({
       </div>
       </div>
 
-      {/* 8 · Resumo operacional */}
+      {/* 6 · Resumo do período (fonte única dos acumulados/operação) */}
       <Card className="p-0">
         <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Resumo operacional</p>
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Resumo do período <span className="font-normal text-graphite-400 dark:text-gray-500">({first ? fmtDia(first.date) : ""} – {last ? fmtDia(last.date) : ""} · {summary.days} dias)</span></p>
         </div>
-        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-5 lg:divide-y-0 dark:divide-white/[0.06]">
+        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0 dark:divide-white/[0.06]">
           {[
-            { l: "Próxima irrigação", v: verdict.irrigar ? verdict.label : "Não irrigar" },
-            { l: "Lâmina recomendada", v: verdict.irrigar ? `${laminaBruta.toFixed(1)} mm` : "0,0 mm" },
-            { l: "Data sugerida", v: "pendente", pend: true },
-            { l: "Janela ideal", v: "pendente", pend: true },
-            head.horasOperadas != null
-              ? { l: "Horas operadas", v: `${head.horasOperadas.toFixed(0)} h` }
-              : { l: "Horas operadas", v: "pendente", pend: true },
+            { l: "Chuva", v: `${summary.totalPrecipitation.toFixed(0)} mm`, sub: `efetiva ${summary.totalEffPrecipitation.toFixed(0)}` },
+            { l: "Irrigação", v: `${summary.totalIrrigation.toFixed(0)} mm`, sub: `efetiva ${(summary.totalIrrigation * efPct / 100).toFixed(0)}` },
+            { l: "ETo", v: `${etoTotal.toFixed(0)} mm` },
+            { l: "ETc", v: `${summary.totalETc.toFixed(0)} mm` },
+            { l: "Variação armaz.", v: `${variacao >= 0 ? "+" : ""}${variacao.toFixed(1)} mm`, cls: variacao >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400" },
+            { l: "Dias em estresse", v: `${summary.daysInDeficit}`, sub: `${stressPct.toFixed(0)}% do período` },
             { l: "Eficiência média", v: `${efPct.toFixed(0)}%` },
+            head.volumeM3 != null ? { l: "Volume acumulado", v: `${(head.volumeM3 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil m³` } : { l: "Volume acumulado", v: "pendente", pend: true },
+            head.horasOperadas != null ? { l: "Horas operadas", v: `${head.horasOperadas.toFixed(0)} h` } : { l: "Horas operadas", v: "pendente", pend: true },
+            head.energiaEspecifica != null ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` } : { l: "Energia específica", v: "pendente", pend: true },
             { l: "Uniformidade (CUC)", v: "pendente", pend: true },
-            head.energiaEspecifica != null
-              ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` }
-              : { l: "Energia específica", v: "pendente", pend: true },
-            head.volumeM3 != null
-              ? { l: "Volume acumulado", v: `${(head.volumeM3 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil m³` }
-              : { l: "Volume acumulado", v: "pendente", pend: true },
-            { l: "Dias em estresse", v: `${summary.daysInDeficit}` },
+            { l: "Janela ideal", v: "pendente", pend: true },
           ].map((s, i) => (
             <div key={i} className="px-5 py-3.5">
               <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{s.l}</p>
-              <p className={`mt-1 text-[16px] font-extrabold tabular-nums ${s.pend ? "text-graphite-300 dark:text-gray-600" : "text-graphite-900 dark:text-white"}`}>{s.v}</p>
+              <p className={`mt-1 text-[16px] font-extrabold tabular-nums ${s.pend ? "text-graphite-300 dark:text-gray-600" : s.cls ?? "text-graphite-900 dark:text-white"}`}>{s.v}</p>
+              {s.sub && <p className="mt-0.5 text-[10.5px] tabular-nums text-graphite-400 dark:text-gray-500">{s.sub}</p>}
             </div>
           ))}
         </div>
@@ -1387,135 +1394,6 @@ function BalanceTab({
           </span>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Charts Tab ──────────────────────────────────────────────────────────
-
-function ChartsTab({ rows }: { rows: DailyBalanceRow[] }) {
-  const recharts = useRecharts();
-
-  if (rows.length === 0) {
-    return (
-      <Card className="py-12 text-center">
-        <p className="text-graphite-400 dark:text-gray-500">
-          Calcule o balanço hídrico para visualizar os gráficos.
-        </p>
-      </Card>
-    );
-  }
-
-  if (!recharts) {
-    return (
-      <Card className="flex items-center justify-center py-12">
-        <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-      </Card>
-    );
-  }
-
-  const { ResponsiveContainer, ComposedChart, Area, Bar, Line, CartesianGrid, XAxis, YAxis, Tooltip, Legend } = recharts;
-
-  const chartData = rows.map((r) => ({
-    date: r.date.slice(5),
-    arm: r.storedWater,
-    cad: r.cad,
-    afd_line: r.cad - r.afd,
-    etc: r.etc,
-    chuva: r.effectivePrecipitation,
-    irrigacao: r.irrigationApplied,
-    deficit: r.deficit,
-    rootDepth: r.rootDepth,
-    kc: r.kc,
-  }));
-
-  const statusData = rows.map((r) => ({
-    date: r.date.slice(5),
-    status: r.waterStatus,
-    color: WATER_STATUS_CONFIG[r.waterStatus].color,
-    value: 1,
-  }));
-
-  return (
-    <div className="space-y-5">
-      {/* Chart 1: Water storage evolution */}
-      <ChartCard title="Evolução da Água no Solo" subtitle="Armazenamento (ARM) vs CAD e limiar de estresse (mm)">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Area type="monotone" dataKey="cad" name="CAD" stroke="#93c5fd" fill="#dbeafe" fillOpacity={0.4} strokeDasharray="4 4" />
-            <Line type="monotone" dataKey="afd_line" name="Limiar Estresse" stroke="#f59e0b" strokeDasharray="6 3" dot={false} />
-            <Area type="monotone" dataKey="arm" name="ARM" stroke="#22c55e" fill="#86efac" fillOpacity={0.6} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartCard>
-
-      {/* Chart 2: ETc vs inputs */}
-      <ChartCard title="Demanda vs Entradas" subtitle="ETc, Chuva efetiva e Irrigação aplicada (mm/dia)">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Bar dataKey="chuva" name="Chuva Efetiva" fill="#60a5fa" />
-            <Bar dataKey="irrigacao" name="Irrigação" fill="#34d399" />
-            <Line type="monotone" dataKey="etc" name="ETc" stroke="#ef4444" strokeWidth={2} dot={false} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartCard>
-
-      {/* Chart 3: Kc and root depth evolution */}
-      <ChartCard title="Evolução Kc e Profundidade Radicular" subtitle="Coeficiente cultural e crescimento radicular ao longo do ciclo">
-        <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-            <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-            <XAxis dataKey="date" tick={{ fontSize: 10 }} interval="preserveStartEnd" />
-            <YAxis yAxisId="left" tick={{ fontSize: 10 }} />
-            <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} />
-            <Tooltip contentStyle={{ fontSize: 12 }} />
-            <Legend wrapperStyle={{ fontSize: 11 }} />
-            <Line yAxisId="left" type="monotone" dataKey="kc" name="Kc" stroke="#8b5cf6" strokeWidth={2} dot={false} />
-            <Area yAxisId="right" type="monotone" dataKey="rootDepth" name="Raiz (m)" stroke="#f97316" fill="#fed7aa" fillOpacity={0.5} />
-          </ComposedChart>
-        </ResponsiveContainer>
-      </ChartCard>
-
-      {/* Chart 4: Status timeline */}
-      <ChartCard title="Status Hídrico Diário" subtitle="Evolução do estado de água no solo">
-        <div className="flex h-full flex-col justify-center">
-          <div className="flex gap-0.5 overflow-x-auto">
-            {statusData.map((d, i) => (
-              <div
-                key={i}
-                className="flex flex-1 flex-col items-center"
-                title={`${rows[i].date}: ${WATER_STATUS_CONFIG[d.status].label}`}
-              >
-                <div
-                  className="h-8 w-full min-w-[4px] rounded-sm"
-                  style={{ backgroundColor: d.color }}
-                />
-                {i % Math.max(1, Math.floor(statusData.length / 10)) === 0 && (
-                  <span className="mt-1 text-[8px] text-gray-400">{d.date}</span>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="mt-3 flex flex-wrap gap-3">
-            {(Object.entries(WATER_STATUS_CONFIG) as [WaterStatus, typeof WATER_STATUS_CONFIG[WaterStatus]][]).map(([key, cfg]) => (
-              <div key={key} className="flex items-center gap-1.5 text-xs text-graphite-400 dark:text-gray-500">
-                <span className="h-3 w-3 rounded-sm" style={{ backgroundColor: cfg.color }} />
-                {cfg.label}
-              </div>
-            ))}
-          </div>
-        </div>
-      </ChartCard>
     </div>
   );
 }
