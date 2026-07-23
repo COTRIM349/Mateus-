@@ -20,6 +20,10 @@ export function useCrud<T extends { id: string }>({
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const supabase = createClient();
+  // Chave estável do objeto `filters` para invalidação de hooks — evita
+  // recomputar sempre que o pai recria o literal, mas dispara quando o
+  // conteúdo muda de verdade.
+  const filtersKey = JSON.stringify(filters);
 
   const fetch = useCallback(async () => {
     setLoading(true);
@@ -43,7 +47,8 @@ export function useCrud<T extends { id: string }>({
       setData((result ?? []) as T[]);
     }
     setLoading(false);
-  }, [supabase, table, orderBy, ascending, JSON.stringify(filters)]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [supabase, table, orderBy, ascending, filtersKey]);
 
   useEffect(() => {
     const hasNullRequiredFilter = Object.values(filters).some((v) => v === null);
@@ -53,7 +58,8 @@ export function useCrud<T extends { id: string }>({
       setData([]);
       setLoading(false);
     }
-  }, [fetch]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fetch, filtersKey]);
 
   const create = async (item: Omit<T, "id" | "created_at" | "updated_at">) => {
     const { error: err } = await supabase.from(table).insert(item as Record<string, unknown>);
