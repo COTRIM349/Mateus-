@@ -141,10 +141,29 @@ export function computeSummary(rows: DiagnosticDailyRow[]): DiagnosticSummary {
 }
 
 // ── Resolve WeatherLocation SERVER-SIDE (coords nunca do cliente) ──────────
+// Devolve `null` quando fazenda inexistente / sem acesso.
+// Devolve `{ error, source }` quando existe mas as coordenadas armazenadas
+// são fisicamente inválidas (fora de [-90,90] / [-180,180]) ou ausentes.
+export interface ResolvedLocation {
+  farmName: string;
+  location: WeatherLocation;
+}
+export interface LocationResolutionError {
+  error: string;
+  source: "farms" | "weather_stations";
+}
+
+function isValidLatitude(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v >= -90 && v <= 90;
+}
+function isValidLongitude(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v) && v >= -180 && v <= 180;
+}
+
 export async function resolveLocation(
   supabase: SupabaseClient,
   farmId: string,
-): Promise<{ farmName: string; location: WeatherLocation } | null> {
+): Promise<ResolvedLocation | LocationResolutionError | null> {
   const { data: farm } = await supabase
     .from("farms")
     .select("id, name, latitude, longitude, altitude, timezone")
@@ -161,17 +180,39 @@ export async function resolveLocation(
     .limit(1)
     .maybeSingle();
 
-  const latitude = (station?.latitude ?? farm.latitude) as number | null;
-  const longitude = (station?.longitude ?? farm.longitude) as number | null;
-  if (latitude === null || longitude === null) return null;
+  const latRaw = (station?.latitude ?? farm.latitude) as unknown;
+  const lonRaw = (station?.longitude ?? farm.longitude) as unknown;
+  const source: LocationResolutionError["source"] =
+    station?.latitude != null || station?.longitude != null
+      ? "weather_stations"
+      : "farms";
+
+  if (latRaw == null || lonRaw == null) {
+    return {
+      error:
+        `Fazenda "${farm.name as string}" está sem coordenadas cadastradas. ` +
+        `Preencha latitude e longitude no cadastro da fazenda ou da estação.`,
+      source,
+    };
+  }
+  if (!isValidLatitude(latRaw) || !isValidLongitude(lonRaw)) {
+    return {
+      error:
+        `Fazenda "${farm.name as string}" tem coordenadas inválidas ` +
+        `(latitude=${String(latRaw)}, longitude=${String(lonRaw)}). ` +
+        `Latitude deve estar entre -90 e 90 e longitude entre -180 e 180, ` +
+        `em graus decimais. Verifique se o valor não está em UTM ou outro sistema.`,
+      source,
+    };
+  }
 
   return {
     farmName: farm.name as string,
     location: {
       id: (station?.id ?? farm.id) as string,
       name: (station?.name ?? farm.name) as string,
-      latitude,
-      longitude,
+      latitude: latRaw,
+      longitude: lonRaw,
       elevationM: (station?.altitude ?? farm.altitude ?? null) as number | null,
       timezone:
         ((station?.timezone ?? farm.timezone) as string | null) ?? "America/Bahia",
@@ -247,11 +288,12 @@ export async function runClimateDiagnostic(
   }
 
   const resolved = await resolveLocation(supabase, params.farmId);
-  if (!resolved) {
-    return {
-      error: "fazenda inacessível ou sem coordenadas cadastradas",
-      status: 403,
-    };
+  if (resolved === null) {
+    return { error: "fazenda inacessível", status: 403 };
+  }
+  if ("error" in resolved) {
+    // Coordenada inválida / ausente — não chamar Open-Meteo com lixo.
+    return { error: resolved.error, status: 400 };
   }
 
   const endDate = new Date();

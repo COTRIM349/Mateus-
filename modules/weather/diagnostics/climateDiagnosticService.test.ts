@@ -117,13 +117,59 @@ describe("runClimateDiagnostic — validações", () => {
     }
   });
 
-  it("fazenda sem coordenadas → 403 (não chama Open-Meteo)", async () => {
+  it("fazenda sem coordenadas → 400 com mensagem amigável (não chama Open-Meteo)", async () => {
     const sb = makeSupabaseMock({
       farms: { id: "f1", name: "F", latitude: null, longitude: null, altitude: null, timezone: "America/Bahia" },
       weather_stations: null,
     });
     const r = await runClimateDiagnostic(sb as never, { farmId: "f1", days: 7 });
     expect("error" in r).toBe(true);
+    if ("error" in r) {
+      expect(r.status).toBe(400);
+      expect(r.error).toContain("sem coordenadas");
+    }
+  });
+
+  it("fazenda com latitude fora de [-90,90] → 400 com mensagem amigável", async () => {
+    // Reproduz o bug real reportado: FAZENDA KARITEL com latitude=141000
+    const sb = makeSupabaseMock({
+      farms: {
+        id: "karitel",
+        name: "FAZENDA KARITEL",
+        latitude: 141000,
+        longitude: -45,
+        altitude: 700,
+        timezone: "America/Bahia",
+      },
+      weather_stations: null,
+    });
+    const r = await runClimateDiagnostic(sb as never, { farmId: "karitel", days: 7 });
+    expect("error" in r).toBe(true);
+    if ("error" in r) {
+      expect(r.status).toBe(400);
+      expect(r.error).toContain("KARITEL");
+      expect(r.error).toContain("coordenadas inválidas");
+      expect(r.error).toContain("141000");
+      // NÃO deve mencionar HTTP 400 da Open-Meteo — validamos antes de chamar
+      expect(r.error).not.toContain("Open-Meteo");
+    }
+  });
+
+  it("longitude fora de [-180,180] → 400", async () => {
+    const sb = makeSupabaseMock({
+      farms: {
+        id: "f2",
+        name: "F2",
+        latitude: -12,
+        longitude: 500,
+        altitude: 700,
+        timezone: "America/Bahia",
+      },
+      weather_stations: null,
+    });
+    const r = await runClimateDiagnostic(sb as never, { farmId: "f2", days: 7 });
+    expect("error" in r).toBe(true);
+    if ("error" in r) expect(r.status).toBe(400);
   });
 
   it("ALLOWED_DIAGNOSTIC_DAYS = [7, 14, 30]", () => {
