@@ -132,8 +132,21 @@ export function calculateReferenceEtoFao56(
   }
 
   // ── 4. Pressão atmosférica (P) e psicrométrica (γ) ────────────────────
-  let atmosphericPressureKpa: number | null = input.surfacePressureKpa;
-  if (atmosphericPressureKpa === null) {
+  // Prioridade (decisão Etapa 2):
+  //   a) surfacePressureKpa válida da fonte;
+  //   b) calcular a partir da altitude (FAO-56 eq. 7), registrando estimativa;
+  //   c) sem pressão nem altitude → ETo não é calculável (missing).
+  let atmosphericPressureKpa: number | null = null;
+  if (
+    input.surfacePressureKpa !== null &&
+    Number.isFinite(input.surfacePressureKpa) &&
+    input.surfacePressureKpa > 0
+  ) {
+    atmosphericPressureKpa = input.surfacePressureKpa;
+  } else {
+    if (input.surfacePressureKpa !== null) {
+      warnings.push("surfacePressureKpa inválida — tratada como ausente.");
+    }
     if (input.elevationM !== null && Number.isFinite(input.elevationM)) {
       atmosphericPressureKpa = atmosphericPressureFromElevation(input.elevationM);
       estimatedFields.push({
@@ -212,6 +225,7 @@ export function calculateReferenceEtoFao56(
     const j = dayOfYearFromISO(input.date);
     const dr = 1 + 0.033 * Math.cos((2 * Math.PI * j) / 365);
     const decl = 0.409 * Math.sin((2 * Math.PI * j) / 365 - 1.39);
+    // Clamp em [-1, 1] previne NaN em latitudes onde tan(δ)·tan(φ) > 1.
     const ws = Math.acos(Math.max(-1, Math.min(1, -Math.tan(latRad) * Math.tan(decl))));
     ra =
       ((24 * 60) / Math.PI) *
@@ -219,8 +233,17 @@ export function calculateReferenceEtoFao56(
       dr *
       (ws * Math.sin(latRad) * Math.sin(decl) +
         Math.cos(latRad) * Math.cos(decl) * Math.sin(ws));
-    const elevForRso = input.elevationM ?? 0;
-    rso = (0.75 + 2e-5 * elevForRso) * ra;
+    // Rso (FAO-56 eq. 37) depende da altitude. Se elevationM ausente mas
+    // pressão foi fornecida, usamos z=0 (nível do mar) e AVISAMOS —
+    // Rso subestimado leve, mas fluxo continua auditável (I2).
+    if (input.elevationM !== null && Number.isFinite(input.elevationM)) {
+      rso = (0.75 + 2e-5 * input.elevationM) * ra;
+    } else {
+      rso = 0.75 * ra;
+      warnings.push(
+        "elevationM ausente; Rso calculado ao nível do mar (subestimativa possível).",
+      );
+    }
   }
 
   // ── 8. Radiação líquida (Rn) ──────────────────────────────────────────
@@ -233,7 +256,19 @@ export function calculateReferenceEtoFao56(
   if (rs !== null && rs >= 0 && ea !== null && rso !== null && tMin !== null && tMax !== null) {
     const tMaxK4 = Math.pow(tMax + 273.16, 4);
     const tMinK4 = Math.pow(tMin + 273.16, 4);
-    const cloudTerm = 1.35 * (rs / Math.max(rso, 0.01)) - 0.35;
+    // I1 (FAO-56 §3.5.2): Rs/Rso deve estar em [0, 1] antes do termo de
+    // nuvens. Valor fora do intervalo indica erro de medição/integração —
+    // limitamos e registramos aviso, sem descartar o registro.
+    const rawRatio = rs / Math.max(rso, 0.01);
+    const cloudRatio = Math.min(Math.max(rawRatio, 0), 1);
+    if (rawRatio > 1) {
+      warnings.push(
+        `Rs/Rso = ${rawRatio.toFixed(3)} > 1 — limitado a 1.0 (FAO-56 §3.5.2).`,
+      );
+    } else if (rawRatio < 0) {
+      warnings.push(`Rs/Rso = ${rawRatio.toFixed(3)} < 0 — limitado a 0.`);
+    }
+    const cloudTerm = 1.35 * cloudRatio - 0.35;
     rnl =
       STEFAN_BOLTZMANN *
       ((tMaxK4 + tMinK4) / 2) *
