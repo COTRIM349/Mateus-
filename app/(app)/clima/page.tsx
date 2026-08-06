@@ -27,6 +27,7 @@ import {
   getVirtualStationSnapshot,
   type VirtualStationSnapshot,
 } from "@/modules/weather/services/virtual-station.service";
+import { ClimateDiagnosticTab } from "@/components/climate/ClimateDiagnosticTab";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -51,6 +52,7 @@ const climaTabs = [
   { id: "clima", label: "Clima" },
   { id: "historico", label: "Histórico" },
   { id: "estacao", label: "Estação" },
+  { id: "diagnostico", label: "Diagnóstico" },
 ];
 
 const estacaoSubTabs = [
@@ -219,6 +221,7 @@ export default function ClimaPage() {
         {activeTab === "clima" && <div className="animate-in"><ForecastTab /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTab /></div>}
         {activeTab === "estacao" && <div className="animate-in"><EstacaoTab /></div>}
+        {activeTab === "diagnostico" && <div className="animate-in"><ClimateDiagnosticTab /></div>}
       </div>
       <p className="mt-6 text-xs text-graphite-400 dark:text-gray-500">
         Dados climáticos automáticos: Open-Meteo.com (CC-BY 4.0).
