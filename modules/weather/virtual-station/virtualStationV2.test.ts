@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildDefaultVirtualStation,
   DEFAULT_VIRTUAL_STATION_PROVIDERS,
+  rankVirtualStationForPivot,
   validateVirtualStationLocation,
+  validateVirtualStationScope,
   VIRTUAL_STATION_PROVIDERS,
   VIRTUAL_STATION_TARGET_RESOLUTION_MINUTES,
 } from "./virtualStationV2";
@@ -29,6 +31,7 @@ describe("Virtual Station V2", () => {
 
     expect(station.shadowMode).toBe(true);
     expect(station.targetResolutionMinutes).toBe(VIRTUAL_STATION_TARGET_RESOLUTION_MINUTES);
+    expect(station.scopeType).toBe("farm");
     expect(station.providers).toHaveLength(4);
     expect(station.providers).toEqual(DEFAULT_VIRTUAL_STATION_PROVIDERS);
   });
@@ -57,5 +60,31 @@ describe("Virtual Station V2", () => {
     });
 
     expect(station.elevationM).toBeNull();
+  });
+
+  it("valida a forma do escopo espacial", () => {
+    expect(validateVirtualStationScope({ scopeType: "farm", moduleId: null, pivotId: null }).valid).toBe(true);
+    expect(validateVirtualStationScope({ scopeType: "module", moduleId: "m1", pivotId: null }).valid).toBe(true);
+    expect(validateVirtualStationScope({ scopeType: "pivot", moduleId: null, pivotId: "p1" }).valid).toBe(true);
+    expect(validateVirtualStationScope({ scopeType: "module", moduleId: null, pivotId: null }).valid).toBe(false);
+  });
+
+  it("resolve prioridade espacial pivo > modulo > fazenda", () => {
+    const target = { farmId: "farm-1", moduleId: "m1", pivotId: "p1" };
+    const farm = buildDefaultVirtualStation({
+      id: "s-farm", farmId: "farm-1", name: "Farm", latitude: -12, longitude: -45, elevationM: 700,
+    });
+    const moduleStation = buildDefaultVirtualStation({
+      id: "s-module", farmId: "farm-1", name: "M1", latitude: -12, longitude: -45, elevationM: 700,
+      scopeType: "module", moduleId: "m1",
+    });
+    const pivotStation = buildDefaultVirtualStation({
+      id: "s-pivot", farmId: "farm-1", name: "P1", latitude: -12, longitude: -45, elevationM: 700,
+      scopeType: "pivot", pivotId: "p1",
+    });
+
+    expect(rankVirtualStationForPivot(farm, target)).toBe(100);
+    expect(rankVirtualStationForPivot(moduleStation, target)).toBe(200);
+    expect(rankVirtualStationForPivot(pivotStation, target)).toBe(300);
   });
 });
