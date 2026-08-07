@@ -6,7 +6,7 @@
 --   • payloads externos ficam preservados de forma imutavel.
 --   • cada provider gera candidatos normalizados de 30 minutos separados.
 --   • ausencia continua NULL; nunca e convertida para zero.
---   • previsao e observado continuam separados por data_type/issued_at.
+--   • previsao e observado continuam separados nos candidatos por data_type.
 -- ==========================================================================
 
 create table if not exists public.weather_provider_payloads_raw (
@@ -15,8 +15,9 @@ create table if not exists public.weather_provider_payloads_raw (
     references public.virtual_weather_stations(id) on delete cascade,
   provider text not null
     check (provider in ('open_meteo', 'meteoblue', 'weatherapi', 'met_norway')),
+  -- Uma unica resposta pode conter passado/presente estimado + futuro previsto.
   data_type text not null
-    check (data_type in ('observed', 'forecast', 'reanalysis', 'estimated')),
+    check (data_type in ('observed', 'forecast', 'reanalysis', 'estimated', 'mixed')),
   model_name text,
   forecast_issued_at timestamptz,
   fetched_at timestamptz not null default now(),
