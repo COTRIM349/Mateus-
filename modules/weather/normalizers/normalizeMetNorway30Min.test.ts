@@ -27,6 +27,7 @@ describe("normalizeMetNorwayHourlyTo30Min", () => {
                 instant: {
                   details: {
                     air_temperature: 26,
+                    dew_point_temperature: 17,
                     relative_humidity: 60,
                     wind_speed: 2,
                     wind_from_direction: 350,
@@ -42,6 +43,7 @@ describe("normalizeMetNorwayHourlyTo30Min", () => {
                 instant: {
                   details: {
                     air_temperature: 30,
+                    dew_point_temperature: 19,
                     relative_humidity: 50,
                     wind_speed: 4,
                     wind_from_direction: 10,
@@ -60,6 +62,7 @@ describe("normalizeMetNorwayHourlyTo30Min", () => {
     expect(rows[0].intervalStart).toBe("2026-08-07T10:00:00.000Z");
     expect(rows[0].intervalEnd).toBe("2026-08-07T10:30:00.000Z");
     expect(rows[0].temperatureC).toBe(28);
+    expect(rows[0].dewPointC).toBe(18);
     expect(rows[0].relativeHumidityPct).toBe(55);
     expect(rows[0].windSpeed10mMs).toBe(3);
     expect(rows[0].windDirectionDeg).toBeCloseTo(0, 8);
@@ -70,6 +73,7 @@ describe("normalizeMetNorwayHourlyTo30Min", () => {
     expect(rows[0].metadata.interpolated).toBe(true);
     expect(rows[0].metadata.estimated).toBe(true);
     expect(rows[0].metadata.qualityStatus).toBe("partial");
+    expect(rows[0].metadata.missingFields).not.toContain("dewPointC");
     expect(rows[0].metadata.missingFields).toContain("precipitationMm");
     expect(rows[0].metadata.missingFields).toContain("solarRadiationWm2");
     expect(rows[0].metadata.forecastIssuedAt).toBe("2026-08-07T09:00:00Z");
@@ -90,8 +94,10 @@ describe("normalizeMetNorwayHourlyTo30Min", () => {
       },
     });
 
+    expect(rows[0].dewPointC).toBeNull();
     expect(rows[0].relativeHumidityPct).toBeNull();
     expect(rows[0].windSpeed10mMs).toBeNull();
+    expect(rows[0].metadata.missingFields).toContain("dewPointC");
     expect(rows[0].metadata.missingFields).toContain("relativeHumidityPct");
   });
 });
