@@ -76,17 +76,6 @@ function utcIsoFromOpenMeteo(value: string): string | null {
   return Number.isFinite(date.getTime()) ? date.toISOString() : null;
 }
 
-function localDate(iso: string, timezone: string): string {
-  const parts = new Intl.DateTimeFormat("en-US", {
-    timeZone: timezone,
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-  }).formatToParts(new Date(iso));
-  const get = (type: string) => parts.find((part) => part.type === type)?.value ?? "";
-  return `${get("year")}-${get("month")}-${get("day")}`;
-}
-
 /**
  * Open-Meteo documenta dados 15-min nativos principalmente em America do
  * Norte e Europa Central. Fora dessas regioes, os valores sao interpolados
@@ -144,7 +133,6 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
   for (const [endEpoch, secondIndex] of [...byEpoch.entries()].sort((a, b) => a[0] - b[0])) {
     const end = new Date(endEpoch);
     const minute = end.getUTCMinutes();
-    // Fechamos apenas janelas alinhadas 00-30 e 30-00.
     if (minute !== 0 && minute !== 30) continue;
 
     const firstEpoch = endEpoch - 15 * 60_000;
@@ -210,6 +198,11 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
         "Open-Meteo 15-min nesta localizacao e tratado como interpolado de dados horarios, conforme documentacao do provedor.",
       );
     }
+    if (dataType === "forecast") {
+      warnings.push(
+        "Open-Meteo best_match nao expoe aqui o issue time real do modelo; forecastIssuedAt permanece null e fetchedAt preserva o instante da consulta.",
+      );
+    }
 
     rows.push({
       location: input.location,
@@ -227,9 +220,9 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
       vapourPressureDeficitKpa: vpd,
       metadata: {
         provider: "open_meteo",
-        modelName: "best_match",
+        modelName: "open_meteo_best_match",
         dataType,
-        forecastIssuedAt: dataType === "forecast" ? input.fetchedAt : null,
+        forecastIssuedAt: null,
         validAt: intervalEnd,
         fetchedAt: input.fetchedAt,
         sourceReference: input.requestUrl,
