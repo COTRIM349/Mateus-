@@ -129,8 +129,9 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
   const fetchedEpoch = new Date(input.fetchedAt).getTime();
   const providerInterpolated = openMeteoLikelyInterpolates15Min(input.location);
   const rows: NormalizedOpenMeteo30Min[] = [];
+  const sortedEntries = Array.from(byEpoch.entries()).sort((a, b) => a[0] - b[0]);
 
-  for (const [endEpoch, secondIndex] of [...byEpoch.entries()].sort((a, b) => a[0] - b[0])) {
+  for (const [endEpoch, secondIndex] of sortedEntries) {
     const end = new Date(endEpoch);
     const minute = end.getUTCMinutes();
     if (minute !== 0 && minute !== 30) continue;
