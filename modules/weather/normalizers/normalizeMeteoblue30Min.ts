@@ -15,6 +15,10 @@ function finiteAt(values: (number | null)[] | undefined, index: number): number 
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
+function kmhToMs(value: number | null): number | null {
+  return value === null ? null : value / 3.6;
+}
+
 function lerp(a: number | null, b: number | null, fraction: number): number | null {
   return a === null || b === null ? null : a + (b - a) * fraction;
 }
@@ -40,7 +44,6 @@ function qualityFor(values: {
   if (values.temperatureC === null) missingFields.push("temperatureC");
   if (values.relativeHumidityPct === null) missingFields.push("relativeHumidityPct");
   if (values.windSpeed10mMs === null) missingFields.push("windSpeed10mMs");
-  // basic-1h nao entrega radiação; chuva sub-horaria nao e inferida.
   missingFields.push("solarRadiationWm2", "precipitationMm", "surfacePressureKpa");
   return { status: "partial", missingFields };
 }
@@ -81,11 +84,12 @@ export function normalizeMeteoblueHourlyTo30Min(input: {
         finiteAt(block.relativehumidity, i + 1),
         fraction,
       );
-      const windSpeed10mMs = lerp(
+      const windSpeed10mKmh = lerp(
         finiteAt(block.windspeed, i),
         finiteAt(block.windspeed, i + 1),
         fraction,
       );
+      const windSpeed10mMs = kmhToMs(windSpeed10mKmh);
       const windDirectionDeg = lerpDirection(
         finiteAt(block.winddirection, i),
         finiteAt(block.winddirection, i + 1),
@@ -121,6 +125,7 @@ export function normalizeMeteoblueHourlyTo30Min(input: {
           missingFields: quality.missingFields,
           warnings: [
             "Meteoblue basic-1h possui resolucao nativa horaria; intervalo Cotrim de 30 min e interpolado.",
+            "Vento recebido em km/h e convertido explicitamente para m/s antes do ajuste FAO para 2 m.",
             "Precipitacao sub-horaria nao foi inferida a partir do acumulado horario; valor mantido como null.",
             "Radiacao solar nao esta disponivel no pacote basic-1h usado nesta etapa; valor mantido como null.",
             "Sea-level pressure nao e usada como surface pressure; valor canonico permanece null.",
