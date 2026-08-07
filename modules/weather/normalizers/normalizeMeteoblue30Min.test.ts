@@ -26,7 +26,8 @@ describe("normalizeMeteoblueHourlyTo30Min", () => {
           time: ["2026-08-07T10:00", "2026-08-07T11:00"],
           temperature: [26, 30],
           relativehumidity: [60, 50],
-          windspeed: [2, 4],
+          // km/h -> 2 e 4 m/s; o meio da hora deve resultar 3 m/s.
+          windspeed: [7.2, 14.4],
           winddirection: [350, 10],
           precipitation: [1, 0],
           sealevelpressure: [1015, 1014],
@@ -39,7 +40,7 @@ describe("normalizeMeteoblueHourlyTo30Min", () => {
     expect(rows[0].intervalEnd).toBe("2026-08-07T10:30:00.000Z");
     expect(rows[0].temperatureC).toBe(28);
     expect(rows[0].relativeHumidityPct).toBe(55);
-    expect(rows[0].windSpeed10mMs).toBe(3);
+    expect(rows[0].windSpeed10mMs).toBeCloseTo(3, 8);
     expect(rows[0].windDirectionDeg).toBeCloseTo(0, 8);
     expect(rows[0].precipitationMm).toBeNull();
     expect(rows[0].solarRadiationWm2).toBeNull();
@@ -51,6 +52,7 @@ describe("normalizeMeteoblueHourlyTo30Min", () => {
     expect(rows[0].metadata.missingFields).toContain("precipitationMm");
     expect(rows[0].metadata.missingFields).toContain("solarRadiationWm2");
     expect(rows[1].temperatureC).toBe(30);
+    expect(rows[1].windSpeed10mMs).toBeCloseTo(4, 8);
   });
 
   it("preserva null quando a variavel horaria esta ausente", () => {
