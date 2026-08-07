@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - "clima-1/**"
+      - "clima-3/**"
   pull_request:
     paths:
       - "modules/weather/**"
