@@ -5,7 +5,6 @@
 -- O payload bruto nunca e sobrescrito; os dados normalizados apontam para ele.
 -- ==========================================================================
 
--- Garante que modulo/pivo pertencem a mesma fazenda da estacao.
 create or replace function public.validate_virtual_weather_station_scope_farm()
 returns trigger
 language plpgsql
@@ -42,15 +41,14 @@ before insert or update of farm_id, scope_type, module_id, pivot_id
 on public.virtual_weather_stations
 for each row execute function public.validate_virtual_weather_station_scope_farm();
 
--- Resposta original do provedor. Guardamos JSONB para auditoria/reprocessamento.
 create table if not exists public.climate_raw_payloads (
   id uuid primary key default gen_random_uuid(),
   virtual_station_id uuid not null
     references public.virtual_weather_stations(id) on delete cascade,
   provider text not null
     check (provider in ('open_meteo', 'meteoblue', 'weatherapi', 'met_norway')),
-  data_type text not null default 'forecast'
-    check (data_type in ('observed', 'forecast', 'reanalysis', 'estimated')),
+  data_type text not null default 'mixed'
+    check (data_type in ('observed', 'forecast', 'reanalysis', 'estimated', 'mixed')),
   requested_at timestamptz not null,
   fetched_at timestamptz not null default now(),
   request_url text,
@@ -68,7 +66,6 @@ create table if not exists public.climate_raw_payloads (
 create index if not exists idx_climate_raw_payloads_station_provider_time
   on public.climate_raw_payloads(virtual_station_id, provider, fetched_at desc);
 
--- Registro canonico por provider e intervalo. Ainda NAO e consenso Cotrim.
 create table if not exists public.climate_interval_readings (
   id uuid primary key default gen_random_uuid(),
   virtual_station_id uuid not null
@@ -88,13 +85,13 @@ create table if not exists public.climate_interval_readings (
   relative_humidity_pct double precision,
   dew_point_c double precision,
   surface_pressure_kpa double precision,
+  vapour_pressure_deficit_kpa double precision,
   wind_speed_10m_ms double precision,
   wind_speed_2m_ms double precision,
   wind_direction_deg double precision,
   solar_radiation_wm2 double precision,
   precipitation_mm double precision,
 
-  -- A ETo sera preenchida apenas pela etapa do motor agronomico.
   provider_reference_eto_mm double precision,
   cotrim_pm_eto_mm double precision,
 
