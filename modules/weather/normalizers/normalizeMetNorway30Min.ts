@@ -34,28 +34,17 @@ function parseTime(value: string | undefined): number | null {
 
 function qualityFor(values: {
   temperatureC: number | null;
+  dewPointC: number | null;
   relativeHumidityPct: number | null;
   windSpeed10mMs: number | null;
 }): { status: WeatherQualityStatus; missingFields: string[] } {
   const missingFields: string[] = [];
   if (values.temperatureC === null) missingFields.push("temperatureC");
+  if (values.dewPointC === null) missingFields.push("dewPointC");
   if (values.relativeHumidityPct === null) missingFields.push("relativeHumidityPct");
   if (values.windSpeed10mMs === null) missingFields.push("windSpeed10mMs");
-
-  // Locationforecast compacto nao fornece radiacao solar neste contrato.
-  // A pressao exposta e ao nivel do mar, portanto nao vira surface pressure.
-  // next_1_hours e acumulado horario e nao e repartido em 30 min.
-  missingFields.push(
-    "dewPointC",
-    "solarRadiationWm2",
-    "surfacePressureKpa",
-    "precipitationMm",
-  );
-
-  return {
-    status: missingFields.length === 0 ? "complete" : "partial",
-    missingFields,
-  };
+  missingFields.push("solarRadiationWm2", "surfacePressureKpa", "precipitationMm");
+  return { status: missingFields.length === 0 ? "complete" : "partial", missingFields };
 }
 
 function detailsAt(payload: MetNorwayCompactPayload, index: number): MetNorwayInstantDetails {
@@ -90,6 +79,11 @@ export function normalizeMetNorwayHourlyTo30Min(input: {
       const intervalStart = new Date(intervalEndEpoch - 30 * 60_000).toISOString();
 
       const temperatureC = lerp(finite(a.air_temperature), finite(b.air_temperature), fraction);
+      const dewPointC = lerp(
+        finite(a.dew_point_temperature),
+        finite(b.dew_point_temperature),
+        fraction,
+      );
       const relativeHumidityPct = lerp(
         finite(a.relative_humidity),
         finite(b.relative_humidity),
@@ -101,7 +95,7 @@ export function normalizeMetNorwayHourlyTo30Min(input: {
         finite(b.wind_from_direction),
         fraction,
       );
-      const quality = qualityFor({ temperatureC, relativeHumidityPct, windSpeed10mMs });
+      const quality = qualityFor({ temperatureC, dewPointC, relativeHumidityPct, windSpeed10mMs });
       const dataType: WeatherDataType = intervalEndEpoch > fetchedEpoch ? "forecast" : "estimated";
 
       rows.push({
@@ -110,7 +104,7 @@ export function normalizeMetNorwayHourlyTo30Min(input: {
         intervalEnd,
         temperatureC,
         relativeHumidityPct,
-        dewPointC: null,
+        dewPointC,
         precipitationMm: null,
         windSpeed2mMs:
           windSpeed10mMs === null ? null : adjustWindToTwoMeters(windSpeed10mMs, 10),
