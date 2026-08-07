@@ -77,10 +77,9 @@ function utcIsoFromOpenMeteo(value: string): string | null {
 }
 
 /**
- * Open-Meteo documenta dados 15-min nativos principalmente em America do
- * Norte e Europa Central. Fora dessas regioes, os valores sao interpolados
- * dos dados horarios. A caixa abaixo e propositalmente conservadora: se nao
- * temos certeza de cobertura nativa, marcamos como interpolado.
+ * Conservador: Brasil e demais regioes fora dos dominios sub-horarios nativos
+ * sao marcados como interpolados. Para a operacao atual no Brasil isso evita
+ * apresentar o dado virtual de 15 min como se fosse medicao nova de 15 min.
  */
 export function openMeteoLikelyInterpolates15Min(location: WeatherLocation): boolean {
   const northAmerica =
@@ -143,26 +142,11 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
     const intervalStart = new Date(endEpoch - 30 * 60_000).toISOString();
     const intervalEnd = end.toISOString();
 
-    const t = mean2(
-      finiteAt(block.temperature_2m, firstIndex),
-      finiteAt(block.temperature_2m, secondIndex),
-    );
-    const rh = mean2(
-      finiteAt(block.relative_humidity_2m, firstIndex),
-      finiteAt(block.relative_humidity_2m, secondIndex),
-    );
-    const dew = mean2(
-      finiteAt(block.dew_point_2m, firstIndex),
-      finiteAt(block.dew_point_2m, secondIndex),
-    );
-    const rain = sum2(
-      finiteAt(block.precipitation, firstIndex),
-      finiteAt(block.precipitation, secondIndex),
-    );
-    const radiation = mean2(
-      finiteAt(block.shortwave_radiation, firstIndex),
-      finiteAt(block.shortwave_radiation, secondIndex),
-    );
+    const t = mean2(finiteAt(block.temperature_2m, firstIndex), finiteAt(block.temperature_2m, secondIndex));
+    const rh = mean2(finiteAt(block.relative_humidity_2m, firstIndex), finiteAt(block.relative_humidity_2m, secondIndex));
+    const dew = mean2(finiteAt(block.dew_point_2m, firstIndex), finiteAt(block.dew_point_2m, secondIndex));
+    const rain = sum2(finiteAt(block.precipitation, firstIndex), finiteAt(block.precipitation, secondIndex));
+    const radiation = mean2(finiteAt(block.shortwave_radiation, firstIndex), finiteAt(block.shortwave_radiation, secondIndex));
     const windFirst = finiteAt(block.wind_speed_10m, firstIndex);
     const windSecond = finiteAt(block.wind_speed_10m, secondIndex);
     const wind10 = mean2(windFirst, windSecond);
@@ -173,14 +157,8 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
       windFirst,
       windSecond,
     );
-    const pressure = hpaToKpa(mean2(
-      finiteAt(block.surface_pressure, firstIndex),
-      finiteAt(block.surface_pressure, secondIndex),
-    ));
-    const vpd = mean2(
-      finiteAt(block.vapour_pressure_deficit, firstIndex),
-      finiteAt(block.vapour_pressure_deficit, secondIndex),
-    );
+    const pressure = hpaToKpa(mean2(finiteAt(block.surface_pressure, firstIndex), finiteAt(block.surface_pressure, secondIndex)));
+    const vpd = mean2(finiteAt(block.vapour_pressure_deficit, firstIndex), finiteAt(block.vapour_pressure_deficit, secondIndex));
 
     const quality = qualityFor({
       temperatureC: t,
@@ -193,6 +171,7 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
     const dataType: WeatherDataType = endEpoch > fetchedEpoch ? "forecast" : "estimated";
     const warnings: string[] = [
       "Intervalo Cotrim de 30 min agregado a partir de dois passos de 15 min do Open-Meteo.",
+      "windSpeed2mMs derivado do vento a 10 m pela equacao FAO-56.",
     ];
     if (providerInterpolated) {
       warnings.push(
@@ -201,7 +180,7 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
     }
     if (dataType === "forecast") {
       warnings.push(
-        "Open-Meteo best_match nao expoe aqui o issue time real do modelo; forecastIssuedAt permanece null e fetchedAt preserva o instante da consulta.",
+        "Open-Meteo best_match nao expoe neste payload o issue time real do modelo; fetchedAt preserva o instante da consulta.",
       );
     }
 
@@ -230,8 +209,11 @@ export function normalizeOpenMeteo15MinTo30Min(input: {
         qualityStatus: quality.status,
         missingFields: quality.missingFields,
         warnings,
+        // Para Brasil, a informacao sub-horaria nasce de dado horario.
         sourceResolutionMinutes: providerInterpolated ? 60 : 15,
-        interpolated: true,
+        // Agregar 15 -> 30 nao e interpolar. Este flag descreve somente a
+        // interpolacao feita pelo provedor para gerar os 15 minutos.
+        interpolated: providerInterpolated,
         estimated: dataType === "estimated",
       },
     });
