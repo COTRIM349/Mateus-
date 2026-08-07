@@ -5,6 +5,7 @@ on:
     branches:
       - "clima-1/**"
       - "clima-3/**"
+      - "clima-4/**"
   pull_request:
     paths:
       - "modules/weather/**"
