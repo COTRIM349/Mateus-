@@ -2,6 +2,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   buildDefaultVirtualStation,
   rankVirtualStationForPivot,
+  VIRTUAL_STATION_TARGET_RESOLUTION_MINUTES,
   type VirtualWeatherStationV2,
   type VirtualStationScopeType,
 } from "./virtualStationV2";
@@ -23,7 +24,13 @@ interface DbVirtualStationRow {
 }
 
 function fromDb(row: DbVirtualStationRow): VirtualWeatherStationV2 {
-  return buildDefaultVirtualStation({
+  if (row.target_resolution_minutes !== VIRTUAL_STATION_TARGET_RESOLUTION_MINUTES) {
+    throw new Error(
+      `Estacao ${row.id} usa resolucao ${row.target_resolution_minutes} min; Climate V2 exige 30 min`,
+    );
+  }
+
+  const station = buildDefaultVirtualStation({
     id: row.id,
     farmId: row.farm_id,
     scopeType: row.scope_type,
@@ -35,6 +42,14 @@ function fromDb(row: DbVirtualStationRow): VirtualWeatherStationV2 {
     elevationM: row.elevation_m,
     timezone: row.timezone,
   });
+
+  // O builder fornece defaults seguros para criacao. Ao ler do banco,
+  // shadowMode e active devem refletir o estado realmente persistido.
+  return {
+    ...station,
+    shadowMode: row.shadow_mode,
+    active: row.active,
+  };
 }
 
 /**
@@ -100,7 +115,7 @@ export async function ensureFarmVirtualStationV2(
       longitude: candidate.longitude,
       elevation_m: candidate.elevationM,
       timezone: candidate.timezone,
-      target_resolution_minutes: 30,
+      target_resolution_minutes: VIRTUAL_STATION_TARGET_RESOLUTION_MINUTES,
       shadow_mode: true,
       active: true,
     })
