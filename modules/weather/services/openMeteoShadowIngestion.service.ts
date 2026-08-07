@@ -50,12 +50,8 @@ export async function ingestOpenMeteo30MinShadow(
   supabase: SupabaseClient,
   station: ShadowVirtualStationRow,
 ): Promise<OpenMeteoShadowIngestionResult> {
-  if (!station.active) {
-    throw new Error("Estacao virtual inativa.");
-  }
-  if (!station.shadow_mode) {
-    throw new Error("CLIMA 2 exige shadow_mode=true.");
-  }
+  if (!station.active) throw new Error("Estacao virtual inativa.");
+  if (!station.shadow_mode) throw new Error("CLIMA 2 exige shadow_mode=true.");
   if (station.target_resolution_minutes !== 30) {
     throw new Error("CLIMA 2 exige target_resolution_minutes=30.");
   }
@@ -74,7 +70,8 @@ export async function ingestOpenMeteo30MinShadow(
     .insert({
       virtual_station_id: station.id,
       provider: "open_meteo",
-      data_type: "forecast",
+      // A mesma resposta possui passos passados/atuais e previsoes futuras.
+      data_type: "mixed",
       requested_at: raw.requestedAt,
       fetched_at: raw.finishedAt,
       request_url: raw.requestUrl,
@@ -116,6 +113,7 @@ export async function ingestOpenMeteo30MinShadow(
     relative_humidity_pct: item.relativeHumidityPct,
     dew_point_c: item.dewPointC,
     surface_pressure_kpa: item.surfacePressureKpa,
+    vapour_pressure_deficit_kpa: item.vapourPressureDeficitKpa,
     wind_speed_10m_ms: item.windSpeed10mMs,
     wind_speed_2m_ms: item.windSpeed2mMs,
     wind_direction_deg: item.windDirectionDeg,
