@@ -12,6 +12,7 @@ export const VIRTUAL_STATION_PROVIDERS = [
 
 export type VirtualStationProvider = (typeof VIRTUAL_STATION_PROVIDERS)[number];
 export type VirtualStationProviderRole = "primary" | "candidate" | "fallback" | "audit";
+export type VirtualStationScopeType = "farm" | "module" | "pivot";
 
 export interface VirtualStationProviderConfig {
   provider: VirtualStationProvider;
@@ -22,6 +23,9 @@ export interface VirtualStationProviderConfig {
 
 export interface VirtualWeatherStationV2 extends WeatherLocation {
   farmId: string;
+  scopeType: VirtualStationScopeType;
+  moduleId: string | null;
+  pivotId: string | null;
   targetResolutionMinutes: typeof VIRTUAL_STATION_TARGET_RESOLUTION_MINUTES;
   shadowMode: boolean;
   active: boolean;
@@ -61,6 +65,26 @@ export function validateVirtualStationLocation(
   return { valid: errors.length === 0, errors };
 }
 
+export function validateVirtualStationScope(input: {
+  scopeType: VirtualStationScopeType;
+  moduleId: string | null;
+  pivotId: string | null;
+}): VirtualStationValidationResult {
+  const errors: string[] = [];
+
+  if (input.scopeType === "farm" && (input.moduleId !== null || input.pivotId !== null)) {
+    errors.push("escopo farm nao aceita moduleId nem pivotId");
+  }
+  if (input.scopeType === "module" && (!input.moduleId || input.pivotId !== null)) {
+    errors.push("escopo module exige moduleId e nao aceita pivotId");
+  }
+  if (input.scopeType === "pivot" && (!input.pivotId || input.moduleId !== null)) {
+    errors.push("escopo pivot exige pivotId e nao aceita moduleId");
+  }
+
+  return { valid: errors.length === 0, errors };
+}
+
 export function buildDefaultVirtualStation(input: {
   id: string;
   farmId: string;
@@ -69,10 +93,17 @@ export function buildDefaultVirtualStation(input: {
   longitude: number;
   elevationM: number | null;
   timezone?: string | null;
+  scopeType?: VirtualStationScopeType;
+  moduleId?: string | null;
+  pivotId?: string | null;
 }): VirtualWeatherStationV2 {
+  const scopeType = input.scopeType ?? "farm";
   const station: VirtualWeatherStationV2 = {
     id: input.id,
     farmId: input.farmId,
+    scopeType,
+    moduleId: input.moduleId ?? null,
+    pivotId: input.pivotId ?? null,
     name: input.name,
     latitude: input.latitude,
     longitude: input.longitude,
@@ -84,10 +115,30 @@ export function buildDefaultVirtualStation(input: {
     providers: DEFAULT_VIRTUAL_STATION_PROVIDERS.map((provider) => ({ ...provider })),
   };
 
-  const validation = validateVirtualStationLocation(station);
-  if (!validation.valid) {
-    throw new Error(`Estacao virtual invalida: ${validation.errors.join("; ")}`);
+  const locationValidation = validateVirtualStationLocation(station);
+  const scopeValidation = validateVirtualStationScope(station);
+  const errors = [...locationValidation.errors, ...scopeValidation.errors];
+  if (errors.length > 0) {
+    throw new Error(`Estacao virtual invalida: ${errors.join("; ")}`);
   }
 
   return station;
+}
+
+/**
+ * Ordena candidatos pela regra espacial oficial do Cotrim:
+ * pivo especifico > modulo do pivo > fazenda.
+ */
+export function rankVirtualStationForPivot(
+  station: Pick<VirtualWeatherStationV2, "farmId" | "scopeType" | "moduleId" | "pivotId" | "active">,
+  target: { farmId: string; moduleId: string | null; pivotId: string },
+): number | null {
+  if (!station.active || station.farmId !== target.farmId) return null;
+  if (station.scopeType === "pivot") {
+    return station.pivotId === target.pivotId ? 300 : null;
+  }
+  if (station.scopeType === "module") {
+    return target.moduleId !== null && station.moduleId === target.moduleId ? 200 : null;
+  }
+  return 100;
 }
