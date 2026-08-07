@@ -5,6 +5,7 @@ export const MET_NORWAY_LOCATIONFORECAST_URL =
 
 export interface MetNorwayInstantDetails {
   air_temperature?: number | null;
+  dew_point_temperature?: number | null;
   relative_humidity?: number | null;
   wind_speed?: number | null;
   wind_from_direction?: number | null;
