@@ -52,7 +52,9 @@ export function buildMeteoblueHourlyUrl(location: WeatherLocation): string {
   url.searchParams.set("format", "json");
   url.searchParams.set("tz", "UTC");
   url.searchParams.set("temperature", "C");
-  url.searchParams.set("windspeed", "ms-1");
+  // Mantemos km/h porque esse formato ja e usado pelo provider legado e e
+  // convertido explicitamente para m/s no normalizador V2.
+  url.searchParams.set("windspeed", "kmh");
   url.searchParams.set("precipitationamount", "mm");
   return url.toString();
 }
