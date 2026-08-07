@@ -42,17 +42,17 @@ create index if not exists idx_virtual_weather_station_providers_station
 alter table public.virtual_weather_stations enable row level security;
 alter table public.virtual_weather_station_providers enable row level security;
 
--- Acesso segue o mesmo escopo de fazendas ja usado pela plataforma.
+-- Acesso segue o mesmo padrao ja usado pelas demais tabelas farm-scoped.
 create policy "virtual weather stations readable by farm access"
   on public.virtual_weather_stations
   for select
-  using (farm_id = any(public.auth_farm_ids()));
+  using (farm_id in (select public.auth_farm_ids()));
 
 create policy "virtual weather stations manageable by farm access"
   on public.virtual_weather_stations
   for all
-  using (farm_id = any(public.auth_farm_ids()))
-  with check (farm_id = any(public.auth_farm_ids()));
+  using (farm_id in (select public.auth_farm_ids()))
+  with check (farm_id in (select public.auth_farm_ids()));
 
 create policy "virtual weather station providers readable by farm access"
   on public.virtual_weather_station_providers
@@ -62,7 +62,7 @@ create policy "virtual weather station providers readable by farm access"
       select 1
       from public.virtual_weather_stations s
       where s.id = virtual_station_id
-        and s.farm_id = any(public.auth_farm_ids())
+        and s.farm_id in (select public.auth_farm_ids())
     )
   );
 
@@ -74,7 +74,7 @@ create policy "virtual weather station providers manageable by farm access"
       select 1
       from public.virtual_weather_stations s
       where s.id = virtual_station_id
-        and s.farm_id = any(public.auth_farm_ids())
+        and s.farm_id in (select public.auth_farm_ids())
     )
   )
   with check (
@@ -82,7 +82,7 @@ create policy "virtual weather station providers manageable by farm access"
       select 1
       from public.virtual_weather_stations s
       where s.id = virtual_station_id
-        and s.farm_id = any(public.auth_farm_ids())
+        and s.farm_id in (select public.auth_farm_ids())
     )
   );
 
