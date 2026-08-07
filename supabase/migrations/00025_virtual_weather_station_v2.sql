@@ -16,8 +16,6 @@ create table if not exists public.virtual_weather_stations (
   id uuid primary key default gen_random_uuid(),
   farm_id uuid not null references public.farms(id) on delete cascade,
 
-  -- Escopo espacial. module_id/pivot_id sao mutuamente exclusivos e a
-  -- consistencia com scope_type e garantida pelo CHECK abaixo.
   scope_type text not null default 'farm'
     check (scope_type in ('farm', 'module', 'pivot')),
   module_id uuid references public.production_modules(id) on delete cascade,
@@ -56,8 +54,6 @@ create index if not exists idx_virtual_weather_stations_pivot
   on public.virtual_weather_stations(pivot_id)
   where active = true and scope_type = 'pivot';
 
--- Evita duas estacoes ativas concorrentes para o MESMO escopo. Estacoes
--- inativas permanecem preservadas para historico/auditoria.
 create unique index if not exists uq_virtual_weather_station_farm_scope
   on public.virtual_weather_stations(farm_id)
   where active = true and scope_type = 'farm';
@@ -88,10 +84,34 @@ create table if not exists public.virtual_weather_station_providers (
 create index if not exists idx_virtual_weather_station_providers_station
   on public.virtual_weather_station_providers(virtual_station_id, enabled, priority);
 
+-- Toda nova estacao nasce com as quatro fontes. Nenhuma recebe autoridade
+-- operacional nesta fase; todas comecam como candidate e serao comparadas.
+create or replace function public.attach_default_virtual_weather_providers()
+returns trigger
+language plpgsql
+as $$
+begin
+  insert into public.virtual_weather_station_providers
+    (virtual_station_id, provider, priority, role)
+  values
+    (new.id, 'open_meteo', 1, 'candidate'),
+    (new.id, 'meteoblue', 2, 'candidate'),
+    (new.id, 'weatherapi', 3, 'candidate'),
+    (new.id, 'met_norway', 4, 'candidate')
+  on conflict (virtual_station_id, provider) do nothing;
+  return new;
+end;
+$$;
+
+drop trigger if exists trg_attach_default_virtual_weather_providers
+  on public.virtual_weather_stations;
+create trigger trg_attach_default_virtual_weather_providers
+after insert on public.virtual_weather_stations
+for each row execute function public.attach_default_virtual_weather_providers();
+
 alter table public.virtual_weather_stations enable row level security;
 alter table public.virtual_weather_station_providers enable row level security;
 
--- Acesso segue o mesmo padrao farm-scoped ja usado pelo projeto.
 create policy "virtual weather stations readable by farm access"
   on public.virtual_weather_stations
   for select
