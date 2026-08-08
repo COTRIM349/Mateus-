@@ -8,6 +8,7 @@ on:
       - "clima-4/**"
       - "clima-5/**"
       - "clima-6/**"
+      - "clima-7/**"
   pull_request:
     paths:
       - "modules/weather/**"
