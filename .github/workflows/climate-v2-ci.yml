@@ -10,9 +10,12 @@ on:
       - "clima-6/**"
       - "clima-7/**"
       - "clima-8/**"
+      - "clima-9/**"
   pull_request:
     paths:
       - "modules/weather/**"
+      - "components/climate/**"
+      - "app/(app)/clima/**"
       - "app/api/climate/**"
       - "app/api/cron/**"
       - "lib/supabase/**"
