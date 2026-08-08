@@ -9,11 +9,15 @@ on:
       - "clima-5/**"
       - "clima-6/**"
       - "clima-7/**"
+      - "clima-8/**"
   pull_request:
     paths:
       - "modules/weather/**"
       - "app/api/climate/**"
+      - "app/api/cron/**"
+      - "lib/supabase/**"
       - "supabase/migrations/**"
+      - "vercel.json"
       - ".github/workflows/climate-v2-ci.yml"
 
 jobs:
