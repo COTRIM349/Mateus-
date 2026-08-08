@@ -5,9 +5,11 @@ describe("calculateReferenceEtoFao56Subdaily", () => {
   it("reproduz aproximadamente o Exemplo 19 FAO-56 para 14-15h", () => {
     // FAO-56 Example 19, N'Diaye/Senegal, 1 Oct:
     // T=38 C, RH=52%, u2=3.3 m/s, Rs=2.450 MJ/m2/h, z=8m.
+    // O exemplo usa meridiano padrao Lz=15 W. Portanto, o periodo 14-15h
+    // do exemplo corresponde ao instante fisico 15-16 UTC.
     const result = calculateReferenceEtoFao56Subdaily({
-      intervalStart: "2026-10-01T14:00:00.000Z",
-      intervalEnd: "2026-10-01T15:00:00.000Z",
+      intervalStart: "2026-10-01T15:00:00.000Z",
+      intervalEnd: "2026-10-01T16:00:00.000Z",
       latitude: 16 + 13 / 60,
       longitude: -(16 + 15 / 60),
       elevationM: 8,
@@ -29,8 +31,8 @@ describe("calculateReferenceEtoFao56Subdaily", () => {
 
   it("integra a taxa horaria pela duracao real de 30 min", () => {
     const result = calculateReferenceEtoFao56Subdaily({
-      intervalStart: "2026-10-01T14:00:00.000Z",
-      intervalEnd: "2026-10-01T14:30:00.000Z",
+      intervalStart: "2026-10-01T15:00:00.000Z",
+      intervalEnd: "2026-10-01T15:30:00.000Z",
       latitude: 16 + 13 / 60,
       longitude: -(16 + 15 / 60),
       elevationM: 8,
