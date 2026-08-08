@@ -1,11 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { buildOrchestrationWindow, decideOrchestrationStatus } from "./climateOrchestrator";
+import {
+  buildOrchestrationPlan,
+  buildOrchestrationWindow,
+  decideOrchestrationStatus,
+} from "./climateOrchestrator";
 
 describe("CLIMA 8 orchestrator helpers", () => {
   it("alinha janela em blocos de 30 minutos", () => {
     const window = buildOrchestrationWindow(new Date("2026-08-08T02:17:45.000Z"), 60, 180);
     expect(window.start).toBe("2026-08-08T01:00:00.000Z");
     expect(window.end).toBe("2026-08-08T05:00:00.000Z");
+  });
+
+  it("faz bootstrap de 48 horas quando ainda nao existe referencia diurna", () => {
+    expect(buildOrchestrationPlan({ hasRecentDaylightSeed: false })).toEqual({
+      bootstrapMode: true,
+      pastMinutes: 2880,
+      futureMinutes: 180,
+      maxIntervals: 102,
+      openMeteoPastSteps15Min: 192,
+    });
+  });
+
+  it("mantem ciclo curto depois que a referencia diurna foi formada", () => {
+    expect(buildOrchestrationPlan({ hasRecentDaylightSeed: true })).toEqual({
+      bootstrapMode: false,
+      pastMinutes: 60,
+      futureMinutes: 180,
+      maxIntervals: 12,
+      openMeteoPastSteps15Min: 8,
+    });
   });
 
   it("marca success quando todos providers e intervalos fecham com ETo disponivel", () => {

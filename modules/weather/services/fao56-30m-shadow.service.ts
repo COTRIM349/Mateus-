@@ -41,6 +41,16 @@ export interface Fao5630MinShadowResult {
   cloudinessInherited: boolean;
 }
 
+export const MAX_INHERITED_CLOUDINESS_AGE_HOURS = 36;
+
+export function inheritedCloudinessCutoff(before: string): string {
+  const timestamp = new Date(before).getTime();
+  if (!Number.isFinite(timestamp)) throw new Error("Intervalo de referencia invalido");
+  return new Date(
+    timestamp - MAX_INHERITED_CLOUDINESS_AGE_HOURS * 60 * 60 * 1_000,
+  ).toISOString();
+}
+
 async function latestDaylightCloudinessRatio(
   supabase: SupabaseClient,
   stationId: string,
@@ -51,6 +61,7 @@ async function latestDaylightCloudinessRatio(
     .select("cloudiness_ratio, interval_end")
     .eq("virtual_station_id", stationId)
     .eq("is_daylight", true)
+    .gte("interval_end", inheritedCloudinessCutoff(before))
     .lt("interval_end", before)
     .not("cloudiness_ratio", "is", null)
     .order("interval_end", { ascending: false })

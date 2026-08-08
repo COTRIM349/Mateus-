@@ -30,4 +30,11 @@ describe("buildOpenMeteo30MinUrl", () => {
     expect(variables).toContain("surface_pressure");
     expect(variables).toContain("dew_point_2m");
   });
+
+  it("mantem a janela operacional curta por padrao", () => {
+    const url = new URL(buildOpenMeteo30MinUrl(location));
+
+    expect(url.searchParams.get("past_minutely_15")).toBe("8");
+    expect(url.searchParams.get("forecast_minutely_15")).toBe("96");
+  });
 });
