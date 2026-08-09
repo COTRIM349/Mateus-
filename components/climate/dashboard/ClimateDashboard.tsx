@@ -6,8 +6,10 @@ import { Card } from "@/components/ui/Card";
 import type { ClimateDashboardResponse } from "@/modules/weather/dashboard/climateDashboard";
 import { ClimateCurrentCard } from "./ClimateCurrentCard";
 import { ClimateForecastPanel } from "./ClimateForecastPanel";
+import { ClimateProviderComparison } from "./ClimateProviderComparison";
 import { ClimateStatusBar } from "./ClimateStatusBar";
 import { ClimateSourceHealth } from "./ClimateSourceHealth";
+import { ClimateValidationNotice } from "./ClimateValidationNotice";
 import { EtoSummaryCard } from "./EtoSummaryCard";
 import { PublicWeatherReferences } from "./PublicWeatherReferences";
 
@@ -71,11 +73,13 @@ export function ClimateDashboard() {
 
   return (
     <div className="space-y-5">
+      <ClimateValidationNotice validation={data.validation} />
       <div className="grid gap-5 xl:grid-cols-[0.88fr_1.12fr]">
         <ClimateCurrentCard current={data.current} />
         <EtoSummaryCard eto={data.eto} />
       </div>
       <ClimateForecastPanel daily={data.dailyForecast} hourly={data.hourlyForecast} timezone={data.timezone} today={data.localDate} />
+      <ClimateProviderComparison sources={data.providerComparison} timezone={data.timezone} />
       <ClimateSourceHealth sources={data.sourceHealth} />
       <PublicWeatherReferences references={data.publicReferences} nasaPower={data.nasaPowerReference} />
       <ClimateStatusBar status={data.status} />

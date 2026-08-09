@@ -56,6 +56,16 @@ function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): nu
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function datesInRange(startIso: string, endIso: string): string[] {
+  const dates: string[] = [];
+  const cursor = new Date(`${startIso}T12:00:00Z`);
+  const end = new Date(`${endIso}T12:00:00Z`);
+  for (; cursor <= end; cursor.setUTCDate(cursor.getUTCDate() + 1)) {
+    dates.push(cursor.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
 // séries climáticas extras (da estação) por data — para o gráfico
 type WeatherExtra = { tmax: number | null; tmin: number | null; tmean: number | null; rh: number | null; wind: number | null; rad: number | null };
 
@@ -110,7 +120,7 @@ interface Soil {
 interface WeatherReading {
   id: string;
   date: string;
-  et0_calculated: number | null;
+  et0_source: number | null;
   precipitation: number;
   station_id: string;
 }
@@ -287,21 +297,21 @@ export default function BalancoHidricoPage() {
         const [wrRes, dsRes] = await Promise.all([
           supabase
             .from("weather_readings")
-            .select("id, date, et0_calculated, precipitation, station_id")
+            .select("id, date, et0_source, precipitation, station_id")
             .in("station_id", stationIds)
             .gte("date", dateStart)
             .lte("date", dateEnd)
             .order("date"),
           supabase
             .from("weather_daily_selection")
-            .select("date, selected_reading_id")
+            .select("date, selected_reading_id, operational_approved")
             .eq("farm_id", activeFarmId!)
             .gte("date", dateStart)
             .lte("date", dateEnd),
         ]);
         weatherReadings = (wrRes.data ?? []) as WeatherReading[];
         for (const s of dsRes.data ?? []) {
-          if (s.selected_reading_id) {
+          if (s.selected_reading_id && s.operational_approved === true) {
             selectedIdByDate.set(s.date as string, s.selected_reading_id as string);
           }
         }
@@ -336,22 +346,22 @@ export default function BalancoHidricoPage() {
       }
 
       // 4. Build weather lookup by date
-      //    Prioridade: leitura apontada por weather_daily_selection quando
-      //    existir. Fallback: qualquer leitura com ET₀ > 0 disponível.
+      //    Somente leituras explicitamente aprovadas para uso operacional.
+      //    Não existe fallback automático para dados de modelo.
       const weatherByDate: Record<string, { et0: number; precip: number }> = {};
       const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
       selectedIdByDate.forEach((readingId, date) => {
         const r = readingsById.get(readingId);
-        if (r) weatherByDate[date] = { et0: r.et0_calculated ?? 0, precip: r.precipitation };
+        if (r?.et0_source != null) weatherByDate[date] = { et0: r.et0_source, precip: r.precipitation };
       });
-      for (const r of weatherReadings) {
-        if (weatherByDate[r.date]) continue;
-        if (!weatherByDate[r.date] || (r.et0_calculated ?? 0) > 0) {
-          weatherByDate[r.date] = {
-            et0: r.et0_calculated ?? 0,
-            precip: r.precipitation,
-          };
-        }
+
+      const missingApprovedDates = datesInRange(dateStart, dateEnd)
+        .filter((date) => !weatherByDate[date]);
+      if (missingApprovedDates.length > 0) {
+        const sample = missingApprovedDates.slice(0, 3).join(", ");
+        throw new Error(
+          `Balanço bloqueado: ${missingApprovedDates.length} dia(s) sem dado climático aprovado (${sample}${missingApprovedDates.length > 3 ? ", …" : ""}). A ETo de modelo está em validação.`,
+        );
       }
 
       // 5. Motor central do balanço hídrico (fonte única de cálculo)
@@ -655,8 +665,14 @@ export default function BalancoHidricoPage() {
     <div>
       <PageHeader
         titulo="Centro de Decisão Hídrica"
-        descricao="Motor FAO-56 — condição da água no solo, recomendação e rastreabilidade"
+        descricao="Motor hídrico — exige dados climáticos aprovados antes de recalcular"
       />
+
+      <Card className="mb-4 border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-900/20">
+        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+          Segurança ativa: estimativas climáticas não validadas não entram automaticamente no balanço hídrico.
+        </p>
+      </Card>
 
       {/* Mapa seletor de pivô (por status hídrico) */}
       {mapPivots.length > 0 && (

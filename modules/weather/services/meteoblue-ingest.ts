@@ -74,7 +74,7 @@ export async function ingestMeteoblueObservations(
         et0_delta: null,
         et0_delta_pct: null,
         effective_precip: null,
-        data_kind: "observed",
+        data_kind: "model_estimate",
         origin: METEOBLUE_PROVIDER,
         data_quality: "degraded",
         imported_at: new Date().toISOString(),

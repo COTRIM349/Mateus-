@@ -63,10 +63,12 @@ export const MAX_AGE = {
   forecastHours: 24,
 } as const;
 
-// ── ETo — política oficial ─────────────────────────────────────────────────
-/** A ETo oficial da plataforma é a interna (FAO-56). */
-export const OFFICIAL_ETO_METHOD = "fao_56_penman_monteith" as const;
-export const OFFICIAL_ETO_FIELD = "internallyCalculatedEtoMm" as const;
+// ── ETo — política de validação ────────────────────────────────────────────
+/** Nenhuma ETo está liberada como oficial enquanto não houver validação local. */
+export const ETO_OPERATIONAL_STATUS = "validation_blocked" as const;
+export const OFFICIAL_ETO_METHOD = null;
+export const OFFICIAL_ETO_FIELD = null;
+export const INTERNAL_ETO_AUDIT_FIELD = "internallyCalculatedEtoMm" as const;
 export const PROVIDER_ETO_FIELD = "providerReferenceEtoMm" as const;
 /** Consumidores autorizados a usar `providerReferenceEtoMm`. */
 export const PROVIDER_ETO_ALLOWED_USES = [

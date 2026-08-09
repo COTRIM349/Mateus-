@@ -3,11 +3,30 @@ import {
   buildEtoSummary,
   climateCondition,
   haversineDistanceKm,
+  latestCandidatePerInterval,
+  latestCandidatePerProvider,
   selectLatestOfficialForecastPerDay,
   windDirectionLabel,
   type ClimateForecastInput,
   type ClimateReadingInput,
 } from "./climateDashboard";
+
+const candidate = (provider: "open_meteo" | "meteoblue", interval: string, fetchedAt: string) => ({
+  provider,
+  interval_start: interval,
+  data_type: "forecast",
+  temperature_c: 25,
+  relative_humidity_pct: 50,
+  precipitation_mm: 0,
+  wind_speed_2m_ms: 1,
+  solar_radiation_wm2: provider === "open_meteo" ? 300 : null,
+  surface_pressure_kpa: provider === "open_meteo" ? 92 : null,
+  quality_status: provider === "open_meteo" ? "complete" : "partial",
+  missing_fields: [],
+  interpolated: false,
+  estimated: true,
+  fetched_at: fetchedAt,
+});
 
 function reading(date: string, eto: number | null, importedAt = `${date}T20:00:00Z`): ClimateReadingInput {
   return {
@@ -60,7 +79,7 @@ describe("climate dashboard data contract", () => {
     });
   });
 
-  it("usa a emissao mais recente com ETo oficial e ignora ETo ausente", () => {
+  it("usa a emissão mais recente com ETo de referência e ignora ETo ausente", () => {
     const selected = selectLatestOfficialForecastPerDay([
       forecast({ id: "old", issued_at: "2026-08-08T10:00:00Z", et0_source: 4.8 }),
       forecast({ id: "missing", issued_at: "2026-08-08T13:00:00Z", et0_source: null }),
@@ -92,5 +111,17 @@ describe("climate dashboard data contract", () => {
     );
 
     expect(distance).toBeCloseTo(115.1, 1);
+  });
+
+  it("preserva uma linha separada por API e escolhe a revisão mais recente", () => {
+    const rows = [
+      candidate("open_meteo", "2026-08-08T18:00:00Z", "2026-08-08T17:00:00Z"),
+      candidate("open_meteo", "2026-08-08T18:00:00Z", "2026-08-08T17:30:00Z"),
+      candidate("meteoblue", "2026-08-08T18:00:00Z", "2026-08-08T17:20:00Z"),
+    ];
+
+    expect(latestCandidatePerProvider(rows).size).toBe(2);
+    expect(latestCandidatePerProvider(rows).get("open_meteo")?.fetched_at).toBe("2026-08-08T17:30:00Z");
+    expect(latestCandidatePerInterval(rows, "open_meteo")).toHaveLength(1);
   });
 });

@@ -4,11 +4,13 @@ import {
   buildEtoSummary,
   climateCondition,
   haversineDistanceKm,
+  latestCandidatePerInterval,
+  latestCandidatePerProvider,
   localDateInTimeZone,
   selectLatestOfficialForecastPerDay,
-  windDirectionLabel,
   type ClimateDashboardResponse,
   type ClimateForecastInput,
+  type ClimateProviderCandidateInput,
   type ClimateReadingInput,
 } from "@/modules/weather/dashboard/climateDashboard";
 import { fetchLatestInmetObservation } from "@/modules/weather/providers/inmetPublicObservation";
@@ -48,6 +50,9 @@ interface ConsensusRow {
   wind_direction_deg: number | null;
   solar_radiation_wm2: number | null;
   surface_pressure_kpa: number | null;
+  source_count: number;
+  disputed_fields: string[] | null;
+  outlier_providers: string[] | null;
 }
 
 interface ProviderConfigRow {
@@ -86,11 +91,11 @@ function latestConsensusPerInterval(rows: ConsensusRow[]): ConsensusRow[] {
 }
 
 function consensusLabel(confidence: string | null): string {
-  if (confidence === "high") return "Clima: consenso alto";
-  if (confidence === "medium") return "Clima: consenso moderado";
-  if (confidence === "low") return "Clima: consenso baixo";
-  if (confidence === "disputed") return "Clima: fontes divergentes";
-  return "Clima: consenso indisponível";
+  if (confidence === "high") return "Comparação: alta concordância";
+  if (confidence === "medium") return "Comparação: concordância moderada";
+  if (confidence === "low") return "Comparação: baixa concordância";
+  if (confidence === "disputed") return "Comparação: fontes divergentes";
+  return "Comparação indisponível";
 }
 
 export async function GET(request: Request) {
@@ -175,7 +180,8 @@ export async function GET(request: Request) {
     providersResult,
     runsResult,
     currentConsensusResult,
-    hourlyConsensusResult,
+    currentCandidatesResult,
+    hourlyOpenMeteoResult,
     publicObservationResults,
     nasaPowerReference,
   ] = await Promise.all([
@@ -212,7 +218,7 @@ export async function GET(request: Request) {
     virtualStation
       ? supabase
           .from("weather_interval_30m_consensus_shadow")
-          .select("interval_start, evaluated_at, confidence, temperature_c, relative_humidity_pct, precipitation_mm, wind_speed_2m_ms, wind_direction_deg, solar_radiation_wm2, surface_pressure_kpa")
+          .select("interval_start, evaluated_at, confidence, temperature_c, relative_humidity_pct, precipitation_mm, wind_speed_2m_ms, wind_direction_deg, solar_radiation_wm2, surface_pressure_kpa, source_count, disputed_fields, outlier_providers")
           .eq("virtual_station_id", virtualStation.id)
           .gte("interval_start", currentFreshnessCutoff)
           .lte("interval_start", nowIso)
@@ -222,12 +228,25 @@ export async function GET(request: Request) {
       : emptyResult,
     virtualStation
       ? supabase
-          .from("weather_interval_30m_consensus_shadow")
-          .select("interval_start, evaluated_at, confidence, temperature_c, relative_humidity_pct, precipitation_mm, wind_speed_2m_ms, wind_direction_deg, solar_radiation_wm2, surface_pressure_kpa")
+          .from("weather_interval_30m_candidates")
+          .select("provider, interval_start, data_type, temperature_c, relative_humidity_pct, precipitation_mm, wind_speed_2m_ms, solar_radiation_wm2, surface_pressure_kpa, quality_status, missing_fields, interpolated, estimated, fetched_at")
           .eq("virtual_station_id", virtualStation.id)
+          .gte("interval_start", currentFreshnessCutoff)
+          .lte("interval_start", nowIso)
+          .order("interval_start", { ascending: false })
+          .order("fetched_at", { ascending: false })
+          .limit(200)
+      : emptyResult,
+    virtualStation
+      ? supabase
+          .from("weather_interval_30m_candidates")
+          .select("provider, interval_start, data_type, temperature_c, relative_humidity_pct, precipitation_mm, wind_speed_2m_ms, solar_radiation_wm2, surface_pressure_kpa, quality_status, missing_fields, interpolated, estimated, fetched_at")
+          .eq("virtual_station_id", virtualStation.id)
+          .eq("provider", "open_meteo")
           .gte("interval_start", nowIso)
           .lte("interval_start", next24hIso)
           .order("interval_start", { ascending: true })
+          .order("fetched_at", { ascending: false })
           .limit(300)
       : emptyResult,
     publicObservationsPromise,
@@ -240,7 +259,8 @@ export async function GET(request: Request) {
     providersResult.error,
     runsResult.error,
     currentConsensusResult.error,
-    hourlyConsensusResult.error,
+    currentCandidatesResult.error,
+    hourlyOpenMeteoResult.error,
   ].find(Boolean);
   if (queryError) {
     return NextResponse.json({ error: queryError.message }, { status: 422 });
@@ -258,8 +278,13 @@ export async function GET(request: Request) {
   const currentConsensus = latestConsensusPerInterval(
     (currentConsensusResult.data ?? []) as ConsensusRow[],
   ).at(-1) ?? null;
-  const hourlyConsensus = latestConsensusPerInterval(
-    (hourlyConsensusResult.data ?? []) as ConsensusRow[],
+  const currentCandidates = latestCandidatePerProvider(
+    (currentCandidatesResult.data ?? []) as ClimateProviderCandidateInput[],
+  );
+  const openMeteoCurrent = currentCandidates.get("open_meteo") ?? null;
+  const hourlyOpenMeteo = latestCandidatePerInterval(
+    (hourlyOpenMeteoResult.data ?? []) as ClimateProviderCandidateInput[],
+    "open_meteo",
   );
   const providerConfigs = (providersResult.data ?? []) as ProviderConfigRow[];
   const latestRun = ((runsResult.data ?? [])[0] ?? null) as OrchestrationRunRow | null;
@@ -327,7 +352,7 @@ export async function GET(request: Request) {
     {
       provider: "open_meteo",
       label: "Open-Meteo",
-      role: "Fonte oficial da ETo",
+      role: "Fonte principal da estimativa de ETo",
       status: openMeteoResult?.status === "success" ? "active" : "unavailable",
       updatedAt: openMeteoResult?.fetchedAt ?? latestRun?.finished_at ?? null,
       message: openMeteoResult?.status === "success"
@@ -407,6 +432,38 @@ export async function GET(request: Request) {
           : publicReferences[0]?.message ?? "Nenhuma estação INMET configurada"),
     },
   ];
+  const comparisonLabels = {
+    open_meteo: "Open-Meteo",
+    meteoblue: "Meteoblue",
+    weatherapi: "WeatherAPI",
+    met_norway: "MET Norway",
+  } as const;
+  const providerComparison: ClimateDashboardResponse["providerComparison"] = (
+    Object.keys(comparisonLabels) as Array<keyof typeof comparisonLabels>
+  ).map((provider) => {
+    const row = currentCandidates.get(provider) ?? null;
+    return {
+      provider,
+      label: comparisonLabels[provider],
+      status: row === null
+        ? "unavailable"
+        : row.quality_status === "complete"
+          ? "available"
+          : "partial",
+      validAt: row?.interval_start ?? null,
+      fetchedAt: row?.fetched_at ?? null,
+      dataType: row?.data_type ?? null,
+      temperatureC: row?.temperature_c ?? null,
+      relativeHumidityPct: row?.relative_humidity_pct ?? null,
+      precipitationMm: row?.precipitation_mm ?? null,
+      windSpeed2mMs: row?.wind_speed_2m_ms ?? null,
+      solarRadiationWm2: row?.solar_radiation_wm2 ?? null,
+      surfacePressureKpa: row?.surface_pressure_kpa ?? null,
+      missingFields: row?.missing_fields ?? [],
+      interpolated: row?.interpolated ?? false,
+      estimated: row?.estimated ?? false,
+    };
+  });
 
   const response: ClimateDashboardResponse = {
     farmId,
@@ -414,31 +471,44 @@ export async function GET(request: Request) {
     localDate: today,
     generatedAt: nowIso,
     current: {
-      observedAt: currentConsensus?.interval_start ?? todayReading?.imported_at ?? null,
+      observedAt: openMeteoCurrent?.interval_start ?? todayReading?.imported_at ?? null,
       sourceKind: "model_estimate",
-      sourceLabel: "Modelo meteorológico no ponto da fazenda",
+      sourceLabel: "Estimativa Open-Meteo no ponto da fazenda · não é medição local",
       condition: climateCondition(
-        currentConsensus?.precipitation_mm ?? todayReading?.precipitation ?? null,
+        openMeteoCurrent?.precipitation_mm ?? todayReading?.precipitation ?? null,
         todayForecast?.precipitation_probability ?? null,
       ),
-      temperatureC: currentConsensus?.temperature_c ?? todayReading?.temp_mean ?? null,
+      temperatureC: openMeteoCurrent?.temperature_c ?? todayReading?.temp_mean ?? null,
       tempMinC: todayReading?.temp_min ?? todayForecast?.temp_min ?? null,
       tempMaxC: todayReading?.temp_max ?? todayForecast?.temp_max ?? null,
-      relativeHumidityPct: currentConsensus?.relative_humidity_pct ?? todayReading?.humidity ?? null,
+      relativeHumidityPct: openMeteoCurrent?.relative_humidity_pct ?? todayReading?.humidity ?? null,
       precipitationTodayMm: todayReading?.precipitation ?? null,
-      windSpeed2mMs: currentConsensus?.wind_speed_2m_ms ?? todayReading?.wind_speed ?? null,
-      windDirection: windDirectionLabel(currentConsensus?.wind_direction_deg ?? null),
-      solarRadiationWm2: currentConsensus?.solar_radiation_wm2 ?? null,
+      windSpeed2mMs: openMeteoCurrent?.wind_speed_2m_ms ?? todayReading?.wind_speed ?? null,
+      windDirection: null,
+      solarRadiationWm2: openMeteoCurrent?.solar_radiation_wm2 ?? null,
       solarRadiationDailyMjM2: todayReading?.solar_radiation ?? null,
-      surfacePressureKpa: currentConsensus?.surface_pressure_kpa ?? null,
+      surfacePressureKpa: openMeteoCurrent?.surface_pressure_kpa ?? null,
       etoTodayMm: eto.todayMm,
     },
     eto: {
       ...eto,
       method: "FAO-56 Penman-Monteith",
-      quality: eto.todayMm === null ? "missing" : "provider_model",
-      sourceLabel: "Valor original da API Open-Meteo · sem recálculo pela plataforma",
+      quality: eto.todayMm === null ? "missing" : "model_unvalidated",
+      sourceLabel: "Estimativa do modelo Open-Meteo · sem validação por estação física local",
     },
+    validation: {
+      mode: "validation",
+      operationalUse: "blocked",
+      confidence: "low",
+      message: "Dados de modelo em validação. Não usar automaticamente para balanço hídrico, recomendação ou programação de irrigação.",
+      latitude: virtualStation?.latitude ?? station.latitude,
+      longitude: virtualStation?.longitude ?? station.longitude,
+      elevationM: virtualStation?.elevation_m ?? station.altitude,
+      sourceCount: currentConsensus?.source_count ?? currentCandidates.size,
+      disputedFields: currentConsensus?.disputed_fields ?? [],
+      outlierProviders: currentConsensus?.outlier_providers ?? [],
+    },
+    providerComparison,
     dailyForecast: forecasts.map((forecast) => ({
       id: forecast.id,
       date: forecast.target_date,
@@ -455,21 +525,21 @@ export async function GET(request: Request) {
       etoMm: forecast.et0_source,
       windSpeed2mMs: forecast.wind_speed,
     })),
-    hourlyForecast: hourlyConsensus.map((row) => ({
+    hourlyForecast: hourlyOpenMeteo.map((row) => ({
       intervalStart: row.interval_start,
       condition: climateCondition(row.precipitation_mm),
       temperatureC: row.temperature_c,
       relativeHumidityPct: row.relative_humidity_pct,
       precipitationMm: row.precipitation_mm,
       windSpeed2mMs: row.wind_speed_2m_ms,
-      confidence: row.confidence,
+      confidence: "model_unvalidated",
     })),
     status: {
       configuredSources: providerConfigs.filter((provider) => provider.enabled).length,
       activeSources: activeProviders.length,
       sourceNames: activeProviders,
       consensusLabel: consensusLabel(latestConfidence),
-      qualityLabel: "ETo oficial Open-Meteo · sem recálculo",
+      qualityLabel: "ETo de modelo · validação pendente",
       updatedAt,
       etoInputSources: activeProviders.includes("open_meteo") ? 1 : 0,
     },
@@ -480,7 +550,7 @@ export async function GET(request: Request) {
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "ETo de referência fornecida pelo Open-Meteo, calculada pelo método FAO-56 Penman-Monteith; a plataforma não recalcula o valor exibido",
+      "ETo estimada pelo modelo Open-Meteo pelo método FAO-56 Penman-Monteith; não validada por estação física local e bloqueada para uso operacional automático",
     ],
   };
 

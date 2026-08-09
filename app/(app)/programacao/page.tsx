@@ -336,6 +336,16 @@ export default function ProgramacaoPage() {
 
     try {
       const today = new Date().toISOString().slice(0, 10);
+      const { data: climateApproval } = await supabase
+        .from("weather_daily_selection")
+        .select("id")
+        .eq("farm_id", activeFarmId)
+        .eq("date", today)
+        .eq("operational_approved", true)
+        .maybeSingle();
+      if (!climateApproval) {
+        throw new Error("Programação bloqueada: os dados climáticos de hoje ainda não foram validados e aprovados para uso operacional.");
+      }
       const currentHour = new Date().getHours();
       const constraints = await loadConstraints();
 
@@ -517,7 +527,7 @@ export default function ProgramacaoPage() {
     <div>
       <PageHeader
         titulo="Central de Programação"
-        descricao="Motor operacional — Programação automática de irrigação"
+        descricao="Motor operacional — exige clima validado antes de gerar recomendações"
         acao={
           <div className="flex gap-2">
             <Button onClick={generateAll} disabled={generating || pivots.length === 0}>
@@ -531,6 +541,12 @@ export default function ProgramacaoPage() {
           </div>
         }
       />
+
+      <Card className="mb-4 border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-900/20">
+        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+          Segurança ativa: a programação não será gerada enquanto a leitura climática do dia não tiver aprovação operacional explícita.
+        </p>
+      </Card>
 
       {error && (
         <Card className="mb-4 border-red-200 bg-red-50 p-3.5 dark:border-red-900 dark:bg-red-900/20">

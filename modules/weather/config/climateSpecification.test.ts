@@ -6,6 +6,7 @@ import {
   DEFAULT_TIMEZONE,
   ETO_BLOCKING_RULES,
   ETO_ESSENTIAL_FIELDS,
+  ETO_OPERATIONAL_STATUS,
   ETO_ESTIMABLE_FIELDS,
   KNOWN_DIVERGENCES,
   MAX_AGE,
@@ -102,10 +103,11 @@ describe("Climate Specification — timezone fallback", () => {
 
 // ── ETo oficial × provider ─────────────────────────────────────────────────
 
-describe("Climate Specification — política oficial de ETo", () => {
-  it("ETo oficial = FAO-56 Penman-Monteith interno", () => {
-    expect(OFFICIAL_ETO_METHOD).toBe("fao_56_penman_monteith");
-    expect(OFFICIAL_ETO_FIELD).toBe("internallyCalculatedEtoMm");
+describe("Climate Specification — política de validação da ETo", () => {
+  it("não libera ETo oficial sem validação local", () => {
+    expect(ETO_OPERATIONAL_STATUS).toBe("validation_blocked");
+    expect(OFFICIAL_ETO_METHOD).toBeNull();
+    expect(OFFICIAL_ETO_FIELD).toBeNull();
     expect(PROVIDER_ETO_FIELD).toBe("providerReferenceEtoMm");
   });
   it("providerEto é permitido apenas para diagnóstico, comparação e auditoria", () => {
@@ -232,7 +234,6 @@ describe("Climate Specification — divergências conhecidas C1/C2/C3", () => {
 
 describe("Climate Specification — meta-garantias", () => {
   it("nenhuma API de provedor aparece como ETo oficial em nenhuma seção", () => {
-    // O único campo com nome de ETo oficial é internallyCalculatedEtoMm.
     expect(OFFICIAL_ETO_FIELD).not.toBe(PROVIDER_ETO_FIELD);
     // Os provedores externos não aparecem na lista de fontes de ETo.
     expect(SOURCE_PRIORITY.eto).not.toContain("open_meteo");

@@ -143,7 +143,7 @@ export function ClimateForecastPanel({
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Previsão</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Previsão diária e ETo fornecidas pelo Open-Meteo</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Estimativas Open-Meteo · não validadas por estação física local</p>
         </div>
         <div className="flex w-fit rounded-xl bg-gray-100 p-1 dark:bg-white/[0.05]" aria-label="Intervalo da previsão">
           {(["daily", "hourly"] as const).map((item) => (

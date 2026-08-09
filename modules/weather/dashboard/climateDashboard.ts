@@ -25,6 +25,25 @@ export interface ClimateForecastInput {
   et0_source: number | null;
 }
 
+export type DashboardClimateProvider = "open_meteo" | "meteoblue" | "weatherapi" | "met_norway";
+
+export interface ClimateProviderCandidateInput {
+  provider: DashboardClimateProvider;
+  interval_start: string;
+  data_type: string;
+  temperature_c: number | null;
+  relative_humidity_pct: number | null;
+  precipitation_mm: number | null;
+  wind_speed_2m_ms: number | null;
+  solar_radiation_wm2: number | null;
+  surface_pressure_kpa: number | null;
+  quality_status: string;
+  missing_fields: string[] | null;
+  interpolated: boolean;
+  estimated: boolean;
+  fetched_at: string;
+}
+
 export interface EtoHistoryPoint {
   date: string;
   etoMm: number | null;
@@ -66,9 +85,38 @@ export interface ClimateDashboardResponse {
   };
   eto: EtoSummary & {
     method: "FAO-56 Penman-Monteith";
-    quality: "provider_model" | "missing";
+    quality: "model_unvalidated" | "missing";
     sourceLabel: string;
   };
+  validation: {
+    mode: "validation";
+    operationalUse: "blocked";
+    confidence: "low";
+    message: string;
+    latitude: number | null;
+    longitude: number | null;
+    elevationM: number | null;
+    sourceCount: number;
+    disputedFields: string[];
+    outlierProviders: string[];
+  };
+  providerComparison: Array<{
+    provider: DashboardClimateProvider;
+    label: string;
+    status: "available" | "partial" | "unavailable";
+    validAt: string | null;
+    fetchedAt: string | null;
+    dataType: string | null;
+    temperatureC: number | null;
+    relativeHumidityPct: number | null;
+    precipitationMm: number | null;
+    windSpeed2mMs: number | null;
+    solarRadiationWm2: number | null;
+    surfacePressureKpa: number | null;
+    missingFields: string[];
+    interpolated: boolean;
+    estimated: boolean;
+  }>;
   dailyForecast: Array<{
     id: string;
     date: string;
@@ -240,6 +288,34 @@ export function selectLatestOfficialForecastPerDay(
   return Array.from(byDate.values())
     .sort((a, b) => a.target_date.localeCompare(b.target_date))
     .slice(0, limit);
+}
+
+export function latestCandidatePerProvider(
+  rows: ClimateProviderCandidateInput[],
+): Map<DashboardClimateProvider, ClimateProviderCandidateInput> {
+  const latest = new Map<DashboardClimateProvider, ClimateProviderCandidateInput>();
+  for (const row of rows) {
+    const existing = latest.get(row.provider);
+    if (!existing
+      || row.interval_start > existing.interval_start
+      || (row.interval_start === existing.interval_start && row.fetched_at > existing.fetched_at)) {
+      latest.set(row.provider, row);
+    }
+  }
+  return latest;
+}
+
+export function latestCandidatePerInterval(
+  rows: ClimateProviderCandidateInput[],
+  provider: DashboardClimateProvider,
+): ClimateProviderCandidateInput[] {
+  const latest = new Map<string, ClimateProviderCandidateInput>();
+  for (const row of rows) {
+    if (row.provider !== provider) continue;
+    const existing = latest.get(row.interval_start);
+    if (!existing || row.fetched_at > existing.fetched_at) latest.set(row.interval_start, row);
+  }
+  return Array.from(latest.values()).sort((a, b) => a.interval_start.localeCompare(b.interval_start));
 }
 
 export function windDirectionLabel(degrees: number | null): string | null {

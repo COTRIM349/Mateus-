@@ -20,7 +20,7 @@ import {
 } from "@/modules/weather/providers/open-meteo";
 
 /** Categoria de dado que um provedor grava em weather_readings.data_kind. */
-type ProviderDataKind = "observed" | "historical_grid";
+type ProviderDataKind = "model_estimate" | "historical_grid";
 
 // Considera dados suficientes para calcular ET₀ pelo Penman-Monteith FAO-56.
 function hasEt0Inputs(d: OpenMeteoDaily): boolean {
@@ -106,7 +106,7 @@ export async function ingestOpenMeteoObservations(
   supabase: SupabaseClient,
   station: IngestionStation,
   pastDays = 7,
-  dataKind: ProviderDataKind = "observed",
+  dataKind: ProviderDataKind = "model_estimate",
 ): Promise<ObservationIngestionResult> {
   const startedAt = Date.now();
   let rowsInserted = 0;

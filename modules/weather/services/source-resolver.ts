@@ -35,8 +35,9 @@ const QUALITY_ORDER: Record<string, number> = { ok: 0, degraded: 1, missing: 2 }
 // (BR-DWGD) ou entrada manual, mantidos os outros critérios iguais.
 const KIND_ORDER: Record<string, number> = {
   observed: 0,
-  historical_grid: 1,
-  manual: 2,
+  manual: 1,
+  model_estimate: 2,
+  historical_grid: 3,
 };
 
 function rankCandidate(a: CandidateReading, b: CandidateReading): number {

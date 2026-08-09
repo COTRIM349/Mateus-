@@ -68,8 +68,8 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
           <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">ETo · {eto.method}</p>
           <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">{eto.sourceLabel}</p>
         </div>
-        <span className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${eto.quality !== "missing" ? "bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"}`}>
-          {eto.quality === "provider_model" ? "Fornecida pela API" : "Aguardando dados"}
+        <span className="w-fit rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+          {eto.quality === "model_unvalidated" ? "Estimativa não validada" : "Aguardando dados"}
         </span>
       </div>
 
@@ -82,6 +82,10 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
         <div className="mt-4 rounded-2xl bg-brand-50/50 p-3 dark:bg-brand-900/10">
           <EtoSparkline history={eto.history} />
         </div>
+
+        <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-semibold leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
+          Referência meteorológica para acompanhamento. Não usar isoladamente para definir lâmina de irrigação.
+        </p>
 
         <div className="mt-5 grid grid-cols-2 gap-x-5 gap-y-4 border-t border-gray-100 pt-5 sm:grid-cols-4 dark:border-white/[0.06]">
           <SummaryMetric label="Ontem" value={eto.yesterdayMm} />
