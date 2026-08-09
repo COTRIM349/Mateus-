@@ -125,6 +125,28 @@ export interface ClimateDashboardResponse {
       formulaVersion: "jensen-haise-1963-simplified-v1";
       sourceLabel: string;
     };
+    turc: EtoSummary & {
+      method: "Turc 1961";
+      formulaVersion: "turc-1961-rh-corrected-v1";
+      sourceLabel: string;
+    };
+    linacre: EtoSummary & {
+      method: "Linacre 1977";
+      formulaVersion: "linacre-1977-vegetation-c500-v1";
+      sourceLabel: string;
+    };
+    ivanov: EtoSummary & {
+      method: "Ivanov 1954";
+      formulaVersion: "ivanov-1954-monthly-daily-equivalent-v1";
+      sourceLabel: string;
+    };
+    camargo1971: EtoSummary & {
+      method: "Camargo 1971";
+      formulaVersion: "camargo-1971-k-by-annual-temperature-v1";
+      sourceLabel: string;
+      climatologicalAnnualMeanTemperatureC: number | null;
+      climatologyStatus: "available" | "unavailable";
+    };
     comparison: {
       deltaTodayMm: number | null;
       deltaTodayPct: number | null;
@@ -177,6 +199,10 @@ export interface ClimateDashboardResponse {
     etoBlaneyCriddleMm: number | null;
     etoMakkinkMm: number | null;
     etoJensenHaiseMm: number | null;
+    etoTurcMm: number | null;
+    etoLinacreMm: number | null;
+    etoIvanovMm: number | null;
+    etoCamargo1971Mm: number | null;
     windSpeed2mMs: number | null;
   }>;
   hourlyForecast: Array<{

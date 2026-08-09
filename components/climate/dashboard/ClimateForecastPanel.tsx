@@ -62,6 +62,10 @@ function DailyForecast({
                 <ForecastMetric label="Blaney-Criddle" value={`${formatNumber(day.etoBlaneyCriddleMm)} mm`} />
                 <ForecastMetric label="Makkink" value={`${formatNumber(day.etoMakkinkMm)} mm`} />
                 <ForecastMetric label="Jensen-Haise" value={`${formatNumber(day.etoJensenHaiseMm)} mm`} />
+                <ForecastMetric label="Turc" value={`${formatNumber(day.etoTurcMm)} mm`} />
+                <ForecastMetric label="Linacre" value={`${formatNumber(day.etoLinacreMm)} mm`} />
+                <ForecastMetric label="Ivanov" value={`${formatNumber(day.etoIvanovMm)} mm`} />
+                <ForecastMetric label="Camargo 1971" value={`${formatNumber(day.etoCamargo1971Mm)} mm`} />
               </dl>
             </details>
           </article>

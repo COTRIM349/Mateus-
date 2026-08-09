@@ -94,7 +94,7 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-start sm:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Evapotranspiração de referência</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Oito métodos exibidos separadamente</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Doze métodos exibidos separadamente</p>
         </div>
         <span className="w-fit rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
           {eto.quality === "model_unvalidated" ? "Estimativa não validada" : "Aguardando dados"}
@@ -120,40 +120,67 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
           {eto.comparison.deltaTodayPct === null ? "" : ` (${eto.comparison.deltaTodayPct > 0 ? "+" : ""}${formatNumber(eto.comparison.deltaTodayPct, 1)}%)`}
         </p>
 
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          <DiagnosticMethod
-            label="ASCE-EWRI ETos"
-            value={eto.asceEwri.todayMm}
-            note="Superfície curta; no passo diário é alinhado ao FAO-56."
-          />
-          <DiagnosticMethod
-            label="Priestley-Taylor"
-            value={eto.priestleyTaylor.todayMm}
-            note="Saldo de radiação calculado · α 1,26."
-          />
-          <DiagnosticMethod
-            label="Thornthwaite-Camargo"
-            value={eto.thornthwaiteCamargo.todayMm}
-            note={eto.thornthwaiteCamargo.climatologyStatus === "available"
-              ? `Normal anual NASA POWER: ${formatNumber(eto.thornthwaiteCamargo.climatologicalAnnualMeanTemperatureC)}°C.`
-              : "Aguardando normal anual NASA POWER; sem valor inventado."}
-          />
-          <DiagnosticMethod
-            label="Blaney-Criddle"
-            value={eto.blaneyCriddle.todayMm}
-            note="Temperatura e fotoperíodo · método originalmente mensal."
-          />
-          <DiagnosticMethod
-            label="Makkink"
-            value={eto.makkink.todayMm}
-            note="Temperatura e radiação diária · coeficiente 0,61."
-          />
-          <DiagnosticMethod
-            label="Jensen-Haise"
-            value={eto.jensenHaise.todayMm}
-            note="Forma simplificada · temperatura e radiação diária."
-          />
-        </div>
+        <details className="mt-4 rounded-2xl border border-gray-100 dark:border-white/[0.06]">
+          <summary className="cursor-pointer px-4 py-3 text-[11px] font-bold text-graphite-600 dark:text-gray-300">
+            Comparar outros 10 métodos de ETo
+          </summary>
+          <div className="grid gap-2 border-t border-gray-100 p-3 sm:grid-cols-2 xl:grid-cols-3 dark:border-white/[0.06]">
+            <DiagnosticMethod
+              label="ASCE-EWRI ETos"
+              value={eto.asceEwri.todayMm}
+              note="Superfície curta; no passo diário é alinhado ao FAO-56."
+            />
+            <DiagnosticMethod
+              label="Priestley-Taylor"
+              value={eto.priestleyTaylor.todayMm}
+              note="Saldo de radiação calculado · α 1,26."
+            />
+            <DiagnosticMethod
+              label="Thornthwaite-Camargo"
+              value={eto.thornthwaiteCamargo.todayMm}
+              note={eto.thornthwaiteCamargo.climatologyStatus === "available"
+                ? `Normal anual NASA POWER: ${formatNumber(eto.thornthwaiteCamargo.climatologicalAnnualMeanTemperatureC)}°C.`
+                : "Aguardando normal anual NASA POWER; sem valor inventado."}
+            />
+            <DiagnosticMethod
+              label="Blaney-Criddle"
+              value={eto.blaneyCriddle.todayMm}
+              note="Temperatura e fotoperíodo · método originalmente mensal."
+            />
+            <DiagnosticMethod
+              label="Makkink"
+              value={eto.makkink.todayMm}
+              note="Temperatura e radiação diária · coeficiente 0,61."
+            />
+            <DiagnosticMethod
+              label="Jensen-Haise"
+              value={eto.jensenHaise.todayMm}
+              note="Forma simplificada · temperatura e radiação diária."
+            />
+            <DiagnosticMethod
+              label="Turc"
+              value={eto.turc.todayMm}
+              note="Temperatura, umidade e radiação · correção para UR abaixo de 50%."
+            />
+            <DiagnosticMethod
+              label="Linacre"
+              value={eto.linacre.todayMm}
+              note="Temperatura, ponto de orvalho derivado, latitude e altitude."
+            />
+            <DiagnosticMethod
+              label="Ivanov"
+              value={eto.ivanov.todayMm}
+              note="Equivalente diário de uma equação originalmente mensal."
+            />
+            <DiagnosticMethod
+              label="Camargo 1971"
+              value={eto.camargo1971.todayMm}
+              note={eto.camargo1971.climatologyStatus === "available"
+                ? `Ra, temperatura e normal anual NASA POWER: ${formatNumber(eto.camargo1971.climatologicalAnnualMeanTemperatureC)}°C.`
+                : "Aguardando normal anual NASA POWER; sem valor inventado."}
+            />
+          </div>
+        </details>
 
         <div className="mt-4 rounded-2xl bg-brand-50/50 p-3 dark:bg-brand-900/10">
           <EtoSparkline penmanMonteith={eto.history} hargreavesSamani={eto.hargreavesSamani.history} />

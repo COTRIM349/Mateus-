@@ -18,11 +18,15 @@ import { fetchLatestNasaPowerDaily } from "@/modules/weather/providers/nasaPower
 import { fetchNasaPowerTemperatureNormal } from "@/modules/weather/providers/nasaPowerClimatology";
 import { calculateReferenceEtoAsceEwri } from "@/modules/weather/calculations/referenceEtoAsceEwri";
 import { calculateReferenceEtoBlaneyCriddle } from "@/modules/weather/calculations/referenceEtoBlaneyCriddle";
+import { calculateReferenceEtoCamargo1971 } from "@/modules/weather/calculations/referenceEtoCamargo1971";
 import { calculateReferenceEtoHargreavesSamani } from "@/modules/weather/calculations/referenceEtoHargreavesSamani";
+import { calculateReferenceEtoIvanov } from "@/modules/weather/calculations/referenceEtoIvanov";
 import { calculateReferenceEtoJensenHaise } from "@/modules/weather/calculations/referenceEtoJensenHaise";
+import { calculateReferenceEtoLinacre } from "@/modules/weather/calculations/referenceEtoLinacre";
 import { calculateReferenceEtoMakkink } from "@/modules/weather/calculations/referenceEtoMakkink";
 import { calculateReferenceEtoPriestleyTaylor } from "@/modules/weather/calculations/referenceEtoPriestleyTaylor";
 import { calculateReferenceEtoThornthwaiteCamargo } from "@/modules/weather/calculations/referenceEtoThornthwaiteCamargo";
+import { calculateReferenceEtoTurc } from "@/modules/weather/calculations/referenceEtoTurc";
 import type { ReferenceEtoInput } from "@/modules/weather/calculations/referenceEtoTypes";
 
 export const dynamic = "force-dynamic";
@@ -361,31 +365,61 @@ export async function GET(request: Request) {
       ),
     ]),
   );
-  const calculateFullMethods = (input: ReferenceEtoInput) => ({
-    asceEwri: calculateReferenceEtoAsceEwri(input).etoMmDay,
-    priestleyTaylor: calculateReferenceEtoPriestleyTaylor(input).etoMmDay,
-    thornthwaiteCamargo: calculateReferenceEtoThornthwaiteCamargo({
-      date: input.date,
-      latitude: input.latitude,
-      temperatureMinC: input.temperatureMinC,
-      temperatureMaxC: input.temperatureMaxC,
-      climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
-    }).etoMmDay,
-    blaneyCriddle: calculateReferenceEtoBlaneyCriddle({
-      date: input.date,
-      latitude: input.latitude,
-      temperatureMeanC: input.temperatureMeanC,
-      temperatureMinC: input.temperatureMinC,
-      temperatureMaxC: input.temperatureMaxC,
-    }).etoMmDay,
-    makkink: calculateReferenceEtoMakkink(input).etoMmDay,
-    jensenHaise: calculateReferenceEtoJensenHaise({
-      temperatureMeanC: input.temperatureMeanC,
-      temperatureMinC: input.temperatureMinC,
-      temperatureMaxC: input.temperatureMaxC,
-      solarRadiationMjM2Day: input.solarRadiationMjM2Day,
-    }).etoMmDay,
-  });
+  const calculateFullMethods = (input: ReferenceEtoInput) => {
+    const temperatureMeanC = input.temperatureMeanC
+      ?? (input.temperatureMinC !== null && input.temperatureMaxC !== null
+        ? (input.temperatureMinC + input.temperatureMaxC) / 2
+        : null);
+    return {
+      asceEwri: calculateReferenceEtoAsceEwri(input).etoMmDay,
+      priestleyTaylor: calculateReferenceEtoPriestleyTaylor(input).etoMmDay,
+      thornthwaiteCamargo: calculateReferenceEtoThornthwaiteCamargo({
+        date: input.date,
+        latitude: input.latitude,
+        temperatureMinC: input.temperatureMinC,
+        temperatureMaxC: input.temperatureMaxC,
+        climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
+      }).etoMmDay,
+      blaneyCriddle: calculateReferenceEtoBlaneyCriddle({
+        date: input.date,
+        latitude: input.latitude,
+        temperatureMeanC,
+        temperatureMinC: input.temperatureMinC,
+        temperatureMaxC: input.temperatureMaxC,
+      }).etoMmDay,
+      makkink: calculateReferenceEtoMakkink({ ...input, temperatureMeanC }).etoMmDay,
+      jensenHaise: calculateReferenceEtoJensenHaise({
+        temperatureMeanC,
+        temperatureMinC: input.temperatureMinC,
+        temperatureMaxC: input.temperatureMaxC,
+        solarRadiationMjM2Day: input.solarRadiationMjM2Day,
+      }).etoMmDay,
+      turc: calculateReferenceEtoTurc({
+        temperatureMeanC,
+        relativeHumidityMeanPct: input.relativeHumidityMeanPct,
+        solarRadiationMjM2Day: input.solarRadiationMjM2Day,
+      }).etoMmDay,
+      linacre: calculateReferenceEtoLinacre({
+        latitude: input.latitude,
+        elevationM: input.elevationM,
+        temperatureMeanC,
+        relativeHumidityMeanPct: input.relativeHumidityMeanPct,
+      }).etoMmDay,
+      ivanov: calculateReferenceEtoIvanov({
+        date: input.date,
+        temperatureMeanC,
+        relativeHumidityMeanPct: input.relativeHumidityMeanPct,
+      }).etoMmDay,
+      camargo1971: calculateReferenceEtoCamargo1971({
+        date: input.date,
+        latitude: input.latitude,
+        temperatureMeanC,
+        temperatureMinC: input.temperatureMinC,
+        temperatureMaxC: input.temperatureMaxC,
+        climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
+      }).etoMmDay,
+    };
+  };
   const readingMethodValues = new Map(readings.map((reading) => {
     if (etoLatitude === null) return [reading, null] as const;
     return [reading, calculateFullMethods(dailyReferenceInput({
@@ -400,7 +434,7 @@ export async function GET(request: Request) {
       solarRadiationMjM2Day: reading.solar_radiation,
     }))] as const;
   }));
-  const buildCalculatedSummary = (method: "asceEwri" | "priestleyTaylor" | "thornthwaiteCamargo" | "blaneyCriddle" | "makkink" | "jensenHaise") =>
+  const buildCalculatedSummary = (method: keyof NonNullable<ReturnType<typeof calculateFullMethods>>) =>
     buildEtoSummary(readings.map((reading) => ({
       ...reading,
       et0_source: readingMethodValues.get(reading)?.[method] ?? null,
@@ -411,6 +445,10 @@ export async function GET(request: Request) {
   const etoBlaneyCriddle = buildCalculatedSummary("blaneyCriddle");
   const etoMakkink = buildCalculatedSummary("makkink");
   const etoJensenHaise = buildCalculatedSummary("jensenHaise");
+  const etoTurc = buildCalculatedSummary("turc");
+  const etoLinacre = buildCalculatedSummary("linacre");
+  const etoIvanov = buildCalculatedSummary("ivanov");
+  const etoCamargo1971 = buildCalculatedSummary("camargo1971");
   const forecastMethodValues = new Map(forecasts.map((forecast) => {
     if (etoLatitude === null) return [forecast.id, null] as const;
     return [forecast.id, calculateFullMethods(dailyReferenceInput({
@@ -702,6 +740,32 @@ export async function GET(request: Request) {
         formulaVersion: "jensen-haise-1963-simplified-v1",
         sourceLabel: "Forma simplificada calculada pela Cotrim com temperatura média e radiação solar diária convertida em equivalente de água",
       },
+      turc: {
+        ...etoTurc,
+        method: "Turc 1961",
+        formulaVersion: "turc-1961-rh-corrected-v1",
+        sourceLabel: "Calculado pela Cotrim com temperatura, umidade relativa e radiação solar diária; correção aplicada quando UR < 50%",
+      },
+      linacre: {
+        ...etoLinacre,
+        method: "Linacre 1977",
+        formulaVersion: "linacre-1977-vegetation-c500-v1",
+        sourceLabel: "Forma para vegetação calculada pela Cotrim com temperatura, ponto de orvalho derivado da UR, latitude e altitude",
+      },
+      ivanov: {
+        ...etoIvanov,
+        method: "Ivanov 1954",
+        formulaVersion: "ivanov-1954-monthly-daily-equivalent-v1",
+        sourceLabel: "Equação mensal de Ivanov calculada pela Cotrim; o painel mostra o equivalente dividido pelos dias do mês",
+      },
+      camargo1971: {
+        ...etoCamargo1971,
+        method: "Camargo 1971",
+        formulaVersion: "camargo-1971-k-by-annual-temperature-v1",
+        sourceLabel: `${nasaPowerClimatology.sourceLabel}; temperatura diária do Open-Meteo`,
+        climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
+        climatologyStatus: nasaPowerClimatology.status,
+      },
       comparison: {
         deltaTodayMm,
         deltaTodayPct,
@@ -741,6 +805,10 @@ export async function GET(request: Request) {
       etoBlaneyCriddleMm: forecastMethodValues.get(forecast.id)?.blaneyCriddle ?? null,
       etoMakkinkMm: forecastMethodValues.get(forecast.id)?.makkink ?? null,
       etoJensenHaiseMm: forecastMethodValues.get(forecast.id)?.jensenHaise ?? null,
+      etoTurcMm: forecastMethodValues.get(forecast.id)?.turc ?? null,
+      etoLinacreMm: forecastMethodValues.get(forecast.id)?.linacre ?? null,
+      etoIvanovMm: forecastMethodValues.get(forecast.id)?.ivanov ?? null,
+      etoCamargo1971Mm: forecastMethodValues.get(forecast.id)?.camargo1971 ?? null,
       windSpeed2mMs: forecast.wind_speed,
     })),
     hourlyForecast: hourlyOpenMeteo.map((row) => ({
@@ -768,9 +836,10 @@ export async function GET(request: Request) {
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle, Makkink e Jensen-Haise calculados pela Cotrim",
-      "Blaney-Criddle é originalmente mensal; sua leitura diária é apenas comparativa. Makkink depende da radiação solar diária e não recebe valor quando essa entrada falta",
-      "Thornthwaite-Camargo usa normal anual de temperatura NASA POWER; todos os métodos permanecem não validados por estação física local e bloqueados para uso operacional automático",
+      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle, Makkink, Jensen-Haise, Turc, Linacre, Ivanov e Camargo 1971 calculados pela Cotrim",
+      "Blaney-Criddle e Ivanov são originalmente mensais; suas leituras diárias são apenas equivalentes comparativos. Makkink e Turc dependem da radiação solar diária e ficam sem valor quando essa entrada falta",
+      "Linacre usa ponto de orvalho derivado de temperatura e umidade; Turc foi desenvolvido para condições úmidas. Camargo 1971 e Thornthwaite-Camargo usam normal anual de temperatura NASA POWER",
+      "Todos os métodos permanecem não validados por estação física local e bloqueados para uso operacional automático",
     ],
   };
 
