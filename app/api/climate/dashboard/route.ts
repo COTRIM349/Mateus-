@@ -12,6 +12,7 @@ import {
   type ClimateReadingInput,
 } from "@/modules/weather/dashboard/climateDashboard";
 import { fetchLatestInmetObservation } from "@/modules/weather/providers/inmetPublicObservation";
+import { fetchLatestNasaPowerDaily } from "@/modules/weather/providers/nasaPowerDaily";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -63,7 +64,11 @@ interface ProviderConfigRow {
 interface OrchestrationRunRow {
   status: string;
   finished_at: string | null;
-  provider_results: Record<string, { status?: string }> | null;
+  provider_results: Record<string, {
+    status?: string;
+    fetchedAt?: string | null;
+    error?: string | null;
+  }> | null;
   confidence_counts: Record<string, number> | null;
 }
 
@@ -171,6 +176,16 @@ export async function GET(request: Request) {
       }),
     })),
   );
+  const nasaPowerPromise = virtualStation
+    ? fetchLatestNasaPowerDaily({
+        id: virtualStation.id,
+        name: "Ponto da fazenda",
+        latitude: virtualStation.latitude,
+        longitude: virtualStation.longitude,
+        elevationM: virtualStation.elevation_m,
+        timezone,
+      }, { now, timeoutMs: 8_000 })
+    : Promise.resolve(null);
 
   const emptyResult = Promise.resolve({ data: [], error: null });
   const [
@@ -182,6 +197,7 @@ export async function GET(request: Request) {
     hourlyConsensusResult,
     hourlyEtoResult,
     publicObservationResults,
+    nasaPowerReference,
   ] = await Promise.all([
     supabase
       .from("weather_readings")
@@ -245,6 +261,7 @@ export async function GET(request: Request) {
           .limit(300)
       : emptyResult,
     publicObservationsPromise,
+    nasaPowerPromise,
   ]);
 
   const queryError = [
@@ -326,6 +343,80 @@ export async function GET(request: Request) {
       message: observation.message,
     };
   });
+  const providerResult = (provider: string) => latestRun?.provider_results?.[provider] ?? null;
+  const meteoblueResult = providerResult("meteoblue");
+  const weatherApiResult = providerResult("weatherapi");
+  const inmetAvailable = publicReferences.find((reference) => reference.status === "available");
+  const inmetStale = publicReferences.find((reference) => reference.status === "stale");
+  const inmetNeedsToken = publicReferences.some((reference) => reference.status === "token_required");
+  const latestInmetReference = publicReferences
+    .filter((reference) => reference.observedAt)
+    .sort((a, b) => (a.observedAt ?? "").localeCompare(b.observedAt ?? ""))
+    .at(-1);
+  const sourceHealth: ClimateDashboardResponse["sourceHealth"] = [
+    {
+      provider: "meteoblue",
+      label: "Meteoblue",
+      role: "Previsão no ponto",
+      status: meteoblueResult?.status === "success"
+        ? "active"
+        : process.env.METEOBLUE_API_KEY?.trim()
+          ? "unavailable"
+          : "credential_required",
+      updatedAt: meteoblueResult?.fetchedAt ?? latestRun?.finished_at ?? null,
+      message: meteoblueResult?.status === "success"
+        ? "Dados recebidos normalmente"
+        : process.env.METEOBLUE_API_KEY?.trim()
+          ? meteoblueResult?.error ?? "Fonte não respondeu no último ciclo"
+          : "Chave não configurada",
+    },
+    {
+      provider: "weatherapi",
+      label: "WeatherAPI",
+      role: "Previsão de conferência",
+      status: weatherApiResult?.status === "success"
+        ? "active"
+        : process.env.WEATHERAPI_API_KEY?.trim()
+          ? "unavailable"
+          : "credential_required",
+      updatedAt: weatherApiResult?.fetchedAt ?? latestRun?.finished_at ?? null,
+      message: weatherApiResult?.status === "success"
+        ? "Dados recebidos normalmente"
+        : process.env.WEATHERAPI_API_KEY?.trim()
+          ? weatherApiResult?.error ?? "Fonte não respondeu no último ciclo"
+          : "Falta cadastrar WEATHERAPI_API_KEY",
+    },
+    {
+      provider: "nasa_power",
+      label: "NASA POWER",
+      role: "Auditoria por satélite",
+      status: nasaPowerReference?.status === "available"
+        ? "active"
+        : nasaPowerReference?.status === "stale"
+          ? "delayed"
+          : "unavailable",
+      updatedAt: nasaPowerReference?.observedAt ?? null,
+      message: nasaPowerReference?.message ?? "Coordenadas da estação virtual indisponíveis",
+    },
+    {
+      provider: "inmet",
+      label: "INMET",
+      role: "Estações físicas próximas",
+      status: inmetAvailable
+        ? "active"
+        : inmetStale
+          ? "delayed"
+          : inmetNeedsToken
+            ? "credential_required"
+            : "unavailable",
+      updatedAt: latestInmetReference?.observedAt ?? null,
+      message: inmetAvailable?.message
+        ?? inmetStale?.message
+        ?? (inmetNeedsToken
+          ? "Consulta pública testada; o INMET exigiu token para dados horários"
+          : publicReferences[0]?.message ?? "Nenhuma estação INMET configurada"),
+    },
+  ];
 
   const response: ClimateDashboardResponse = {
     farmId,
@@ -393,9 +484,12 @@ export async function GET(request: Request) {
       updatedAt,
       etoInputSources: activeProviders.includes("open_meteo") ? 1 : 0,
     },
+    sourceHealth,
+    nasaPowerReference,
     publicReferences,
     attribution: [
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
+      "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
       "ETo calculada internamente pelo método FAO-56 Penman-Monteith",
     ],

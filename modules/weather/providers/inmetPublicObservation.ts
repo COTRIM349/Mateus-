@@ -121,6 +121,16 @@ export function buildInmetObservationUrl(
   return `${base}/token/estacao/${startDate}/${endDate}/${encodeURIComponent(stationCode)}/${encodeURIComponent(token)}`;
 }
 
+export function buildInmetPublicObservationUrl(
+  stationCode: string,
+  startDate: string,
+  endDate: string,
+  baseUrl = INMET_API_BASE_URL,
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  return `${base}/estacao/${startDate}/${endDate}/${encodeURIComponent(stationCode)}`;
+}
+
 function unavailable(
   status: Exclude<InmetObservationStatus, "available" | "stale">,
   message: string,
@@ -150,23 +160,23 @@ export async function fetchLatestInmetObservation(
   options: FetchInmetObservationOptions = {},
 ): Promise<InmetPublicObservation> {
   const token = options.token?.trim();
-  if (!token) {
-    return unavailable(
-      "token_required",
-      "Aguardando credencial oficial da API INMET",
-    );
-  }
-
   const now = options.now ?? new Date();
   const startDate = dateOffsetUtc(now, -1);
   const endDate = dateOffsetUtc(now, 0);
-  const requestUrl = buildInmetObservationUrl(
-    stationCode,
-    startDate,
-    endDate,
-    token,
-    options.baseUrl,
-  );
+  const requestUrl = token
+    ? buildInmetObservationUrl(
+        stationCode,
+        startDate,
+        endDate,
+        token,
+        options.baseUrl,
+      )
+    : buildInmetPublicObservationUrl(
+        stationCode,
+        startDate,
+        endDate,
+        options.baseUrl,
+      );
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), options.timeoutMs ?? 5_000);
 
@@ -180,11 +190,23 @@ export async function fetchLatestInmetObservation(
         "User-Agent": "Mozilla/5.0 Cotrim-Irrigacao-Clima/1.0",
       },
     });
-    if (!response.ok) {
+    if (response.status === 204) {
       return unavailable(
-        response.status === 401 || response.status === 403 ? "token_required" : "unavailable",
-        response.status === 401 || response.status === 403
-          ? "Credencial da API INMET recusada"
+        "token_required",
+        token
+          ? "Credencial da API INMET não retornou dados"
+          : "O INMET exige credencial para a leitura horária desta estação",
+      );
+    }
+    if (!response.ok) {
+      const credentialRequired = response.status === 401
+        || response.status === 403;
+      return unavailable(
+        credentialRequired ? "token_required" : "unavailable",
+        credentialRequired
+          ? token
+            ? "Credencial da API INMET recusada"
+            : "O INMET exige credencial para a leitura horária desta estação"
           : `API INMET indisponível (HTTP ${response.status})`,
       );
     }

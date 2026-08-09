@@ -101,6 +101,26 @@ export interface ClimateDashboardResponse {
     updatedAt: string | null;
     etoInputSources: number;
   };
+  sourceHealth: Array<{
+    provider: "meteoblue" | "weatherapi" | "nasa_power" | "inmet";
+    label: string;
+    role: string;
+    status: "active" | "delayed" | "credential_required" | "unavailable";
+    updatedAt: string | null;
+    message: string;
+  }>;
+  nasaPowerReference: {
+    status: "available" | "stale" | "unavailable";
+    observedAt: string | null;
+    temperatureC: number | null;
+    relativeHumidityPct: number | null;
+    precipitationMm: number | null;
+    windSpeed10mMs: number | null;
+    surfacePressureKpa: number | null;
+    solarRadiationDailyMjM2: number | null;
+    completenessPct: number;
+    message: string;
+  } | null;
   publicReferences: Array<{
     stationId: string;
     code: string;
