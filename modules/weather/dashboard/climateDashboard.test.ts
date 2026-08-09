@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildEtoSummary,
   climateCondition,
+  haversineDistanceKm,
   selectLatestOfficialForecastPerDay,
   windDirectionLabel,
   type ClimateForecastInput,
@@ -80,5 +81,16 @@ describe("climate dashboard data contract", () => {
     expect(climateCondition(null, null)).toBe("unknown");
     expect(climateCondition(0.4, 35)).toBe("partly_cloudy");
     expect(climateCondition(5, 10)).toBe("rain");
+  });
+
+  it("calcula a distância da fazenda até a estação pública", () => {
+    const distance = haversineDistanceKm(
+      -14.775986,
+      -45.566556,
+      -14.08916666,
+      -46.36638888,
+    );
+
+    expect(distance).toBeCloseTo(115.1, 1);
   });
 });

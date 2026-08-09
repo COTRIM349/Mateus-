@@ -66,9 +66,10 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Evapotranspiração de referência</h2>
           <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">ETo · {eto.method}</p>
+          <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">{eto.sourceLabel}</p>
         </div>
-        <span className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${eto.quality === "calculated" ? "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"}`}>
-          {eto.quality === "calculated" ? "Calculada" : "Aguardando dados"}
+        <span className={`w-fit rounded-full px-2.5 py-1 text-[10px] font-bold ${eto.quality !== "missing" ? "bg-sky-50 text-sky-700 dark:bg-sky-900/20 dark:text-sky-400" : "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"}`}>
+          {eto.quality === "estimated_model" ? "Estimada por modelo" : eto.quality === "observed_inputs" ? "Dados observados" : "Aguardando dados"}
         </span>
       </div>
 

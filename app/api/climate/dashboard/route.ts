@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   buildEtoSummary,
   climateCondition,
+  haversineDistanceKm,
   localDateInTimeZone,
   selectLatestOfficialForecastPerDay,
   windDirectionLabel,
@@ -10,20 +11,29 @@ import {
   type ClimateForecastInput,
   type ClimateReadingInput,
 } from "@/modules/weather/dashboard/climateDashboard";
+import { fetchLatestInmetObservation } from "@/modules/weather/providers/inmetPublicObservation";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 interface StationRow {
   id: string;
+  name: string;
   timezone: string | null;
   data_source: string;
   source_priority: number;
+  external_id: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  altitude: number | null;
 }
 
 interface VirtualStationRow {
   id: string;
   timezone: string;
+  latitude: number;
+  longitude: number;
+  elevation_m: number | null;
 }
 
 interface ConsensusRow {
@@ -112,13 +122,13 @@ export async function GET(request: Request) {
   const [stationsResult, virtualStationResult] = await Promise.all([
     supabase
       .from("weather_stations")
-      .select("id, timezone, data_source, source_priority")
+      .select("id, name, timezone, data_source, source_priority, external_id, latitude, longitude, altitude")
       .eq("farm_id", farmId)
       .eq("active", true)
       .order("source_priority", { ascending: true }),
     supabase
       .from("virtual_weather_stations")
-      .select("id, timezone")
+      .select("id, timezone, latitude, longitude, elevation_m")
       .eq("farm_id", farmId)
       .eq("active", true)
       .order("created_at", { ascending: true })
@@ -149,6 +159,18 @@ export async function GET(request: Request) {
   const currentFreshnessCutoff = new Date(now.getTime() - 2 * 60 * 60 * 1_000).toISOString();
   const today = localDateInTimeZone(now, timezone);
   const historyStart = isoDateOffset(today, -39);
+  const publicStations = stations.filter(
+    (item) => item.data_source === "api_inmet" && Boolean(item.external_id),
+  );
+  const publicObservationsPromise = Promise.all(
+    publicStations.map(async (publicStation) => ({
+      station: publicStation,
+      observation: await fetchLatestInmetObservation(publicStation.external_id!, {
+        token: process.env.INMET_TOKEN,
+        now,
+      }),
+    })),
+  );
 
   const emptyResult = Promise.resolve({ data: [], error: null });
   const [
@@ -159,6 +181,7 @@ export async function GET(request: Request) {
     currentConsensusResult,
     hourlyConsensusResult,
     hourlyEtoResult,
+    publicObservationResults,
   ] = await Promise.all([
     supabase
       .from("weather_readings")
@@ -221,6 +244,7 @@ export async function GET(request: Request) {
           .order("calculated_at", { ascending: false })
           .limit(300)
       : emptyResult,
+    publicObservationsPromise,
   ]);
 
   const queryError = [
@@ -268,6 +292,40 @@ export async function GET(request: Request) {
     todayReading?.imported_at,
   ].filter((value): value is string => Boolean(value));
   const updatedAt = updatedAtCandidates.sort().at(-1) ?? null;
+  const publicReferences = publicObservationResults.map(({ station: publicStation, observation }) => {
+    const hasCoordinates = virtualStation
+      && typeof publicStation.latitude === "number"
+      && typeof publicStation.longitude === "number";
+    const distanceKm = hasCoordinates
+      ? haversineDistanceKm(
+          virtualStation.latitude,
+          virtualStation.longitude,
+          publicStation.latitude!,
+          publicStation.longitude!,
+        )
+      : null;
+    const elevationDifferenceM = virtualStation?.elevation_m !== null
+      && virtualStation?.elevation_m !== undefined
+      && publicStation.altitude !== null
+      ? Math.abs(virtualStation.elevation_m - publicStation.altitude)
+      : null;
+
+    return {
+      stationId: publicStation.id,
+      code: publicStation.external_id!,
+      name: publicStation.name,
+      distanceKm,
+      elevationDifferenceM,
+      status: observation.status,
+      observedAt: observation.observedAt,
+      temperatureC: observation.temperatureC,
+      relativeHumidityPct: observation.relativeHumidityPct,
+      precipitationMm: observation.precipitationMm,
+      windSpeedMs: observation.windSpeedMs,
+      completenessPct: observation.completenessPct,
+      message: observation.message,
+    };
+  });
 
   const response: ClimateDashboardResponse = {
     farmId,
@@ -276,6 +334,8 @@ export async function GET(request: Request) {
     generatedAt: nowIso,
     current: {
       observedAt: currentConsensus?.interval_start ?? todayReading?.imported_at ?? null,
+      sourceKind: "model_estimate",
+      sourceLabel: "Modelo meteorológico no ponto da fazenda",
       condition: climateCondition(
         currentConsensus?.precipitation_mm ?? todayReading?.precipitation ?? null,
         todayForecast?.precipitation_probability ?? null,
@@ -288,13 +348,15 @@ export async function GET(request: Request) {
       windSpeed2mMs: currentConsensus?.wind_speed_2m_ms ?? todayReading?.wind_speed ?? null,
       windDirection: windDirectionLabel(currentConsensus?.wind_direction_deg ?? null),
       solarRadiationWm2: currentConsensus?.solar_radiation_wm2 ?? null,
+      solarRadiationDailyMjM2: todayReading?.solar_radiation ?? null,
       surfacePressureKpa: currentConsensus?.surface_pressure_kpa ?? null,
       etoTodayMm: eto.todayMm,
     },
     eto: {
       ...eto,
       method: "FAO-56 Penman-Monteith",
-      quality: eto.todayMm === null ? "missing" : "calculated",
+      quality: eto.todayMm === null ? "missing" : "estimated_model",
+      sourceLabel: "ETo estimada com variáveis do modelo no ponto da fazenda",
     },
     dailyForecast: forecasts.map((forecast) => ({
       id: forecast.id,
@@ -327,11 +389,14 @@ export async function GET(request: Request) {
       activeSources: activeProviders.length,
       sourceNames: activeProviders,
       consensusLabel: consensusLabel(latestConfidence),
-      qualityLabel: "Qualidade em validação",
+      qualityLabel: "Estimativa por modelo no ponto da fazenda",
       updatedAt,
+      etoInputSources: activeProviders.includes("open_meteo") ? 1 : 0,
     },
+    publicReferences,
     attribution: [
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
+      "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
       "ETo calculada internamente pelo método FAO-56 Penman-Monteith",
     ],
   };

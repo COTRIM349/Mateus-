@@ -8,6 +8,7 @@ import { ClimateCurrentCard } from "./ClimateCurrentCard";
 import { ClimateForecastPanel } from "./ClimateForecastPanel";
 import { ClimateStatusBar } from "./ClimateStatusBar";
 import { EtoSummaryCard } from "./EtoSummaryCard";
+import { PublicWeatherReferences } from "./PublicWeatherReferences";
 
 export function ClimateDashboard() {
   const { activeFarmId } = useAuth();
@@ -74,6 +75,7 @@ export function ClimateDashboard() {
         <EtoSummaryCard eto={data.eto} />
       </div>
       <ClimateForecastPanel daily={data.dailyForecast} hourly={data.hourlyForecast} timezone={data.timezone} today={data.localDate} />
+      <PublicWeatherReferences references={data.publicReferences} />
       <ClimateStatusBar status={data.status} />
       <p className="text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">{data.attribution.join(" · ")}</p>
     </div>

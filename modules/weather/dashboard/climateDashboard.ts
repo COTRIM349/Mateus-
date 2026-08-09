@@ -49,6 +49,8 @@ export interface ClimateDashboardResponse {
   generatedAt: string;
   current: {
     observedAt: string | null;
+    sourceKind: "model_estimate" | "local_observation";
+    sourceLabel: string;
     condition: ClimateCondition;
     temperatureC: number | null;
     tempMinC: number | null;
@@ -58,12 +60,14 @@ export interface ClimateDashboardResponse {
     windSpeed2mMs: number | null;
     windDirection: string | null;
     solarRadiationWm2: number | null;
+    solarRadiationDailyMjM2: number | null;
     surfacePressureKpa: number | null;
     etoTodayMm: number | null;
   };
   eto: EtoSummary & {
     method: "FAO-56 Penman-Monteith";
-    quality: "calculated" | "missing";
+    quality: "estimated_model" | "observed_inputs" | "missing";
+    sourceLabel: string;
   };
   dailyForecast: Array<{
     id: string;
@@ -95,8 +99,39 @@ export interface ClimateDashboardResponse {
     consensusLabel: string;
     qualityLabel: string;
     updatedAt: string | null;
+    etoInputSources: number;
   };
+  publicReferences: Array<{
+    stationId: string;
+    code: string;
+    name: string;
+    distanceKm: number | null;
+    elevationDifferenceM: number | null;
+    status: "available" | "stale" | "token_required" | "unavailable";
+    observedAt: string | null;
+    temperatureC: number | null;
+    relativeHumidityPct: number | null;
+    precipitationMm: number | null;
+    windSpeedMs: number | null;
+    completenessPct: number;
+    message: string;
+  }>;
   attribution: string[];
+}
+
+export function haversineDistanceKm(
+  latitudeA: number,
+  longitudeA: number,
+  latitudeB: number,
+  longitudeB: number,
+): number {
+  const radians = (degrees: number) => degrees * Math.PI / 180;
+  const deltaLatitude = radians(latitudeB - latitudeA);
+  const deltaLongitude = radians(longitudeB - longitudeA);
+  const a = Math.sin(deltaLatitude / 2) ** 2
+    + Math.cos(radians(latitudeA)) * Math.cos(radians(latitudeB))
+    * Math.sin(deltaLongitude / 2) ** 2;
+  return 6_371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
 function addDays(dateIso: string, days: number): string {

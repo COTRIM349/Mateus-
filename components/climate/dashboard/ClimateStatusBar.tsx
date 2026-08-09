@@ -10,6 +10,7 @@ export function ClimateStatusBar({ status }: { status: ClimateDashboardResponse[
       </span>
       <span>{status.consensusLabel}</span>
       <span>{status.qualityLabel}</span>
+      <span>{status.etoInputSources} fonte completa para ETo</span>
       <span>{formatRelativeUpdate(status.updatedAt)}</span>
     </div>
   );

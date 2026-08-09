@@ -23,7 +23,7 @@ export function ClimateCurrentCard({
     <Card className="h-full overflow-hidden p-0">
       <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
         <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Condições atuais</h2>
-        <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Leitura meteorológica mais recente da fazenda</p>
+        <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">{current.sourceLabel}</p>
       </div>
 
       <div className="p-6">
@@ -50,7 +50,8 @@ export function ClimateCurrentCard({
             value={formatNumber(current.windSpeed2mMs)}
             unit={`m/s${current.windDirection ? ` · ${current.windDirection}` : ""}`}
           />
-          <Metric label="Radiação" value={formatNumber(current.solarRadiationWm2, 0)} unit="W/m²" />
+          <Metric label="Radiação agora" value={formatNumber(current.solarRadiationWm2, 0)} unit="W/m²" />
+          <Metric label="Radiação no dia" value={formatNumber(current.solarRadiationDailyMjM2, 1)} unit="MJ/m²" />
           <Metric label="Pressão" value={formatNumber(current.surfacePressureKpa)} unit="kPa" />
           <Metric label="ETo" value={formatNumber(current.etoTodayMm)} unit="mm" />
         </div>
