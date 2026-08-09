@@ -59,6 +59,8 @@ function DailyForecast({
                 <ForecastMetric label="ASCE ETos" value={`${formatNumber(day.etoAsceEwriMm)} mm`} />
                 <ForecastMetric label="Priestley-Taylor" value={`${formatNumber(day.etoPriestleyTaylorMm)} mm`} />
                 <ForecastMetric label="Thornthwaite-Camargo" value={`${formatNumber(day.etoThornthwaiteCamargoMm)} mm`} />
+                <ForecastMetric label="Blaney-Criddle" value={`${formatNumber(day.etoBlaneyCriddleMm)} mm`} />
+                <ForecastMetric label="Makkink" value={`${formatNumber(day.etoMakkinkMm)} mm`} />
               </dl>
             </details>
           </article>

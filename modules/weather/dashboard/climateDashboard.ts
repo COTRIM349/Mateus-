@@ -110,6 +110,16 @@ export interface ClimateDashboardResponse {
       climatologicalAnnualMeanTemperatureC: number | null;
       climatologyStatus: "available" | "unavailable";
     };
+    blaneyCriddle: EtoSummary & {
+      method: "Blaney-Criddle FAO-24";
+      formulaVersion: "fao-24-blaney-criddle-basic-daily-v1";
+      sourceLabel: string;
+    };
+    makkink: EtoSummary & {
+      method: "Makkink 1957";
+      formulaVersion: "makkink-1957-c0.61-v1";
+      sourceLabel: string;
+    };
     comparison: {
       deltaTodayMm: number | null;
       deltaTodayPct: number | null;
@@ -159,6 +169,8 @@ export interface ClimateDashboardResponse {
     etoAsceEwriMm: number | null;
     etoPriestleyTaylorMm: number | null;
     etoThornthwaiteCamargoMm: number | null;
+    etoBlaneyCriddleMm: number | null;
+    etoMakkinkMm: number | null;
     windSpeed2mMs: number | null;
   }>;
   hourlyForecast: Array<{

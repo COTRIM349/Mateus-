@@ -17,7 +17,9 @@ import { fetchLatestInmetObservation } from "@/modules/weather/providers/inmetPu
 import { fetchLatestNasaPowerDaily } from "@/modules/weather/providers/nasaPowerDaily";
 import { fetchNasaPowerTemperatureNormal } from "@/modules/weather/providers/nasaPowerClimatology";
 import { calculateReferenceEtoAsceEwri } from "@/modules/weather/calculations/referenceEtoAsceEwri";
+import { calculateReferenceEtoBlaneyCriddle } from "@/modules/weather/calculations/referenceEtoBlaneyCriddle";
 import { calculateReferenceEtoHargreavesSamani } from "@/modules/weather/calculations/referenceEtoHargreavesSamani";
+import { calculateReferenceEtoMakkink } from "@/modules/weather/calculations/referenceEtoMakkink";
 import { calculateReferenceEtoPriestleyTaylor } from "@/modules/weather/calculations/referenceEtoPriestleyTaylor";
 import { calculateReferenceEtoThornthwaiteCamargo } from "@/modules/weather/calculations/referenceEtoThornthwaiteCamargo";
 import type { ReferenceEtoInput } from "@/modules/weather/calculations/referenceEtoTypes";
@@ -368,6 +370,14 @@ export async function GET(request: Request) {
       temperatureMaxC: input.temperatureMaxC,
       climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
     }).etoMmDay,
+    blaneyCriddle: calculateReferenceEtoBlaneyCriddle({
+      date: input.date,
+      latitude: input.latitude,
+      temperatureMeanC: input.temperatureMeanC,
+      temperatureMinC: input.temperatureMinC,
+      temperatureMaxC: input.temperatureMaxC,
+    }).etoMmDay,
+    makkink: calculateReferenceEtoMakkink(input).etoMmDay,
   });
   const readingMethodValues = new Map(readings.map((reading) => {
     if (etoLatitude === null) return [reading, null] as const;
@@ -383,7 +393,7 @@ export async function GET(request: Request) {
       solarRadiationMjM2Day: reading.solar_radiation,
     }))] as const;
   }));
-  const buildCalculatedSummary = (method: "asceEwri" | "priestleyTaylor" | "thornthwaiteCamargo") =>
+  const buildCalculatedSummary = (method: "asceEwri" | "priestleyTaylor" | "thornthwaiteCamargo" | "blaneyCriddle" | "makkink") =>
     buildEtoSummary(readings.map((reading) => ({
       ...reading,
       et0_source: readingMethodValues.get(reading)?.[method] ?? null,
@@ -391,6 +401,8 @@ export async function GET(request: Request) {
   const etoAsceEwri = buildCalculatedSummary("asceEwri");
   const etoPriestleyTaylor = buildCalculatedSummary("priestleyTaylor");
   const etoThornthwaiteCamargo = buildCalculatedSummary("thornthwaiteCamargo");
+  const etoBlaneyCriddle = buildCalculatedSummary("blaneyCriddle");
+  const etoMakkink = buildCalculatedSummary("makkink");
   const forecastMethodValues = new Map(forecasts.map((forecast) => {
     if (etoLatitude === null) return [forecast.id, null] as const;
     return [forecast.id, calculateFullMethods(dailyReferenceInput({
@@ -664,6 +676,18 @@ export async function GET(request: Request) {
         climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
         climatologyStatus: nasaPowerClimatology.status,
       },
+      blaneyCriddle: {
+        ...etoBlaneyCriddle,
+        method: "Blaney-Criddle FAO-24",
+        formulaVersion: "fao-24-blaney-criddle-basic-daily-v1",
+        sourceLabel: "Calculado pela Cotrim com temperatura média, data e fotoperíodo da latitude da fazenda; método originalmente mensal",
+      },
+      makkink: {
+        ...etoMakkink,
+        method: "Makkink 1957",
+        formulaVersion: "makkink-1957-c0.61-v1",
+        sourceLabel: "Calculado pela Cotrim com temperatura, radiação solar diária e pressão estimada pela altitude",
+      },
       comparison: {
         deltaTodayMm,
         deltaTodayPct,
@@ -700,6 +724,8 @@ export async function GET(request: Request) {
       etoAsceEwriMm: forecastMethodValues.get(forecast.id)?.asceEwri ?? null,
       etoPriestleyTaylorMm: forecastMethodValues.get(forecast.id)?.priestleyTaylor ?? null,
       etoThornthwaiteCamargoMm: forecastMethodValues.get(forecast.id)?.thornthwaiteCamargo ?? null,
+      etoBlaneyCriddleMm: forecastMethodValues.get(forecast.id)?.blaneyCriddle ?? null,
+      etoMakkinkMm: forecastMethodValues.get(forecast.id)?.makkink ?? null,
       windSpeed2mMs: forecast.wind_speed,
     })),
     hourlyForecast: hourlyOpenMeteo.map((row) => ({
@@ -727,7 +753,8 @@ export async function GET(request: Request) {
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor e Thornthwaite-Camargo calculados pela Cotrim",
+      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle e Makkink calculados pela Cotrim",
+      "Blaney-Criddle é originalmente mensal; sua leitura diária é apenas comparativa. Makkink depende da radiação solar diária e não recebe valor quando essa entrada falta",
       "Thornthwaite-Camargo usa normal anual de temperatura NASA POWER; todos os métodos permanecem não validados por estação física local e bloqueados para uso operacional automático",
     ],
   };
