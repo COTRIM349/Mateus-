@@ -61,6 +61,7 @@ function DailyForecast({
                 <ForecastMetric label="Thornthwaite-Camargo" value={`${formatNumber(day.etoThornthwaiteCamargoMm)} mm`} />
                 <ForecastMetric label="Blaney-Criddle" value={`${formatNumber(day.etoBlaneyCriddleMm)} mm`} />
                 <ForecastMetric label="Makkink" value={`${formatNumber(day.etoMakkinkMm)} mm`} />
+                <ForecastMetric label="Jensen-Haise" value={`${formatNumber(day.etoJensenHaiseMm)} mm`} />
               </dl>
             </details>
           </article>

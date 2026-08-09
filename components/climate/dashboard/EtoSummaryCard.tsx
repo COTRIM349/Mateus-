@@ -94,7 +94,7 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-start sm:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Evapotranspiração de referência</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Sete métodos exibidos separadamente</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Oito métodos exibidos separadamente</p>
         </div>
         <span className="w-fit rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
           {eto.quality === "model_unvalidated" ? "Estimativa não validada" : "Aguardando dados"}
@@ -147,6 +147,11 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
             label="Makkink"
             value={eto.makkink.todayMm}
             note="Temperatura e radiação diária · coeficiente 0,61."
+          />
+          <DiagnosticMethod
+            label="Jensen-Haise"
+            value={eto.jensenHaise.todayMm}
+            note="Forma simplificada · temperatura e radiação diária."
           />
         </div>
 

@@ -19,6 +19,7 @@ import { fetchNasaPowerTemperatureNormal } from "@/modules/weather/providers/nas
 import { calculateReferenceEtoAsceEwri } from "@/modules/weather/calculations/referenceEtoAsceEwri";
 import { calculateReferenceEtoBlaneyCriddle } from "@/modules/weather/calculations/referenceEtoBlaneyCriddle";
 import { calculateReferenceEtoHargreavesSamani } from "@/modules/weather/calculations/referenceEtoHargreavesSamani";
+import { calculateReferenceEtoJensenHaise } from "@/modules/weather/calculations/referenceEtoJensenHaise";
 import { calculateReferenceEtoMakkink } from "@/modules/weather/calculations/referenceEtoMakkink";
 import { calculateReferenceEtoPriestleyTaylor } from "@/modules/weather/calculations/referenceEtoPriestleyTaylor";
 import { calculateReferenceEtoThornthwaiteCamargo } from "@/modules/weather/calculations/referenceEtoThornthwaiteCamargo";
@@ -378,6 +379,12 @@ export async function GET(request: Request) {
       temperatureMaxC: input.temperatureMaxC,
     }).etoMmDay,
     makkink: calculateReferenceEtoMakkink(input).etoMmDay,
+    jensenHaise: calculateReferenceEtoJensenHaise({
+      temperatureMeanC: input.temperatureMeanC,
+      temperatureMinC: input.temperatureMinC,
+      temperatureMaxC: input.temperatureMaxC,
+      solarRadiationMjM2Day: input.solarRadiationMjM2Day,
+    }).etoMmDay,
   });
   const readingMethodValues = new Map(readings.map((reading) => {
     if (etoLatitude === null) return [reading, null] as const;
@@ -393,7 +400,7 @@ export async function GET(request: Request) {
       solarRadiationMjM2Day: reading.solar_radiation,
     }))] as const;
   }));
-  const buildCalculatedSummary = (method: "asceEwri" | "priestleyTaylor" | "thornthwaiteCamargo" | "blaneyCriddle" | "makkink") =>
+  const buildCalculatedSummary = (method: "asceEwri" | "priestleyTaylor" | "thornthwaiteCamargo" | "blaneyCriddle" | "makkink" | "jensenHaise") =>
     buildEtoSummary(readings.map((reading) => ({
       ...reading,
       et0_source: readingMethodValues.get(reading)?.[method] ?? null,
@@ -403,6 +410,7 @@ export async function GET(request: Request) {
   const etoThornthwaiteCamargo = buildCalculatedSummary("thornthwaiteCamargo");
   const etoBlaneyCriddle = buildCalculatedSummary("blaneyCriddle");
   const etoMakkink = buildCalculatedSummary("makkink");
+  const etoJensenHaise = buildCalculatedSummary("jensenHaise");
   const forecastMethodValues = new Map(forecasts.map((forecast) => {
     if (etoLatitude === null) return [forecast.id, null] as const;
     return [forecast.id, calculateFullMethods(dailyReferenceInput({
@@ -688,6 +696,12 @@ export async function GET(request: Request) {
         formulaVersion: "makkink-1957-c0.61-v1",
         sourceLabel: "Calculado pela Cotrim com temperatura, radiação solar diária e pressão estimada pela altitude",
       },
+      jensenHaise: {
+        ...etoJensenHaise,
+        method: "Jensen-Haise 1963",
+        formulaVersion: "jensen-haise-1963-simplified-v1",
+        sourceLabel: "Forma simplificada calculada pela Cotrim com temperatura média e radiação solar diária convertida em equivalente de água",
+      },
       comparison: {
         deltaTodayMm,
         deltaTodayPct,
@@ -726,6 +740,7 @@ export async function GET(request: Request) {
       etoThornthwaiteCamargoMm: forecastMethodValues.get(forecast.id)?.thornthwaiteCamargo ?? null,
       etoBlaneyCriddleMm: forecastMethodValues.get(forecast.id)?.blaneyCriddle ?? null,
       etoMakkinkMm: forecastMethodValues.get(forecast.id)?.makkink ?? null,
+      etoJensenHaiseMm: forecastMethodValues.get(forecast.id)?.jensenHaise ?? null,
       windSpeed2mMs: forecast.wind_speed,
     })),
     hourlyForecast: hourlyOpenMeteo.map((row) => ({
@@ -753,7 +768,7 @@ export async function GET(request: Request) {
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle e Makkink calculados pela Cotrim",
+      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle, Makkink e Jensen-Haise calculados pela Cotrim",
       "Blaney-Criddle é originalmente mensal; sua leitura diária é apenas comparativa. Makkink depende da radiação solar diária e não recebe valor quando essa entrada falta",
       "Thornthwaite-Camargo usa normal anual de temperatura NASA POWER; todos os métodos permanecem não validados por estação física local e bloqueados para uso operacional automático",
     ],

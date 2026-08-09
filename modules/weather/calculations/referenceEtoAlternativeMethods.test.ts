@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { calculateReferenceEtoAsceEwri } from "./referenceEtoAsceEwri";
 import { calculateReferenceEtoBlaneyCriddle } from "./referenceEtoBlaneyCriddle";
 import { calculateReferenceEtoFao56 } from "./referenceEtoFao56";
+import { calculateReferenceEtoJensenHaise } from "./referenceEtoJensenHaise";
 import { calculateReferenceEtoMakkink } from "./referenceEtoMakkink";
 import { calculateReferenceEtoPriestleyTaylor } from "./referenceEtoPriestleyTaylor";
 import { calculateReferenceEtoThornthwaiteCamargo, photoperiodHours } from "./referenceEtoThornthwaiteCamargo";
@@ -139,6 +140,34 @@ describe("Makkink 1957", () => {
   it("não converte radiação ausente em zero", () => {
     const result = calculateReferenceEtoMakkink({
       ...input,
+      solarRadiationMjM2Day: null,
+    });
+    expect(result.etoMmDay).toBeNull();
+    expect(result.missingFields).toContain("solarRadiationMjM2Day");
+  });
+});
+
+describe("Jensen-Haise 1963 simplificado", () => {
+  it("converte Rs em equivalente de água antes de aplicar o coeficiente térmico", () => {
+    const result = calculateReferenceEtoJensenHaise({
+      temperatureMeanC: input.temperatureMeanC,
+      temperatureMinC: input.temperatureMinC,
+      temperatureMaxC: input.temperatureMaxC,
+      solarRadiationMjM2Day: input.solarRadiationMjM2Day,
+    });
+    const radiationMm = (input.solarRadiationMjM2Day as number) * 0.408;
+    const expected = radiationMm * (0.025 * (input.temperatureMeanC as number) + 0.08);
+
+    expect(result.solarRadiationEquivalentMmDay).toBeCloseTo(radiationMm, 12);
+    expect(result.etoMmDay).toBeCloseTo(expected, 12);
+    expect(result.qualityStatus).toBe("estimated");
+  });
+
+  it("preserva ausência de radiação", () => {
+    const result = calculateReferenceEtoJensenHaise({
+      temperatureMeanC: input.temperatureMeanC,
+      temperatureMinC: input.temperatureMinC,
+      temperatureMaxC: input.temperatureMaxC,
       solarRadiationMjM2Day: null,
     });
     expect(result.etoMmDay).toBeNull();

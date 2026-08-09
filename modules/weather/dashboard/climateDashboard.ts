@@ -120,6 +120,11 @@ export interface ClimateDashboardResponse {
       formulaVersion: "makkink-1957-c0.61-v1";
       sourceLabel: string;
     };
+    jensenHaise: EtoSummary & {
+      method: "Jensen-Haise 1963";
+      formulaVersion: "jensen-haise-1963-simplified-v1";
+      sourceLabel: string;
+    };
     comparison: {
       deltaTodayMm: number | null;
       deltaTodayPct: number | null;
@@ -171,6 +176,7 @@ export interface ClimateDashboardResponse {
     etoThornthwaiteCamargoMm: number | null;
     etoBlaneyCriddleMm: number | null;
     etoMakkinkMm: number | null;
+    etoJensenHaiseMm: number | null;
     windSpeed2mMs: number | null;
   }>;
   hourlyForecast: Array<{
