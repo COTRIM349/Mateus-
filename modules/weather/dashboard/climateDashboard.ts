@@ -7,7 +7,7 @@ export interface ClimateReadingInput {
   wind_speed: number | null;
   solar_radiation: number | null;
   precipitation: number | null;
-  et0_calculated: number | null;
+  et0_source: number | null;
   imported_at: string | null;
 }
 
@@ -22,7 +22,7 @@ export interface ClimateForecastInput {
   solar_radiation: number | null;
   precipitation: number | null;
   precipitation_probability: number | null;
-  et0_calculated: number | null;
+  et0_source: number | null;
 }
 
 export interface EtoHistoryPoint {
@@ -66,7 +66,7 @@ export interface ClimateDashboardResponse {
   };
   eto: EtoSummary & {
     method: "FAO-56 Penman-Monteith";
-    quality: "estimated_model" | "observed_inputs" | "missing";
+    quality: "provider_model" | "missing";
     sourceLabel: string;
   };
   dailyForecast: Array<{
@@ -89,7 +89,6 @@ export interface ClimateDashboardResponse {
     relativeHumidityPct: number | null;
     precipitationMm: number | null;
     windSpeed2mMs: number | null;
-    etoMm: number | null;
     confidence: string;
   }>;
   status: {
@@ -102,10 +101,10 @@ export interface ClimateDashboardResponse {
     etoInputSources: number;
   };
   sourceHealth: Array<{
-    provider: "meteoblue" | "weatherapi" | "nasa_power" | "inmet";
+    provider: "open_meteo" | "meteoblue" | "weatherapi" | "met_norway" | "nasa_power" | "inmet";
     label: string;
     role: string;
-    status: "active" | "delayed" | "credential_required" | "unavailable";
+    status: "active" | "partial" | "delayed" | "credential_required" | "unavailable";
     updatedAt: string | null;
     message: string;
   }>;
@@ -201,24 +200,24 @@ export function buildEtoSummary(
     const start = addDays(today, -(days - 1));
     return latest
       .filter((reading) => reading.date >= start && reading.date <= today)
-      .map((reading) => reading.et0_calculated)
+      .map((reading) => reading.et0_source)
       .filter((value): value is number => value !== null && Number.isFinite(value));
   };
   const monthPrefix = today.slice(0, 7);
   const monthValues = latest
     .filter((reading) => reading.date.startsWith(monthPrefix) && reading.date <= today)
-    .map((reading) => reading.et0_calculated)
+    .map((reading) => reading.et0_source)
     .filter((value): value is number => value !== null && Number.isFinite(value));
 
   const history = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(today, index - 6);
-    const etoMm = byDate.get(date)?.et0_calculated ?? null;
+    const etoMm = byDate.get(date)?.et0_source ?? null;
     return { date, etoMm, quality: etoMm === null ? "missing" : "available" } as const;
   });
 
   return {
-    todayMm: byDate.get(today)?.et0_calculated ?? null,
-    yesterdayMm: byDate.get(addDays(today, -1))?.et0_calculated ?? null,
+    todayMm: byDate.get(today)?.et0_source ?? null,
+    yesterdayMm: byDate.get(addDays(today, -1))?.et0_source ?? null,
     average7dMm: average(valuesInRange(7)),
     average30dMm: average(valuesInRange(30)),
     monthTotalMm: monthValues.length > 0
@@ -234,7 +233,7 @@ export function selectLatestOfficialForecastPerDay(
 ): ClimateForecastInput[] {
   const byDate = new Map<string, ClimateForecastInput>();
   for (const row of rows) {
-    if (row.et0_calculated === null || !Number.isFinite(row.et0_calculated)) continue;
+    if (row.et0_source === null || !Number.isFinite(row.et0_source)) continue;
     const existing = byDate.get(row.target_date);
     if (!existing || row.issued_at > existing.issued_at) byDate.set(row.target_date, row);
   }

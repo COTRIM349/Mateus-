@@ -64,7 +64,9 @@ export async function ingestMeteoblueObservations(
         temp_mean: d.tempMean ?? (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : 0),
         humidity: d.humidity ?? 0,
         wind_speed: d.windSpeed ?? 0,
-        solar_radiation: 0,
+        // O pacote básico da Meteoblue não fornece radiação. Zero significaria
+        // uma medição real (noite/ausência de energia) e contaminaria auditorias.
+        solar_radiation: null,
         precipitation: d.precipitation ?? 0,
         sunshine: null,
         et0_source: null,

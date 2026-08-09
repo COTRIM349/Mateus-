@@ -50,12 +50,6 @@ interface ConsensusRow {
   surface_pressure_kpa: number | null;
 }
 
-interface EtoIntervalRow {
-  interval_start: string;
-  calculated_at: string;
-  eto_mm_30m: number | null;
-}
-
 interface ProviderConfigRow {
   provider: string;
   enabled: boolean;
@@ -91,25 +85,12 @@ function latestConsensusPerInterval(rows: ConsensusRow[]): ConsensusRow[] {
   );
 }
 
-function latestEtoPerInterval(rows: EtoIntervalRow[]): Map<string, number | null> {
-  const latest = new Map<string, EtoIntervalRow>();
-  for (const row of rows) {
-    const existing = latest.get(row.interval_start);
-    if (!existing || row.calculated_at > existing.calculated_at) {
-      latest.set(row.interval_start, row);
-    }
-  }
-  return new Map(
-    Array.from(latest.entries()).map(([interval, row]) => [interval, row.eto_mm_30m]),
-  );
-}
-
 function consensusLabel(confidence: string | null): string {
-  if (confidence === "high") return "Consenso alto";
-  if (confidence === "medium") return "Consenso moderado";
-  if (confidence === "low") return "Consenso baixo";
-  if (confidence === "disputed") return "Dados divergentes";
-  return "Consenso indisponível";
+  if (confidence === "high") return "Clima: consenso alto";
+  if (confidence === "medium") return "Clima: consenso moderado";
+  if (confidence === "low") return "Clima: consenso baixo";
+  if (confidence === "disputed") return "Clima: fontes divergentes";
+  return "Clima: consenso indisponível";
 }
 
 export async function GET(request: Request) {
@@ -195,13 +176,12 @@ export async function GET(request: Request) {
     runsResult,
     currentConsensusResult,
     hourlyConsensusResult,
-    hourlyEtoResult,
     publicObservationResults,
     nasaPowerReference,
   ] = await Promise.all([
     supabase
       .from("weather_readings")
-      .select("date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, et0_calculated, imported_at")
+      .select("date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, et0_source, imported_at")
       .eq("station_id", station.id)
       .gte("date", historyStart)
       .lte("date", today)
@@ -209,10 +189,10 @@ export async function GET(request: Request) {
       .order("imported_at", { ascending: false }),
     supabase
       .from("weather_forecasts")
-      .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_calculated")
+      .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source")
       .eq("station_id", station.id)
       .gte("target_date", today)
-      .not("et0_calculated", "is", null)
+      .not("et0_source", "is", null)
       .order("issued_at", { ascending: false })
       .limit(400),
     virtualStation
@@ -250,16 +230,6 @@ export async function GET(request: Request) {
           .order("interval_start", { ascending: true })
           .limit(300)
       : emptyResult,
-    virtualStation
-      ? supabase
-          .from("weather_eto_30m_shadow")
-          .select("interval_start, calculated_at, eto_mm_30m")
-          .eq("virtual_station_id", virtualStation.id)
-          .gte("interval_start", nowIso)
-          .lte("interval_start", next24hIso)
-          .order("calculated_at", { ascending: false })
-          .limit(300)
-      : emptyResult,
     publicObservationsPromise,
     nasaPowerPromise,
   ]);
@@ -271,7 +241,6 @@ export async function GET(request: Request) {
     runsResult.error,
     currentConsensusResult.error,
     hourlyConsensusResult.error,
-    hourlyEtoResult.error,
   ].find(Boolean);
   if (queryError) {
     return NextResponse.json({ error: queryError.message }, { status: 422 });
@@ -292,7 +261,6 @@ export async function GET(request: Request) {
   const hourlyConsensus = latestConsensusPerInterval(
     (hourlyConsensusResult.data ?? []) as ConsensusRow[],
   );
-  const hourlyEto = latestEtoPerInterval((hourlyEtoResult.data ?? []) as EtoIntervalRow[]);
   const providerConfigs = (providersResult.data ?? []) as ProviderConfigRow[];
   const latestRun = ((runsResult.data ?? [])[0] ?? null) as OrchestrationRunRow | null;
   const activeProviders = latestRun?.provider_results
@@ -346,6 +314,8 @@ export async function GET(request: Request) {
   const providerResult = (provider: string) => latestRun?.provider_results?.[provider] ?? null;
   const meteoblueResult = providerResult("meteoblue");
   const weatherApiResult = providerResult("weatherapi");
+  const openMeteoResult = providerResult("open_meteo");
+  const metNorwayResult = providerResult("met_norway");
   const inmetAvailable = publicReferences.find((reference) => reference.status === "available");
   const inmetStale = publicReferences.find((reference) => reference.status === "stale");
   const inmetNeedsToken = publicReferences.some((reference) => reference.status === "token_required");
@@ -355,17 +325,27 @@ export async function GET(request: Request) {
     .at(-1);
   const sourceHealth: ClimateDashboardResponse["sourceHealth"] = [
     {
+      provider: "open_meteo",
+      label: "Open-Meteo",
+      role: "Fonte oficial da ETo",
+      status: openMeteoResult?.status === "success" ? "active" : "unavailable",
+      updatedAt: openMeteoResult?.fetchedAt ?? latestRun?.finished_at ?? null,
+      message: openMeteoResult?.status === "success"
+        ? "ETo, radiação, pressão e demais variáveis recebidas"
+        : openMeteoResult?.error ?? "Fonte principal não respondeu no último ciclo",
+    },
+    {
       provider: "meteoblue",
       label: "Meteoblue",
-      role: "Previsão no ponto",
+      role: "Conferência parcial",
       status: meteoblueResult?.status === "success"
-        ? "active"
+        ? "partial"
         : process.env.METEOBLUE_API_KEY?.trim()
           ? "unavailable"
           : "credential_required",
       updatedAt: meteoblueResult?.fetchedAt ?? latestRun?.finished_at ?? null,
       message: meteoblueResult?.status === "success"
-        ? "Dados recebidos normalmente"
+        ? "Temperatura, umidade, vento e chuva; sem radiação e pressão"
         : process.env.METEOBLUE_API_KEY?.trim()
           ? meteoblueResult?.error ?? "Fonte não respondeu no último ciclo"
           : "Chave não configurada",
@@ -384,7 +364,17 @@ export async function GET(request: Request) {
         ? "Dados recebidos normalmente"
         : process.env.WEATHERAPI_API_KEY?.trim()
           ? weatherApiResult?.error ?? "Fonte não respondeu no último ciclo"
-          : "Falta cadastrar WEATHERAPI_API_KEY",
+          : "WEATHERAPI_API_KEY ausente no ambiente deste deploy",
+    },
+    {
+      provider: "met_norway",
+      label: "MET Norway",
+      role: "Conferência parcial",
+      status: metNorwayResult?.status === "success" ? "partial" : "unavailable",
+      updatedAt: metNorwayResult?.fetchedAt ?? latestRun?.finished_at ?? null,
+      message: metNorwayResult?.status === "success"
+        ? "Temperatura, umidade, vento e chuva; sem radiação e pressão"
+        : metNorwayResult?.error ?? "Fonte não respondeu no último ciclo",
     },
     {
       provider: "nasa_power",
@@ -446,8 +436,8 @@ export async function GET(request: Request) {
     eto: {
       ...eto,
       method: "FAO-56 Penman-Monteith",
-      quality: eto.todayMm === null ? "missing" : "estimated_model",
-      sourceLabel: "ETo estimada com variáveis do modelo no ponto da fazenda",
+      quality: eto.todayMm === null ? "missing" : "provider_model",
+      sourceLabel: "Valor original da API Open-Meteo · sem recálculo pela plataforma",
     },
     dailyForecast: forecasts.map((forecast) => ({
       id: forecast.id,
@@ -462,7 +452,7 @@ export async function GET(request: Request) {
       relativeHumidityPct: forecast.humidity,
       precipitationMm: forecast.precipitation,
       precipitationProbabilityPct: forecast.precipitation_probability,
-      etoMm: forecast.et0_calculated,
+      etoMm: forecast.et0_source,
       windSpeed2mMs: forecast.wind_speed,
     })),
     hourlyForecast: hourlyConsensus.map((row) => ({
@@ -472,7 +462,6 @@ export async function GET(request: Request) {
       relativeHumidityPct: row.relative_humidity_pct,
       precipitationMm: row.precipitation_mm,
       windSpeed2mMs: row.wind_speed_2m_ms,
-      etoMm: hourlyEto.get(row.interval_start) ?? null,
       confidence: row.confidence,
     })),
     status: {
@@ -480,7 +469,7 @@ export async function GET(request: Request) {
       activeSources: activeProviders.length,
       sourceNames: activeProviders,
       consensusLabel: consensusLabel(latestConfidence),
-      qualityLabel: "Estimativa por modelo no ponto da fazenda",
+      qualityLabel: "ETo oficial Open-Meteo · sem recálculo",
       updatedAt,
       etoInputSources: activeProviders.includes("open_meteo") ? 1 : 0,
     },
@@ -491,7 +480,7 @@ export async function GET(request: Request) {
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "ETo calculada internamente pelo método FAO-56 Penman-Monteith",
+      "ETo de referência fornecida pelo Open-Meteo, calculada pelo método FAO-56 Penman-Monteith; a plataforma não recalcula o valor exibido",
     ],
   };
 

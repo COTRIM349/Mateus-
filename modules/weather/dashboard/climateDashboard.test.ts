@@ -19,7 +19,7 @@ function reading(date: string, eto: number | null, importedAt = `${date}T20:00:0
     wind_speed: 2,
     solar_radiation: 20,
     precipitation: 0,
-    et0_calculated: eto,
+    et0_source: eto,
     imported_at: importedAt,
   };
 }
@@ -36,7 +36,7 @@ function forecast(overrides: Partial<ClimateForecastInput>): ClimateForecastInpu
     solar_radiation: 20,
     precipitation: 0,
     precipitation_probability: 10,
-    et0_calculated: 5,
+    et0_source: 5,
     ...overrides,
   };
 }
@@ -62,9 +62,9 @@ describe("climate dashboard data contract", () => {
 
   it("usa a emissao mais recente com ETo oficial e ignora ETo ausente", () => {
     const selected = selectLatestOfficialForecastPerDay([
-      forecast({ id: "old", issued_at: "2026-08-08T10:00:00Z", et0_calculated: 4.8 }),
-      forecast({ id: "missing", issued_at: "2026-08-08T13:00:00Z", et0_calculated: null }),
-      forecast({ id: "new", issued_at: "2026-08-08T12:00:00Z", et0_calculated: 5.2 }),
+      forecast({ id: "old", issued_at: "2026-08-08T10:00:00Z", et0_source: 4.8 }),
+      forecast({ id: "missing", issued_at: "2026-08-08T13:00:00Z", et0_source: null }),
+      forecast({ id: "new", issued_at: "2026-08-08T12:00:00Z", et0_source: 5.2 }),
     ]);
 
     expect(selected.map((row) => row.id)).toEqual(["new"]);

@@ -92,7 +92,6 @@ function HourlyForecast({
             <th className="border-b border-gray-100 px-3 py-3 dark:border-white/[0.06]">Temperatura</th>
             <th className="border-b border-gray-100 px-3 py-3 dark:border-white/[0.06]">Umidade</th>
             <th className="border-b border-gray-100 px-3 py-3 dark:border-white/[0.06]">Chuva</th>
-            <th className="border-b border-gray-100 px-3 py-3 dark:border-white/[0.06]">ETo 30 min</th>
             <th className="border-b border-gray-100 px-3 py-3 dark:border-white/[0.06]">Vento</th>
           </tr>
         </thead>
@@ -109,7 +108,6 @@ function HourlyForecast({
               <td className="border-b border-gray-50 px-3 py-3 font-semibold tabular-nums dark:border-white/[0.04]">{formatNumber(hour.temperatureC)}°C</td>
               <td className="border-b border-gray-50 px-3 py-3 tabular-nums dark:border-white/[0.04]">{formatNumber(hour.relativeHumidityPct, 0)}%</td>
               <td className="border-b border-gray-50 px-3 py-3 tabular-nums text-blue-600 dark:border-white/[0.04] dark:text-blue-400">{formatNumber(hour.precipitationMm)} mm</td>
-              <td className="border-b border-gray-50 px-3 py-3 font-bold tabular-nums text-brand-700 dark:border-white/[0.04] dark:text-brand-400">{formatNumber(hour.etoMm, 2)} mm</td>
               <td className="border-b border-gray-50 px-3 py-3 tabular-nums dark:border-white/[0.04]">{formatNumber(hour.windSpeed2mMs)} m/s</td>
             </tr>
           ))}
@@ -145,7 +143,7 @@ export function ClimateForecastPanel({
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Previsão</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Meteorologia e ETo calculada para os próximos períodos</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Previsão diária e ETo fornecidas pelo Open-Meteo</p>
         </div>
         <div className="flex w-fit rounded-xl bg-gray-100 p-1 dark:bg-white/[0.05]" aria-label="Intervalo da previsão">
           {(["daily", "hourly"] as const).map((item) => (

@@ -3,6 +3,7 @@ import { formatRelativeUpdate } from "./climateFormat";
 
 const STATUS_LABELS: Record<ClimateDashboardResponse["sourceHealth"][number]["status"], string> = {
   active: "Ativa",
+  partial: "Parcial",
   delayed: "Atrasada",
   credential_required: "Falta credencial",
   unavailable: "Indisponível",
@@ -10,6 +11,7 @@ const STATUS_LABELS: Record<ClimateDashboardResponse["sourceHealth"][number]["st
 
 function statusClasses(status: ClimateDashboardResponse["sourceHealth"][number]["status"]): string {
   if (status === "active") return "bg-emerald-500";
+  if (status === "partial") return "bg-sky-500";
   if (status === "delayed") return "bg-amber-500";
   if (status === "credential_required") return "bg-orange-500";
   return "bg-gray-300 dark:bg-gray-600";
@@ -30,7 +32,7 @@ export function ClimateSourceHealth({
           <p className="text-[10px] text-graphite-400 dark:text-gray-500">Cada fonte tem uma função; referências externas não alteram a ETo.</p>
         </div>
       </div>
-      <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         {sources.map((source) => (
           <div key={source.provider} className="rounded-xl border border-gray-100 bg-white px-3 py-2.5 shadow-sm dark:border-white/[0.06] dark:bg-graphite-800">
             <div className="flex items-center justify-between gap-2">
