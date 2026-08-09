@@ -15,7 +15,12 @@ import {
 } from "@/modules/weather/dashboard/climateDashboard";
 import { fetchLatestInmetObservation } from "@/modules/weather/providers/inmetPublicObservation";
 import { fetchLatestNasaPowerDaily } from "@/modules/weather/providers/nasaPowerDaily";
+import { fetchNasaPowerTemperatureNormal } from "@/modules/weather/providers/nasaPowerClimatology";
+import { calculateReferenceEtoAsceEwri } from "@/modules/weather/calculations/referenceEtoAsceEwri";
 import { calculateReferenceEtoHargreavesSamani } from "@/modules/weather/calculations/referenceEtoHargreavesSamani";
+import { calculateReferenceEtoPriestleyTaylor } from "@/modules/weather/calculations/referenceEtoPriestleyTaylor";
+import { calculateReferenceEtoThornthwaiteCamargo } from "@/modules/weather/calculations/referenceEtoThornthwaiteCamargo";
+import type { ReferenceEtoInput } from "@/modules/weather/calculations/referenceEtoTypes";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -99,6 +104,35 @@ function consensusLabel(confidence: string | null): string {
   return "Comparação indisponível";
 }
 
+function dailyReferenceInput(input: {
+  date: string;
+  latitude: number;
+  elevationM: number | null;
+  temperatureMinC: number | null;
+  temperatureMaxC: number | null;
+  temperatureMeanC: number | null;
+  relativeHumidityMeanPct: number | null;
+  windSpeed2mMs: number | null;
+  solarRadiationMjM2Day: number | null;
+}): ReferenceEtoInput {
+  return {
+    date: input.date,
+    latitude: input.latitude,
+    elevationM: input.elevationM,
+    temperatureMinC: input.temperatureMinC,
+    temperatureMaxC: input.temperatureMaxC,
+    temperatureMeanC: input.temperatureMeanC,
+    relativeHumidityMinPct: null,
+    relativeHumidityMaxPct: null,
+    relativeHumidityMeanPct: input.relativeHumidityMeanPct,
+    actualVapourPressureKpa: null,
+    windSpeedMs: input.windSpeed2mMs,
+    windMeasurementHeightM: 2,
+    solarRadiationMjM2Day: input.solarRadiationMjM2Day,
+    surfacePressureKpa: null,
+  };
+}
+
 export async function GET(request: Request) {
   const supabase = createClient();
   const { data: authData, error: authError } = await supabase.auth.getUser();
@@ -173,6 +207,21 @@ export async function GET(request: Request) {
         timezone,
       }, { now, timeoutMs: 8_000 })
     : Promise.resolve(null);
+  const nasaPowerClimatologyPromise = virtualStation
+    ? fetchNasaPowerTemperatureNormal({
+        id: virtualStation.id,
+        name: "Ponto da fazenda",
+        latitude: virtualStation.latitude,
+        longitude: virtualStation.longitude,
+        elevationM: virtualStation.elevation_m,
+        timezone,
+      }, { timeoutMs: 8_000 })
+    : Promise.resolve({
+        status: "unavailable" as const,
+        annualMeanTemperatureC: null,
+        sourceLabel: "Normal climatológica NASA POWER T2M",
+        message: "Coordenadas da estação virtual indisponíveis",
+      });
 
   const emptyResult = Promise.resolve({ data: [], error: null });
   const [
@@ -185,6 +234,7 @@ export async function GET(request: Request) {
     hourlyOpenMeteoResult,
     publicObservationResults,
     nasaPowerReference,
+    nasaPowerClimatology,
   ] = await Promise.all([
     supabase
       .from("weather_readings")
@@ -251,6 +301,7 @@ export async function GET(request: Request) {
       : emptyResult,
     publicObservationsPromise,
     nasaPowerPromise,
+    nasaPowerClimatologyPromise,
   ]);
 
   const queryError = [
@@ -272,6 +323,7 @@ export async function GET(request: Request) {
   );
   const eto = buildEtoSummary(readings, today);
   const etoLatitude = virtualStation?.latitude ?? station.latitude;
+  const etoElevationM = virtualStation?.elevation_m ?? station.altitude;
   const hargreavesValue = (
     date: string,
     temperatureMinC: number | null,
@@ -306,6 +358,53 @@ export async function GET(request: Request) {
       ),
     ]),
   );
+  const calculateFullMethods = (input: ReferenceEtoInput) => ({
+    asceEwri: calculateReferenceEtoAsceEwri(input).etoMmDay,
+    priestleyTaylor: calculateReferenceEtoPriestleyTaylor(input).etoMmDay,
+    thornthwaiteCamargo: calculateReferenceEtoThornthwaiteCamargo({
+      date: input.date,
+      latitude: input.latitude,
+      temperatureMinC: input.temperatureMinC,
+      temperatureMaxC: input.temperatureMaxC,
+      climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
+    }).etoMmDay,
+  });
+  const readingMethodValues = new Map(readings.map((reading) => {
+    if (etoLatitude === null) return [reading, null] as const;
+    return [reading, calculateFullMethods(dailyReferenceInput({
+      date: reading.date,
+      latitude: etoLatitude,
+      elevationM: etoElevationM,
+      temperatureMinC: reading.temp_min,
+      temperatureMaxC: reading.temp_max,
+      temperatureMeanC: reading.temp_mean,
+      relativeHumidityMeanPct: reading.humidity,
+      windSpeed2mMs: reading.wind_speed,
+      solarRadiationMjM2Day: reading.solar_radiation,
+    }))] as const;
+  }));
+  const buildCalculatedSummary = (method: "asceEwri" | "priestleyTaylor" | "thornthwaiteCamargo") =>
+    buildEtoSummary(readings.map((reading) => ({
+      ...reading,
+      et0_source: readingMethodValues.get(reading)?.[method] ?? null,
+    })), today);
+  const etoAsceEwri = buildCalculatedSummary("asceEwri");
+  const etoPriestleyTaylor = buildCalculatedSummary("priestleyTaylor");
+  const etoThornthwaiteCamargo = buildCalculatedSummary("thornthwaiteCamargo");
+  const forecastMethodValues = new Map(forecasts.map((forecast) => {
+    if (etoLatitude === null) return [forecast.id, null] as const;
+    return [forecast.id, calculateFullMethods(dailyReferenceInput({
+      date: forecast.target_date,
+      latitude: etoLatitude,
+      elevationM: etoElevationM,
+      temperatureMinC: forecast.temp_min,
+      temperatureMaxC: forecast.temp_max,
+      temperatureMeanC: null,
+      relativeHumidityMeanPct: forecast.humidity,
+      windSpeed2mMs: forecast.wind_speed,
+      solarRadiationMjM2Day: forecast.solar_radiation,
+    }))] as const;
+  }));
   const deltaTodayMm = eto.todayMm !== null && etoHargreavesSamani.todayMm !== null
     ? etoHargreavesSamani.todayMm - eto.todayMm
     : null;
@@ -545,6 +644,26 @@ export async function GET(request: Request) {
         formulaVersion: "hs-1985-v1",
         sourceLabel: "Calculado pela Cotrim com Tmin/Tmax do Open-Meteo, data e latitude da fazenda",
       },
+      asceEwri: {
+        ...etoAsceEwri,
+        method: "ASCE-EWRI ETos 2005",
+        formulaVersion: "asce-ewri-2005-etos-daily-v1",
+        sourceLabel: "ETos diária para superfície curta, calculada pela Cotrim com os dados diários do Open-Meteo",
+      },
+      priestleyTaylor: {
+        ...etoPriestleyTaylor,
+        method: "Priestley-Taylor 1972",
+        formulaVersion: "pt-1972-alpha-1.26-v1",
+        sourceLabel: "Calculado pela Cotrim com saldo de radiação FAO-56 e α=1,26",
+      },
+      thornthwaiteCamargo: {
+        ...etoThornthwaiteCamargo,
+        method: "Thornthwaite-Camargo 1999",
+        formulaVersion: "thornthwaite-camargo-1999-b0.36-v1",
+        sourceLabel: `${nasaPowerClimatology.sourceLabel}; Tmin/Tmax do Open-Meteo`,
+        climatologicalAnnualMeanTemperatureC: nasaPowerClimatology.annualMeanTemperatureC,
+        climatologyStatus: nasaPowerClimatology.status,
+      },
       comparison: {
         deltaTodayMm,
         deltaTodayPct,
@@ -578,6 +697,9 @@ export async function GET(request: Request) {
       precipitationProbabilityPct: forecast.precipitation_probability,
       etoMm: forecast.et0_source,
       etoHargreavesSamaniMm: hargreavesForecastById.get(forecast.id) ?? null,
+      etoAsceEwriMm: forecastMethodValues.get(forecast.id)?.asceEwri ?? null,
+      etoPriestleyTaylorMm: forecastMethodValues.get(forecast.id)?.priestleyTaylor ?? null,
+      etoThornthwaiteCamargoMm: forecastMethodValues.get(forecast.id)?.thornthwaiteCamargo ?? null,
       windSpeed2mMs: forecast.wind_speed,
     })),
     hourlyForecast: hourlyOpenMeteo.map((row) => ({
@@ -605,7 +727,8 @@ export async function GET(request: Request) {
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "ETo Penman-Monteith fornecida pelo Open-Meteo e ETo Hargreaves-Samani calculada separadamente pela Cotrim; ambas não validadas por estação física local e bloqueadas para uso operacional automático",
+      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor e Thornthwaite-Camargo calculados pela Cotrim",
+      "Thornthwaite-Camargo usa normal anual de temperatura NASA POWER; todos os métodos permanecem não validados por estação física local e bloqueados para uso operacional automático",
     ],
   };
 

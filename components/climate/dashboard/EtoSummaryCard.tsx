@@ -66,13 +66,35 @@ function SummaryMetric({ label, value }: { label: string; value: number | null }
   );
 }
 
+function DiagnosticMethod({
+  label,
+  value,
+  note,
+}: {
+  label: string;
+  value: number | null;
+  note: string;
+}) {
+  return (
+    <div className="rounded-xl border border-gray-100 px-3 py-2.5 dark:border-white/[0.06]">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[10px] font-bold text-graphite-700 dark:text-gray-200">{label}</p>
+        <p className="shrink-0 text-[13px] font-extrabold tabular-nums text-graphite-900 dark:text-white">
+          {formatNumber(value)} <span className="text-[9px] font-medium text-graphite-400">mm</span>
+        </p>
+      </div>
+      <p className="mt-1 text-[9px] leading-relaxed text-graphite-400 dark:text-gray-500">{note}</p>
+    </div>
+  );
+}
+
 export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }) {
   return (
     <Card className="h-full overflow-hidden p-0">
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-start sm:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Evapotranspiração de referência</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Comparação diária entre dois métodos</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Cinco métodos exibidos separadamente</p>
         </div>
         <span className="w-fit rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
           {eto.quality === "model_unvalidated" ? "Estimativa não validada" : "Aguardando dados"}
@@ -98,13 +120,33 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
           {eto.comparison.deltaTodayPct === null ? "" : ` (${eto.comparison.deltaTodayPct > 0 ? "+" : ""}${formatNumber(eto.comparison.deltaTodayPct, 1)}%)`}
         </p>
 
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          <DiagnosticMethod
+            label="ASCE-EWRI ETos"
+            value={eto.asceEwri.todayMm}
+            note="Superfície curta; no passo diário é alinhado ao FAO-56."
+          />
+          <DiagnosticMethod
+            label="Priestley-Taylor"
+            value={eto.priestleyTaylor.todayMm}
+            note="Saldo de radiação calculado · α 1,26."
+          />
+          <DiagnosticMethod
+            label="Thornthwaite-Camargo"
+            value={eto.thornthwaiteCamargo.todayMm}
+            note={eto.thornthwaiteCamargo.climatologyStatus === "available"
+              ? `Normal anual NASA POWER: ${formatNumber(eto.thornthwaiteCamargo.climatologicalAnnualMeanTemperatureC)}°C.`
+              : "Aguardando normal anual NASA POWER; sem valor inventado."}
+          />
+        </div>
+
         <div className="mt-4 rounded-2xl bg-brand-50/50 p-3 dark:bg-brand-900/10">
           <EtoSparkline penmanMonteith={eto.history} hargreavesSamani={eto.hargreavesSamani.history} />
           <div className="mt-2 flex justify-center gap-4 text-[10px] font-semibold text-graphite-500 dark:text-gray-400"><span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-emerald-500" />PM FAO-56</span><span><span className="mr-1 inline-block h-2 w-2 rounded-full bg-amber-500" />Hargreaves-Samani</span></div>
         </div>
 
         <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-semibold leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-          Referência meteorológica para acompanhamento. Não usar isoladamente para definir lâmina de irrigação.
+          Comparação diagnóstica. Nenhum método entra automaticamente em irrigação ou balanço hídrico.
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-x-5 border-t border-gray-100 pt-5 dark:border-white/[0.06]">

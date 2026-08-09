@@ -93,6 +93,23 @@ export interface ClimateDashboardResponse {
       formulaVersion: "hs-1985-v1";
       sourceLabel: string;
     };
+    asceEwri: EtoSummary & {
+      method: "ASCE-EWRI ETos 2005";
+      formulaVersion: "asce-ewri-2005-etos-daily-v1";
+      sourceLabel: string;
+    };
+    priestleyTaylor: EtoSummary & {
+      method: "Priestley-Taylor 1972";
+      formulaVersion: "pt-1972-alpha-1.26-v1";
+      sourceLabel: string;
+    };
+    thornthwaiteCamargo: EtoSummary & {
+      method: "Thornthwaite-Camargo 1999";
+      formulaVersion: "thornthwaite-camargo-1999-b0.36-v1";
+      sourceLabel: string;
+      climatologicalAnnualMeanTemperatureC: number | null;
+      climatologyStatus: "available" | "unavailable";
+    };
     comparison: {
       deltaTodayMm: number | null;
       deltaTodayPct: number | null;
@@ -139,6 +156,9 @@ export interface ClimateDashboardResponse {
     precipitationProbabilityPct: number | null;
     etoMm: number | null;
     etoHargreavesSamaniMm: number | null;
+    etoAsceEwriMm: number | null;
+    etoPriestleyTaylorMm: number | null;
+    etoThornthwaiteCamargoMm: number | null;
     windSpeed2mMs: number | null;
   }>;
   hourlyForecast: Array<{

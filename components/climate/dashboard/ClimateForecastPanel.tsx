@@ -51,6 +51,16 @@ function DailyForecast({
               <ForecastMetric label="ETo HS" value={`${formatNumber(day.etoHargreavesSamaniMm)} mm`} tone="amber" />
               <ForecastMetric label="Vento" value={`${formatNumber(day.windSpeed2mMs)} m/s`} />
             </dl>
+            <details className="mt-3 border-t border-gray-100 pt-2 dark:border-white/[0.06]">
+              <summary className="cursor-pointer text-[10px] font-bold text-graphite-500 dark:text-gray-400">
+                Outros métodos de ETo
+              </summary>
+              <dl className="mt-2 space-y-1.5 text-[10px]">
+                <ForecastMetric label="ASCE ETos" value={`${formatNumber(day.etoAsceEwriMm)} mm`} />
+                <ForecastMetric label="Priestley-Taylor" value={`${formatNumber(day.etoPriestleyTaylorMm)} mm`} />
+                <ForecastMetric label="Thornthwaite-Camargo" value={`${formatNumber(day.etoThornthwaiteCamargoMm)} mm`} />
+              </dl>
+            </details>
           </article>
         );
       })}
