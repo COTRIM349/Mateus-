@@ -82,11 +82,21 @@ export interface ClimateDashboardResponse {
     solarRadiationDailyMjM2: number | null;
     surfacePressureKpa: number | null;
     etoTodayMm: number | null;
+    etoHargreavesSamaniTodayMm: number | null;
   };
   eto: EtoSummary & {
     method: "FAO-56 Penman-Monteith";
     quality: "model_unvalidated" | "missing";
     sourceLabel: string;
+    hargreavesSamani: EtoSummary & {
+      method: "Hargreaves-Samani 1985";
+      formulaVersion: "hs-1985-v1";
+      sourceLabel: string;
+    };
+    comparison: {
+      deltaTodayMm: number | null;
+      deltaTodayPct: number | null;
+    };
   };
   validation: {
     mode: "validation";
@@ -128,6 +138,7 @@ export interface ClimateDashboardResponse {
     precipitationMm: number | null;
     precipitationProbabilityPct: number | null;
     etoMm: number | null;
+    etoHargreavesSamaniMm: number | null;
     windSpeed2mMs: number | null;
   }>;
   hourlyForecast: Array<{
@@ -281,7 +292,6 @@ export function selectLatestOfficialForecastPerDay(
 ): ClimateForecastInput[] {
   const byDate = new Map<string, ClimateForecastInput>();
   for (const row of rows) {
-    if (row.et0_source === null || !Number.isFinite(row.et0_source)) continue;
     const existing = byDate.get(row.target_date);
     if (!existing || row.issued_at > existing.issued_at) byDate.set(row.target_date, row);
   }

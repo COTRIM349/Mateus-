@@ -79,14 +79,14 @@ describe("climate dashboard data contract", () => {
     });
   });
 
-  it("usa a emissão mais recente com ETo de referência e ignora ETo ausente", () => {
+  it("usa a emissão meteorológica mais recente mesmo quando a ETo do provedor está ausente", () => {
     const selected = selectLatestOfficialForecastPerDay([
       forecast({ id: "old", issued_at: "2026-08-08T10:00:00Z", et0_source: 4.8 }),
       forecast({ id: "missing", issued_at: "2026-08-08T13:00:00Z", et0_source: null }),
       forecast({ id: "new", issued_at: "2026-08-08T12:00:00Z", et0_source: 5.2 }),
     ]);
 
-    expect(selected.map((row) => row.id)).toEqual(["new"]);
+    expect(selected.map((row) => row.id)).toEqual(["missing"]);
   });
 
   it("converte direcao do vento para quadrante brasileiro", () => {

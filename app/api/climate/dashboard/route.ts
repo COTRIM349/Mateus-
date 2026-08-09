@@ -15,6 +15,7 @@ import {
 } from "@/modules/weather/dashboard/climateDashboard";
 import { fetchLatestInmetObservation } from "@/modules/weather/providers/inmetPublicObservation";
 import { fetchLatestNasaPowerDaily } from "@/modules/weather/providers/nasaPowerDaily";
+import { calculateReferenceEtoHargreavesSamani } from "@/modules/weather/calculations/referenceEtoHargreavesSamani";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -198,7 +199,6 @@ export async function GET(request: Request) {
       .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source")
       .eq("station_id", station.id)
       .gte("target_date", today)
-      .not("et0_source", "is", null)
       .order("issued_at", { ascending: false })
       .limit(400),
     virtualStation
@@ -271,6 +271,47 @@ export async function GET(request: Request) {
     (forecastsResult.data ?? []) as ClimateForecastInput[],
   );
   const eto = buildEtoSummary(readings, today);
+  const etoLatitude = virtualStation?.latitude ?? station.latitude;
+  const hargreavesValue = (
+    date: string,
+    temperatureMinC: number | null,
+    temperatureMaxC: number | null,
+  ): number | null => {
+    if (etoLatitude === null) return null;
+    return calculateReferenceEtoHargreavesSamani({
+      date,
+      latitude: etoLatitude,
+      temperatureMinC,
+      temperatureMaxC,
+    }).etoMmDay;
+  };
+  const etoHargreavesSamani = buildEtoSummary(
+    readings.map((reading) => ({
+      ...reading,
+      et0_source: hargreavesValue(
+        reading.date,
+        reading.temp_min,
+        reading.temp_max,
+      ),
+    })),
+    today,
+  );
+  const hargreavesForecastById = new Map(
+    forecasts.map((forecast) => [
+      forecast.id,
+      hargreavesValue(
+        forecast.target_date,
+        forecast.temp_min,
+        forecast.temp_max,
+      ),
+    ]),
+  );
+  const deltaTodayMm = eto.todayMm !== null && etoHargreavesSamani.todayMm !== null
+    ? etoHargreavesSamani.todayMm - eto.todayMm
+    : null;
+  const deltaTodayPct = deltaTodayMm !== null && eto.todayMm !== null && eto.todayMm !== 0
+    ? (deltaTodayMm / eto.todayMm) * 100
+    : null;
   const todayReading = readings
     .filter((reading) => reading.date === today)
     .sort((a, b) => (b.imported_at ?? "").localeCompare(a.imported_at ?? ""))[0];
@@ -489,12 +530,25 @@ export async function GET(request: Request) {
       solarRadiationDailyMjM2: todayReading?.solar_radiation ?? null,
       surfacePressureKpa: openMeteoCurrent?.surface_pressure_kpa ?? null,
       etoTodayMm: eto.todayMm,
+      etoHargreavesSamaniTodayMm: etoHargreavesSamani.todayMm,
     },
     eto: {
       ...eto,
       method: "FAO-56 Penman-Monteith",
-      quality: eto.todayMm === null ? "missing" : "model_unvalidated",
-      sourceLabel: "Estimativa do modelo Open-Meteo · sem validação por estação física local",
+      quality: eto.todayMm === null && etoHargreavesSamani.todayMm === null
+        ? "missing"
+        : "model_unvalidated",
+      sourceLabel: "Penman-Monteith recebido do Open-Meteo",
+      hargreavesSamani: {
+        ...etoHargreavesSamani,
+        method: "Hargreaves-Samani 1985",
+        formulaVersion: "hs-1985-v1",
+        sourceLabel: "Calculado pela Cotrim com Tmin/Tmax do Open-Meteo, data e latitude da fazenda",
+      },
+      comparison: {
+        deltaTodayMm,
+        deltaTodayPct,
+      },
     },
     validation: {
       mode: "validation",
@@ -523,6 +577,7 @@ export async function GET(request: Request) {
       precipitationMm: forecast.precipitation,
       precipitationProbabilityPct: forecast.precipitation_probability,
       etoMm: forecast.et0_source,
+      etoHargreavesSamaniMm: hargreavesForecastById.get(forecast.id) ?? null,
       windSpeed2mMs: forecast.wind_speed,
     })),
     hourlyForecast: hourlyOpenMeteo.map((row) => ({
@@ -550,7 +605,7 @@ export async function GET(request: Request) {
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "ETo estimada pelo modelo Open-Meteo pelo método FAO-56 Penman-Monteith; não validada por estação física local e bloqueada para uso operacional automático",
+      "ETo Penman-Monteith fornecida pelo Open-Meteo e ETo Hargreaves-Samani calculada separadamente pela Cotrim; ambas não validadas por estação física local e bloqueadas para uso operacional automático",
     ],
   };
 

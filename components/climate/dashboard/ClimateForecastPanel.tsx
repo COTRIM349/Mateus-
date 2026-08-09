@@ -47,7 +47,8 @@ function DailyForecast({
               <ForecastMetric label="Umidade" value={`${formatNumber(day.relativeHumidityPct, 0)}%`} />
               <ForecastMetric label="Chuva" value={`${formatNumber(day.precipitationMm)} mm`} tone="blue" />
               <ForecastMetric label="Probabilidade" value={`${formatNumber(day.precipitationProbabilityPct, 0)}%`} />
-              <ForecastMetric label="ETo" value={`${formatNumber(day.etoMm)} mm`} tone="green" />
+              <ForecastMetric label="ETo PM" value={`${formatNumber(day.etoMm)} mm`} tone="green" />
+              <ForecastMetric label="ETo HS" value={`${formatNumber(day.etoHargreavesSamaniMm)} mm`} tone="amber" />
               <ForecastMetric label="Vento" value={`${formatNumber(day.windSpeed2mMs)} m/s`} />
             </dl>
           </article>
@@ -57,11 +58,13 @@ function DailyForecast({
   );
 }
 
-function ForecastMetric({ label, value, tone }: { label: string; value: string; tone?: "blue" | "green" }) {
+function ForecastMetric({ label, value, tone }: { label: string; value: string; tone?: "blue" | "green" | "amber" }) {
   const valueColor = tone === "blue"
     ? "text-blue-600 dark:text-blue-400"
     : tone === "green"
       ? "text-brand-700 dark:text-brand-400"
+      : tone === "amber"
+        ? "text-amber-700 dark:text-amber-300"
       : "text-graphite-800 dark:text-gray-200";
   return (
     <div className="flex items-center justify-between gap-2">

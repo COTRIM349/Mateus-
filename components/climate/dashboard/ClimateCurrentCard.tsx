@@ -53,7 +53,8 @@ export function ClimateCurrentCard({
           <Metric label="Radiação agora" value={formatNumber(current.solarRadiationWm2, 0)} unit="W/m²" />
           <Metric label="Radiação no dia" value={formatNumber(current.solarRadiationDailyMjM2, 1)} unit="MJ/m²" />
           <Metric label="Pressão" value={formatNumber(current.surfacePressureKpa)} unit="kPa" />
-          <Metric label="ETo" value={formatNumber(current.etoTodayMm)} unit="mm" />
+          <Metric label="ETo PM" value={formatNumber(current.etoTodayMm)} unit="mm" />
+          <Metric label="ETo HS" value={formatNumber(current.etoHargreavesSamaniTodayMm)} unit="mm" />
         </div>
       </div>
     </Card>

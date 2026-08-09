@@ -10,6 +10,11 @@ export interface ClimateObservabilityProvider {
   lastQualityStatus: string | null;
   lastError: string | null;
   rowsInWindow: number;
+  requestLatitude: number | null;
+  requestLongitude: number | null;
+  responseLatitude: number | null;
+  responseLongitude: number | null;
+  coordinateDistanceKm: number | null;
 }
 
 export interface ClimateObservabilityRun {
@@ -87,6 +92,37 @@ function asStringArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
 }
 
+function asFiniteNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const number = typeof value === "number" ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+
+function coordinateDistanceKm(input: {
+  requestLatitude: number | null;
+  requestLongitude: number | null;
+  responseLatitude: number | null;
+  responseLongitude: number | null;
+}): number | null {
+  const { requestLatitude, requestLongitude, responseLatitude, responseLongitude } = input;
+  if (
+    requestLatitude === null
+    || requestLongitude === null
+    || responseLatitude === null
+    || responseLongitude === null
+  ) return null;
+
+  const toRadians = (value: number) => (value * Math.PI) / 180;
+  const latitudeDelta = toRadians(responseLatitude - requestLatitude);
+  const longitudeDelta = toRadians(responseLongitude - requestLongitude);
+  const haversine = Math.sin(latitudeDelta / 2) ** 2
+    + Math.cos(toRadians(requestLatitude))
+    * Math.cos(toRadians(responseLatitude))
+    * Math.sin(longitudeDelta / 2) ** 2;
+
+  return 2 * 6_371 * Math.asin(Math.sqrt(Math.min(1, haversine)));
+}
+
 export async function getClimateObservabilitySnapshot(
   supabase: SupabaseClient,
   input: { virtualStationId: string; hours?: number },
@@ -112,7 +148,7 @@ export async function getClimateObservabilitySnapshot(
 
   const { data: rawRows, error: rawError } = await supabase
     .from("weather_provider_payloads_raw")
-    .select("provider, fetched_at")
+    .select("provider, fetched_at, request_latitude, request_longitude, response_latitude, response_longitude")
     .eq("virtual_station_id", input.virtualStationId)
     .gte("fetched_at", since)
     .order("fetched_at", { ascending: false });
@@ -162,9 +198,24 @@ export async function getClimateObservabilitySnapshot(
     (providerConfig ?? []).map((row) => [row.provider as string, Boolean(row.enabled)]),
   );
 
-  const latestRaw = new Map<string, string>();
+  const latestRaw = new Map<string, {
+    fetchedAt: string;
+    requestLatitude: number | null;
+    requestLongitude: number | null;
+    responseLatitude: number | null;
+    responseLongitude: number | null;
+  }>();
   for (const row of rawRows ?? []) {
-    if (!latestRaw.has(row.provider as string)) latestRaw.set(row.provider as string, row.fetched_at as string);
+    const provider = row.provider as string;
+    if (!latestRaw.has(provider)) {
+      latestRaw.set(provider, {
+        fetchedAt: row.fetched_at as string,
+        requestLatitude: asFiniteNumber(row.request_latitude),
+        requestLongitude: asFiniteNumber(row.request_longitude),
+        responseLatitude: asFiniteNumber(row.response_latitude),
+        responseLongitude: asFiniteNumber(row.response_longitude),
+      });
+    }
   }
 
   const latestCandidate = new Map<string, { fetchedAt: string; qualityStatus: string | null }>();
@@ -183,14 +234,23 @@ export async function getClimateObservabilitySnapshot(
   const latestRunProviderResults = asObject(runsData?.[0]?.provider_results);
   const providers: ClimateObservabilityProvider[] = PROVIDERS.map((provider) => {
     const providerResult = asObject(latestRunProviderResults[provider]);
+    const raw = latestRaw.get(provider);
+    const coordinates = {
+      requestLatitude: raw?.requestLatitude ?? null,
+      requestLongitude: raw?.requestLongitude ?? null,
+      responseLatitude: raw?.responseLatitude ?? null,
+      responseLongitude: raw?.responseLongitude ?? null,
+    };
     return {
       provider,
       enabled: enabledMap.get(provider) ?? false,
-      lastFetchedAt: latestRaw.get(provider) ?? null,
+      lastFetchedAt: raw?.fetchedAt ?? null,
       lastCandidateAt: latestCandidate.get(provider)?.fetchedAt ?? null,
       lastQualityStatus: latestCandidate.get(provider)?.qualityStatus ?? null,
       lastError: typeof providerResult.error === "string" ? providerResult.error : null,
       rowsInWindow: candidateCount.get(provider) ?? 0,
+      ...coordinates,
+      coordinateDistanceKm: coordinateDistanceKm(coordinates),
     };
   });
 
