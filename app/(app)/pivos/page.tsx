@@ -17,9 +17,14 @@ import {
 import { useAuth } from "@/components/providers";
 import { useCrud } from "@/lib/hooks";
 import { PrerequisiteNotice } from "@/components/onboarding";
-import { PIVOT_STATUSES, PIVOT_TYPES, PIVOT_MANUFACTURERS } from "@/constants/brazil";
+import { PIVOT_TYPES, PIVOT_MANUFACTURERS } from "@/constants/brazil";
 import { createClient } from "@/lib/supabase/client";
 import { radiusFromArea } from "@/utils/geo";
+import {
+  calculatePivotAll,
+  checkTypicalRanges,
+  type PivotCalculationInput,
+} from "@/modules/irrigation/services/pivot-calculations";
 
 const MapPicker = dynamic(() => import("@/components/maps/MapPicker").then((mod) => mod.MapPicker), {
   ssr: false,
@@ -60,6 +65,7 @@ interface Pivot {
   max_operating_time: number | null;
   installed_power_kw: number | null;
   specific_consumption: number | null;
+  cuc: number | null;
   energy_cost: number | null;
   cost_per_mm: number | null;
   cost_per_hectare: number | null;
@@ -84,16 +90,9 @@ const TABS = [
   { id: "custos", label: "Custos" },
 ];
 
-const STATUS_COLORS: Record<string, string> = {
-  irrigando: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-  parado: "bg-gray-100 text-gray-600 dark:bg-gray-700/30 dark:text-gray-400",
-  manutencao: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  alerta: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-};
-
-const STATUS_LABELS: Record<string, string> = Object.fromEntries(
-  PIVOT_STATUSES.map((s) => [s.value, s.label])
-);
+// Pivô é EQUIPAMENTO — não tem "status" na área de cadastro. Status
+// operacional (irrigando/parado) é derivado da parcela ativa + operações
+// em tempo real, e é exibido em telas operacionais (Programação, Dashboard).
 
 // ── Main Page ──────────────────────────────────────────────────────────
 
@@ -114,7 +113,18 @@ export default function PivosPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [activeTab, setActiveTab] = useState("geral");
-  const [areaValue, setAreaValue] = useState(0);
+
+  // Campos técnicos controlados no parent para permitir auto-cálculo ao vivo
+  // (compartilhados entre TabCaracteristicas e TabCustos).
+  const [tech, setTech] = useState<TechFields>({
+    area: null, radius: null, flow: null, velocity: null,
+    fullTurnTime: null, depth100: null, pumpCv: null,
+    motorEff: 88, installedKw: null, cuc: 85, specificCons: null,
+  });
+  const [energyCost, setEnergyCost] = useState<number | null>(null);
+
+  const updateTech = <K extends keyof TechFields>(field: K, value: TechFields[K]) =>
+    setTech((prev) => ({ ...prev, [field]: value }));
 
   useEffect(() => {
     if (!activeFarmId) return;
@@ -149,7 +159,12 @@ export default function PivosPage() {
     setEditing(null);
     setActiveTab("geral");
     setFormError("");
-    setAreaValue(0);
+    setTech({
+      area: null, radius: null, flow: null, velocity: null,
+      fullTurnTime: null, depth100: null, pumpCv: null,
+      motorEff: 88, installedKw: null, cuc: 85, specificCons: null,
+    });
+    setEnergyCost(null);
     setModalOpen(true);
   };
 
@@ -157,7 +172,21 @@ export default function PivosPage() {
     setEditing(pivot);
     setActiveTab("geral");
     setFormError("");
-    setAreaValue(pivot.area);
+    setTech({
+      area: pivot.area,
+      radius: pivot.last_tower_radius,
+      flow: pivot.flow_rate,
+      velocity: pivot.speed_100_pct,
+      fullTurnTime: pivot.full_turn_time,
+      depth100: pivot.depth_100_pct,
+      pumpCv: pivot.pump_power,
+      motorEff: pivot.motor_efficiency != null ? pivot.motor_efficiency * 100 : 88,
+      installedKw: pivot.installed_power_kw,
+      // cuc pode vir da coluna nova; fallback para efficiency (backfill do 00025)
+      cuc: pivot.cuc != null ? pivot.cuc * 100 : (pivot.efficiency ? pivot.efficiency * 100 : 85),
+      specificCons: pivot.specific_consumption,
+    });
+    setEnergyCost(pivot.energy_cost);
     setModalOpen(true);
   };
 
@@ -177,20 +206,26 @@ export default function PivosPage() {
       return v ? Number(v) : null;
     };
 
-    const area = Number(fd.get("area")) || 0;
-    const inputRadius = numOrNull("radius");
-    const computedRadius = inputRadius || Math.round(radiusFromArea(area));
-
-    const efficiency = Number(fd.get("efficiency"));
-    if (efficiency < 0 || efficiency > 100) {
-      setFormError("Eficiência de irrigação deve estar entre 0 e 100%");
+    // Fonte da verdade: estado controlado (tech) para os campos técnicos;
+    // FormData para os demais (identificação, localização).
+    const area = tech.area ?? 0;
+    if (area <= 0) {
+      setFormError("Informe a área irrigada (aba Características).");
+      setActiveTab("caracteristicas");
       setSaving(false);
       return;
     }
 
-    const motorEfficiency = Number(fd.get("motor_efficiency"));
-    if (motorEfficiency < 0 || motorEfficiency > 100) {
-      setFormError("Eficiência do motor deve estar entre 0 e 100%");
+    if (tech.motorEff == null || tech.motorEff < 50 || tech.motorEff > 100) {
+      setFormError("Eficiência do motor deve estar entre 50 e 100%.");
+      setActiveTab("caracteristicas");
+      setSaving(false);
+      return;
+    }
+
+    if (tech.cuc == null || tech.cuc < 0 || tech.cuc > 100) {
+      setFormError("CUC deve estar entre 0 e 100%.");
+      setActiveTab("caracteristicas");
       setSaving(false);
       return;
     }
@@ -203,35 +238,41 @@ export default function PivosPage() {
       return;
     }
 
+    // Raio: manual > auto (do estado controlado ou hidden input do auto)
+    const radius = tech.radius ?? numOrNull("radius") ?? Math.round(radiusFromArea(area));
+
     const payload = {
       farm_id: activeFarmId!,
       name,
       code: (fd.get("code") as string) || null,
       module_id: (fd.get("module_id") as string) || null,
       culture_id: (fd.get("culture_id") as string) || null,
-      status: fd.get("status") as string,
       manufacturer: (fd.get("manufacturer") as string) || null,
       model: (fd.get("model") as string) || null,
       pivot_type: (fd.get("pivot_type") as string) || "central",
       area,
-      radius: computedRadius,
-      last_tower_radius: numOrNull("last_tower_radius"),
-      flow_rate: Number(fd.get("flow_rate")) || 0,
+      radius,
+      last_tower_radius: tech.radius,
+      flow_rate: tech.flow ?? 0,
       service_pressure: numOrNull("service_pressure"),
-      speed_100_pct: numOrNull("speed_100_pct"),
-      full_turn_time: numOrNull("full_turn_time"),
-      depth_100_pct: numOrNull("depth_100_pct"),
+      speed_100_pct: tech.velocity,
+      full_turn_time: tech.fullTurnTime ?? numOrNull("full_turn_time"),
+      depth_100_pct: tech.depth100 ?? numOrNull("depth_100_pct"),
       max_operating_time: numOrNull("max_operating_time"),
-      pump_power: Number(fd.get("pump_power")) || 0,
+      pump_power: tech.pumpCv ?? 0,
       installed_power_kw: numOrNull("installed_power_kw"),
-      motor_efficiency: Number(fd.get("motor_efficiency")) / 100,
-      efficiency: efficiency / 100,
+      motor_efficiency: tech.motorEff / 100,
+      // cuc é a fonte da verdade a partir de agora; mantemos efficiency
+      // preenchido também (backfill legado — Etapa 6 removerá).
+      cuc: tech.cuc / 100,
+      efficiency: tech.cuc / 100,
       specific_consumption: numOrNull("specific_consumption"),
       latitude: Number(fd.get("latitude")) || 0,
       longitude: Number(fd.get("longitude")) || 0,
-      energy_cost: numOrNull("energy_cost"),
+      energy_cost: energyCost,
       cost_per_mm: numOrNull("cost_per_mm"),
-      cost_per_hectare: numOrNull("cost_per_hectare"),
+      // cost_per_hectare NÃO é gravado aqui — vira campo derivado da parcela
+      // (Sprint 13, Etapa 5).
     };
 
     try {
@@ -274,12 +315,14 @@ export default function PivosPage() {
     { header: "Área (ha)", render: (r) => r.area?.toLocaleString("pt-BR"), align: "right" },
     { header: "Vazão (m³/h)", render: (r) => r.flow_rate?.toLocaleString("pt-BR"), align: "right" },
     {
-      header: "Status",
-      render: (r) => (
-        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${STATUS_COLORS[r.status] ?? ""}`}>
-          {STATUS_LABELS[r.status] ?? r.status}
-        </span>
-      ),
+      header: "Potência (CV)",
+      render: (r) => r.pump_power?.toLocaleString("pt-BR") ?? "—",
+      align: "right",
+    },
+    {
+      header: "CUC",
+      render: (r) => r.cuc != null ? `${(r.cuc * 100).toFixed(0)}%` : "—",
+      align: "right",
     },
     {
       header: "",
@@ -350,13 +393,13 @@ export default function PivosPage() {
               />
             </div>
             <div className={activeTab === "caracteristicas" ? "" : "hidden"}>
-              <TabCaracteristicas editing={editing} areaValue={areaValue} onAreaChange={setAreaValue} />
+              <TabCaracteristicas editing={editing} tech={tech} onChange={updateTech} />
             </div>
             <div className={activeTab === "localizacao" ? "" : "hidden"}>
-              <TabLocalizacao editing={editing} allPivots={activePivots} areaValue={areaValue} />
+              <TabLocalizacao editing={editing} allPivots={activePivots} areaValue={tech.area ?? 0} />
             </div>
             <div className={activeTab === "custos" ? "" : "hidden"}>
-              <TabCustos editing={editing} />
+              <TabCustos tech={tech} energyCost={energyCost} onEnergyCostChange={setEnergyCost} />
             </div>
           </div>
 
@@ -456,29 +499,102 @@ function TabGeral({
         options={cultures.map((c) => ({ value: c.id, label: c.name }))}
         defaultValue={editing?.culture_id ?? ""}
       />
-      <Select
-        id="status"
-        name="status"
-        label="Status"
-        options={[...PIVOT_STATUSES]}
-        required
-        defaultValue={editing?.status ?? "parado"}
-      />
     </div>
   );
 }
 
-// ── Tab: Características ───────────────────────────────────────────────
+// ── Tab: Características (auto-cálculos vivos via pivot-calculations) ─────
+
+interface TechFields {
+  area: number | null;
+  radius: number | null;
+  flow: number | null;
+  velocity: number | null;
+  fullTurnTime: number | null;
+  depth100: number | null;
+  pumpCv: number | null;
+  motorEff: number | null;   // 0-100 (fração exibida em %)
+  installedKw: number | null;
+  cuc: number | null;         // 0-100 (%)
+  specificCons: number | null;
+}
+
+/** Card de dado auto-calculado: valor destacado + fórmula visível abaixo. */
+function AutoField({
+  label,
+  value,
+  unit,
+  formula,
+  warning,
+}: {
+  label: string;
+  value: number | null;
+  unit: string;
+  formula: string;
+  warning?: string | null;
+}) {
+  const display = value == null || !Number.isFinite(value)
+    ? "—"
+    : value.toLocaleString("pt-BR", { maximumFractionDigits: 2 });
+  return (
+    <div className="rounded-xl border border-dashed border-brand-200 bg-brand-50/40 p-3 dark:border-brand-800/40 dark:bg-brand-900/10">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-brand-700 dark:text-brand-400">
+        {label}
+        <span className="ml-1 rounded bg-brand-100 px-1 py-0.5 text-[9px] normal-case tracking-normal text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">
+          auto
+        </span>
+      </div>
+      <p className="mt-1 text-lg font-bold tabular-nums text-graphite-900 dark:text-white">
+        {display}
+        <span className="ml-1 text-xs font-normal text-graphite-400 dark:text-gray-500">{unit}</span>
+      </p>
+      <p className="mt-1 font-mono text-[10px] text-graphite-400 dark:text-gray-500">{formula}</p>
+      {warning && (
+        <p className="mt-1 text-[10px] text-yellow-600 dark:text-yellow-400">⚠ {warning}</p>
+      )}
+    </div>
+  );
+}
 
 function TabCaracteristicas({
   editing,
-  areaValue,
-  onAreaChange,
+  tech,
+  onChange,
 }: {
   editing: Pivot | null;
-  areaValue: number;
-  onAreaChange: (v: number) => void;
+  tech: TechFields;
+  onChange: <K extends keyof TechFields>(field: K, value: TechFields[K]) => void;
 }) {
+  // Auto-cálculos derivados ao vivo do motor puro (Etapa 2).
+  const auto = useMemo(() => {
+    const input: PivotCalculationInput = {
+      areaHa: tech.area,
+      radiusM: tech.radius,
+      flowRateM3h: tech.flow,
+      velocity100PctMh: tech.velocity,
+      pumpPowerCv: tech.pumpCv,
+      motorEfficiency: tech.motorEff != null ? tech.motorEff / 100 : null,
+    };
+    return calculatePivotAll(input);
+  }, [tech.area, tech.radius, tech.flow, tech.velocity, tech.pumpCv, tech.motorEff]);
+
+  // Warnings de faixa típica (soft).
+  const warnings = useMemo(() => {
+    return checkTypicalRanges({
+      cuc: tech.cuc != null ? tech.cuc / 100 : null,
+      motorEfficiency: tech.motorEff != null ? tech.motorEff / 100 : null,
+      specificConsumptionKwhM3: auto.specificConsumptionKwhM3,
+      velocity100PctMh: tech.velocity,
+      fullTurnTimeH: auto.fullTurnTimeH,
+      depth100PctMm: auto.depth100PctMm,
+    });
+  }, [tech.cuc, tech.motorEff, tech.velocity, auto]);
+
+  const warningFor = (field: string) =>
+    warnings.find((w) => w.field === field)?.message ?? null;
+
+  const numInput = (val: number | null) => (val == null ? "" : String(val));
+
   return (
     <div className="space-y-8">
       <fieldset>
@@ -522,18 +638,27 @@ function TabCaracteristicas({
             type="number"
             step="any"
             required
-            value={areaValue || ""}
-            onChange={(e) => onAreaChange(Number(e.target.value) || 0)}
+            value={numInput(tech.area)}
+            onChange={(e) => onChange("area", e.target.value ? Number(e.target.value) : null)}
           />
-          <Input
-            id="last_tower_radius"
-            name="last_tower_radius"
-            label="Raio da última torre (m)"
-            type="number"
-            step="any"
-            placeholder="Auto-calculado se vazio"
-            defaultValue={editing?.last_tower_radius ?? ""}
-          />
+          {tech.radius != null ? (
+            <Input
+              id="last_tower_radius"
+              name="last_tower_radius"
+              label="Raio da última torre (m)"
+              type="number"
+              step="any"
+              value={numInput(tech.radius)}
+              onChange={(e) => onChange("radius", e.target.value ? Number(e.target.value) : null)}
+            />
+          ) : (
+            <AutoField
+              label="Raio da última torre"
+              value={auto.radiusM}
+              unit="m"
+              formula={`= √(${tech.area ?? "área"} × 10.000 / π)`}
+            />
+          )}
           <Input
             id="flow_rate"
             name="flow_rate"
@@ -541,7 +666,8 @@ function TabCaracteristicas({
             type="number"
             step="any"
             required
-            defaultValue={editing?.flow_rate}
+            value={numInput(tech.flow)}
+            onChange={(e) => onChange("flow", e.target.value ? Number(e.target.value) : null)}
           />
           <Input
             id="service_pressure"
@@ -552,6 +678,12 @@ function TabCaracteristicas({
             defaultValue={editing?.service_pressure ?? ""}
           />
         </div>
+        {tech.radius == null && (
+          <p className="mt-2 text-[11px] text-graphite-400 dark:text-gray-500">
+            Raio deixado em branco: calculado automaticamente a partir da área.
+            Digite um valor se quiser sobrescrever.
+          </p>
+        )}
       </fieldset>
 
       <fieldset>
@@ -565,24 +697,47 @@ function TabCaracteristicas({
             label="Velocidade a 100% (m/h)"
             type="number"
             step="any"
-            defaultValue={editing?.speed_100_pct ?? ""}
+            value={numInput(tech.velocity)}
+            onChange={(e) => onChange("velocity", e.target.value ? Number(e.target.value) : null)}
           />
-          <Input
-            id="full_turn_time"
-            name="full_turn_time"
-            label="Tempo de volta a 100% (h)"
-            type="number"
-            step="any"
-            defaultValue={editing?.full_turn_time ?? ""}
-          />
-          <Input
-            id="depth_100_pct"
-            name="depth_100_pct"
-            label="Lâmina a 100% (mm)"
-            type="number"
-            step="any"
-            defaultValue={editing?.depth_100_pct ?? ""}
-          />
+          {tech.fullTurnTime != null ? (
+            <Input
+              id="full_turn_time"
+              name="full_turn_time"
+              label="Tempo de volta a 100% (h)"
+              type="number"
+              step="any"
+              value={numInput(tech.fullTurnTime)}
+              onChange={(e) => onChange("fullTurnTime", e.target.value ? Number(e.target.value) : null)}
+            />
+          ) : (
+            <AutoField
+              label="Tempo de volta a 100%"
+              value={auto.fullTurnTimeH}
+              unit="h"
+              formula="= 2π × raio / velocidade"
+              warning={warningFor("fullTurnTimeH")}
+            />
+          )}
+          {tech.depth100 != null ? (
+            <Input
+              id="depth_100_pct"
+              name="depth_100_pct"
+              label="Lâmina a 100% (mm)"
+              type="number"
+              step="any"
+              value={numInput(tech.depth100)}
+              onChange={(e) => onChange("depth100", e.target.value ? Number(e.target.value) : null)}
+            />
+          ) : (
+            <AutoField
+              label="Lâmina a 100%"
+              value={auto.depth100PctMm}
+              unit="mm"
+              formula="= (vazão × tempo_volta) / (área × 10)"
+              warning={warningFor("depth100PctMm")}
+            />
+          )}
         </div>
       </fieldset>
 
@@ -602,19 +757,12 @@ function TabCaracteristicas({
           <Input
             id="pump_power"
             name="pump_power"
-            label="Potência da bomba (cv)"
+            label="Potência da bomba (CV)"
             type="number"
             step="any"
             required
-            defaultValue={editing?.pump_power}
-          />
-          <Input
-            id="installed_power_kw"
-            name="installed_power_kw"
-            label="Potência instalada (kW)"
-            type="number"
-            step="any"
-            defaultValue={editing?.installed_power_kw ?? ""}
+            value={numInput(tech.pumpCv)}
+            onChange={(e) => onChange("pumpCv", e.target.value ? Number(e.target.value) : null)}
           />
           <Input
             id="motor_efficiency"
@@ -623,30 +771,47 @@ function TabCaracteristicas({
             type="number"
             step="any"
             required
-            defaultValue={editing ? (editing.motor_efficiency * 100) : 88}
+            value={numInput(tech.motorEff)}
+            onChange={(e) => onChange("motorEff", e.target.value ? Number(e.target.value) : null)}
+          />
+          <AutoField
+            label="Potência instalada"
+            value={auto.installedPowerKw}
+            unit="kW elétricos"
+            formula="= CV × 0,7355 / (η_motor/100)"
           />
           <Input
-            id="efficiency"
-            name="efficiency"
-            label="Eficiência de aplicação (%)"
+            id="cuc"
+            name="cuc"
+            label="CUC — Uniformidade Christiansen (%)"
             type="number"
             step="any"
             required
-            defaultValue={editing ? (editing.efficiency * 100) : 85}
+            value={numInput(tech.cuc)}
+            onChange={(e) => onChange("cuc", e.target.value ? Number(e.target.value) : null)}
           />
-          <Input
-            id="specific_consumption"
-            name="specific_consumption"
-            label="Consumo específico (kWh/m³)"
-            type="number"
-            step="any"
-            defaultValue={editing?.specific_consumption ?? ""}
+          <AutoField
+            label="Consumo específico"
+            value={auto.specificConsumptionKwhM3}
+            unit="kWh/m³"
+            formula="= kW_instalada / vazão"
+            warning={warningFor("specificConsumptionKwhM3")}
           />
         </div>
+        {warningFor("cuc") && (
+          <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">⚠ CUC — {warningFor("cuc")}</p>
+        )}
+        {warningFor("motorEfficiency") && (
+          <p className="mt-1 text-xs text-yellow-600 dark:text-yellow-400">⚠ Eficiência do motor — {warningFor("motorEfficiency")}</p>
+        )}
       </fieldset>
 
-      {/* Hidden field — radius is handled in submit */}
-      <input type="hidden" name="radius" value="" />
+      {/* Hidden fields — auto-calc values (para persistência mesmo se usuário não sobrescrever) */}
+      <input type="hidden" name="radius" value={tech.radius ?? auto.radiusM ?? ""} />
+      <input type="hidden" name="full_turn_time" value={tech.fullTurnTime ?? auto.fullTurnTimeH ?? ""} />
+      <input type="hidden" name="depth_100_pct" value={tech.depth100 ?? auto.depth100PctMm ?? ""} />
+      <input type="hidden" name="installed_power_kw" value={auto.installedPowerKw ?? ""} />
+      <input type="hidden" name="specific_consumption" value={auto.specificConsumptionKwhM3 ?? ""} />
     </div>
   );
 }
@@ -779,39 +944,81 @@ function TabLocalizacao({
 
 // ── Tab: Custos ────────────────────────────────────────────────────────
 
-function TabCustos({ editing }: { editing: Pivot | null }) {
+function TabCustos({
+  tech,
+  energyCost,
+  onEnergyCostChange,
+}: {
+  tech: TechFields;
+  energyCost: number | null;
+  onEnergyCostChange: (v: number | null) => void;
+}) {
+  // Recomputa consumo específico a partir dos técnicos para calcular custo/mm
+  const auto = useMemo(() => {
+    return calculatePivotAll({
+      areaHa: tech.area,
+      radiusM: tech.radius,
+      flowRateM3h: tech.flow,
+      velocity100PctMh: tech.velocity,
+      pumpPowerCv: tech.pumpCv,
+      motorEfficiency: tech.motorEff != null ? tech.motorEff / 100 : null,
+      energyCostPerKwh: energyCost,
+    });
+  }, [tech, energyCost]);
+
+  const warnings = useMemo(
+    () =>
+      checkTypicalRanges({
+        costPerKwhReais: energyCost,
+        costPerMmReais: auto.costPerMmReais,
+      }),
+    [energyCost, auto.costPerMmReais],
+  );
+  const warningFor = (field: string) =>
+    warnings.find((w) => w.field === field)?.message ?? null;
+
   return (
     <div className="space-y-5">
-      <p className="text-sm text-graphite-400 dark:text-gray-500">
-        Custos operacionais do pivô. Esses valores são utilizados nos relatórios e no rateio de energia.
-      </p>
-      <div className="grid gap-5 sm:grid-cols-3">
+      <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50/60 p-4 dark:border-amber-500/60 dark:bg-amber-900/10">
+        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
+          Estes valores alimentam relatórios, alertas e rateio de energia — cuidado com a digitação.
+        </p>
+        <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+          O custo por hectare é <b>calculado no relatório da parcela</b> (depende da lâmina total aplicada na safra) — não é fixo aqui.
+        </p>
+      </div>
+
+      <div className="grid gap-5 sm:grid-cols-2">
         <Input
           id="energy_cost"
           name="energy_cost"
           label="Custo de energia (R$/kWh)"
           type="number"
-          step="any"
-          placeholder="0.72"
-          defaultValue={editing?.energy_cost ?? ""}
+          step="0.01"
+          min="0"
+          max="5"
+          required
+          placeholder="0,72"
+          value={energyCost == null ? "" : String(energyCost)}
+          onChange={(e) => onEnergyCostChange(e.target.value ? Number(e.target.value) : null)}
         />
-        <Input
-          id="cost_per_mm"
-          name="cost_per_mm"
-          label="Custo por mm (R$/mm)"
-          type="number"
-          step="any"
-          defaultValue={editing?.cost_per_mm ?? ""}
-        />
-        <Input
-          id="cost_per_hectare"
-          name="cost_per_hectare"
-          label="Custo por hectare (R$/ha)"
-          type="number"
-          step="any"
-          defaultValue={editing?.cost_per_hectare ?? ""}
+        <AutoField
+          label="Custo por mm (por hectare)"
+          value={auto.costPerMmReais}
+          unit="R$/mm/ha"
+          formula="= consumo_específico × 10 × R$/kWh"
+          warning={warningFor("costPerMmReais")}
         />
       </div>
+
+      {warningFor("costPerKwhReais") && (
+        <p className="text-xs text-yellow-600 dark:text-yellow-400">
+          ⚠ Custo de energia — {warningFor("costPerKwhReais")}
+        </p>
+      )}
+
+      {/* Hidden field — cost_per_mm persistido (o cálculo é auto) */}
+      <input type="hidden" name="cost_per_mm" value={auto.costPerMmReais ?? ""} />
     </div>
   );
 }
