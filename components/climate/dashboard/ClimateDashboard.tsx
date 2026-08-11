@@ -4,13 +4,11 @@ import { useEffect, useState } from "react";
 import { useAuth } from "@/components/providers";
 import { Card } from "@/components/ui/Card";
 import type { ClimateDashboardResponse } from "@/modules/weather/dashboard/climateDashboard";
-import { ClimateCurrentCard } from "./ClimateCurrentCard";
+import { ClimateCurrentMetrics } from "./ClimateCurrentMetrics";
 import { ClimateForecastPanel } from "./ClimateForecastPanel";
 import { ClimateProviderComparison } from "./ClimateProviderComparison";
 import { ClimateStatusBar } from "./ClimateStatusBar";
 import { ClimateSourceHealth } from "./ClimateSourceHealth";
-import { ClimateValidationNotice } from "./ClimateValidationNotice";
-import { EtoSummaryCard } from "./EtoSummaryCard";
 import { PublicWeatherReferences } from "./PublicWeatherReferences";
 
 export function ClimateDashboard() {
@@ -72,17 +70,18 @@ export function ClimateDashboard() {
   if (!data) return <MessageCard message="Nenhum dado climático disponível." />;
 
   return (
-    <div className="space-y-5">
-      <ClimateValidationNotice validation={data.validation} />
-      <div className="grid gap-5 xl:grid-cols-[0.88fr_1.12fr]">
-        <ClimateCurrentCard current={data.current} />
-        <EtoSummaryCard eto={data.eto} />
-      </div>
+    <div className="space-y-4">
+      <ClimateCurrentMetrics current={data.current} />
       <ClimateForecastPanel daily={data.dailyForecast} hourly={data.hourlyForecast} timezone={data.timezone} today={data.localDate} />
-      <ClimateProviderComparison sources={data.providerComparison} timezone={data.timezone} />
-      <ClimateSourceHealth sources={data.sourceHealth} />
-      <PublicWeatherReferences references={data.publicReferences} nasaPower={data.nasaPowerReference} />
-      <ClimateStatusBar status={data.status} />
+      <details className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-card dark:border-white/[0.06] dark:bg-graphite-800 dark:shadow-dark-card">
+        <summary className="cursor-pointer text-xs font-bold text-graphite-700 dark:text-gray-300">Qualidade, fontes e referências climáticas</summary>
+        <div className="mt-5 space-y-5">
+          <ClimateProviderComparison sources={data.providerComparison} timezone={data.timezone} />
+          <ClimateSourceHealth sources={data.sourceHealth} />
+          <PublicWeatherReferences references={data.publicReferences} nasaPower={data.nasaPowerReference} />
+          <ClimateStatusBar status={data.status} />
+        </div>
+      </details>
       <p className="text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">{data.attribution.join(" · ")}</p>
     </div>
   );
