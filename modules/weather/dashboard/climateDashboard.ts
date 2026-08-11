@@ -191,6 +191,8 @@ export interface ClimateDashboardResponse {
     relativeHumidityPct: number | null;
     precipitationMm: number | null;
     precipitationProbabilityPct: number | null;
+    precipitationProbabilityMeteobluePct: number | null;
+    solarRadiationMeteoblueMjM2Day: number | null;
     etoMm: number | null;
     etoMeteoblueMm: number | null;
     etoMeteoblueIssuedAt: string | null;
