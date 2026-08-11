@@ -65,9 +65,8 @@ export async function ingestMeteoblueObservations(
         temp_mean: d.tempMean ?? (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : 0),
         humidity: d.humidity ?? 0,
         wind_speed: d.windSpeed ?? 0,
-        // O pacote básico da Meteoblue não fornece radiação. Zero significaria
-        // uma medição real (noite/ausência de energia) e contaminaria auditorias.
-        solar_radiation: null,
+        // GHI diário recebido do solar-day e normalizado para MJ/m²/dia.
+        solar_radiation: d.solarRadiationMjM2Day,
         precipitation: d.precipitation ?? 0,
         sunshine: null,
         et0_source: d.referenceEtoFaoMm,
@@ -221,9 +220,9 @@ export async function ingestMeteoblueForecast(
         temp_mean: d.tempMean,
         humidity: d.humidity,
         wind_speed: d.windSpeed,
-        solar_radiation: null,
+        solar_radiation: d.solarRadiationMjM2Day,
         precipitation: d.precipitation,
-        precipitation_probability: null,
+        precipitation_probability: d.precipitationProbabilityPct,
         // Valor fornecido pela própria Meteoblue no pacote agro-day.
         et0_source: d.referenceEtoFaoMm,
         et0_calculated: null,
