@@ -18,12 +18,14 @@ function DailyForecast({
   }
 
   return (
-    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+    <>
+    <div className="overflow-x-auto pb-2">
+      <div className="grid min-w-[980px] grid-cols-7 gap-3">
       {days.map((day) => {
         const date = new Date(`${day.date}T12:00:00`);
         const isToday = day.date === today;
         return (
-          <article key={day.id} className={`rounded-2xl border p-4 ${isToday ? "border-brand-200 bg-brand-50/40 dark:border-brand-700/40 dark:bg-brand-900/10" : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"}`}>
+          <article key={day.id} className={`flex min-h-[300px] flex-col rounded-2xl border p-4 ${isToday ? "border-brand-200 bg-brand-50/40 dark:border-brand-700/40 dark:bg-brand-900/10" : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"}`}>
             <div className="text-center">
               <p className={`text-[13px] font-extrabold uppercase ${isToday ? "text-brand-700 dark:text-brand-400" : "text-graphite-800 dark:text-white"}`}>
                 {isToday ? "Hoje" : weekdayLabel(day.date)}
@@ -43,54 +45,48 @@ function DailyForecast({
               <span className="text-blue-500">{formatNumber(day.tempMinC)}°</span>
             </p>
 
-            <dl className="mt-4 space-y-2 border-t border-gray-100 pt-3 text-[11px] dark:border-white/[0.06]">
-              <ForecastMetric label="Umidade" value={`${formatNumber(day.relativeHumidityPct, 0)}%`} />
-              <ForecastMetric label="Chuva" value={`${formatNumber(day.precipitationMm)} mm`} tone="blue" />
-              <ForecastMetric label="Prob. chuva MB" value={`${formatNumber(day.precipitationProbabilityMeteobluePct, 0)}%`} />
-              <ForecastMetric label="Radiação MB" value={`${formatNumber(day.solarRadiationMeteoblueMjM2Day)} MJ/m²`} tone="amber" />
-              <ForecastMetric label="ETo PM" value={`${formatNumber(day.etoMm)} mm`} tone="green" />
-              <ForecastMetric label="ETo Meteoblue" value={`${formatNumber(day.etoMeteoblueMm)} mm`} tone="blue" />
-              <ForecastMetric label="ETo HS" value={`${formatNumber(day.etoHargreavesSamaniMm)} mm`} tone="amber" />
-              <ForecastMetric label="Vento" value={`${formatNumber(day.windSpeed2mMs)} m/s`} />
-            </dl>
-            <details className="mt-3 border-t border-gray-100 pt-2 dark:border-white/[0.06]">
-              <summary className="cursor-pointer text-[10px] font-bold text-graphite-500 dark:text-gray-400">
-                Outros métodos de ETo
-              </summary>
-              <dl className="mt-2 space-y-1.5 text-[10px]">
-                <ForecastMetric label="Dif. Meteoblue × PM" value={`${formatNumber(day.etoMeteoblueDeltaMm)} mm (${formatNumber(day.etoMeteoblueDeltaPct, 0)}%)`} />
-                <ForecastMetric label="ASCE ETos" value={`${formatNumber(day.etoAsceEwriMm)} mm`} />
-                <ForecastMetric label="Priestley-Taylor" value={`${formatNumber(day.etoPriestleyTaylorMm)} mm`} />
-                <ForecastMetric label="Thornthwaite-Camargo" value={`${formatNumber(day.etoThornthwaiteCamargoMm)} mm`} />
-                <ForecastMetric label="Blaney-Criddle" value={`${formatNumber(day.etoBlaneyCriddleMm)} mm`} />
-                <ForecastMetric label="Makkink" value={`${formatNumber(day.etoMakkinkMm)} mm`} />
-                <ForecastMetric label="Jensen-Haise" value={`${formatNumber(day.etoJensenHaiseMm)} mm`} />
-                <ForecastMetric label="Turc" value={`${formatNumber(day.etoTurcMm)} mm`} />
-                <ForecastMetric label="Linacre" value={`${formatNumber(day.etoLinacreMm)} mm`} />
-                <ForecastMetric label="Ivanov" value={`${formatNumber(day.etoIvanovMm)} mm`} />
-                <ForecastMetric label="Camargo 1971" value={`${formatNumber(day.etoCamargo1971Mm)} mm`} />
-              </dl>
-            </details>
+            <div className="mt-4 border-t border-gray-100 pt-3 text-center dark:border-white/[0.06]">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">Chuva</p>
+              <p className="mt-1 text-[12px] font-bold tabular-nums text-graphite-700 dark:text-gray-200">
+                {formatNumber(day.precipitationProbabilityMeteobluePct, 0)}% · {formatNumber(day.precipitationMeteoblueMm)} mm
+              </p>
+            </div>
+            <div className="mt-auto border-t border-gray-100 pt-3 text-center dark:border-white/[0.06]">
+              <p className="text-[10px] font-bold uppercase tracking-wide text-graphite-400 dark:text-gray-500">ETo</p>
+              <p className="mt-1 text-[16px] font-extrabold tabular-nums text-brand-700 dark:text-brand-400">
+                {formatNumber(day.etoOperationalMm)} mm
+              </p>
+              {day.etoOperationalSource === "open_meteo_pm_fao56" ? (
+                <p className="mt-1 text-[9px] font-semibold text-amber-700 dark:text-amber-300">PM FAO-56 · fallback</p>
+              ) : null}
+            </div>
           </article>
         );
       })}
+      </div>
     </div>
-  );
-}
-
-function ForecastMetric({ label, value, tone }: { label: string; value: string; tone?: "blue" | "green" | "amber" }) {
-  const valueColor = tone === "blue"
-    ? "text-blue-600 dark:text-blue-400"
-    : tone === "green"
-      ? "text-brand-700 dark:text-brand-400"
-      : tone === "amber"
-        ? "text-amber-700 dark:text-amber-300"
-      : "text-graphite-800 dark:text-gray-200";
-  return (
-    <div className="flex items-center justify-between gap-2">
-      <dt className="text-graphite-400 dark:text-gray-500">{label}</dt>
-      <dd className={`font-bold tabular-nums ${valueColor}`}>{value}</dd>
-    </div>
+    <details className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
+      <summary className="cursor-pointer text-[11px] font-bold text-graphite-600 dark:text-gray-300">
+        Ver detalhes: umidade, vento e radiação
+      </summary>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[720px] text-left text-[11px]">
+          <thead className="text-graphite-400 dark:text-gray-500"><tr><th className="py-2">Dia</th><th>Umidade</th><th>Vento</th><th>Radiação GHI</th></tr></thead>
+          <tbody>{days.map((day) => <tr key={`detail-${day.id}`} className="border-t border-gray-100 dark:border-white/[0.05]"><td className="py-2 font-bold">{weekdayLabel(day.date)}</td><td>{formatNumber(day.relativeHumidityPct, 0)}%</td><td>{formatNumber(day.windSpeed2mMs)} m/s</td><td>{formatNumber(day.solarRadiationMeteoblueMjM2Day)} MJ/m²/dia</td></tr>)}</tbody>
+        </table>
+      </div>
+    </details>
+    <details className="mt-3 rounded-xl border border-gray-100 px-4 py-3 dark:border-white/[0.06]">
+      <summary className="cursor-pointer text-[11px] font-bold text-graphite-600 dark:text-gray-300">Auditoria da ETo</summary>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full min-w-[1640px] text-left text-[10px]">
+          <thead className="text-graphite-400 dark:text-gray-500"><tr><th className="py-2">Dia</th><th>Meteoblue FAO</th><th>PM FAO-56</th><th>Diferença</th><th>Hargreaves</th><th>ASCE ETos</th><th>Priestley–Taylor</th><th>Thornthwaite–Camargo</th><th>Blaney–Criddle</th><th>Makkink</th><th>Jensen–Haise</th><th>Turc</th><th>Linacre</th><th>Ivanov</th><th>Camargo 1971</th></tr></thead>
+          <tbody>{days.map((day) => <tr key={`audit-${day.id}`} className="border-t border-gray-100 dark:border-white/[0.05]"><td className="py-2 font-bold">{weekdayLabel(day.date)}</td><td>{formatNumber(day.etoMeteoblueMm)} mm</td><td>{formatNumber(day.etoMm)} mm</td><td>{formatNumber(day.etoMeteoblueDeltaPct, 0)}%</td><td>{formatNumber(day.etoHargreavesSamaniMm)} mm</td><td>{formatNumber(day.etoAsceEwriMm)} mm</td><td>{formatNumber(day.etoPriestleyTaylorMm)} mm</td><td>{formatNumber(day.etoThornthwaiteCamargoMm)} mm</td><td>{formatNumber(day.etoBlaneyCriddleMm)} mm</td><td>{formatNumber(day.etoMakkinkMm)} mm</td><td>{formatNumber(day.etoJensenHaiseMm)} mm</td><td>{formatNumber(day.etoTurcMm)} mm</td><td>{formatNumber(day.etoLinacreMm)} mm</td><td>{formatNumber(day.etoIvanovMm)} mm</td><td>{formatNumber(day.etoCamargo1971Mm)} mm</td></tr>)}</tbody>
+        </table>
+      </div>
+    </details>
+    <p className="mt-4 text-[10px] text-graphite-400 dark:text-gray-500">Meteoblue Basic + Agro + Solar · atualização 06:15 e 18:15 · modelo em validação</p>
+    </>
   );
 }
 
@@ -163,23 +159,27 @@ export function ClimateForecastPanel({
 
   return (
     <Card className="p-0">
-      <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06]">
+      <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 xl:flex-row xl:items-center xl:justify-between dark:border-white/[0.06]">
         <div>
-          <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Previsão</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Open-Meteo + Meteoblue Basic/Agro/Solar · comparação em validação</p>
+          <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Previsão de 7 dias</h2>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Meteoblue Basic + Agro + Solar · modelo em validação</p>
         </div>
-        <div className="flex w-fit rounded-xl bg-gray-100 p-1 dark:bg-white/[0.05]" aria-label="Intervalo da previsão">
-          {(["daily", "hourly"] as const).map((item) => (
-            <button
-              key={item}
-              type="button"
-              aria-pressed={mode === item}
-              onClick={() => setMode(item)}
-              className={`rounded-lg px-4 py-2 text-[11px] font-bold transition-colors ${mode === item ? "bg-white text-brand-700 shadow-sm dark:bg-graphite-700 dark:text-brand-400" : "text-graphite-400 hover:text-graphite-700 dark:text-gray-500 dark:hover:text-gray-300"}`}
-            >
-              {item === "daily" ? "Diária" : "Horária"}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="rounded-lg bg-brand-700 px-3 py-2 text-[10px] font-extrabold text-white">ETo: Meteoblue FAO</span>
+          <span className="rounded-lg border border-amber-300 px-3 py-2 text-[10px] font-bold text-amber-700 dark:border-amber-700 dark:text-amber-300">Sem estação local</span>
+          <div className="flex w-fit rounded-xl bg-gray-100 p-1 dark:bg-white/[0.05]" aria-label="Intervalo da previsão">
+            {(["daily", "hourly"] as const).map((item) => (
+              <button
+                key={item}
+                type="button"
+                aria-pressed={mode === item}
+                onClick={() => setMode(item)}
+                className={`rounded-lg px-4 py-2 text-[11px] font-bold transition-colors ${mode === item ? "bg-white text-brand-700 shadow-sm dark:bg-graphite-700 dark:text-brand-400" : "text-graphite-400 hover:text-graphite-700 dark:text-gray-500 dark:hover:text-gray-300"}`}
+              >
+                {item === "daily" ? "Diária" : "Horária"}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       <div className="p-5 sm:p-6">
