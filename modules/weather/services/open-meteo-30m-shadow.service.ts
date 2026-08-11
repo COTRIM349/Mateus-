@@ -62,6 +62,7 @@ function toLocation(station: VirtualStationRow): WeatherLocation {
 export async function syncOpenMeteo30MinShadow(
   supabase: SupabaseClient,
   virtualStationId: string,
+  options: { pastSteps15Min?: number; forecastSteps15Min?: number } = {},
 ): Promise<OpenMeteo30MinSyncResult> {
   const { data: stationData, error: stationError } = await supabase
     .from("virtual_weather_stations")
@@ -91,7 +92,7 @@ export async function syncOpenMeteo30MinShadow(
   }
 
   const location = toLocation(station);
-  const result = await fetchOpenMeteo30MinRaw(location);
+  const result = await fetchOpenMeteo30MinRaw(location, options);
   const providerInterpolated = openMeteoLikelyInterpolates15Min(location);
   const sourceResolutionMinutes = providerInterpolated ? 60 : 15;
 

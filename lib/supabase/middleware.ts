@@ -1,7 +1,17 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
+export function bypassesUserSession(pathname: string): boolean {
+  return pathname === "/api/cron/meteoblue-agro";
+}
+
 export async function updateSession(request: NextRequest) {
+  // Esta rota é chamada pelo Supabase Cron sem sessão de usuário. A autenticação
+  // dela é feita no próprio handler com o Bearer token guardado no Vault.
+  if (bypassesUserSession(request.nextUrl.pathname)) {
+    return NextResponse.next({ request });
+  }
+
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 

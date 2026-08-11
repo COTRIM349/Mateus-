@@ -113,16 +113,18 @@ Cada variável tem um **uso agronômico** documentado:
 
 ---
 
-## 2. ETo oficial {#2-eto-oficial}
+## 2. ETo em validação {#2-eto-oficial}
 
-**Regra fundamental:** a ETo oficial da plataforma é
-`internallyCalculatedEtoMm`, calculada pelo motor FAO-56 Penman-Monteith
-validado na Etapa 2 (`referenceEtoFao56.ts`).
+**Regra fundamental:** enquanto não houver validação por estação física local,
+nenhuma ETo é classificada como oficial ou liberada automaticamente para uso
+operacional. `internallyCalculatedEtoMm` e `providerReferenceEtoMm` permanecem
+apenas como referências de auditoria.
 
 **Contrato:**
 
-- Método exclusivo: **FAO-56 Penman-Monteith** (Allen et al., 1998).
-  Constante em código: `OFFICIAL_ETO_METHOD = "fao_56_penman_monteith"`.
+- Estado operacional: `ETO_OPERATIONAL_STATUS = "validation_blocked"`.
+- O método interno de auditoria continua sendo **FAO-56 Penman-Monteith**
+  (Allen et al., 1998), mas não recebe o rótulo de ETo oficial.
 - `providerReferenceEtoMm` **existe apenas para**:
   1. `diagnostic` — verificar consistência entre modelo Cotrim e provider
   2. `ui_comparison` — mostrar as duas ETo lado a lado em tela de análise

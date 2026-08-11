@@ -1,6 +1,6 @@
 # Provedores climáticos — Matriz de compatibilidade
 
-**Versão:** 1.0.0 (companion do [`CLIMATE_SPECIFICATION.md`](./CLIMATE_SPECIFICATION.md))
+**Versão:** 1.1.0 (companion do [`CLIMATE_SPECIFICATION.md`](./CLIMATE_SPECIFICATION.md))
 
 Esta matriz registra apenas o que **temos evidência real** — verificado por
 integração testada, chamada direta à API ou documentação oficial cruzada
@@ -128,28 +128,55 @@ payload (Open-Meteo faz best-match automático) — registrar `null`.
 
 ---
 
-## 3. NASA POWER · **não integrado**
+## 3. NASA POWER · ✅ **integrado como referência diária**
 
 | Item | Valor |
 |---|---|
 | Previsão | ❌ |
-| Histórico / reanálise | ⚠️ (documentado, não verificado) |
+| Histórico / reanálise | ✅ chamada real validada no ponto da fazenda |
 | Resolução temporal | diário |
 | Resolução espacial | ~0.5° × 0.625° (~55 km × 70 km) |
 | Autenticação | não requer chave |
 | Custo | gratuito |
 
-### Variáveis previstas (a confirmar quando integrar)
+### Variáveis integradas
 
-`T2M`, `T2M_MAX`, `T2M_MIN`, `RH2M`, `WS10M`, `PRECTOTCORR`,
-`ALLSKY_SFC_SW_DWN`, `PS`.
+`T2M`, `RH2M`, `WS10M`, `PRECTOTCORR`, `ALLSKY_SFC_SW_DWN`, `PS`.
+Sentinelas `-999` são preservadas como ausência. A unidade de radiação é
+lida dos metadados antes da conversão; sem unidade reconhecida o valor fica
+`null`, nunca zero.
 
-### Uso previsto
+### Uso
 
 - Histórico e reanálise (spec §3).
 - **Nunca** como fonte única para chuva operacional (resolução grosseira).
+- Referência externa no dashboard; não entra diretamente no cálculo da ETo.
 
-Status: aguarda etapa dedicada de integração.
+Implementação: `modules/weather/providers/nasaPowerDaily.ts`.
+
+## 3.1 WeatherAPI · ✅ **integrada; exige chave**
+
+| Item | Valor |
+|---|---|
+| Previsão | ✅ integração horária e normalização de 30 min testadas |
+| Autenticação | **requer** `WEATHERAPI_API_KEY` |
+| Estado operacional | bloqueada quando a variável não está cadastrada |
+
+O dashboard diferencia falha de rede de ausência de credencial. Nenhuma chave
+fictícia é aceita e o segredo é removido das URLs de auditoria.
+
+## 3.2 INMET · ✅ **integração oficial com fallback público**
+
+| Item | Valor |
+|---|---|
+| Estações físicas | Posse A017 e Correntina A416 |
+| Consulta pública | ✅ tentada automaticamente primeiro |
+| Consulta autenticada | ✅ rota oficial `/token/estacao/...` |
+| Estado operacional sem token | API oficial respondeu HTTP 204 em 08/08/2026 |
+
+As observações são brutas, filtradas apenas por faixas físicas e usadas como
+comparação externa. A distância e a diferença de altitude são exibidas e os
+dados do INMET não entram na ETo da fazenda.
 
 ---
 

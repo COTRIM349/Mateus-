@@ -1,7 +1,7 @@
 // ============================================================================
 // Provider meteoblue (https://www.meteoblue.com/)
 // ----------------------------------------------------------------------------
-// Busca dados diários via Packages API (basic-day). Não persiste nada —
+// Busca dados diários via Packages API (basic-day + agro-day + solar-day). Não persiste nada —
 // apenas normaliza e devolve para o serviço de ingestão.
 //
 // Chave: METEOBLUE_API_KEY (server-only, nunca exposta ao client).
@@ -10,7 +10,7 @@
 export const METEOBLUE_PROVIDER = "meteoblue";
 export const METEOBLUE_ATTRIBUTION = "Weather data by meteoblue.com";
 
-const PACKAGES_URL = "https://my.meteoblue.com/packages/basic-day";
+const PACKAGES_URL = "https://my.meteoblue.com/packages/basic-day_agro-day_solar-day";
 
 function getApiKey(): string {
   const key = (process.env.METEOBLUE_API_KEY ?? "").trim();
@@ -30,7 +30,12 @@ export interface MeteoblueDaily {
   humidity: number | null;
   windSpeed: number | null;
   precipitation: number | null;
+  precipitationProbabilityPct: number | null;
   pressureHpa: number | null;
+  solarRadiationMjM2Day: number | null;
+  referenceEtoFaoMm: number | null;
+  evapotranspirationMm: number | null;
+  potentialEvapotranspirationMm: number | null;
 }
 
 export interface MeteoblueFetchResult {
@@ -70,7 +75,10 @@ async function fetchJsonWithRetry(url: string, attempts = 3): Promise<unknown> {
   throw lastError instanceof Error ? lastError : new Error(String(lastError));
 }
 
-interface MeteoblueDayPayload {
+export interface MeteoblueDayPayload {
+  units?: {
+    ghi_total?: string;
+  };
   data_day?: {
     time?: string[];
     temperature_max?: (number | null)[];
@@ -79,11 +87,32 @@ interface MeteoblueDayPayload {
     relativehumidity_mean?: (number | null)[];
     windspeed_mean?: (number | null)[];
     precipitation?: (number | null)[];
+    precipitation_probability?: (number | null)[];
     sealevelpressure_mean?: (number | null)[];
+    referenceevapotranspiration_fao?: (number | null)[];
+    evapotranspiration?: (number | null)[];
+    potentialevapotranspiration?: (number | null)[];
+    ghi_total?: (number | null)[];
   };
 }
 
-function parseDaily(payload: MeteoblueDayPayload): MeteoblueDaily[] {
+export function meteoblueGhiToMjM2Day(
+  value: number | null | undefined,
+  unit: string | null | undefined,
+): number | null {
+  if (value == null || !Number.isFinite(value) || value < 0) return null;
+  // solar-day entrega o total diário em Wh/m² e pode omitir a unidade no bloco
+  // `units` quando pacotes são combinados. Nunca interpretar o total como W/m².
+  const normalized = (unit ?? "Wh/m²").toLowerCase().replaceAll(" ", "");
+  let result: number | null = null;
+  if (normalized.includes("j/cm") || normalized.includes("jcm")) result = value * 0.01;
+  else if (normalized.includes("mj/m") || normalized.includes("mjm")) result = value;
+  else if (normalized.includes("wh/m") || normalized.includes("whm")) result = value * 0.0036;
+  // Barreira física/auditável: totais fora da faixa diária plausível não entram.
+  return result != null && result <= 45 ? result : null;
+}
+
+export function parseMeteoblueDailyPayload(payload: MeteoblueDayPayload): MeteoblueDaily[] {
   const d = payload.data_day;
   if (!d?.time) return [];
   const out: MeteoblueDaily[] = [];
@@ -97,7 +126,15 @@ function parseDaily(payload: MeteoblueDayPayload): MeteoblueDaily[] {
       humidity: d.relativehumidity_mean?.[i] ?? null,
       windSpeed: windKmh != null ? windKmh / 3.6 : null,
       precipitation: d.precipitation?.[i] ?? null,
+      precipitationProbabilityPct: d.precipitation_probability?.[i] ?? null,
       pressureHpa: d.sealevelpressure_mean?.[i] ?? null,
+      solarRadiationMjM2Day: meteoblueGhiToMjM2Day(
+        d.ghi_total?.[i],
+        payload.units?.ghi_total,
+      ),
+      referenceEtoFaoMm: d.referenceevapotranspiration_fao?.[i] ?? null,
+      evapotranspirationMm: d.evapotranspiration?.[i] ?? null,
+      potentialEvapotranspirationMm: d.potentialevapotranspiration?.[i] ?? null,
     });
   }
   return out;
@@ -107,8 +144,23 @@ export async function fetchMeteoblueDaily(params: {
   latitude: number;
   longitude: number;
   timezone: string;
+  elevationM?: number | null;
   forecastDays?: number;
 }): Promise<MeteoblueFetchResult> {
+  const url = buildMeteoblueDailyUrl(params);
+  const payload = (await fetchJsonWithRetry(url)) as MeteoblueDayPayload;
+  return {
+    requestUrl: redactKey(url),
+    daily: parseMeteoblueDailyPayload(payload),
+  };
+}
+
+export function buildMeteoblueDailyUrl(params: {
+  latitude: number;
+  longitude: number;
+  timezone: string;
+  elevationM?: number | null;
+}): string {
   const apiKey = getApiKey();
   const qs = new URLSearchParams({
     lat: String(params.latitude),
@@ -117,13 +169,12 @@ export async function fetchMeteoblueDaily(params: {
     format: "json",
     timeformat: "Y-M-D",
     windspeed: "kmh",
+    tz: params.timezone,
   });
-  const url = `${PACKAGES_URL}?${qs.toString()}`;
-  const payload = (await fetchJsonWithRetry(url)) as MeteoblueDayPayload;
-  return {
-    requestUrl: redactKey(url),
-    daily: parseDaily(payload),
-  };
+  if (params.elevationM != null && Number.isFinite(params.elevationM)) {
+    qs.set("asl", String(Math.round(params.elevationM)));
+  }
+  return `${PACKAGES_URL}?${qs.toString()}`;
 }
 
 export interface MeteobluePingResult {

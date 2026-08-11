@@ -4,7 +4,10 @@ import { syncMeteoblue30MinShadow } from "@/modules/weather/services/meteoblue-3
 import { syncWeatherApi30MinShadow } from "@/modules/weather/services/weatherapi-30m-shadow.service";
 import { syncMetNorway30MinShadow } from "@/modules/weather/services/met-norway-30m-shadow.service";
 import { evaluateClimateConsensusShadow } from "@/modules/weather/services/climate-consensus-shadow.service";
-import { calculateFao5630MinShadow } from "@/modules/weather/services/fao56-30m-shadow.service";
+import {
+  calculateFao5630MinShadow,
+  MAX_INHERITED_CLOUDINESS_AGE_HOURS,
+} from "@/modules/weather/services/fao56-30m-shadow.service";
 
 export type ClimateOrchestratorProvider =
   | "open_meteo"
@@ -50,6 +53,48 @@ interface IntervalRow {
   interval_end: string;
 }
 
+export interface ClimateOrchestrationPlan {
+  bootstrapMode: boolean;
+  pastMinutes: number;
+  futureMinutes: number;
+  maxIntervals: number;
+  openMeteoPastSteps15Min: number;
+}
+
+const NORMAL_PAST_MINUTES = 60;
+const BOOTSTRAP_PAST_MINUTES = 48 * 60;
+const DEFAULT_FUTURE_MINUTES = 180;
+const MAX_ORCHESTRATION_INTERVALS = 144;
+
+export function buildOrchestrationPlan(input: {
+  hasRecentDaylightSeed: boolean;
+  pastMinutes?: number;
+  futureMinutes?: number;
+  maxIntervals?: number;
+}): ClimateOrchestrationPlan {
+  const bootstrapMode = !input.hasRecentDaylightSeed;
+  const pastMinutes = Math.max(
+    0,
+    input.pastMinutes ?? (bootstrapMode ? BOOTSTRAP_PAST_MINUTES : NORMAL_PAST_MINUTES),
+  );
+  const futureMinutes = Math.max(30, input.futureMinutes ?? DEFAULT_FUTURE_MINUTES);
+  const intervalsInWindow = Math.ceil((pastMinutes + futureMinutes) / 30);
+  const defaultMaxIntervals = bootstrapMode
+    ? intervalsInWindow
+    : Math.max(12, intervalsInWindow);
+
+  return {
+    bootstrapMode,
+    pastMinutes,
+    futureMinutes,
+    maxIntervals: Math.max(
+      1,
+      Math.min(input.maxIntervals ?? defaultMaxIntervals, MAX_ORCHESTRATION_INTERVALS),
+    ),
+    openMeteoPastSteps15Min: Math.max(8, Math.ceil(pastMinutes / 15)),
+  };
+}
+
 const PROVIDERS: ClimateOrchestratorProvider[] = [
   "open_meteo",
   "meteoblue",
@@ -89,12 +134,15 @@ async function runProvider(
   provider: ClimateOrchestratorProvider,
   supabase: SupabaseClient,
   stationId: string,
+  plan: ClimateOrchestrationPlan,
 ): Promise<ProviderRunResult> {
   const started = Date.now();
   try {
     const result =
       provider === "open_meteo"
-        ? await syncOpenMeteo30MinShadow(supabase, stationId)
+        ? await syncOpenMeteo30MinShadow(supabase, stationId, {
+            pastSteps15Min: plan.openMeteoPastSteps15Min,
+          })
         : provider === "meteoblue"
           ? await syncMeteoblue30MinShadow(supabase, stationId)
           : provider === "weatherapi"
@@ -174,12 +222,6 @@ export async function runClimateOrchestration(
 ): Promise<ClimateOrchestrationResult> {
   const startedMs = Date.now();
   const startedAt = new Date(startedMs).toISOString();
-  const window = buildOrchestrationWindow(
-    input.now ?? new Date(),
-    input.pastMinutes ?? 60,
-    input.futureMinutes ?? 180,
-  );
-  const maxIntervals = Math.max(1, Math.min(input.maxIntervals ?? 12, 24));
   const warnings: string[] = [];
   const providerResults = emptyProviderResults();
 
@@ -194,6 +236,34 @@ export async function runClimateOrchestration(
     throw new Error(stationError?.message ?? "Estacao virtual nao encontrada");
   }
   if (!station.shadow_mode) throw new Error("CLIMA 8 exige shadow_mode=true");
+
+  const now = input.now ?? new Date();
+  const recentDaylightCutoff = new Date(
+    now.getTime() - MAX_INHERITED_CLOUDINESS_AGE_HOURS * 60 * 60 * 1_000,
+  ).toISOString();
+  const { data: recentDaylight, error: recentDaylightError } = await supabase
+    .from("weather_eto_30m_shadow")
+    .select("id")
+    .eq("virtual_station_id", input.virtualStationId)
+    .eq("is_daylight", true)
+    .not("cloudiness_ratio", "is", null)
+    .gte("interval_end", recentDaylightCutoff)
+    .limit(1);
+  if (recentDaylightError) throw new Error(recentDaylightError.message);
+
+  const plan = buildOrchestrationPlan({
+    hasRecentDaylightSeed: Boolean(recentDaylight?.length),
+    pastMinutes: input.pastMinutes,
+    futureMinutes: input.futureMinutes,
+    maxIntervals: input.maxIntervals,
+  });
+  const window = buildOrchestrationWindow(now, plan.pastMinutes, plan.futureMinutes);
+  const maxIntervals = plan.maxIntervals;
+  if (plan.bootstrapMode) {
+    warnings.push(
+      "Bootstrap ETo: processando ate 48 horas para formar referencia diurna antes dos intervalos noturnos.",
+    );
+  }
 
   const { data: configs, error: configError } = await supabase
     .from("virtual_weather_station_providers")
@@ -229,7 +299,7 @@ export async function runClimateOrchestration(
     const providerPairs = await Promise.all(
       enabledProviders.map(async (provider) => [
         provider,
-        await runProvider(provider, supabase, input.virtualStationId),
+        await runProvider(provider, supabase, input.virtualStationId, plan),
       ] as const),
     );
     for (const [provider, result] of providerPairs) providerResults[provider] = result;

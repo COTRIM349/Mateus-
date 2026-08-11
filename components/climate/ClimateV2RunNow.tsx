@@ -46,8 +46,12 @@ export function ClimateV2RunNow() {
       const json = await response.json();
       if (!response.ok) throw new Error(json.error ?? "Falha ao executar ciclo climático");
       const result = json.result ?? {};
+      const weatherApi = result.providerResults?.weatherapi;
+      const weatherApiStatus = weatherApi?.status === "success"
+        ? `WeatherAPI ativa (${weatherApi.rowsInserted ?? 0} candidatos)`
+        : `WeatherAPI falhou: ${weatherApi?.error ?? "sem resposta"}`;
       setMessage(
-        `Ciclo ${result.status ?? "concluído"}: ${result.consensusCreated ?? 0} consensos e ${result.etoAvailable ?? 0} ETo disponíveis. Atualizando painel…`,
+        `Ciclo ${result.status ?? "concluído"}: ${weatherApiStatus}. ${result.consensusCreated ?? 0} consensos e ${result.etoAvailable ?? 0} ETo disponíveis. Atualizando painel…`,
       );
       window.setTimeout(() => window.location.reload(), 1200);
     } catch (e) {

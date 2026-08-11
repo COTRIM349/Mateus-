@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { buildWeatherApiHourlyUrl, redactWeatherApiKey } from "./weatherApiHourly";
+import {
+  assertWeatherApiResponseLocation,
+  buildWeatherApiHourlyUrl,
+  redactWeatherApiKey,
+  weatherApiResponseDistanceKm,
+} from "./weatherApiHourly";
 import type { WeatherLocation } from "@/modules/weather/types/weatherTypes";
 
 const location: WeatherLocation = {
@@ -31,5 +36,23 @@ describe("WeatherAPI provider", () => {
   it("falha explicitamente quando a chave nao esta configurada", () => {
     delete process.env.WEATHERAPI_API_KEY;
     expect(() => buildWeatherApiHourlyUrl(location)).toThrow("WEATHERAPI_API_KEY nao configurada");
+  });
+
+  it("valida quando a resposta corresponde ao ponto solicitado", () => {
+    const payload = { location: { lat: -12.5001, lon: -45.5001 } };
+    expect(weatherApiResponseDistanceKm(location, payload)).toBeLessThan(0.1);
+    expect(assertWeatherApiResponseLocation(location, payload)).toBeLessThan(0.1);
+  });
+
+  it("rejeita resposta deslocada da estacao virtual", () => {
+    expect(() => assertWeatherApiResponseLocation(location, {
+      location: { lat: 52.52, lon: 13.42 },
+    })).toThrow(/distante da estacao virtual/);
+  });
+
+  it("rejeita payload sem coordenadas de resposta", () => {
+    expect(() => assertWeatherApiResponseLocation(location, {})).toThrow(
+      "WeatherAPI nao informou as coordenadas da resposta",
+    );
   });
 });
