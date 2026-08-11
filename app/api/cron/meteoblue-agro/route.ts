@@ -22,7 +22,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const supabase = createAdminClient();
+  let supabase: ReturnType<typeof createAdminClient>;
+  try {
+    supabase = createAdminClient();
+  } catch (err) {
+    return NextResponse.json({
+      error: "Falha na configuração do servidor climático",
+      detail: err instanceof Error ? err.message : "Erro de configuração desconhecido",
+    }, { status: 500 });
+  }
   const { data, error } = await supabase
     .from("virtual_weather_stations")
     .select("id, farm_id, latitude, longitude, elevation_m, timezone")
