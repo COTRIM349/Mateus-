@@ -2,15 +2,11 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { ingestMeteoblueForecast } from "@/modules/weather/services/meteoblue-ingest";
 import { ensureVirtualStation } from "@/modules/weather/services/virtual-station.service";
+import { isMeteoblueAgroCronAuthorized } from "./auth";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-function authorized(request: Request): boolean {
-  const secret = process.env.CRON_SECRET?.trim();
-  return Boolean(secret) && request.headers.get("authorization") === `Bearer ${secret}`;
-}
 
 interface VirtualStation {
   id: string;
@@ -22,7 +18,7 @@ interface VirtualStation {
 }
 
 export async function GET(request: Request) {
-  if (!authorized(request)) {
+  if (!isMeteoblueAgroCronAuthorized(request)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
