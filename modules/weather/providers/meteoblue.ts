@@ -101,11 +101,15 @@ export function meteoblueGhiToMjM2Day(
   unit: string | null | undefined,
 ): number | null {
   if (value == null || !Number.isFinite(value) || value < 0) return null;
-  const normalized = (unit ?? "J/cm²").toLowerCase().replaceAll(" ", "");
-  if (normalized.includes("j/cm") || normalized.includes("jcm")) return value * 0.01;
-  if (normalized.includes("mj/m") || normalized.includes("mjm")) return value;
-  if (normalized.includes("wh/m") || normalized.includes("whm")) return value * 0.0036;
-  return null;
+  // solar-day entrega o total diário em Wh/m² e pode omitir a unidade no bloco
+  // `units` quando pacotes são combinados. Nunca interpretar o total como W/m².
+  const normalized = (unit ?? "Wh/m²").toLowerCase().replaceAll(" ", "");
+  let result: number | null = null;
+  if (normalized.includes("j/cm") || normalized.includes("jcm")) result = value * 0.01;
+  else if (normalized.includes("mj/m") || normalized.includes("mjm")) result = value;
+  else if (normalized.includes("wh/m") || normalized.includes("whm")) result = value * 0.0036;
+  // Barreira física/auditável: totais fora da faixa diária plausível não entram.
+  return result != null && result <= 45 ? result : null;
 }
 
 export function parseMeteoblueDailyPayload(payload: MeteoblueDayPayload): MeteoblueDaily[] {
