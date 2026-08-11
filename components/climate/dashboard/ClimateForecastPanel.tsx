@@ -46,7 +46,8 @@ function DailyForecast({
             <dl className="mt-4 space-y-2 border-t border-gray-100 pt-3 text-[11px] dark:border-white/[0.06]">
               <ForecastMetric label="Umidade" value={`${formatNumber(day.relativeHumidityPct, 0)}%`} />
               <ForecastMetric label="Chuva" value={`${formatNumber(day.precipitationMm)} mm`} tone="blue" />
-              <ForecastMetric label="Probabilidade" value={`${formatNumber(day.precipitationProbabilityPct, 0)}%`} />
+              <ForecastMetric label="Prob. chuva MB" value={`${formatNumber(day.precipitationProbabilityMeteobluePct, 0)}%`} />
+              <ForecastMetric label="Radiação MB" value={`${formatNumber(day.solarRadiationMeteoblueMjM2Day)} MJ/m²`} tone="amber" />
               <ForecastMetric label="ETo PM" value={`${formatNumber(day.etoMm)} mm`} tone="green" />
               <ForecastMetric label="ETo Meteoblue" value={`${formatNumber(day.etoMeteoblueMm)} mm`} tone="blue" />
               <ForecastMetric label="ETo HS" value={`${formatNumber(day.etoHargreavesSamaniMm)} mm`} tone="amber" />
@@ -165,7 +166,7 @@ export function ClimateForecastPanel({
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Previsão</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Open-Meteo + ETo FAO Meteoblue Agro · comparação em validação</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Open-Meteo + Meteoblue Basic/Agro/Solar · comparação em validação</p>
         </div>
         <div className="flex w-fit rounded-xl bg-gray-100 p-1 dark:bg-white/[0.05]" aria-label="Intervalo da previsão">
           {(["daily", "hourly"] as const).map((item) => (
