@@ -1,7 +1,7 @@
 // ============================================================================
 // Provider meteoblue (https://www.meteoblue.com/)
 // ----------------------------------------------------------------------------
-// Busca dados diários via Packages API (basic-day + agro-day). Não persiste nada —
+// Busca dados diários via Packages API (basic-day + agro-day + solar-day). Não persiste nada —
 // apenas normaliza e devolve para o serviço de ingestão.
 //
 // Chave: METEOBLUE_API_KEY (server-only, nunca exposta ao client).
@@ -10,7 +10,7 @@
 export const METEOBLUE_PROVIDER = "meteoblue";
 export const METEOBLUE_ATTRIBUTION = "Weather data by meteoblue.com";
 
-const PACKAGES_URL = "https://my.meteoblue.com/packages/basic-day_agro-day";
+const PACKAGES_URL = "https://my.meteoblue.com/packages/basic-day_agro-day_solar-day";
 
 function getApiKey(): string {
   const key = (process.env.METEOBLUE_API_KEY ?? "").trim();
@@ -30,7 +30,9 @@ export interface MeteoblueDaily {
   humidity: number | null;
   windSpeed: number | null;
   precipitation: number | null;
+  precipitationProbabilityPct: number | null;
   pressureHpa: number | null;
+  solarRadiationMjM2Day: number | null;
   referenceEtoFaoMm: number | null;
   evapotranspirationMm: number | null;
   potentialEvapotranspirationMm: number | null;
@@ -74,6 +76,9 @@ async function fetchJsonWithRetry(url: string, attempts = 3): Promise<unknown> {
 }
 
 export interface MeteoblueDayPayload {
+  units?: {
+    ghi_total?: string;
+  };
   data_day?: {
     time?: string[];
     temperature_max?: (number | null)[];
@@ -82,11 +87,25 @@ export interface MeteoblueDayPayload {
     relativehumidity_mean?: (number | null)[];
     windspeed_mean?: (number | null)[];
     precipitation?: (number | null)[];
+    precipitation_probability?: (number | null)[];
     sealevelpressure_mean?: (number | null)[];
     referenceevapotranspiration_fao?: (number | null)[];
     evapotranspiration?: (number | null)[];
     potentialevapotranspiration?: (number | null)[];
+    ghi_total?: (number | null)[];
   };
+}
+
+export function meteoblueGhiToMjM2Day(
+  value: number | null | undefined,
+  unit: string | null | undefined,
+): number | null {
+  if (value == null || !Number.isFinite(value) || value < 0) return null;
+  const normalized = (unit ?? "J/cm²").toLowerCase().replaceAll(" ", "");
+  if (normalized.includes("j/cm") || normalized.includes("jcm")) return value * 0.01;
+  if (normalized.includes("mj/m") || normalized.includes("mjm")) return value;
+  if (normalized.includes("wh/m") || normalized.includes("whm")) return value * 0.0036;
+  return null;
 }
 
 export function parseMeteoblueDailyPayload(payload: MeteoblueDayPayload): MeteoblueDaily[] {
@@ -103,7 +122,12 @@ export function parseMeteoblueDailyPayload(payload: MeteoblueDayPayload): Meteob
       humidity: d.relativehumidity_mean?.[i] ?? null,
       windSpeed: windKmh != null ? windKmh / 3.6 : null,
       precipitation: d.precipitation?.[i] ?? null,
+      precipitationProbabilityPct: d.precipitation_probability?.[i] ?? null,
       pressureHpa: d.sealevelpressure_mean?.[i] ?? null,
+      solarRadiationMjM2Day: meteoblueGhiToMjM2Day(
+        d.ghi_total?.[i],
+        payload.units?.ghi_total,
+      ),
       referenceEtoFaoMm: d.referenceevapotranspiration_fao?.[i] ?? null,
       evapotranspirationMm: d.evapotranspiration?.[i] ?? null,
       potentialEvapotranspirationMm: d.potentialevapotranspiration?.[i] ?? null,
