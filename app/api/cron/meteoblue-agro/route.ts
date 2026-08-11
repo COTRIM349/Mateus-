@@ -31,6 +31,22 @@ export async function GET(request: Request) {
       detail: err instanceof Error ? err.message : "Erro de configuração desconhecido",
     }, { status: 500 });
   }
+
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() ?? "";
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY?.trim() ?? "";
+  const serviceKeyType = serviceRoleKey.startsWith("sb_secret_")
+    ? "sb_secret"
+    : serviceRoleKey.startsWith("eyJ")
+      ? "legacy_jwt"
+      : "unknown";
+  let supabaseHost = "invalid_url";
+  try {
+    supabaseHost = new URL(supabaseUrl).host;
+  } catch {
+    // createAdminClient already validates that a value exists. This diagnostic
+    // intentionally exposes only the host/type/length, never a secret value.
+  }
+
   const { data, error } = await supabase
     .from("virtual_weather_stations")
     .select("id, farm_id, latitude, longitude, elevation_m, timezone")
@@ -39,7 +55,14 @@ export async function GET(request: Request) {
     .limit(20);
 
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({
+      error: error.message,
+      diagnostic: {
+        supabaseHost,
+        serviceKeyType,
+        serviceKeyLength: serviceRoleKey.length,
+      },
+    }, { status: 500 });
   }
 
   const results: Array<{
