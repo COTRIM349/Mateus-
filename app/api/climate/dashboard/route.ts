@@ -824,10 +824,17 @@ export async function GET(request: Request) {
       relativeHumidityPct: forecast.humidity,
       precipitationMm: forecast.precipitation,
       precipitationProbabilityPct: forecast.precipitation_probability,
+      precipitationMeteoblueMm: meteoblueForecast?.precipitation ?? null,
       precipitationProbabilityMeteobluePct: meteoblueForecast?.precipitation_probability ?? null,
       solarRadiationMeteoblueMjM2Day: meteoblueForecast?.solar_radiation ?? null,
       etoMm: forecast.et0_source,
       etoMeteoblueMm: meteoblueForecast?.et0_source ?? null,
+      etoOperationalMm: meteoblueForecast?.et0_source ?? forecast.et0_source ?? null,
+      etoOperationalSource: meteoblueForecast?.et0_source != null
+        ? "meteoblue_fao"
+        : forecast.et0_source != null
+          ? "open_meteo_pm_fao56"
+          : null,
       etoMeteoblueIssuedAt: meteoblueForecast?.issued_at ?? null,
       etoMeteoblueDeltaMm: meteoblueDeltaMm,
       etoMeteoblueDeltaPct: meteoblueDeltaPct,
