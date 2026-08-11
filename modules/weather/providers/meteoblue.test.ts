@@ -48,6 +48,8 @@ describe("meteoblue daily Agro provider", () => {
   it("recusa unidade de radiação desconhecida em vez de gravar valor incorreto", () => {
     expect(meteoblueGhiToMjM2Day(2000, "unknown")).toBeNull();
     expect(meteoblueGhiToMjM2Day(2000, "Wh/m²")).toBeCloseTo(7.2);
+    expect(meteoblueGhiToMjM2Day(6165, undefined)).toBeCloseTo(22.194);
+    expect(meteoblueGhiToMjM2Day(6165, "J/cm²")).toBeNull();
   });
 
   it("preserva a ETo FAO fornecida pela Meteoblue sem recalcular", () => {
