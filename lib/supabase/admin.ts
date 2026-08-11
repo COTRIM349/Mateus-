@@ -14,5 +14,11 @@ export function createAdminClient() {
       persistSession: false,
       detectSessionInUrl: false,
     },
+    global: {
+      fetch: (input, init) => fetch(input, {
+        ...init,
+        cache: "no-store",
+      }),
+    },
   });
 }
