@@ -191,10 +191,13 @@ export interface ClimateDashboardResponse {
     relativeHumidityPct: number | null;
     precipitationMm: number | null;
     precipitationProbabilityPct: number | null;
+    precipitationMeteoblueMm: number | null;
     precipitationProbabilityMeteobluePct: number | null;
     solarRadiationMeteoblueMjM2Day: number | null;
     etoMm: number | null;
     etoMeteoblueMm: number | null;
+    etoOperationalMm: number | null;
+    etoOperationalSource: "meteoblue_fao" | "open_meteo_pm_fao56" | null;
     etoMeteoblueIssuedAt: string | null;
     etoMeteoblueDeltaMm: number | null;
     etoMeteoblueDeltaPct: number | null;
