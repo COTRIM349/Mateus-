@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import type { ClimateDashboardResponse } from "@/modules/weather/dashboard/climateDashboard";
 import { ClimateWeatherIcon } from "./ClimateWeatherIcon";
@@ -19,41 +16,42 @@ function DailyForecast({
 
   return (
     <>
-    <div className="overflow-x-auto pb-2">
-      <div className="grid min-w-[980px] grid-cols-7 gap-3">
+    <div className="overflow-x-auto pb-3">
+      <div className="grid min-w-[1040px] grid-cols-7 gap-3 xl:min-w-0">
       {days.map((day) => {
         const date = new Date(`${day.date}T12:00:00`);
         const isToday = day.date === today;
         return (
-          <article key={day.id} className={`flex min-h-[300px] flex-col rounded-2xl border p-4 ${isToday ? "border-brand-200 bg-brand-50/40 dark:border-brand-700/40 dark:bg-brand-900/10" : "border-gray-100 bg-white dark:border-white/[0.06] dark:bg-graphite-800"}`}>
+          <article key={day.id} className={`relative flex min-h-[420px] flex-col overflow-hidden rounded-2xl border px-4 pb-4 pt-5 transition-shadow hover:shadow-lg ${isToday ? "border-brand-300 bg-gradient-to-b from-brand-50/80 to-white shadow-sm ring-1 ring-brand-100 dark:border-brand-700/50 dark:from-brand-900/20 dark:to-graphite-800 dark:ring-brand-800/30" : "border-gray-100 bg-white shadow-sm dark:border-white/[0.06] dark:bg-graphite-800"}`}>
+            <span aria-hidden="true" className={`absolute inset-x-0 top-0 h-1 ${isToday ? "bg-brand-600" : "bg-gradient-to-r from-transparent via-gray-200 to-transparent dark:via-white/10"}`} />
             <div className="text-center">
-              <p className={`text-[13px] font-extrabold uppercase ${isToday ? "text-brand-700 dark:text-brand-400" : "text-graphite-800 dark:text-white"}`}>
-                {isToday ? "Hoje" : weekdayLabel(day.date)}
+              <p className={`text-[15px] font-black uppercase tracking-wide ${isToday ? "text-brand-700 dark:text-brand-400" : "text-graphite-900 dark:text-white"}`}>
+                {weekdayLabel(day.date)}
               </p>
-              <p className="mt-0.5 text-[10px] text-graphite-400 dark:text-gray-500">
-                {date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
+              <p className="mt-1 text-[11px] font-medium text-graphite-500 dark:text-gray-400">
+                {isToday ? "Hoje" : date.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}
               </p>
             </div>
 
-            <div className="my-3 flex justify-center">
-              <ClimateWeatherIcon condition={day.condition} size={48} />
+            <div className="mx-auto my-5 flex h-[76px] w-[76px] items-center justify-center rounded-full bg-gradient-to-br from-amber-50 to-orange-50 ring-1 ring-amber-100 dark:from-amber-500/10 dark:to-orange-500/5 dark:ring-amber-500/10">
+              <ClimateWeatherIcon condition={day.condition} size={54} />
             </div>
 
-            <p className="text-center text-[15px] font-extrabold tabular-nums">
-              <span className="text-red-500">{formatNumber(day.tempMaxC)}°</span>
-              <span className="mx-1 text-graphite-300">/</span>
-              <span className="text-blue-500">{formatNumber(day.tempMinC)}°</span>
+            <p className="text-center text-[17px] font-black tabular-nums">
+              <span className="text-orange-600">{formatNumber(day.tempMaxC)}°C</span>
+              <span className="mx-2 text-graphite-300 dark:text-gray-600">/</span>
+              <span className="text-brand-700 dark:text-brand-400">{formatNumber(day.tempMinC)}°C</span>
             </p>
 
-            <div className="mt-4 border-t border-gray-100 pt-3 text-center dark:border-white/[0.06]">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-blue-600 dark:text-blue-400">Chuva</p>
-              <p className="mt-1 text-[12px] font-bold tabular-nums text-graphite-700 dark:text-gray-200">
+            <div className="mt-5 rounded-xl bg-blue-50/70 px-3 py-3 text-center dark:bg-blue-500/[0.06]">
+              <p className="text-[11px] font-extrabold text-blue-700 dark:text-blue-400">Chuva</p>
+              <p className="mt-1.5 text-[13px] font-bold tabular-nums text-graphite-700 dark:text-gray-200">
                 {formatNumber(day.precipitationProbabilityMeteobluePct, 0)}% · {formatNumber(day.precipitationMeteoblueMm)} mm
               </p>
             </div>
-            <div className="mt-auto border-t border-gray-100 pt-3 text-center dark:border-white/[0.06]">
-              <p className="text-[10px] font-bold uppercase tracking-wide text-graphite-400 dark:text-gray-500">ETo</p>
-              <p className="mt-1 text-[16px] font-extrabold tabular-nums text-brand-700 dark:text-brand-400">
+            <div className="mt-auto rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-3 text-center dark:border-brand-700/20 dark:bg-brand-500/[0.07]">
+              <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-brand-700 dark:text-brand-400">ETo operacional</p>
+              <p className="mt-1 text-[18px] font-black tabular-nums text-brand-800 dark:text-brand-300">
                 {formatNumber(day.etoOperationalMm)} mm
               </p>
               {day.etoOperationalSource === "open_meteo_pm_fao56" ? (
@@ -65,7 +63,7 @@ function DailyForecast({
       })}
       </div>
     </div>
-    <details className="mt-4 rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
+    <details className="mt-3 rounded-xl border border-gray-100 bg-gray-50/70 px-4 py-3 dark:border-white/[0.06] dark:bg-white/[0.03]">
       <summary className="cursor-pointer text-[11px] font-bold text-graphite-600 dark:text-gray-300">
         Ver detalhes: umidade, vento e radiação
       </summary>
@@ -76,7 +74,7 @@ function DailyForecast({
         </table>
       </div>
     </details>
-    <details className="mt-3 rounded-xl border border-gray-100 px-4 py-3 dark:border-white/[0.06]">
+    <details id="eto-audit" className="mt-3 rounded-xl border border-gray-100 px-4 py-3 dark:border-white/[0.06]">
       <summary className="cursor-pointer text-[11px] font-bold text-graphite-600 dark:text-gray-300">Auditoria da ETo</summary>
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[1640px] text-left text-[10px]">
@@ -85,7 +83,7 @@ function DailyForecast({
         </table>
       </div>
     </details>
-    <p className="mt-4 text-[10px] text-graphite-400 dark:text-gray-500">Meteoblue Basic + Agro + Solar · atualização 06:15 e 18:15 · modelo em validação</p>
+    <p className="mt-4 text-center text-[10px] text-graphite-400 dark:text-gray-500">Meteoblue Basic + Agro + Solar · atualização 06:15 e 18:15 · modelo em validação</p>
     </>
   );
 }
@@ -155,35 +153,25 @@ export function ClimateForecastPanel({
   timezone: string;
   today: string;
 }) {
-  const [mode, setMode] = useState<"daily" | "hourly">("daily");
-
   return (
-    <Card className="p-0">
+    <Card className="min-h-[600px] overflow-hidden p-0">
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 xl:flex-row xl:items-center xl:justify-between dark:border-white/[0.06]">
         <div>
-          <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Previsão de 7 dias</h2>
+          <h2 className="text-[18px] font-black text-graphite-900 dark:text-white">Previsão de 7 dias</h2>
           <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Meteoblue Basic + Agro + Solar · modelo em validação</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-lg bg-brand-700 px-3 py-2 text-[10px] font-extrabold text-white">ETo: Meteoblue FAO</span>
+          <span className="rounded-xl bg-brand-700 px-4 py-2.5 text-[11px] font-extrabold text-white shadow-sm">ETo: Meteoblue FAO</span>
           <span className="rounded-lg border border-amber-300 px-3 py-2 text-[10px] font-bold text-amber-700 dark:border-amber-700 dark:text-amber-300">Sem estação local</span>
-          <div className="flex w-fit rounded-xl bg-gray-100 p-1 dark:bg-white/[0.05]" aria-label="Intervalo da previsão">
-            {(["daily", "hourly"] as const).map((item) => (
-              <button
-                key={item}
-                type="button"
-                aria-pressed={mode === item}
-                onClick={() => setMode(item)}
-                className={`rounded-lg px-4 py-2 text-[11px] font-bold transition-colors ${mode === item ? "bg-white text-brand-700 shadow-sm dark:bg-graphite-700 dark:text-brand-400" : "text-graphite-400 hover:text-graphite-700 dark:text-gray-500 dark:hover:text-gray-300"}`}
-              >
-                {item === "daily" ? "Diária" : "Horária"}
-              </button>
-            ))}
-          </div>
+          <a href="#eto-audit" className="rounded-lg px-3 py-2 text-[11px] font-extrabold text-graphite-700 transition-colors hover:bg-gray-100 hover:text-brand-700 dark:text-gray-300 dark:hover:bg-white/[0.05]">Auditoria →</a>
         </div>
       </div>
       <div className="p-5 sm:p-6">
-        {mode === "daily" ? <DailyForecast days={daily} today={today} /> : <HourlyForecast hours={hourly} timezone={timezone} />}
+        <DailyForecast days={daily} today={today} />
+        <details className="mt-3 rounded-xl border border-gray-100 px-4 py-3 dark:border-white/[0.06]">
+          <summary className="cursor-pointer text-[11px] font-bold text-graphite-600 dark:text-gray-300">Previsão horária</summary>
+          <div className="mt-3"><HourlyForecast hours={hourly} timezone={timezone} /></div>
+        </details>
       </div>
     </Card>
   );
