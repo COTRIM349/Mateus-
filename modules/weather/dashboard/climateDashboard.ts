@@ -192,6 +192,10 @@ export interface ClimateDashboardResponse {
     precipitationMm: number | null;
     precipitationProbabilityPct: number | null;
     etoMm: number | null;
+    etoMeteoblueMm: number | null;
+    etoMeteoblueIssuedAt: string | null;
+    etoMeteoblueDeltaMm: number | null;
+    etoMeteoblueDeltaPct: number | null;
     etoHargreavesSamaniMm: number | null;
     etoAsceEwriMm: number | null;
     etoPriestleyTaylorMm: number | null;

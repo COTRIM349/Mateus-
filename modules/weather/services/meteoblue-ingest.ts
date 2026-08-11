@@ -2,8 +2,8 @@
 // Serviço de ingestão meteoblue
 // ----------------------------------------------------------------------------
 // Grava observações/forecast da meteoblue em weather_readings com
-// origin='meteoblue'. NÃO calcula ET₀ (meteoblue básico não fornece
-// radiação solar). Nunca altera weather_daily_selection.
+// origin='meteoblue'. A ETo FAO é recebida diretamente do pacote agro-day;
+// não é recalculada por este serviço. Nunca altera weather_daily_selection.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -32,6 +32,7 @@ export async function ingestMeteoblueObservations(
       latitude: station.latitude,
       longitude: station.longitude,
       timezone: station.timezone || "America/Sao_Paulo",
+      elevationM: station.altitude,
     });
     requestUrl = result.requestUrl;
     const { daily } = result;
@@ -69,14 +70,14 @@ export async function ingestMeteoblueObservations(
         solar_radiation: null,
         precipitation: d.precipitation ?? 0,
         sunshine: null,
-        et0_source: null,
+        et0_source: d.referenceEtoFaoMm,
         et0_calculated: null,
         et0_delta: null,
         et0_delta_pct: null,
         effective_precip: null,
         data_kind: "model_estimate",
         origin: METEOBLUE_PROVIDER,
-        data_quality: "degraded",
+        data_quality: d.referenceEtoFaoMm == null ? "degraded" : "ok",
         imported_at: new Date().toISOString(),
         is_locked: false,
       };
@@ -172,18 +173,30 @@ export async function ingestMeteoblueForecast(
   supabase: SupabaseClient,
   station: IngestionStation,
   days = 7,
-): Promise<{ rowsInserted: number; rowsUpdated: number; errorMessage: string | null }> {
+): Promise<{
+  rowsInserted: number;
+  rowsUpdated: number;
+  errorMessage: string | null;
+  requestUrl: string | null;
+  etoDaysReceived: number;
+}> {
   let rowsInserted = 0;
   let rowsUpdated = 0;
   let errorMessage: string | null = null;
+  let requestUrl: string | null = null;
+  let etoDaysReceived = 0;
 
   try {
-    const { daily } = await fetchMeteoblueDaily({
+    const result = await fetchMeteoblueDaily({
       latitude: station.latitude,
       longitude: station.longitude,
       timezone: station.timezone || "America/Sao_Paulo",
       forecastDays: days,
+      elevationM: station.altitude,
     });
+    requestUrl = result.requestUrl;
+    const daily = result.daily.slice(0, days);
+    etoDaysReceived = daily.filter((day) => day.referenceEtoFaoMm != null).length;
 
     const issuedAt = new Date().toISOString();
     const issuedDay = new Date(issuedAt.slice(0, 10) + "T12:00:00Z");
@@ -211,7 +224,8 @@ export async function ingestMeteoblueForecast(
         solar_radiation: null,
         precipitation: d.precipitation,
         precipitation_probability: null,
-        et0_source: null,
+        // Valor fornecido pela própria Meteoblue no pacote agro-day.
+        et0_source: d.referenceEtoFaoMm,
         et0_calculated: null,
         imported_at: new Date().toISOString(),
       };
@@ -233,5 +247,5 @@ export async function ingestMeteoblueForecast(
     errorMessage = err instanceof Error ? err.message : String(err);
   }
 
-  return { rowsInserted, rowsUpdated, errorMessage };
+  return { rowsInserted, rowsUpdated, errorMessage, requestUrl, etoDaysReceived };
 }

@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/meteoblue-agro",
+      "schedule": "15 9,21 * * *"
+    }
+  ]
+}

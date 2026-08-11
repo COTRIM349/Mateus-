@@ -177,6 +177,7 @@ export async function GET(request: Request) {
 
   const stations = (stationsResult.data ?? []) as StationRow[];
   const station = stations.find((item) => item.data_source === "open_meteo") ?? stations[0];
+  const meteoblueStation = stations.find((item) => item.data_source === "meteoblue") ?? null;
   if (!station) {
     return NextResponse.json(
       { error: "Nenhuma estação climática ativa encontrada para a fazenda" },
@@ -234,6 +235,7 @@ export async function GET(request: Request) {
   const [
     readingsResult,
     forecastsResult,
+    meteoblueForecastsResult,
     providersResult,
     runsResult,
     currentConsensusResult,
@@ -258,6 +260,16 @@ export async function GET(request: Request) {
       .gte("target_date", today)
       .order("issued_at", { ascending: false })
       .limit(400),
+    meteoblueStation
+      ? supabase
+          .from("weather_forecasts")
+          .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source")
+          .eq("station_id", meteoblueStation.id)
+          .eq("provider", "meteoblue")
+          .gte("target_date", today)
+          .order("issued_at", { ascending: false })
+          .limit(400)
+      : emptyResult,
     virtualStation
       ? supabase
           .from("virtual_weather_station_providers")
@@ -314,6 +326,7 @@ export async function GET(request: Request) {
   const queryError = [
     readingsResult.error,
     forecastsResult.error,
+    meteoblueForecastsResult.error,
     providersResult.error,
     runsResult.error,
     currentConsensusResult.error,
@@ -327,6 +340,12 @@ export async function GET(request: Request) {
   const readings = (readingsResult.data ?? []) as ClimateReadingInput[];
   const forecasts = selectLatestOfficialForecastPerDay(
     (forecastsResult.data ?? []) as ClimateForecastInput[],
+  );
+  const meteoblueForecasts = selectLatestOfficialForecastPerDay(
+    (meteoblueForecastsResult.data ?? []) as ClimateForecastInput[],
+  );
+  const meteoblueForecastByDate = new Map(
+    meteoblueForecasts.map((forecast) => [forecast.target_date, forecast]),
   );
   const eto = buildEtoSummary(readings, today);
   const etoLatitude = virtualStation?.latitude ?? station.latitude;
@@ -784,7 +803,15 @@ export async function GET(request: Request) {
       outlierProviders: currentConsensus?.outlier_providers ?? [],
     },
     providerComparison,
-    dailyForecast: forecasts.map((forecast) => ({
+    dailyForecast: forecasts.map((forecast) => {
+      const meteoblueForecast = meteoblueForecastByDate.get(forecast.target_date) ?? null;
+      const meteoblueDeltaMm = forecast.et0_source != null && meteoblueForecast?.et0_source != null
+        ? meteoblueForecast.et0_source - forecast.et0_source
+        : null;
+      const meteoblueDeltaPct = meteoblueDeltaMm != null && forecast.et0_source != null && forecast.et0_source !== 0
+        ? (meteoblueDeltaMm / forecast.et0_source) * 100
+        : null;
+      return {
       id: forecast.id,
       date: forecast.target_date,
       issuedAt: forecast.issued_at,
@@ -798,6 +825,10 @@ export async function GET(request: Request) {
       precipitationMm: forecast.precipitation,
       precipitationProbabilityPct: forecast.precipitation_probability,
       etoMm: forecast.et0_source,
+      etoMeteoblueMm: meteoblueForecast?.et0_source ?? null,
+      etoMeteoblueIssuedAt: meteoblueForecast?.issued_at ?? null,
+      etoMeteoblueDeltaMm: meteoblueDeltaMm,
+      etoMeteoblueDeltaPct: meteoblueDeltaPct,
       etoHargreavesSamaniMm: hargreavesForecastById.get(forecast.id) ?? null,
       etoAsceEwriMm: forecastMethodValues.get(forecast.id)?.asceEwri ?? null,
       etoPriestleyTaylorMm: forecastMethodValues.get(forecast.id)?.priestleyTaylor ?? null,
@@ -810,7 +841,8 @@ export async function GET(request: Request) {
       etoIvanovMm: forecastMethodValues.get(forecast.id)?.ivanov ?? null,
       etoCamargo1971Mm: forecastMethodValues.get(forecast.id)?.camargo1971 ?? null,
       windSpeed2mMs: forecast.wind_speed,
-    })),
+      };
+    }),
     hourlyForecast: hourlyOpenMeteo.map((row) => ({
       intervalStart: row.interval_start,
       condition: climateCondition(row.precipitation_mm),
@@ -834,9 +866,10 @@ export async function GET(request: Request) {
     publicReferences,
     attribution: [
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
+      "ETo FAO da Meteoblue recebida diretamente do pacote agro-day, sem recálculo pela plataforma; sincronização às 06:15 e 18:15 America/Bahia",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
-      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle, Makkink, Jensen-Haise, Turc, Linacre, Ivanov e Camargo 1971 calculados pela Cotrim",
+      "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; FAO da Meteoblue; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle, Makkink, Jensen-Haise, Turc, Linacre, Ivanov e Camargo 1971 calculados pela Cotrim",
       "Blaney-Criddle e Ivanov são originalmente mensais; suas leituras diárias são apenas equivalentes comparativos. Makkink e Turc dependem da radiação solar diária e ficam sem valor quando essa entrada falta",
       "Linacre usa ponto de orvalho derivado de temperatura e umidade; Turc foi desenvolvido para condições úmidas. Camargo 1971 e Thornthwaite-Camargo usam normal anual de temperatura NASA POWER",
       "Todos os métodos permanecem não validados por estação física local e bloqueados para uso operacional automático",

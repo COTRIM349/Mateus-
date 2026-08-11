@@ -48,6 +48,7 @@ function DailyForecast({
               <ForecastMetric label="Chuva" value={`${formatNumber(day.precipitationMm)} mm`} tone="blue" />
               <ForecastMetric label="Probabilidade" value={`${formatNumber(day.precipitationProbabilityPct, 0)}%`} />
               <ForecastMetric label="ETo PM" value={`${formatNumber(day.etoMm)} mm`} tone="green" />
+              <ForecastMetric label="ETo Meteoblue" value={`${formatNumber(day.etoMeteoblueMm)} mm`} tone="blue" />
               <ForecastMetric label="ETo HS" value={`${formatNumber(day.etoHargreavesSamaniMm)} mm`} tone="amber" />
               <ForecastMetric label="Vento" value={`${formatNumber(day.windSpeed2mMs)} m/s`} />
             </dl>
@@ -56,6 +57,7 @@ function DailyForecast({
                 Outros métodos de ETo
               </summary>
               <dl className="mt-2 space-y-1.5 text-[10px]">
+                <ForecastMetric label="Dif. Meteoblue × PM" value={`${formatNumber(day.etoMeteoblueDeltaMm)} mm (${formatNumber(day.etoMeteoblueDeltaPct, 0)}%)`} />
                 <ForecastMetric label="ASCE ETos" value={`${formatNumber(day.etoAsceEwriMm)} mm`} />
                 <ForecastMetric label="Priestley-Taylor" value={`${formatNumber(day.etoPriestleyTaylorMm)} mm`} />
                 <ForecastMetric label="Thornthwaite-Camargo" value={`${formatNumber(day.etoThornthwaiteCamargoMm)} mm`} />
@@ -163,7 +165,7 @@ export function ClimateForecastPanel({
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 sm:flex-row sm:items-center sm:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Previsão</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Estimativas Open-Meteo · não validadas por estação física local</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Open-Meteo + ETo FAO Meteoblue Agro · comparação em validação</p>
         </div>
         <div className="flex w-fit rounded-xl bg-gray-100 p-1 dark:bg-white/[0.05]" aria-label="Intervalo da previsão">
           {(["daily", "hourly"] as const).map((item) => (
