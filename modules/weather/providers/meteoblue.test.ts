@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   buildMeteoblueDailyUrl,
+  meteoblueGhiToMjM2Day,
   parseMeteoblueDailyPayload,
   redactKey,
 } from "./meteoblue";
@@ -13,7 +14,7 @@ afterEach(() => {
 });
 
 describe("meteoblue daily Agro provider", () => {
-  it("consulta basic-day e agro-day com coordenada, altitude e fuso corretos", () => {
+  it("consulta basic-day, agro-day e solar-day com coordenada, altitude e fuso corretos", () => {
     process.env.METEOBLUE_API_KEY = "secret-test-key";
     const url = buildMeteoblueDailyUrl({
       latitude: -14.776019,
@@ -22,12 +23,31 @@ describe("meteoblue daily Agro provider", () => {
       timezone: "America/Bahia",
     });
 
-    expect(url).toContain("/packages/basic-day_agro-day");
+    expect(url).toContain("/packages/basic-day_agro-day_solar-day");
     expect(url).toContain("lat=-14.776019");
     expect(url).toContain("lon=-45.566547");
     expect(url).toContain("asl=856");
     expect(url).toContain("tz=America%2FBahia");
     expect(redactKey(url)).not.toContain("secret-test-key");
+  });
+
+  it("preserva probabilidade de chuva e converte GHI diário para MJ/m²/dia", () => {
+    const [day] = parseMeteoblueDailyPayload({
+      units: { ghi_total: "J/cm²" },
+      data_day: {
+        time: ["2026-08-11"],
+        precipitation_probability: [35],
+        ghi_total: [2140],
+      },
+    });
+
+    expect(day.precipitationProbabilityPct).toBe(35);
+    expect(day.solarRadiationMjM2Day).toBeCloseTo(21.4);
+  });
+
+  it("recusa unidade de radiação desconhecida em vez de gravar valor incorreto", () => {
+    expect(meteoblueGhiToMjM2Day(2000, "unknown")).toBeNull();
+    expect(meteoblueGhiToMjM2Day(2000, "Wh/m²")).toBeCloseTo(7.2);
   });
 
   it("preserva a ETo FAO fornecida pela Meteoblue sem recalcular", () => {
