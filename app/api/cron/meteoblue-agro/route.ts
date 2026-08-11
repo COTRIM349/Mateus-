@@ -58,6 +58,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       error: error.message,
       diagnostic: {
+        version: "2026-08-11.2",
         supabaseHost,
         serviceKeyType,
         serviceKeyLength: serviceRoleKey.length,
