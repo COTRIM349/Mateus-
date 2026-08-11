@@ -824,6 +824,8 @@ export async function GET(request: Request) {
       relativeHumidityPct: forecast.humidity,
       precipitationMm: forecast.precipitation,
       precipitationProbabilityPct: forecast.precipitation_probability,
+      precipitationProbabilityMeteobluePct: meteoblueForecast?.precipitation_probability ?? null,
+      solarRadiationMeteoblueMjM2Day: meteoblueForecast?.solar_radiation ?? null,
       etoMm: forecast.et0_source,
       etoMeteoblueMm: meteoblueForecast?.et0_source ?? null,
       etoMeteoblueIssuedAt: meteoblueForecast?.issued_at ?? null,
@@ -866,7 +868,7 @@ export async function GET(request: Request) {
     publicReferences,
     attribution: [
       "Dados de previsão por Open-Meteo.com (CC-BY 4.0)",
-      "ETo FAO da Meteoblue recebida diretamente do pacote agro-day, sem recálculo pela plataforma; sincronização às 06:15 e 18:15 America/Bahia",
+      "Meteoblue: probabilidade de chuva do basic-day, ETo FAO do agro-day sem recálculo e GHI diário do solar-day convertido para MJ/m²/dia; sincronização às 06:15 e 18:15 America/Bahia",
       "NASA POWER usada como referência diária de satélite e reanálise; não entra diretamente na ETo",
       "Estações públicas INMET usadas somente como referência externa; dados horários brutos e não validados pelo órgão",
       "Métodos de ETo exibidos separadamente: PM FAO-56 do Open-Meteo; FAO da Meteoblue; Hargreaves-Samani, ASCE-EWRI ETos, Priestley-Taylor, Thornthwaite-Camargo, Blaney-Criddle, Makkink, Jensen-Haise, Turc, Linacre, Ivanov e Camargo 1971 calculados pela Cotrim",
