@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   buildEtoSummary,
   climateCondition,
+  ensureDailyForecastWindow,
   haversineDistanceKm,
   latestCandidatePerInterval,
   latestCandidatePerProvider,
@@ -338,8 +339,10 @@ export async function GET(request: Request) {
   }
 
   const readings = (readingsResult.data ?? []) as ClimateReadingInput[];
-  const forecasts = selectLatestOfficialForecastPerDay(
+  const forecasts = ensureDailyForecastWindow(
     (forecastsResult.data ?? []) as ClimateForecastInput[],
+    today,
+    7,
   );
   const meteoblueForecasts = selectLatestOfficialForecastPerDay(
     (meteoblueForecastsResult.data ?? []) as ClimateForecastInput[],
