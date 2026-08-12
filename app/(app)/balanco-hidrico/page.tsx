@@ -237,6 +237,8 @@ export default function BalancoHidricoPage() {
         .select("*")
         .eq("pivot_id", selectedPivotId)
         .eq("active", true)
+        // Sprint 13 · Etapa 6 — só considera parcela em manejo.
+        .or("status.is.null,status.eq.ativa")
         .order("created_at", { ascending: false })
         .limit(1)
         .single();

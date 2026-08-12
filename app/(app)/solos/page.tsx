@@ -706,11 +706,13 @@ function AssociationTab({
   const fetchAssignments = useCallback(async () => {
     if (!selectedSoilId) { setAssignments([]); return; }
     setLoading(true);
+    // Sprint 13 · Etapa 6 — só parcelas ativas neste solo.
     const { data } = await supabase
       .from("pivot_crop_assignments")
       .select("id, pivot_id, soil_id, pivots(name), seasons(name), cultures(name)")
       .eq("soil_id", selectedSoilId)
-      .eq("active", true);
+      .eq("active", true)
+      .or("status.is.null,status.eq.ativa");
     if (data) {
       setAssignments(
         data.map((d) => ({
