@@ -3,10 +3,12 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ReactNode } from "react";
+import { useAuth } from "@/components/providers";
 
 export default function ClimaLayout({ children }: { children: ReactNode }) {
   const pathname = usePathname();
   const observabilidade = pathname.includes("/clima/observabilidade");
+  const { profile } = useAuth();
 
   return (
     <div className="space-y-4">
@@ -21,7 +23,7 @@ export default function ClimaLayout({ children }: { children: ReactNode }) {
         >
           Clima atual
         </Link>
-        <Link
+        {profile?.role === "admin" ? <Link
           href="/clima/observabilidade"
           className={`rounded-xl px-4 py-2 text-sm font-semibold transition ${
             observabilidade
@@ -29,8 +31,8 @@ export default function ClimaLayout({ children }: { children: ReactNode }) {
               : "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/[0.08]"
           }`}
         >
-          Observabilidade V2
-        </Link>
+          Dados administrativos
+        </Link> : null}
         <span className="ml-auto hidden text-xs text-graphite-400 dark:text-gray-500 md:inline">
           CLIMA V2 em Shadow Mode
         </span>

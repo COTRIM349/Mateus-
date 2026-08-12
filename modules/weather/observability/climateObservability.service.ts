@@ -15,6 +15,12 @@ export interface ClimateObservabilityProvider {
   responseLatitude: number | null;
   responseLongitude: number | null;
   coordinateDistanceKm: number | null;
+  temperatureC: number | null;
+  relativeHumidityPct: number | null;
+  precipitationMm: number | null;
+  windSpeed2mMs: number | null;
+  solarRadiationWm2: number | null;
+  surfacePressureKpa: number | null;
 }
 
 export interface ClimateObservabilityRun {
@@ -156,7 +162,7 @@ export async function getClimateObservabilitySnapshot(
 
   const { data: candidateRows, error: candidateError } = await supabase
     .from("weather_interval_30m_candidates")
-    .select("provider, fetched_at, quality_status, interval_start")
+    .select("provider, fetched_at, quality_status, interval_start, temperature_c, relative_humidity_pct, precipitation_mm, wind_speed_2m_ms, solar_radiation_wm2, surface_pressure_kpa")
     .eq("virtual_station_id", input.virtualStationId)
     .gte("interval_start", since)
     .order("fetched_at", { ascending: false });
@@ -218,7 +224,7 @@ export async function getClimateObservabilitySnapshot(
     }
   }
 
-  const latestCandidate = new Map<string, { fetchedAt: string; qualityStatus: string | null }>();
+  const latestCandidate = new Map<string, { fetchedAt: string; qualityStatus: string | null; temperatureC: number | null; relativeHumidityPct: number | null; precipitationMm: number | null; windSpeed2mMs: number | null; solarRadiationWm2: number | null; surfacePressureKpa: number | null }>();
   const candidateCount = new Map<string, number>();
   for (const row of candidateRows ?? []) {
     const provider = row.provider as string;
@@ -227,6 +233,12 @@ export async function getClimateObservabilitySnapshot(
       latestCandidate.set(provider, {
         fetchedAt: row.fetched_at as string,
         qualityStatus: (row.quality_status as string | null) ?? null,
+        temperatureC: asFiniteNumber(row.temperature_c),
+        relativeHumidityPct: asFiniteNumber(row.relative_humidity_pct),
+        precipitationMm: asFiniteNumber(row.precipitation_mm),
+        windSpeed2mMs: asFiniteNumber(row.wind_speed_2m_ms),
+        solarRadiationWm2: asFiniteNumber(row.solar_radiation_wm2),
+        surfacePressureKpa: asFiniteNumber(row.surface_pressure_kpa),
       });
     }
   }
@@ -251,6 +263,12 @@ export async function getClimateObservabilitySnapshot(
       rowsInWindow: candidateCount.get(provider) ?? 0,
       ...coordinates,
       coordinateDistanceKm: coordinateDistanceKm(coordinates),
+      temperatureC: latestCandidate.get(provider)?.temperatureC ?? null,
+      relativeHumidityPct: latestCandidate.get(provider)?.relativeHumidityPct ?? null,
+      precipitationMm: latestCandidate.get(provider)?.precipitationMm ?? null,
+      windSpeed2mMs: latestCandidate.get(provider)?.windSpeed2mMs ?? null,
+      solarRadiationWm2: latestCandidate.get(provider)?.solarRadiationWm2 ?? null,
+      surfacePressureKpa: latestCandidate.get(provider)?.surfacePressureKpa ?? null,
     };
   });
 

@@ -11,6 +11,15 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Nao autenticado" }, { status: 401 });
   }
 
+  const { data: profile, error: profileError } = await supabase
+    .from("users")
+    .select("role")
+    .eq("id", authData.user.id)
+    .single();
+  if (profileError || profile?.role !== "admin") {
+    return NextResponse.json({ error: "Acesso exclusivo para administradores" }, { status: 403 });
+  }
+
   const url = new URL(request.url);
   const virtualStationId = url.searchParams.get("virtualStationId")?.trim();
   const hoursParam = Number(url.searchParams.get("hours") ?? "24");

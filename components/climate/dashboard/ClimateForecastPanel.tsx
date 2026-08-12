@@ -3,6 +3,38 @@ import type { ClimateDashboardResponse } from "@/modules/weather/dashboard/clima
 import { ClimateWeatherIcon } from "./ClimateWeatherIcon";
 import { formatNumber, weekdayLabel } from "./climateFormat";
 
+type DailyForecastRow = ClimateDashboardResponse["dailyForecast"][number];
+
+function addIsoDays(dateIso: string, amount: number): string {
+  const date = new Date(`${dateIso}T12:00:00Z`);
+  date.setUTCDate(date.getUTCDate() + amount);
+  return date.toISOString().slice(0, 10);
+}
+
+function emptyForecastDay(date: string): DailyForecastRow {
+  return {
+    id: `ui-missing-${date}`, date, issuedAt: "", condition: "unknown",
+    tempMaxC: null, tempMinC: null, relativeHumidityPct: null,
+    precipitationMm: null, precipitationProbabilityPct: null,
+    precipitationMeteoblueMm: null, precipitationProbabilityMeteobluePct: null,
+    solarRadiationMeteoblueMjM2Day: null, etoMm: null, etoMeteoblueMm: null,
+    etoOperationalMm: null, etoOperationalSource: null, etoMeteoblueIssuedAt: null,
+    etoMeteoblueDeltaMm: null, etoMeteoblueDeltaPct: null,
+    etoHargreavesSamaniMm: null, etoAsceEwriMm: null, etoPriestleyTaylorMm: null,
+    etoThornthwaiteCamargoMm: null, etoBlaneyCriddleMm: null, etoMakkinkMm: null,
+    etoJensenHaiseMm: null, etoTurcMm: null, etoLinacreMm: null,
+    etoIvanovMm: null, etoCamargo1971Mm: null, windSpeed2mMs: null,
+  };
+}
+
+export function ensureSevenForecastCards(days: ClimateDashboardResponse["dailyForecast"], today: string) {
+  const byDate = new Map(days.map((day) => [day.date, day]));
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = addIsoDays(today, index);
+    return byDate.get(date) ?? emptyForecastDay(date);
+  });
+}
+
 function DailyForecast({
   days,
   today,
@@ -10,15 +42,13 @@ function DailyForecast({
   days: ClimateDashboardResponse["dailyForecast"];
   today: string;
 }) {
-  if (days.length === 0) {
-    return <EmptyForecast message="A previsão diária ainda não está disponível para esta fazenda." />;
-  }
+  const sevenDays = ensureSevenForecastCards(days, today);
 
   return (
     <>
     <div className="overflow-x-auto pb-3">
       <div className="grid min-w-[1040px] grid-cols-7 gap-3 xl:min-w-0">
-      {days.map((day) => {
+      {sevenDays.map((day) => {
         const date = new Date(`${day.date}T12:00:00`);
         const isToday = day.date === today;
         return (
@@ -70,7 +100,7 @@ function DailyForecast({
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[720px] text-left text-[11px]">
           <thead className="text-graphite-400 dark:text-gray-500"><tr><th className="py-2">Dia</th><th>Umidade</th><th>Vento</th><th>Radiação GHI</th></tr></thead>
-          <tbody>{days.map((day) => <tr key={`detail-${day.id}`} className="border-t border-gray-100 dark:border-white/[0.05]"><td className="py-2 font-bold">{weekdayLabel(day.date)}</td><td>{formatNumber(day.relativeHumidityPct, 0)}%</td><td>{formatNumber(day.windSpeed2mMs)} m/s</td><td>{formatNumber(day.solarRadiationMeteoblueMjM2Day)} MJ/m²/dia</td></tr>)}</tbody>
+          <tbody>{sevenDays.map((day) => <tr key={`detail-${day.id}`} className="border-t border-gray-100 dark:border-white/[0.05]"><td className="py-2 font-bold">{weekdayLabel(day.date)}</td><td>{formatNumber(day.relativeHumidityPct, 0)}%</td><td>{formatNumber(day.windSpeed2mMs)} m/s</td><td>{formatNumber(day.solarRadiationMeteoblueMjM2Day)} MJ/m²/dia</td></tr>)}</tbody>
         </table>
       </div>
     </details>
@@ -79,7 +109,7 @@ function DailyForecast({
       <div className="mt-3 overflow-x-auto">
         <table className="w-full min-w-[1640px] text-left text-[10px]">
           <thead className="text-graphite-400 dark:text-gray-500"><tr><th className="py-2">Dia</th><th>Meteoblue FAO</th><th>PM FAO-56</th><th>Diferença</th><th>Hargreaves</th><th>ASCE ETos</th><th>Priestley–Taylor</th><th>Thornthwaite–Camargo</th><th>Blaney–Criddle</th><th>Makkink</th><th>Jensen–Haise</th><th>Turc</th><th>Linacre</th><th>Ivanov</th><th>Camargo 1971</th></tr></thead>
-          <tbody>{days.map((day) => <tr key={`audit-${day.id}`} className="border-t border-gray-100 dark:border-white/[0.05]"><td className="py-2 font-bold">{weekdayLabel(day.date)}</td><td>{formatNumber(day.etoMeteoblueMm)} mm</td><td>{formatNumber(day.etoMm)} mm</td><td>{formatNumber(day.etoMeteoblueDeltaPct, 0)}%</td><td>{formatNumber(day.etoHargreavesSamaniMm)} mm</td><td>{formatNumber(day.etoAsceEwriMm)} mm</td><td>{formatNumber(day.etoPriestleyTaylorMm)} mm</td><td>{formatNumber(day.etoThornthwaiteCamargoMm)} mm</td><td>{formatNumber(day.etoBlaneyCriddleMm)} mm</td><td>{formatNumber(day.etoMakkinkMm)} mm</td><td>{formatNumber(day.etoJensenHaiseMm)} mm</td><td>{formatNumber(day.etoTurcMm)} mm</td><td>{formatNumber(day.etoLinacreMm)} mm</td><td>{formatNumber(day.etoIvanovMm)} mm</td><td>{formatNumber(day.etoCamargo1971Mm)} mm</td></tr>)}</tbody>
+          <tbody>{sevenDays.map((day) => <tr key={`audit-${day.id}`} className="border-t border-gray-100 dark:border-white/[0.05]"><td className="py-2 font-bold">{weekdayLabel(day.date)}</td><td>{formatNumber(day.etoMeteoblueMm)} mm</td><td>{formatNumber(day.etoMm)} mm</td><td>{formatNumber(day.etoMeteoblueDeltaPct, 0)}%</td><td>{formatNumber(day.etoHargreavesSamaniMm)} mm</td><td>{formatNumber(day.etoAsceEwriMm)} mm</td><td>{formatNumber(day.etoPriestleyTaylorMm)} mm</td><td>{formatNumber(day.etoThornthwaiteCamargoMm)} mm</td><td>{formatNumber(day.etoBlaneyCriddleMm)} mm</td><td>{formatNumber(day.etoMakkinkMm)} mm</td><td>{formatNumber(day.etoJensenHaiseMm)} mm</td><td>{formatNumber(day.etoTurcMm)} mm</td><td>{formatNumber(day.etoLinacreMm)} mm</td><td>{formatNumber(day.etoIvanovMm)} mm</td><td>{formatNumber(day.etoCamargo1971Mm)} mm</td></tr>)}</tbody>
         </table>
       </div>
     </details>
