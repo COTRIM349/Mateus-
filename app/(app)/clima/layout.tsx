@@ -33,9 +33,6 @@ export default function ClimaLayout({ children }: { children: ReactNode }) {
         >
           Dados administrativos
         </Link> : null}
-        <span className="ml-auto hidden text-xs text-graphite-400 dark:text-gray-500 md:inline">
-          CLIMA V2 em Shadow Mode
-        </span>
       </div>
       {children}
     </div>
