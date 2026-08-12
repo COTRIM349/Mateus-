@@ -55,6 +55,13 @@ interface Culture {
   depletion_factor: number;
   cycle_days: number;
   active: boolean;
+  // Sprint 13 · Etapa 4 — variáveis de manejo de irrigação
+  kl: number | null;
+  ks_function: string | null;
+  optimal_temperature_c: number | null;
+  basal_temperature_c: number | null;
+  by_phase: boolean | null;
+  kc_constant: boolean | null;
 }
 
 interface Variety {
@@ -81,6 +88,15 @@ interface PhaseRow {
   root_depth_end: number;
   depletion_factor: number;
   description: string | null;
+  // Sprint 13 · Etapa 4 — parâmetros avançados
+  color: string | null;
+  duration_degree_days: number | null;
+  kc_constant: boolean | null;
+  shaded_area_pct: number | null;
+  ks_function: string | null;
+  itn_pct: number | null;
+  cycle_count: number | null;
+  ends_cycle: boolean | null;
 }
 
 interface AssignmentRow {
@@ -235,6 +251,11 @@ function CulturesTab({
       colheita: Number(fd.get("kc_colheita")),
     };
 
+    const numOrNull = (name: string) => {
+      const v = fd.get(name) as string;
+      return v ? Number(v) : null;
+    };
+
     const payload = {
       name: fd.get("name") as string,
       scientific_name: (fd.get("scientific_name") as string) || null,
@@ -245,6 +266,13 @@ function CulturesTab({
       root_depth: Number(fd.get("root_depth")),
       depletion_factor: depletionFactor,
       cycle_days: Number(fd.get("cycle_days")),
+      // Sprint 13 · Etapa 4 — manejo de irrigação
+      kl: numOrNull("kl"),
+      ks_function: (fd.get("ks_function") as string) || "linear",
+      optimal_temperature_c: numOrNull("optimal_temperature_c"),
+      basal_temperature_c: numOrNull("basal_temperature_c"),
+      by_phase: fd.get("by_phase") === "on",
+      kc_constant: fd.get("kc_constant") === "on",
     };
     try {
       const supabase = createClient();
@@ -317,6 +345,82 @@ function CulturesTab({
               ))}
             </div>
           </div>
+
+          {/* ── Manejo de irrigação (Sprint 13 · Etapa 4) ────────────── */}
+          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
+            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
+              Manejo de irrigação
+            </legend>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Input
+                id="kl"
+                name="kl"
+                label="Kl — Coef. de localização (0-1)"
+                type="number"
+                step="0.01"
+                min="0"
+                max="1"
+                placeholder="1.0 (pivô central)"
+                defaultValue={editing?.kl ?? 1.0}
+              />
+              <Select
+                id="ks_function"
+                name="ks_function"
+                label="Ks — Função de estresse"
+                options={[
+                  { value: "linear", label: "Linear (FAO-56 padrão)" },
+                  { value: "exponential", label: "Exponencial" },
+                  { value: "sigmoid", label: "Sigmoide" },
+                  { value: "none", label: "Nenhum (Ks fixo em 1)" },
+                ]}
+                defaultValue={editing?.ks_function ?? "linear"}
+              />
+              <Input
+                id="optimal_temperature_c"
+                name="optimal_temperature_c"
+                label="Temp. ótima (°C)"
+                type="number"
+                step="0.1"
+                min="0"
+                max="45"
+                placeholder="Ex: algodão 28"
+                defaultValue={editing?.optimal_temperature_c ?? ""}
+              />
+              <Input
+                id="basal_temperature_c"
+                name="basal_temperature_c"
+                label="Temp. basal (°C) — graus-dia"
+                type="number"
+                step="0.1"
+                min="0"
+                max="30"
+                placeholder="Ex: algodão 10"
+                defaultValue={editing?.basal_temperature_c ?? ""}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  name="by_phase"
+                  defaultChecked={editing?.by_phase ?? true}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Manejo por fase
+                <span className="text-xs text-graphite-400 dark:text-gray-500">(usa parâmetros da fase atual)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  name="kc_constant"
+                  defaultChecked={editing?.kc_constant ?? false}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Kc constante no ciclo
+                <span className="text-xs text-graphite-400 dark:text-gray-500">(pastagens perenes)</span>
+              </label>
+            </div>
+          </fieldset>
 
           {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-4">
@@ -557,6 +661,17 @@ function PhasesTab({
 
   const columns: Column<PhaseRow>[] = [
     { header: "#", render: (r) => r.phase_order, align: "center" },
+    {
+      header: "Cor",
+      render: (r) => (
+        <span
+          className="inline-block h-4 w-4 rounded-full border border-gray-200 dark:border-white/10"
+          style={{ backgroundColor: r.color ?? "#94a3b8" }}
+          title={r.color ?? ""}
+        />
+      ),
+      align: "center",
+    },
     { header: "Fase", render: (r) => <span className="font-medium">{r.name}</span> },
     { header: "DAP", render: (r) => r.days_after_plant, align: "right" },
     { header: "Duração", render: (r) => `${r.duration_days} dias`, align: "right" },
@@ -565,6 +680,8 @@ function PhasesTab({
     { header: "Raiz ini (m)", render: (r) => r.root_depth_start.toFixed(2), align: "right" },
     { header: "Raiz fim (m)", render: (r) => r.root_depth_end.toFixed(2), align: "right" },
     { header: "p", render: (r) => r.depletion_factor.toFixed(2), align: "right" },
+    { header: "ITN", render: (r) => r.itn_pct != null ? `${r.itn_pct.toFixed(0)}%` : "100%", align: "right" },
+    { header: "Área somb.", render: (r) => r.shaded_area_pct != null ? `${r.shaded_area_pct.toFixed(0)}%` : "—", align: "right" },
     {
       header: "Ações",
       align: "right",
@@ -610,6 +727,11 @@ function PhasesTab({
     }
     setWarnings(issues.filter((i) => i.level === "warning"));
 
+    const numOrNull = (name: string) => {
+      const v = fd.get(name) as string;
+      return v ? Number(v) : null;
+    };
+
     const payload = {
       culture_id: selectedCultureId,
       phase_order: newPhase.phase_order,
@@ -622,6 +744,15 @@ function PhasesTab({
       root_depth_end: Number(fd.get("root_depth_end")),
       depletion_factor: Number(fd.get("depletion_factor")),
       description: (fd.get("description") as string) || null,
+      // Sprint 13 · Etapa 4 — parâmetros avançados
+      color: (fd.get("color") as string) || "#94a3b8",
+      duration_degree_days: numOrNull("duration_degree_days"),
+      kc_constant: fd.get("kc_constant") === "on",
+      shaded_area_pct: numOrNull("shaded_area_pct"),
+      ks_function: (fd.get("ks_function") as string) || null,
+      itn_pct: numOrNull("itn_pct") ?? 100,
+      cycle_count: numOrNull("cycle_count") ?? 1,
+      ends_cycle: fd.get("ends_cycle") === "on",
     };
 
     try {
@@ -750,6 +881,108 @@ function PhasesTab({
           </div>
 
           <Input id="depletion_factor" name="depletion_factor" label="Fator de depleção (p)" type="number" step="0.01" min="0" max="1" required defaultValue={editing?.depletion_factor ?? selectedCulture?.depletion_factor ?? 0.5} />
+
+          {/* ── Parâmetros avançados (Sprint 13 · Etapa 4) ────────── */}
+          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
+            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
+              Parâmetros avançados
+            </legend>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className="mb-1 block text-xs font-medium text-graphite-700 dark:text-gray-300">
+                  Cor da fase (timeline)
+                </label>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="color"
+                    id="color"
+                    name="color"
+                    defaultValue={editing?.color ?? "#94a3b8"}
+                    className="h-9 w-14 cursor-pointer rounded border border-gray-200 dark:border-white/10"
+                  />
+                  <span className="text-xs text-graphite-400 dark:text-gray-500">clique para escolher</span>
+                </div>
+              </div>
+              <Input
+                id="duration_degree_days"
+                name="duration_degree_days"
+                label="Duração (graus-dia °C)"
+                type="number"
+                step="0.1"
+                min="0"
+                placeholder="Alternativa a dias"
+                defaultValue={editing?.duration_degree_days ?? ""}
+              />
+              <Input
+                id="itn_pct"
+                name="itn_pct"
+                label="ITN — Irrigação total (%)"
+                type="number"
+                step="1"
+                min="0"
+                max="150"
+                placeholder="100"
+                defaultValue={editing?.itn_pct ?? 100}
+              />
+              <Input
+                id="shaded_area_pct"
+                name="shaded_area_pct"
+                label="Área sombreada (%)"
+                type="number"
+                step="1"
+                min="0"
+                max="100"
+                placeholder="0-100"
+                defaultValue={editing?.shaded_area_pct ?? ""}
+              />
+              <Select
+                id="ks_function"
+                name="ks_function"
+                label="Ks — Função (override)"
+                options={[
+                  { value: "", label: "Herda da cultura" },
+                  { value: "linear", label: "Linear (FAO-56)" },
+                  { value: "exponential", label: "Exponencial" },
+                  { value: "sigmoid", label: "Sigmoide" },
+                  { value: "none", label: "Nenhum (Ks = 1)" },
+                ]}
+                defaultValue={editing?.ks_function ?? ""}
+              />
+              <Input
+                id="cycle_count"
+                name="cycle_count"
+                label="Nº de ciclos (rebrotas)"
+                type="number"
+                step="1"
+                min="1"
+                placeholder="1"
+                defaultValue={editing?.cycle_count ?? 1}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  name="kc_constant"
+                  defaultChecked={editing?.kc_constant ?? false}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Kc constante nesta fase
+                <span className="text-xs text-graphite-400 dark:text-gray-500">(usa só kc_início)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  name="ends_cycle"
+                  defaultChecked={editing?.ends_cycle ?? false}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Encerra o ciclo aqui
+                <span className="text-xs text-graphite-400 dark:text-gray-500">(reinicia após esta fase)</span>
+              </label>
+            </div>
+          </fieldset>
+
           <TextArea id="description" name="description" label="Observações" defaultValue={editing?.description ?? ""} />
 
           {warnings.length > 0 && (
