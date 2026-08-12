@@ -38,6 +38,30 @@ interface Assignment {
   depletion_factor: number | null;
   notes: string | null;
   active: boolean;
+  // Sprint 13 · Etapa 5 — parcela rica
+  name: string | null;
+  planted_area: number | null;
+  variety_id: string | null;
+  water_source: string | null;
+  water_source_note: string | null;
+  climate_config: string | null;
+  rain_option: string | null;
+  plant_spacing_m: number | null;
+  row_spacing_m: number | null;
+  additional_row_spacing_m: number | null;
+  deficit_irrigation: boolean | null;
+  stress_point_irrigation: boolean | null;
+  initial_soil_moisture_pct: number | null;
+  initial_moisture_is_cc: boolean | null;
+  // Lifecycle
+  status: "rascunho" | "ativa" | "encerrada" | "cancelada";
+  closed_at: string | null;
+  close_reason: string | null;
+  close_note: string | null;
+  yield_kg_ha: number | null;
+  total_water_applied_mm: number | null;
+  total_energy_kwh: number | null;
+  total_cost: number | null;
 }
 
 interface PivotLite { id: string; name: string; efficiency: number }
@@ -47,6 +71,10 @@ interface SoilLite { id: string; name: string }
 interface VarietyLite { id: string; culture_id: string; name: string }
 
 interface FormState {
+  // Identidade
+  name: string;
+  planted_area: string;
+  // Vínculo original
   pivot_id: string;
   season_id: string;
   culture_id: string;
@@ -55,6 +83,19 @@ interface FormState {
   planting_date: string;
   emergence_date: string;
   expected_harvest_date: string;
+  // Sprint 13 · manejo de irrigação
+  water_source: string;
+  water_source_note: string;
+  climate_config: string;
+  rain_option: string;
+  plant_spacing_m: string;
+  row_spacing_m: string;
+  additional_row_spacing_m: string;
+  deficit_irrigation: boolean;
+  stress_point_irrigation: boolean;
+  initial_soil_moisture_pct: string;
+  initial_moisture_is_cc: boolean;
+  // Parâmetros customizados legado
   parameter_mode: "padrao" | "personalizado";
   initial_root_depth: string;
   max_root_depth: string;
@@ -64,6 +105,8 @@ interface FormState {
 }
 
 const EMPTY_FORM: FormState = {
+  name: "",
+  planted_area: "",
   pivot_id: "",
   season_id: "",
   culture_id: "",
@@ -72,6 +115,17 @@ const EMPTY_FORM: FormState = {
   planting_date: "",
   emergence_date: "",
   expected_harvest_date: "",
+  water_source: "",
+  water_source_note: "",
+  climate_config: "farm_default",
+  rain_option: "auto",
+  plant_spacing_m: "",
+  row_spacing_m: "",
+  additional_row_spacing_m: "",
+  deficit_irrigation: false,
+  stress_point_irrigation: false,
+  initial_soil_moisture_pct: "",
+  initial_moisture_is_cc: true,
   parameter_mode: "padrao",
   initial_root_depth: "",
   max_root_depth: "",
@@ -106,6 +160,15 @@ export default function VinculacaoPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
+  // Sprint 13 · Etapa 5 — lifecycle da parcela
+  const [activeSection, setActiveSection] = useState<"ativas" | "historico">("ativas");
+  const [closeTarget, setCloseTarget] = useState<Assignment | null>(null);
+  const [closeForm, setCloseForm] = useState({
+    close_reason: "colheita",
+    close_note: "",
+    yield_kg_ha: "",
+  });
+
   useEffect(() => {
     if (!activeFarmId) {
       setLookupsLoading(false);
@@ -135,6 +198,16 @@ export default function VinculacaoPage() {
     [assignments, pivotIds],
   );
 
+  // Separa por status (Sprint 13 · Etapa 5)
+  const parcelasAtivas = useMemo(
+    () => farmAssignments.filter((a) => (a.status ?? "ativa") === "ativa"),
+    [farmAssignments],
+  );
+  const parcelasHistorico = useMemo(
+    () => farmAssignments.filter((a) => a.status === "encerrada" || a.status === "cancelada"),
+    [farmAssignments],
+  );
+
   const pivotMap = useMemo(() => new Map(pivots.map((p) => [p.id, p.name])), [pivots]);
   const seasonMap = useMemo(() => new Map(seasons.map((s) => [s.id, s.name])), [seasons]);
   const cultureMap = useMemo(() => new Map(cultures.map((c) => [c.id, c])), [cultures]);
@@ -156,14 +229,27 @@ export default function VinculacaoPage() {
   const openEdit = (a: Assignment) => {
     setEditing(a);
     setForm({
+      name: a.name ?? "",
+      planted_area: a.planted_area != null ? String(a.planted_area) : "",
       pivot_id: a.pivot_id,
       season_id: a.season_id,
       culture_id: a.culture_id,
-      culture_variety_id: a.culture_variety_id ?? "",
+      culture_variety_id: a.culture_variety_id ?? a.variety_id ?? "",
       soil_id: a.soil_id,
       planting_date: a.planting_date ?? "",
       emergence_date: a.emergence_date ?? "",
       expected_harvest_date: a.expected_harvest_date ?? "",
+      water_source: a.water_source ?? "",
+      water_source_note: a.water_source_note ?? "",
+      climate_config: a.climate_config ?? "farm_default",
+      rain_option: a.rain_option ?? "auto",
+      plant_spacing_m: a.plant_spacing_m != null ? String(a.plant_spacing_m) : "",
+      row_spacing_m: a.row_spacing_m != null ? String(a.row_spacing_m) : "",
+      additional_row_spacing_m: a.additional_row_spacing_m != null ? String(a.additional_row_spacing_m) : "",
+      deficit_irrigation: a.deficit_irrigation ?? false,
+      stress_point_irrigation: a.stress_point_irrigation ?? false,
+      initial_soil_moisture_pct: a.initial_soil_moisture_pct != null ? String(a.initial_soil_moisture_pct) : "",
+      initial_moisture_is_cc: a.initial_moisture_is_cc ?? true,
       parameter_mode: a.parameter_mode,
       initial_root_depth: a.initial_root_depth != null ? String(a.initial_root_depth) : "",
       max_root_depth: a.max_root_depth != null ? String(a.max_root_depth) : "",
@@ -178,6 +264,35 @@ export default function VinculacaoPage() {
   const closeModal = () => {
     setModalOpen(false);
     setEditing(null);
+  };
+
+  const openClose = (a: Assignment) => {
+    setCloseTarget(a);
+    setCloseForm({ close_reason: "colheita", close_note: "", yield_kg_ha: "" });
+  };
+
+  const handleCloseParcela = async () => {
+    if (!closeTarget) return;
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from("pivot_crop_assignments")
+        .update({
+          status: "encerrada",
+          closed_at: new Date().toISOString(),
+          close_reason: closeForm.close_reason,
+          close_note: closeForm.close_note || null,
+          yield_kg_ha: closeForm.yield_kg_ha ? Number(closeForm.yield_kg_ha) : null,
+        })
+        .eq("id", closeTarget.id);
+      if (error) throw new Error(error.message);
+      setCloseTarget(null);
+      // useCrud não observa mudanças de status; força refetch simples via reload
+      location.reload();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Erro ao encerrar parcela");
+    }
+    setSaving(false);
   };
 
   const patch = (changes: Partial<FormState>) => setForm((f) => ({ ...f, ...changes }));
@@ -244,21 +359,44 @@ export default function VinculacaoPage() {
     setFormError("");
 
     const custom = form.parameter_mode === "personalizado";
+    const num = (v: string) => v ? Number(v) : null;
     const payload = {
+      // Identidade da parcela (Sprint 13)
+      name: form.name || null,
+      planted_area: num(form.planted_area),
+      // Vínculo
       pivot_id: form.pivot_id,
       season_id: form.season_id,
       culture_id: form.culture_id,
       culture_variety_id: form.culture_variety_id || null,
+      variety_id: form.culture_variety_id || null,  // duplica no campo novo
       soil_id: form.soil_id,
       planting_date: form.planting_date,
       emergence_date: form.emergence_date || null,
       expected_harvest_date: form.expected_harvest_date || null,
+      // Água + clima
+      water_source: form.water_source || null,
+      water_source_note: form.water_source_note || null,
+      climate_config: form.climate_config,
+      rain_option: form.rain_option,
+      // Espaçamento
+      plant_spacing_m: num(form.plant_spacing_m),
+      row_spacing_m: num(form.row_spacing_m),
+      additional_row_spacing_m: num(form.additional_row_spacing_m),
+      // Manejo
+      deficit_irrigation: form.deficit_irrigation,
+      stress_point_irrigation: form.stress_point_irrigation,
+      initial_soil_moisture_pct: num(form.initial_soil_moisture_pct),
+      initial_moisture_is_cc: form.initial_moisture_is_cc,
+      // Legado
       parameter_mode: form.parameter_mode,
       initial_root_depth: custom && form.initial_root_depth ? Number(form.initial_root_depth) : null,
       max_root_depth: custom && form.max_root_depth ? Number(form.max_root_depth) : null,
       irrigation_efficiency: custom && form.irrigation_efficiency ? Number(form.irrigation_efficiency) / 100 : null,
       depletion_factor: custom && form.depletion_factor ? Number(form.depletion_factor) : null,
       notes: form.notes || null,
+      // Lifecycle — se novo, cria como ativa; edição não altera status
+      ...(editing ? {} : { status: "ativa" as const }),
     };
 
     try {
@@ -279,43 +417,97 @@ export default function VinculacaoPage() {
     setSaving(false);
   };
 
-  const columns: Column<Assignment>[] = [
-    { header: "Pivô", render: (r) => <span className="font-medium">{pivotMap.get(r.pivot_id) ?? "—"}</span> },
+  const activeColumns: Column<Assignment>[] = [
+    {
+      header: "Parcela",
+      render: (r) => (
+        <div>
+          <span className="font-medium">{r.name || pivotMap.get(r.pivot_id) || "—"}</span>
+          <span className="block text-xs text-gray-400 dark:text-gray-500">{pivotMap.get(r.pivot_id) ?? "—"}</span>
+        </div>
+      ),
+    },
     { header: "Safra", render: (r) => seasonMap.get(r.season_id) ?? "—" },
     {
       header: "Cultura",
       render: (r) => (
         <div>
           <span>{cultureMap.get(r.culture_id)?.name ?? "—"}</span>
-          {r.culture_variety_id && (
-            <span className="block text-xs text-gray-400 dark:text-gray-500">{varietyMap.get(r.culture_variety_id) ?? ""}</span>
+          {(r.culture_variety_id ?? r.variety_id) && (
+            <span className="block text-xs text-gray-400 dark:text-gray-500">
+              {varietyMap.get(r.culture_variety_id ?? r.variety_id ?? "") ?? ""}
+            </span>
           )}
         </div>
       ),
     },
     { header: "Solo", render: (r) => soilMap.get(r.soil_id) ?? "—" },
-    { header: "Plantio", render: (r) => r.planting_date ? new Date(r.planting_date + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
     {
-      header: "Parâmetros",
-      render: (r) => (
-        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${
-          r.parameter_mode === "personalizado"
-            ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400"
-            : "bg-brand-100 text-brand-700 dark:bg-brand-900/30 dark:text-brand-400"
-        }`}>
-          {r.parameter_mode === "personalizado" ? "Personalizado" : "Padrão da cultura"}
-        </span>
-      ),
+      header: "Área (ha)",
+      render: (r) => r.planted_area != null ? r.planted_area.toLocaleString("pt-BR") : "—",
+      align: "right",
     },
+    { header: "Plantio", render: (r) => r.planting_date ? new Date(r.planting_date + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
     {
       header: "Ações",
       align: "right",
       render: (r) => (
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>Editar</Button>
+          <Button variant="ghost" size="sm" onClick={() => openClose(r)}>Encerrar</Button>
           <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
         </div>
       ),
+    },
+  ];
+
+  const historicColumns: Column<Assignment>[] = [
+    {
+      header: "Parcela",
+      render: (r) => (
+        <div>
+          <span className="font-medium">{r.name || pivotMap.get(r.pivot_id) || "—"}</span>
+          <span className="block text-xs text-gray-400 dark:text-gray-500">{pivotMap.get(r.pivot_id) ?? "—"}</span>
+        </div>
+      ),
+    },
+    { header: "Safra", render: (r) => seasonMap.get(r.season_id) ?? "—" },
+    { header: "Cultura", render: (r) => cultureMap.get(r.culture_id)?.name ?? "—" },
+    {
+      header: "Período",
+      render: (r) => {
+        const start = r.planting_date ? new Date(r.planting_date + "T12:00:00").toLocaleDateString("pt-BR") : "—";
+        const end = r.closed_at ? new Date(r.closed_at).toLocaleDateString("pt-BR") : "—";
+        return <span className="text-xs">{start} → {end}</span>;
+      },
+    },
+    {
+      header: "Área",
+      render: (r) => r.planted_area != null ? `${r.planted_area.toLocaleString("pt-BR")} ha` : "—",
+      align: "right",
+    },
+    {
+      header: "Motivo",
+      render: (r) => {
+        const labels: Record<string, string> = {
+          colheita: "Colheita",
+          falha_lavoura: "Falha da lavoura",
+          clima_adverso: "Clima adverso",
+          decisao_gerencial: "Decisão gerencial",
+          outro: "Outro",
+        };
+        return labels[r.close_reason ?? ""] ?? "—";
+      },
+    },
+    {
+      header: "Yield (kg/ha)",
+      render: (r) => r.yield_kg_ha != null ? r.yield_kg_ha.toLocaleString("pt-BR") : "—",
+      align: "right",
+    },
+    {
+      header: "Água total",
+      render: (r) => r.total_water_applied_mm != null ? `${r.total_water_applied_mm.toFixed(0)} mm` : "—",
+      align: "right",
     },
   ];
 
@@ -324,7 +516,7 @@ export default function VinculacaoPage() {
   if (!activeFarmId) {
     return (
       <div className="space-y-8">
-        <PageHeader titulo="Vinculação Operacional" descricao="Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico" />
+        <PageHeader titulo="Parcelas" descricao="Cadastro operacional de parcelas (pivô + cultura + solo). Encerre ao colher para gerar histórico da safra." />
         <PrerequisiteNotice
           title="Cadastre uma fazenda primeiro"
           description="A vinculação operacional pertence a uma fazenda. Cadastre e selecione uma fazenda ativa para continuar."
@@ -350,7 +542,7 @@ export default function VinculacaoPage() {
   if (prerequisite) {
     return (
       <div className="space-y-8">
-        <PageHeader titulo="Vinculação Operacional" descricao="Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico" />
+        <PageHeader titulo="Parcelas" descricao="Cadastro operacional de parcelas (pivô + cultura + solo). Encerre ao colher para gerar histórico da safra." />
         <PrerequisiteNotice {...prerequisite} />
       </div>
     );
@@ -360,27 +552,79 @@ export default function VinculacaoPage() {
     <div className="space-y-8">
       <PageHeader titulo="Vinculação Operacional" descricao="Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico" />
 
+      {/* Tabs Ativas / Histórico */}
+      <div className="flex gap-2 border-b border-gray-100 dark:border-white/[0.06]">
+        <button
+          onClick={() => setActiveSection("ativas")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeSection === "ativas"
+              ? "border-brand-500 text-brand-700 dark:text-brand-400"
+              : "border-transparent text-graphite-400 hover:text-graphite-700 dark:text-gray-500 dark:hover:text-gray-300"
+          }`}
+        >
+          Ativas <span className="ml-1 text-xs">({parcelasAtivas.length})</span>
+        </button>
+        <button
+          onClick={() => setActiveSection("historico")}
+          className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
+            activeSection === "historico"
+              ? "border-brand-500 text-brand-700 dark:text-brand-400"
+              : "border-transparent text-graphite-400 hover:text-graphite-700 dark:text-gray-500 dark:hover:text-gray-300"
+          }`}
+        >
+          Histórico <span className="ml-1 text-xs">({parcelasHistorico.length})</span>
+        </button>
+      </div>
+
       <div className="flex items-center justify-between">
         <p className="text-sm text-graphite-400 dark:text-gray-500">
-          {farmAssignments.length} vinculação{farmAssignments.length !== 1 ? "ões" : ""} ativa{farmAssignments.length !== 1 ? "s" : ""}
+          {activeSection === "ativas"
+            ? `${parcelasAtivas.length} parcela${parcelasAtivas.length !== 1 ? "s" : ""} ativa${parcelasAtivas.length !== 1 ? "s" : ""}`
+            : `${parcelasHistorico.length} parcela${parcelasHistorico.length !== 1 ? "s" : ""} no histórico`}
         </p>
-        <Button onClick={openNew}>Nova vinculação</Button>
+        {activeSection === "ativas" && (
+          <Button onClick={openNew}>Nova parcela</Button>
+        )}
       </div>
 
       <Card>
         {loading || lookupsLoading ? (
           <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-        ) : farmAssignments.length === 0 ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-            Nenhuma vinculação cadastrada. Crie a primeira para habilitar o balanço hídrico dos pivôs.
-          </p>
+        ) : activeSection === "ativas" ? (
+          parcelasAtivas.length === 0 ? (
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
+              Nenhuma parcela ativa. Crie a primeira para habilitar o balanço hídrico dos pivôs.
+            </p>
+          ) : (
+            <Table columns={activeColumns} data={parcelasAtivas} getKey={(r) => r.id} />
+          )
         ) : (
-          <Table columns={columns} data={farmAssignments} getKey={(r) => r.id} />
+          parcelasHistorico.length === 0 ? (
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
+              Nenhuma parcela encerrada ainda. Ao colher uma safra, encerre a parcela para gerar o histórico.
+            </p>
+          ) : (
+            <Table columns={historicColumns} data={parcelasHistorico} getKey={(r) => r.id} />
+          )
         )}
       </Card>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar vinculação" : "Nova vinculação"} size="lg">
+      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar parcela" : "Nova parcela"} size="lg">
         <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Identidade da parcela */}
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input
+              id="parcel_name" label="Nome da parcela (opcional)" placeholder="Ex: Pivô 05 · Algodão 2025/26"
+              value={form.name}
+              onChange={(e) => patch({ name: e.target.value })}
+            />
+            <Input
+              id="planted_area" label="Área plantada (ha)" type="number" step="0.1" min="0"
+              value={form.planted_area}
+              onChange={(e) => patch({ planted_area: e.target.value })}
+              placeholder="Se diferente da área total do pivô"
+            />
+          </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <Select
               id="pivot_id" label="Pivô" required
@@ -430,6 +674,109 @@ export default function VinculacaoPage() {
               onChange={(e) => patch({ expected_harvest_date: e.target.value })}
             />
           </div>
+
+          {/* Água, clima e espaçamento (Sprint 13 · Etapa 5) */}
+          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
+            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
+              Água, clima e manejo
+            </legend>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Select
+                id="water_source" label="Fonte de água"
+                value={form.water_source}
+                onChange={(e) => patch({ water_source: e.target.value })}
+                options={[
+                  { value: "", label: "Não especificada" },
+                  { value: "rio", label: "Rio" },
+                  { value: "poco", label: "Poço" },
+                  { value: "reservatorio", label: "Reservatório" },
+                  { value: "canal", label: "Canal" },
+                  { value: "outorga", label: "Outorga" },
+                  { value: "misto", label: "Misto" },
+                  { value: "outro", label: "Outro" },
+                ]}
+              />
+              <Select
+                id="climate_config" label="Fonte de clima"
+                value={form.climate_config}
+                onChange={(e) => patch({ climate_config: e.target.value })}
+                options={[
+                  { value: "farm_default", label: "Padrão da fazenda" },
+                  { value: "virtual_station", label: "Estação virtual" },
+                  { value: "nearest_station", label: "Estação física mais próxima" },
+                  { value: "manual", label: "Registros manuais" },
+                ]}
+              />
+              <Select
+                id="rain_option" label="Fonte da chuva"
+                value={form.rain_option}
+                onChange={(e) => patch({ rain_option: e.target.value })}
+                options={[
+                  { value: "auto", label: "Automática (provedor)" },
+                  { value: "manual", label: "Manual" },
+                  { value: "pluviometer", label: "Pluviômetro da fazenda" },
+                  { value: "ignore", label: "Ignorar chuva" },
+                ]}
+              />
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-3">
+              <Input
+                id="plant_spacing_m" label="Espaç. entre plantas (m)" type="number" step="0.01" min="0"
+                value={form.plant_spacing_m}
+                onChange={(e) => patch({ plant_spacing_m: e.target.value })}
+              />
+              <Input
+                id="row_spacing_m" label="Espaç. entre linhas (m)" type="number" step="0.01" min="0"
+                value={form.row_spacing_m}
+                onChange={(e) => patch({ row_spacing_m: e.target.value })}
+              />
+              <Input
+                id="additional_row_spacing_m" label="Linha adicional (m)" type="number" step="0.01" min="0"
+                value={form.additional_row_spacing_m}
+                onChange={(e) => patch({ additional_row_spacing_m: e.target.value })}
+              />
+            </div>
+            <div className="mt-4 flex flex-wrap gap-6">
+              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={form.deficit_irrigation}
+                  onChange={(e) => patch({ deficit_irrigation: e.target.checked })}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Irrigação com déficit
+                <span className="text-xs text-graphite-400 dark:text-gray-500">(ITN &lt; 100% em fases não-críticas)</span>
+              </label>
+              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={form.stress_point_irrigation}
+                  onChange={(e) => patch({ stress_point_irrigation: e.target.checked })}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Irrigar no ponto de estresse
+                <span className="text-xs text-graphite-400 dark:text-gray-500">(só ao atingir p × ADT)</span>
+              </label>
+            </div>
+            <div className="mt-4 grid gap-4 sm:grid-cols-2">
+              <Input
+                id="initial_soil_moisture_pct" label="Umidade inicial do solo (%)" type="number" step="0.1" min="0" max="100"
+                value={form.initial_soil_moisture_pct}
+                onChange={(e) => patch({ initial_soil_moisture_pct: e.target.value })}
+                disabled={form.initial_moisture_is_cc}
+                placeholder={form.initial_moisture_is_cc ? "Solo em CC" : ""}
+              />
+              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                <input
+                  type="checkbox"
+                  checked={form.initial_moisture_is_cc}
+                  onChange={(e) => patch({ initial_moisture_is_cc: e.target.checked })}
+                  className="h-4 w-4 accent-brand-500"
+                />
+                Solo em Capacidade de Campo no início do manejo
+              </label>
+            </div>
+          </fieldset>
 
           {/* Origem dos parâmetros de manejo */}
           <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.06]">
@@ -510,11 +857,63 @@ export default function VinculacaoPage() {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={async () => { if (deleteTarget) { await softDelete(deleteTarget.id); setDeleteTarget(null); } }}
-        title="Excluir vinculação"
-        message="Deseja excluir esta vinculação? O histórico de balanço associado deixará de ser recalculado."
+        title="Excluir parcela"
+        message="Deseja excluir esta parcela? O histórico de balanço associado deixará de ser recalculado. Se a safra já colheu, prefira encerrar em vez de excluir."
         confirmLabel="Excluir"
         loading={saving}
       />
+
+      {/* Modal — Encerrar Parcela (Sprint 13 · Etapa 5) */}
+      <Modal
+        open={!!closeTarget}
+        onClose={() => setCloseTarget(null)}
+        title={`Encerrar parcela · ${closeTarget?.name || pivotMap.get(closeTarget?.pivot_id ?? "") || ""}`}
+        size="md"
+      >
+        <div className="space-y-5">
+          <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50/60 p-4 dark:border-amber-500/60 dark:bg-amber-900/10">
+            <p className="text-sm text-amber-800 dark:text-amber-300">
+              Ao encerrar, esta parcela sai da lista de <b>Ativas</b> e vai para o <b>Histórico</b>. O balanço hídrico para de ser calculado. Esta ação pode ser revertida editando o status no banco.
+            </p>
+          </div>
+
+          <div className="grid gap-4">
+            <Select
+              id="close_reason" label="Motivo do encerramento" required
+              value={closeForm.close_reason}
+              onChange={(e) => setCloseForm((f) => ({ ...f, close_reason: e.target.value }))}
+              options={[
+                { value: "colheita", label: "Colheita" },
+                { value: "falha_lavoura", label: "Falha da lavoura" },
+                { value: "clima_adverso", label: "Clima adverso" },
+                { value: "decisao_gerencial", label: "Decisão gerencial" },
+                { value: "outro", label: "Outro" },
+              ]}
+            />
+            <Input
+              id="yield_kg_ha" label="Produtividade final (kg/ha) — opcional" type="number" step="1" min="0"
+              value={closeForm.yield_kg_ha}
+              onChange={(e) => setCloseForm((f) => ({ ...f, yield_kg_ha: e.target.value }))}
+              placeholder="Ex: 4800 (algodão em pluma)"
+            />
+            <TextArea
+              id="close_note" label="Observações do fechamento"
+              value={closeForm.close_note}
+              onChange={(e) => setCloseForm((f) => ({ ...f, close_note: e.target.value }))}
+              placeholder="Ex: colheita antecipada por chuva, safra abaixo do esperado, etc."
+            />
+          </div>
+
+          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
+
+          <div className="flex justify-end gap-3 pt-4">
+            <Button variant="secondary" type="button" onClick={() => setCloseTarget(null)}>Cancelar</Button>
+            <Button type="button" onClick={handleCloseParcela} disabled={saving}>
+              {saving ? "Encerrando..." : "Encerrar parcela"}
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   );
 }
