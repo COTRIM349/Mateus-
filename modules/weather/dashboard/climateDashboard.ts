@@ -373,6 +373,34 @@ export function selectLatestOfficialForecastPerDay(
     .slice(0, limit);
 }
 
+export function ensureDailyForecastWindow(
+  rows: ClimateForecastInput[],
+  startDate: string,
+  days = 7,
+): ClimateForecastInput[] {
+  const latestByDate = new Map(
+    selectLatestOfficialForecastPerDay(rows, Math.max(days, rows.length))
+      .map((row) => [row.target_date, row]),
+  );
+
+  return Array.from({ length: days }, (_, index) => {
+    const targetDate = addDays(startDate, index);
+    return latestByDate.get(targetDate) ?? {
+      id: `missing-${targetDate}`,
+      issued_at: "",
+      target_date: targetDate,
+      temp_max: null,
+      temp_min: null,
+      humidity: null,
+      wind_speed: null,
+      solar_radiation: null,
+      precipitation: null,
+      precipitation_probability: null,
+      et0_source: null,
+    };
+  });
+}
+
 export function latestCandidatePerProvider(
   rows: ClimateProviderCandidateInput[],
 ): Map<DashboardClimateProvider, ClimateProviderCandidateInput> {
