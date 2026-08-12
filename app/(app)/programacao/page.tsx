@@ -183,6 +183,9 @@ export default function ProgramacaoPage() {
         .select("*")
         .eq("pivot_id", pivot.id)
         .eq("active", true)
+        // Sprint 13 · Etapa 6 — só considera parcela em manejo (status='ativa'
+        // ou NULL para retro-compat com registros pré-Sprint 13).
+        .or("status.is.null,status.eq.ativa")
         .order("created_at", { ascending: false })
         .limit(1)
         .single();

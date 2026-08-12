@@ -1031,11 +1031,13 @@ function AssociationTab({
   const fetchAssignments = useCallback(async () => {
     if (!selectedCultureId) { setAssignments([]); return; }
     setLoading(true);
+    // Sprint 13 · Etapa 6 — só parcelas ativas nesta cultura.
     const { data } = await supabase
       .from("pivot_crop_assignments")
       .select("id, crop_stage, planting_date, pivots(name), seasons(name), soils(name)")
       .eq("culture_id", selectedCultureId)
-      .eq("active", true);
+      .eq("active", true)
+      .or("status.is.null,status.eq.ativa");
     if (data) {
       setAssignments(
         data.map((d) => ({

@@ -97,11 +97,13 @@ export function useImplantationStatus(): ImplantationStatus {
       result.pivot = pivotIds.length;
 
       if (pivotIds.length > 0) {
+        // Sprint 13 · Etapa 6 — status='ativa' ou NULL (retro-compat).
         const { count } = await supabase
           .from("pivot_crop_assignments")
           .select("id", { count: "exact", head: true })
           .in("pivot_id", pivotIds)
-          .eq("active", true);
+          .eq("active", true)
+          .or("status.is.null,status.eq.ativa");
         result.assignment = count ?? 0;
       }
     }

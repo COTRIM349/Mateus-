@@ -67,11 +67,13 @@ export function useFarmHydricState(): FarmHydricState {
     }
 
     // 2. vínculos ativos desses pivôs (mais recente por pivô)
+    //    Sprint 13 · Etapa 6 — status='ativa' ou NULL (retro-compat).
     const { data: assignmentRows } = await supabase
       .from("pivot_crop_assignments")
       .select("*")
       .in("pivot_id", pivotIds)
       .eq("active", true)
+      .or("status.is.null,status.eq.ativa")
       .order("created_at", { ascending: false });
 
     const assignmentByPivot = new Map<string, Record<string, unknown>>();
