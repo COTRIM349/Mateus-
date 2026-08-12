@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildEtoSummary,
+  ensureDailyForecastWindow,
   climateCondition,
   haversineDistanceKm,
   latestCandidatePerInterval,
@@ -87,6 +88,27 @@ describe("climate dashboard data contract", () => {
     ]);
 
     expect(selected.map((row) => row.id)).toEqual(["missing"]);
+  });
+
+  it("mantém exatamente sete dias e preserva lacunas como dados ausentes", () => {
+    const rows = ensureDailyForecastWindow([
+      forecast({ id: "today", target_date: "2026-08-08" }),
+      forecast({ id: "day-three", target_date: "2026-08-10" }),
+    ], "2026-08-08");
+
+    expect(rows).toHaveLength(7);
+    expect(rows.map((row) => row.target_date)).toEqual([
+      "2026-08-08",
+      "2026-08-09",
+      "2026-08-10",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+      "2026-08-14",
+    ]);
+    expect(rows[1]?.id).toBe("missing-2026-08-09");
+    expect(rows[1]?.temp_max).toBeNull();
+    expect(rows[2]?.id).toBe("day-three");
   });
 
   it("converte direcao do vento para quadrante brasileiro", () => {
