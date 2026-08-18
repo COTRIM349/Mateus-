@@ -1,0 +1,46 @@
+Capacidade (p90 ha/dia): {'KRT': 250.0, 'RDM': 150.0} | ciclo P25 soja: {'KRT': 117.5, 'RDM': 117.0}
+
+==========================================================================================
+CENARIOS (A=observado no motor; antecipacao em dias vs A)
+  H1 = pivos sem soja registrada presos a data real (LIMITE INFERIOR do efeito da chuva)
+  H2 = pivos sem soja registrada livres desde 02/12  (LIMITE SUPERIOR)
+
+  --- H1 ---
+cenario     ultimo  antecip_media  antecip_pond  ha_dia  ha_ate_31dez  ha_ate_31jan pct_ate_31jan
+      A 2026-03-19            0.0           0.0       0          2161          4840           58%
+      B 2026-03-14            2.4           2.5   20790          2421          5290           64%
+      C 2026-03-09            1.4           1.4   11705          2161          4840           58%
+      D 2026-03-09            4.7           4.9   40984          2421          5590           67%
+     E1 2026-03-19            0.6           0.6    5281          2161          5140           62%
+     E2 2026-03-19            0.8           0.9    7505          2161          5290           64%
+     E3 2026-03-19            1.0           1.1    9189          2161          5290           64%
+
+  --- H2 ---
+cenario     ultimo  antecip_media  antecip_pond  ha_dia  ha_ate_31dez  ha_ate_31jan pct_ate_31jan
+      A 2026-03-19            0.0           0.0       0          4968          6352           76%
+      B 2026-03-14            7.8           7.8   64469          5118          6352           76%
+      C 2026-03-09            1.8           2.0   16532          4968          6652           80%
+      D 2026-03-02           10.2          10.2   84963          5118          6652           80%
+     E1 2026-03-19            1.2           1.3   10555          5118          6352           76%
+     E2 2026-03-19            2.1           2.2   17988          5118          6352           76%
+     E3 2026-03-19            3.3           3.5   28944          5118          6352           76%
+
+VALIDACAO (A_H1 x real): vies +0 d | MAE 1 d | <=5d em 93% | ultimo real 2026-03-19 x sim 2026-03-19
+
+==========================================================================================
+DECOMPOSICAO DOS 108 DIAS DA CAMPANHA (por fazenda)
+                                                             dias      ha   pct
+fazenda classe                                                                 
+KRT     BLOQUEADO PELA CHUVA com area liberada                 42  2131.0  39.0
+        agricultavel e trabalhou                               26  3874.0  24.0
+        agricultavel, area liberada, sem registro              15     0.0  14.0
+        sem area liberada (espera da soja/cultura anterior)    25     0.0  23.0
+RDM     BLOQUEADO PELA CHUVA com area liberada                 15   886.0  14.0
+        agricultavel e trabalhou                               12  1414.0  11.0
+        agricultavel, area liberada, sem registro               9     0.0   8.0
+        sem area liberada (espera da soja/cultura anterior)    72     0.0  67.0
+
+==========================================================================================
+QUANTO TEMPO DE MAQUINA A CAMPANHA REALMENTE EXIGIU
+  KRT: 6005 ha / 250 ha-dia = 24 dias de maquina | dias agricultaveis na campanha: 46 | span real: 108 dias
+  RDM: 2300 ha / 150 ha-dia = 15 dias de maquina | dias agricultaveis na campanha: 40 | span real: 108 dias

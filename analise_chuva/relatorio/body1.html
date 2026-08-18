@@ -1,0 +1,145 @@
+<div id="tt"></div>
+<header>
+  <div class="wrap">
+    <div class="kicker">Karitel · Rio do Meio · Cocos/BA · Safra 2025/26</div>
+    <h1>A chuva bloqueou 6 de cada 10 dias — e mesmo assim não foi ela que definiu o calendário</h1>
+    <p class="lede">Análise do efeito da chuva sobre a semeadura da soja e do algodão nas fazendas
+      Karitel e Rio do Meio. A regra operacional — dia com chuva acima de 5 mm é não agricultável —
+      foi aplicada com um efeito residual calibrado nos registros reais de plantio, e não arbitrado.</p>
+    <div class="meta">
+      <span>8.305 ha de algodão · 68 eventos de plantio</span>
+      <span>7.037 ha de soja · 54 pivôs</span>
+      <span>106 pluviômetros · 342 dias de série</span>
+      <span>Emissão: 18/08/2026</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Resposta direta</span>
+  <h2>Quantos dias foram impactados</h2>
+  <div class="prose">
+    <p>Na campanha de plantio do algodão — <b>02/12/2025 a 19/03/2026, 108 dias</b> — a chuva
+      inviabilizou a semeadura na maior parte do período. Aplicando a regra de 5 mm mais o efeito
+      residual calibrado de 2 dias:</p>
+  </div>
+  <div class="tiles">
+    <div class="tile hi"><div class="v">62 <span style="font-size:1rem">·</span> 68</div>
+      <div class="k">dias não agricultáveis em 108<br>Karitel · Rio do Meio</div>
+      <div class="s">57% e 63% da campanha</div></div>
+    <div class="tile"><div class="v">33</div>
+      <div class="k">dias com chuva acima de 5 mm<br>(bloqueio direto, nas duas fazendas)</div>
+      <div class="s">Por pivô: 28 a 40 dias</div></div>
+    <div class="tile"><div class="v">29 · 35</div>
+      <div class="k">dias perdidos por efeito residual<br>do solo, após a chuva passar</div>
+      <div class="s">R = 2 dias, calibrado</div></div>
+    <div class="tile"><div class="v">10 · 16</div>
+      <div class="k">maior sequência de dias<br>seguidos bloqueados</div>
+      <div class="s">Por pivô, chega a 19 dias</div></div>
+    <div class="tile"><div class="v">46 · 40</div>
+      <div class="k">dias agricultáveis restantes<br>para plantar toda a área</div>
+      <div class="s">Sobrou folga: ver abaixo</div></div>
+    <div class="tile"><div class="v">24 · 15</div>
+      <div class="k">dias de máquina realmente<br>necessários para os 8.305 ha</div>
+      <div class="s">A 250 e 150 ha/dia</div></div>
+  </div>
+  <div class="prose">
+    <p>Os dois últimos números são a chave da análise. A campanha durou <b>108 dias</b>, a chuva
+      bloqueou <b>62 a 68</b> deles, mas o trabalho de plantio exigia apenas <b>24 dias de máquina
+      em Karitel e 15 em Rio do Meio</b>. Havia 46 e 40 dias agricultáveis disponíveis — quase o
+      dobro do necessário. A chuva estreitou a janela, mas não foi ela que consumiu os 108 dias.</p>
+    <p>O que consumiu foi a <b>liberação escalonada dos pivôs pela cultura anterior</b>. O algodão
+      entrou, em mediana, <b>2 dias</b> depois da colheita da soja no mesmo pivô — o plantio seguiu
+      a colheita quase colado. E a colheita da soja, por sua vez, seguiu uma semeadura espalhada
+      deliberadamente por 111 dias.</p>
+  </div>
+  <div class="note">
+    <b>Efeito líquido da chuva sobre o calendário do algodão: 2,5 a 7,8 dias</b> de atraso médio
+    ponderado pela área (20.790 a 64.469 hectares-dia). Somando o atraso herdado da soja, o atraso
+    total fica entre <b>4,9 e 10,2 dias</b> (40.984 a 84.963 hectares-dia). O intervalo existe
+    porque a cultura antecessora de 43 dos 68 talhões não consta nas fontes — ver
+    <a href="#limites">limitações</a>.
+  </div>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Figura 1 · a campanha dia a dia</span>
+  <h2>Onde os dias foram perdidos</h2>
+  <div class="prose">
+    <p>Cada célula é um dia da campanha. A barra laranja embaixo marca os dias em que houve
+      plantio registrado.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Situação de cada dia da campanha do algodão</div>
+    <div class="fig-s">02/12/2025 a 19/03/2026 · chuva mediana da fazenda · regra de 5 mm com 2 dias residuais</div>
+    <div class="legend">
+      <span><i style="background:var(--blk-direto)"></i>Chuva acima de 5 mm (bloqueio direto)</span>
+      <span><i style="background:var(--blk-resid)"></i>Efeito residual do solo (D+1 e D+2)</span>
+      <span><i style="background:var(--livre);outline:1px solid var(--rule-2)"></i>Agricultável</span>
+      <span><i style="background:var(--plant);height:4px;border-radius:0"></i>Houve plantio</span>
+    </div>
+    <div id="cal"></div>
+    <figcaption>Passe o cursor sobre um dia para ver a chuva, o API e a área plantada.
+      <b>Reparo importante:</b> 3.017 ha — 36% da área — foram plantados em dias que a regra
+      classifica como bloqueados. A regra de 5 mm descreve condição adversa, não impossibilidade
+      absoluta: chuva de fim de tarde não impede o plantio da manhã. O bloqueio efetivo recai
+      sobre o dia seguinte, como mostra a calibração.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Calibração · sem regra arbitrária</span>
+  <h2>Quantos dias o solo realmente leva para voltar</h2>
+  <div class="prose">
+    <p>A instrução era não arbitrar um número de dias adicionais. Em vez de supor, medimos:
+      para cada dia seco da campanha, verificamos a que distância ele estava da última chuva acima
+      de 5 mm e se houve plantio registrado naquele dia. A probabilidade de operar é o dado; o
+      número de dias residuais é a conclusão.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Probabilidade de haver plantio num dia seco, por distância à última chuva</div>
+    <div class="fig-s">Dias com até 5 mm, dentro da campanha, com talhão liberado · n = 114 dias-fazenda · IC 95% por bootstrap</div>
+    <div id="ch-resid"></div>
+    <figcaption>A base (0,52) é o patamar dos dias em que já não havia chuva relevante há pelo menos
+      5 dias — o solo recuperado. <b>D+1 cai para 0,12 e D+2 para 0,25; em D+3 a operação já voltou
+      ao patamar da base.</b> Teste exato de Fisher contra a base: D+1 p = 0,0035 (significativo),
+      D+2 p = 0,079, D+3 p = 1,00. Tomando D+1 e D+2 juntos, a chance de operar cai 65%
+      (p = 0,004). É isso que fixa <b>R = 2 dias residuais</b>.</figcaption>
+  </figure>
+  <h3>Análise de sensibilidade</h3>
+  <div class="prose">
+    <p>Nenhum parâmetro isolado deve carregar a conclusão. O quadro abaixo mostra o efeito de
+      supor recuperação mais rápida ou mais lenta que a calibrada.</p>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Cenário de recuperação</th><th>R</th><th>Dias bloqueados<br>Karitel</th>
+      <th>Dias bloqueados<br>Rio do Meio</th><th>Maior sequência<br>KRT · RDM</th>
+      <th>Dias agricultáveis<br>KRT · RDM</th></tr></thead>
+    <tbody>
+      <tr><td>Rápida — solo drena no mesmo dia</td><td>1</td><td>48 <span style="color:var(--ink-3)">(44%)</span></td>
+        <td>54 <span style="color:var(--ink-3)">(50%)</span></td><td>7 · 9</td><td>60 · 54</td></tr>
+      <tr><td class="em">Intermediária — calibrada nos dados 25/26</td><td class="em">2</td>
+        <td class="em">62 <span style="color:var(--ink-3)">(57%)</span></td><td class="em">68 <span style="color:var(--ink-3)">(63%)</span></td>
+        <td class="em">10 · 16</td><td class="em">46 · 40</td></tr>
+      <tr><td>Lenta — solo pesado, eventos grandes</td><td>3</td><td>73 <span style="color:var(--ink-3)">(68%)</span></td>
+        <td>80 <span style="color:var(--ink-3)">(74%)</span></td><td>14 · 19</td><td>35 · 28</td></tr>
+    </tbody>
+  </table></div>
+  <div class="prose">
+    <p>Por tamanho do evento, a recuperação diferencia-se — mas com amostras pequenas, então vale
+      como indicação e não como parâmetro: chuvas de 5 a 15 mm devolvem a operação em D+3
+      (P = 0,67, n = 6); acima de 15 mm, D+1 e D+2 ficam praticamente zerados e D+3 ainda está
+      abaixo da base.</p>
+    <p><b>O API não substituiu essa regra.</b> Testamos o índice de precipitação antecedente com
+      decaimento de 0,30 a 0,95, com e sem a chuva do próprio dia. A melhor separação entre dias
+      operados e não operados ficou em AUC 0,55 (p = 0,15 por permutação) — estatisticamente
+      indistinguível do acaso. O bloqueio aqui é curto e quase binário, não uma função suave da
+      umidade acumulada. O API está calculado e exportado por dia e por talhão como descritor,
+      mas não foi usado como regra de decisão.</p>
+  </div>
+</section>

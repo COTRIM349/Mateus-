@@ -1,0 +1,69 @@
+==============================================================================
+1. COBERTURA TEMPORAL
+  KRT: 2025-09-10 a 2026-08-17 | dias no arquivo=197 | dias no calendario=342 | AUSENTES=145 (42%)
+     maiores blocos ausentes: 2026-04-29->2026-08-05 (99d); 2025-10-23->2025-11-01 (10d); 2025-11-10->2025-11-18 (9d); 2025-09-29->2025-10-06 (8d); 2026-04-19->2026-04-25 (7d); 2025-09-12->2025-09-16 (5d)
+  RDM: 2025-09-20 a 2026-08-17 | dias no arquivo=169 | dias no calendario=332 | AUSENTES=163 (49%)
+     maiores blocos ausentes: 2026-04-26->2026-08-05 (102d); 2025-10-02->2025-10-12 (11d); 2025-10-23->2025-11-02 (11d); 2025-11-11->2025-11-18 (8d); 2025-09-24->2025-09-30 (7d); 2026-04-19->2026-04-24 (6d)
+==============================================================================
+2. CONSISTENCIA: soma dos diarios x linha 'Total' do arquivo
+  |dif| max = 0.0000 mm  |  series com |dif|>1mm: 0 de 117
+  => Os dias AUSENTES nao entram no total: o arquivo omite linhas, mas o total bate
+     com a soma dos dias presentes. Nao ha como distinguir, so por este arquivo,
+     'dia sem chuva' de 'dia sem leitura'.
+==============================================================================
+3. UNIDADES E FAIXA DE VALORES
+  mm diario: min=0.0, max=156.97, media=5.69
+  negativos: 0 | nao numericos/vazios: 0
+  acumulado por serie (mm/safra):
+         count    min     50%     max
+fazenda                              
+KRT       79.0  339.0  1124.0  1389.0
+RDM       38.0  716.0   990.0  1244.0
+  => faixa 340-1390 mm compativel com mm/dia no Oeste da BA. Nenhum indicio de cm ou pol.
+==============================================================================
+4. CHUVA ZERO x FALHA DE PLUVIOMETRO
+fazenda pluvio_id  dias   acum  zeros  zero_suspeito  frac_do_acum_mediano
+    KRT  KRT-004B   197 338.76    171             22              0.301377
+    KRT  KRT-006B   197 509.18    138              9              0.452991
+    KRT  KRT-002B   197 513.24     98              0              0.456603
+    KRT   KRT-066   197 807.66    111              0              0.718533
+    KRT   KRT-057   197 875.75    113              0              0.779109
+    KRT   KRT-058   197 908.13    104              0              0.807916
+    RDM   RDM-110   169 838.73     96              1              0.839738
+    KRT   KRT-054   197 953.44    107              0              0.848226
+    KRT   KRT-045   197 962.37    125              0              0.856171
+    RDM   RDM-105   169 855.69     82              1              0.856718
+    RDM   RDM-109   169 857.48     80              1              0.858510
+    RDM   RDM-106   169 865.87     81              1              0.866910
+  => series com acumulado <70% da mediana da fazenda E zeros em dias de chuva geral
+     sao tratadas como FALHA (subregistro), nao como ausencia de chuva.
+  SERIES REPROVADAS: ['KRT-004B', 'KRT-006B']
+==============================================================================
+5. PARES REDUNDANTES NO MESMO PIVO (primario x secundario)
+   pivo  n_dias  acum_prim  acum_sec  razao_sec_prim  corr
+KRT-001     197    1285.79   1296.09            1.01  0.81
+KRT-002     197    1176.16    513.24            0.44  0.65
+KRT-004     197    1129.01    338.76            0.30  0.48
+KRT-006     197    1184.37    509.18            0.43  0.55
+KRT-007     197    1355.06   1194.89            0.88  0.80
+  => razao ~1.0 e corr alta: sensores concordam. razao ~0.3-0.45: o secundario
+     perdeu eventos (bateria/entupimento). Usa-se o primario.
+==============================================================================
+6. OUTLIERS (nao removidos sem justificativa)
+  quantis dos dias com chuva: {0.5: 6.4, 0.9: 31.8, 0.99: 75.4, 0.999: 110.4}
+fazenda       data pluvio_id     mm  mm_ref
+    KRT 2025-11-21   KRT-049 156.97   83.06
+    KRT 2025-11-21   KRT-072 154.66   83.06
+    KRT 2025-11-21   KRT-070 128.44   83.06
+    KRT 2026-02-22   KRT-007 124.46   62.00
+    KRT 2026-02-22   KRT-009 120.65   62.00
+    KRT 2025-11-21   KRT-069 119.40   83.06
+    KRT 2025-11-21   KRT-071 118.45   83.06
+    KRT 2025-11-21   KRT-035 115.32   83.06
+    KRT 2025-11-21   KRT-043 113.28   83.06
+    KRT 2025-11-21   KRT-051 110.68   83.06
+  => os maiores valores tem mediana da fazenda alta no mesmo dia (evento regional real).
+     Mantidos. Seriam suspeitos apenas se isolados (mm alto com mm_ref~0).
+  outliers isolados (>80mm com mediana da fazenda <2mm): 0
+==============================================================================
+SERIES_REPROVADAS = ['KRT-004B', 'KRT-006B']

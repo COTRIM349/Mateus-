@@ -1,0 +1,20 @@
+================================================================================
+SOJA — KRT
+  janela de plantio: 2025-09-20 a 2026-01-08 (111 dias) | 5096 ha
+  dias >5mm: 22 | residuais: 20 | BLOQUEADOS 42/111 (38%) | agricultaveis 69
+  capacidade (p90 ha/dia): 300 | dias de maquina necessarios: 17 | dias com plantio registrado: 31
+  plantou em dia bloqueado: 872 ha de 5096
+  ATRASO vs fila sem restricao (so capacidade): mediana 14 d | media 28 d | max 94 d | ha-dia 137,667
+  => a fila sem restricao terminaria em 2025-10-06, o real terminou em 2026-01-08:
+     94 dias de escalonamento DELIBERADO, nao explicados por chuva
+     (so 42 dias bloqueados, e sobravam 38 dias agricultaveis ociosos)
+================================================================================
+SOJA — RDM
+  janela de plantio: 2025-09-30 a 2025-12-15 (77 dias) | 1941 ha
+  dias >5mm: 14 | residuais: 10 | BLOQUEADOS 24/77 (31%) | agricultaveis 53
+  capacidade (p90 ha/dia): 150 | dias de maquina necessarios: 13 | dias com plantio registrado: 15
+  plantou em dia bloqueado: 251 ha de 1941
+  ATRASO vs fila sem restricao (so capacidade): mediana 15 d | media 16 d | max 64 d | ha-dia 32,694
+  => a fila sem restricao terminaria em 2025-10-12, o real terminou em 2025-12-15:
+     64 dias de escalonamento DELIBERADO, nao explicados por chuva
+     (so 24 dias bloqueados, e sobravam 38 dias agricultaveis ociosos)

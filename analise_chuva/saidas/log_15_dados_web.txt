@@ -1,0 +1,4 @@
+payload: 39.4072265625 KB
+chaves: ['calendario', 'avanco', 'residual', 'prod', 'cenarios', 'decomp']
+avanco observado final: {'iso': '2026-03-19', 'ha': 8305}
+residual: [{'lab': 'D+1', 'p': 0.12, 'n': 24, 'lo': 0.0, 'hi': 0.25}, {'lab': 'D+2', 'p': 0.25, 'n': 20, 'lo': 0.05, 'hi': 0.45}, {'lab': 'D+3', 'p': 0.56, 'n': 16, 'lo': 0.312, 'hi': 0.812}, {'lab': 'D+4', 'p': 0.57, 'n': 14, 'lo': 0.286, 'hi': 0.857}, {'lab': 'D+5', 'p': 0.54, 'n': 13, 'lo': 0.308, 'hi': 0.769}, {'lab': 'sem chuva>5mm ha >=5d (BASE)', 'p': 0.52, 'n': 27, 'lo': 0.333, 'hi': 0.704}]

@@ -1,0 +1,7 @@
+grade completa: (342, 106) | pluviometros: 106
+  KRT: 2025-09-10 a 2026-08-17 | 342 dias | acum mediano 983 mm | dias >5mm: 49
+  RDM: 2025-09-20 a 2026-08-17 | 332 dias | acum mediano 923 mm | dias >5mm: 46
+
+ALGODAO: janela 2025-12-02 a 2026-03-19 | 68 eventos | 8305.0 ha
+  ha/dia observado: max 450.0 | media nos dias com plantio 138.4 | dias com plantio: 53
+  ha/dia agregando as 2 fazendas: max 450.0 | p90 250.0

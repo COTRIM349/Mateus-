@@ -1,0 +1,892 @@
+<title>Chuva e o Calendário do Algodão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --ground:#F4F7F7; --surface:#FFFFFF; --surface-2:#EDF2F2;
+  --ink:#0E1A1C; --ink-2:#48595C; --ink-3:#7A8C8F;
+  --rule:#D9E3E3; --rule-2:#C3D2D2;
+  --accent:#1F6FB2; --accent-ink:#155585;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --blk-direto:#1F5F9E; --blk-resid:#8FB6D8; --livre:#E2EAEA; --plant:#EB6834;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --prose:68ch; --wide:1120px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0C1416; --surface:#131F21; --surface-2:#1A282A;
+  --ink:#E9F1F1; --ink-2:#A6B8BA; --ink-3:#7D9092;
+  --rule:#243436; --rule-2:#2F4245;
+  --accent:#5AA9E6; --accent-ink:#8CC5F0;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --blk-direto:#3B87CE; --blk-resid:#1F4463; --livre:#223134; --plant:#D95926;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0C1416; --surface:#131F21; --surface-2:#1A282A;
+  --ink:#E9F1F1; --ink-2:#A6B8BA; --ink-3:#7D9092;
+  --rule:#243436; --rule-2:#2F4245;
+  --accent:#5AA9E6; --accent-ink:#8CC5F0;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --blk-direto:#3B87CE; --blk-resid:#1F4463; --livre:#223134; --plant:#D95926;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--wide);margin:0 auto;padding:0 24px 96px}
+.prose{max-width:var(--prose)}
+h1,h2,h3{font-family:var(--serif);text-wrap:balance;margin:0}
+h1{font-size:clamp(2rem,4.4vw,3.1rem);line-height:1.08;font-weight:600;letter-spacing:-.015em}
+h2{font-size:clamp(1.4rem,2.4vw,1.85rem);line-height:1.2;font-weight:600;margin-bottom:.5rem}
+h3{font-size:1.06rem;font-weight:600;margin:2rem 0 .4rem}
+p{margin:0 0 1rem}
+a{color:var(--accent-ink)}
+strong{font-weight:600}
+.eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);display:block;margin-bottom:.55rem}
+.num{font-variant-numeric:tabular-nums}
+
+/* --- cabecalho --- */
+header{border-bottom:1px solid var(--rule);background:var(--surface)}
+header .wrap{padding-top:56px;padding-bottom:40px}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent-ink);margin-bottom:1.1rem}
+.lede{font-size:1.12rem;color:var(--ink-2);max-width:62ch;margin-top:1.1rem}
+.meta{display:flex;flex-wrap:wrap;gap:8px 28px;margin-top:1.8rem;font-family:var(--mono);
+  font-size:.75rem;color:var(--ink-3)}
+
+/* --- secoes --- */
+section{padding-top:56px}
+section > .rule{height:1px;background:var(--rule);margin-bottom:26px}
+
+/* --- destaque numerico --- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:28px 0}
+.tile{background:var(--surface);padding:20px 18px}
+.tile .v{font-family:var(--mono);font-size:1.85rem;font-weight:600;line-height:1.05;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tile .k{font-size:.82rem;color:var(--ink-2);margin-top:.45rem;line-height:1.35}
+.tile .s{font-family:var(--mono);font-size:.68rem;color:var(--ink-3);margin-top:.5rem;
+  letter-spacing:.04em}
+.tile.hi .v{color:var(--accent-ink)}
+
+/* --- blocos de dados --- */
+figure{margin:34px 0;background:var(--surface);border:1px solid var(--rule);padding:22px}
+figcaption{font-size:.83rem;color:var(--ink-2);margin-top:14px;line-height:1.5;max-width:78ch}
+figcaption b{color:var(--ink);font-weight:600}
+.fig-h{font-family:var(--serif);font-size:1.02rem;font-weight:600;margin-bottom:2px}
+.fig-s{font-size:.8rem;color:var(--ink-3);margin-bottom:16px}
+
+table{border-collapse:collapse;width:100%;font-size:.84rem;font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+thead th{font-family:var(--mono);font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);border-bottom:1px solid var(--rule-2);font-weight:500;vertical-align:bottom}
+tbody tr:hover{background:var(--surface-2)}
+td.em{font-weight:600;color:var(--ink)}
+td.txt{white-space:normal;text-align:left;min-width:26ch}
+tfoot td{font-weight:600;border-top:1px solid var(--rule-2);border-bottom:none}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:.78rem;color:var(--ink-2);
+  margin-bottom:14px;align-items:center}
+.legend i{width:11px;height:11px;display:inline-block;margin-right:7px;vertical-align:-1px;border-radius:2px}
+.legend span{display:inline-flex;align-items:center}
+
+/* --- calendario --- */
+.cal-row{display:flex;align-items:center;gap:12px;margin-bottom:9px}
+.cal-lab{font-family:var(--mono);font-size:.72rem;color:var(--ink-2);width:38px;flex:none;font-weight:500}
+.cal-strip{display:flex;gap:1.5px;flex:1;min-width:0}
+.cal-d{flex:1;height:34px;background:var(--livre);position:relative;cursor:default;
+  border-radius:1px;transition:transform .08s}
+.cal-d[data-st="direto"]{background:var(--blk-direto)}
+.cal-d[data-st="residual"]{background:var(--blk-resid)}
+.cal-d.pl::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:5px;
+  background:var(--plant);border-radius:1px;box-shadow:0 0 0 1.5px var(--surface)}
+.cal-d:hover{transform:scaleY(1.14);outline:1.5px solid var(--ink);outline-offset:0;z-index:3}
+.cal-ax{display:flex;margin:10px 0 0 50px;font-family:var(--mono);font-size:.68rem;color:var(--ink-3)}
+.cal-ax div{flex:none;border-left:1px solid var(--rule-2);padding-left:5px}
+
+/* --- tooltip --- */
+#tt{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--ink);
+  color:var(--ground);font-family:var(--mono);font-size:.72rem;line-height:1.55;padding:8px 11px;
+  border-radius:3px;z-index:99;max-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.22)}
+#tt .k{opacity:.68}
+#tt b{font-weight:600}
+
+svg{display:block;width:100%;height:auto;overflow:visible}
+.gridline{stroke:var(--rule);stroke-width:1}
+.axis{stroke:var(--rule-2);stroke-width:1}
+.axt{font-family:var(--mono);font-size:10px;fill:var(--ink-3)}
+.dlab{font-family:var(--mono);font-size:10.5px;font-weight:500}
+
+/* --- caixas --- */
+.note{border-left:3px solid var(--accent);background:var(--surface);padding:16px 20px;margin:26px 0;
+  font-size:.92rem;color:var(--ink-2)}
+.note b{color:var(--ink)}
+.warn{border-left:3px solid var(--s2)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin:26px 0}
+.card{background:var(--surface);border:1px solid var(--rule);padding:18px 20px}
+.card h4{font-family:var(--serif);font-size:.98rem;font-weight:600;margin:0 0 .45rem}
+.card p{font-size:.87rem;color:var(--ink-2);margin:0}
+ul,ol{padding-left:1.15rem;margin:0 0 1rem}
+li{margin-bottom:.5rem}
+li::marker{color:var(--ink-3)}
+.chain{counter-reset:c;list-style:none;padding:0;margin:26px 0}
+.chain li{counter-increment:c;position:relative;padding-left:52px;margin-bottom:22px}
+.chain li::before{content:counter(c);position:absolute;left:0;top:1px;width:30px;height:30px;
+  border:1px solid var(--rule-2);border-radius:50%;display:grid;place-items:center;
+  font-family:var(--mono);font-size:.78rem;color:var(--accent-ink);font-weight:600}
+.chain h4{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .3rem}
+.chain p{font-size:.9rem;color:var(--ink-2);margin:0}
+footer{border-top:1px solid var(--rule);margin-top:70px;padding-top:26px;font-size:.8rem;
+  color:var(--ink-3);font-family:var(--mono);line-height:1.7}
+@media (max-width:640px){
+  .cal-d{height:26px}.tile .v{font-size:1.5rem}
+  figure{padding:16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>
+<div id="tt"></div>
+<header>
+  <div class="wrap">
+    <div class="kicker">Karitel · Rio do Meio · Cocos/BA · Safra 2025/26</div>
+    <h1>A chuva bloqueou 6 de cada 10 dias — e mesmo assim não foi ela que definiu o calendário</h1>
+    <p class="lede">Análise do efeito da chuva sobre a semeadura da soja e do algodão nas fazendas
+      Karitel e Rio do Meio. A regra operacional — dia com chuva acima de 5 mm é não agricultável —
+      foi aplicada com um efeito residual calibrado nos registros reais de plantio, e não arbitrado.</p>
+    <div class="meta">
+      <span>8.305 ha de algodão · 68 eventos de plantio</span>
+      <span>7.037 ha de soja · 54 pivôs</span>
+      <span>106 pluviômetros · 342 dias de série</span>
+      <span>Emissão: 18/08/2026</span>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Resposta direta</span>
+  <h2>Quantos dias foram impactados</h2>
+  <div class="prose">
+    <p>Na campanha de plantio do algodão — <b>02/12/2025 a 19/03/2026, 108 dias</b> — a chuva
+      inviabilizou a semeadura na maior parte do período. Aplicando a regra de 5 mm mais o efeito
+      residual calibrado de 2 dias:</p>
+  </div>
+  <div class="tiles">
+    <div class="tile hi"><div class="v">62 <span style="font-size:1rem">·</span> 68</div>
+      <div class="k">dias não agricultáveis em 108<br>Karitel · Rio do Meio</div>
+      <div class="s">57% e 63% da campanha</div></div>
+    <div class="tile"><div class="v">33</div>
+      <div class="k">dias com chuva acima de 5 mm<br>(bloqueio direto, nas duas fazendas)</div>
+      <div class="s">Por pivô: 28 a 40 dias</div></div>
+    <div class="tile"><div class="v">29 · 35</div>
+      <div class="k">dias perdidos por efeito residual<br>do solo, após a chuva passar</div>
+      <div class="s">R = 2 dias, calibrado</div></div>
+    <div class="tile"><div class="v">10 · 16</div>
+      <div class="k">maior sequência de dias<br>seguidos bloqueados</div>
+      <div class="s">Por pivô, chega a 19 dias</div></div>
+    <div class="tile"><div class="v">46 · 40</div>
+      <div class="k">dias agricultáveis restantes<br>para plantar toda a área</div>
+      <div class="s">Sobrou folga: ver abaixo</div></div>
+    <div class="tile"><div class="v">24 · 15</div>
+      <div class="k">dias de máquina realmente<br>necessários para os 8.305 ha</div>
+      <div class="s">A 250 e 150 ha/dia</div></div>
+  </div>
+  <div class="prose">
+    <p>Os dois últimos números são a chave da análise. A campanha durou <b>108 dias</b>, a chuva
+      bloqueou <b>62 a 68</b> deles, mas o trabalho de plantio exigia apenas <b>24 dias de máquina
+      em Karitel e 15 em Rio do Meio</b>. Havia 46 e 40 dias agricultáveis disponíveis — quase o
+      dobro do necessário. A chuva estreitou a janela, mas não foi ela que consumiu os 108 dias.</p>
+    <p>O que consumiu foi a <b>liberação escalonada dos pivôs pela cultura anterior</b>. O algodão
+      entrou, em mediana, <b>2 dias</b> depois da colheita da soja no mesmo pivô — o plantio seguiu
+      a colheita quase colado. E a colheita da soja, por sua vez, seguiu uma semeadura espalhada
+      deliberadamente por 111 dias.</p>
+  </div>
+  <div class="note">
+    <b>Efeito líquido da chuva sobre o calendário do algodão: 2,5 a 7,8 dias</b> de atraso médio
+    ponderado pela área (20.790 a 64.469 hectares-dia). Somando o atraso herdado da soja, o atraso
+    total fica entre <b>4,9 e 10,2 dias</b> (40.984 a 84.963 hectares-dia). O intervalo existe
+    porque a cultura antecessora de 43 dos 68 talhões não consta nas fontes — ver
+    <a href="#limites">limitações</a>.
+  </div>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Figura 1 · a campanha dia a dia</span>
+  <h2>Onde os dias foram perdidos</h2>
+  <div class="prose">
+    <p>Cada célula é um dia da campanha. A barra laranja embaixo marca os dias em que houve
+      plantio registrado.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Situação de cada dia da campanha do algodão</div>
+    <div class="fig-s">02/12/2025 a 19/03/2026 · chuva mediana da fazenda · regra de 5 mm com 2 dias residuais</div>
+    <div class="legend">
+      <span><i style="background:var(--blk-direto)"></i>Chuva acima de 5 mm (bloqueio direto)</span>
+      <span><i style="background:var(--blk-resid)"></i>Efeito residual do solo (D+1 e D+2)</span>
+      <span><i style="background:var(--livre);outline:1px solid var(--rule-2)"></i>Agricultável</span>
+      <span><i style="background:var(--plant);height:4px;border-radius:0"></i>Houve plantio</span>
+    </div>
+    <div id="cal"></div>
+    <figcaption>Passe o cursor sobre um dia para ver a chuva, o API e a área plantada.
+      <b>Reparo importante:</b> 3.017 ha — 36% da área — foram plantados em dias que a regra
+      classifica como bloqueados. A regra de 5 mm descreve condição adversa, não impossibilidade
+      absoluta: chuva de fim de tarde não impede o plantio da manhã. O bloqueio efetivo recai
+      sobre o dia seguinte, como mostra a calibração.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Calibração · sem regra arbitrária</span>
+  <h2>Quantos dias o solo realmente leva para voltar</h2>
+  <div class="prose">
+    <p>A instrução era não arbitrar um número de dias adicionais. Em vez de supor, medimos:
+      para cada dia seco da campanha, verificamos a que distância ele estava da última chuva acima
+      de 5 mm e se houve plantio registrado naquele dia. A probabilidade de operar é o dado; o
+      número de dias residuais é a conclusão.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Probabilidade de haver plantio num dia seco, por distância à última chuva</div>
+    <div class="fig-s">Dias com até 5 mm, dentro da campanha, com talhão liberado · n = 114 dias-fazenda · IC 95% por bootstrap</div>
+    <div id="ch-resid"></div>
+    <figcaption>A base (0,52) é o patamar dos dias em que já não havia chuva relevante há pelo menos
+      5 dias — o solo recuperado. <b>D+1 cai para 0,12 e D+2 para 0,25; em D+3 a operação já voltou
+      ao patamar da base.</b> Teste exato de Fisher contra a base: D+1 p = 0,0035 (significativo),
+      D+2 p = 0,079, D+3 p = 1,00. Tomando D+1 e D+2 juntos, a chance de operar cai 65%
+      (p = 0,004). É isso que fixa <b>R = 2 dias residuais</b>.</figcaption>
+  </figure>
+  <h3>Análise de sensibilidade</h3>
+  <div class="prose">
+    <p>Nenhum parâmetro isolado deve carregar a conclusão. O quadro abaixo mostra o efeito de
+      supor recuperação mais rápida ou mais lenta que a calibrada.</p>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Cenário de recuperação</th><th>R</th><th>Dias bloqueados<br>Karitel</th>
+      <th>Dias bloqueados<br>Rio do Meio</th><th>Maior sequência<br>KRT · RDM</th>
+      <th>Dias agricultáveis<br>KRT · RDM</th></tr></thead>
+    <tbody>
+      <tr><td>Rápida — solo drena no mesmo dia</td><td>1</td><td>48 <span style="color:var(--ink-3)">(44%)</span></td>
+        <td>54 <span style="color:var(--ink-3)">(50%)</span></td><td>7 · 9</td><td>60 · 54</td></tr>
+      <tr><td class="em">Intermediária — calibrada nos dados 25/26</td><td class="em">2</td>
+        <td class="em">62 <span style="color:var(--ink-3)">(57%)</span></td><td class="em">68 <span style="color:var(--ink-3)">(63%)</span></td>
+        <td class="em">10 · 16</td><td class="em">46 · 40</td></tr>
+      <tr><td>Lenta — solo pesado, eventos grandes</td><td>3</td><td>73 <span style="color:var(--ink-3)">(68%)</span></td>
+        <td>80 <span style="color:var(--ink-3)">(74%)</span></td><td>14 · 19</td><td>35 · 28</td></tr>
+    </tbody>
+  </table></div>
+  <div class="prose">
+    <p>Por tamanho do evento, a recuperação diferencia-se — mas com amostras pequenas, então vale
+      como indicação e não como parâmetro: chuvas de 5 a 15 mm devolvem a operação em D+3
+      (P = 0,67, n = 6); acima de 15 mm, D+1 e D+2 ficam praticamente zerados e D+3 ainda está
+      abaixo da base.</p>
+    <p><b>O API não substituiu essa regra.</b> Testamos o índice de precipitação antecedente com
+      decaimento de 0,30 a 0,95, com e sem a chuva do próprio dia. A melhor separação entre dias
+      operados e não operados ficou em AUC 0,55 (p = 0,15 por permutação) — estatisticamente
+      indistinguível do acaso. O bloqueio aqui é curto e quase binário, não uma função suave da
+      umidade acumulada. O API está calculado e exportado por dia e por talhão como descritor,
+      mas não foi usado como regra de decisão.</p>
+  </div>
+</section>
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">A cadeia da sucessão</span>
+  <h2>Onde o calendário do algodão realmente se perdeu</h2>
+  <div class="prose">
+    <p>O algodão plantado em 19 de março não chegou lá por causa da chuva de março. Ele herdou
+      uma fila que começou em setembro. Seguindo a cadeia, etapa por etapa:</p>
+  </div>
+  <ol class="chain">
+    <li>
+      <h4>A soja foi semeada em 111 dias — por decisão, não por chuva</h4>
+      <p>Karitel plantou 5.096 ha entre 20/09 e 08/01. Com a capacidade observada de 300 ha/dia,
+        essa área sairia em <b>17 dias de máquina</b>; mesmo descontando os 42 dias bloqueados por
+        chuva na janela, sobraram <b>38 dias agricultáveis ociosos</b>. A fila sem restrição
+        terminaria em 06/10 — o real terminou em 08/01. São <b>94 dias de escalonamento
+        deliberado</b> (64 dias em Rio do Meio), que a chuva não explica. É uma escolha de manejo,
+        e é ela que fixa a data em que cada pivô será liberado.</p>
+    </li>
+    <li>
+      <h4>A colheita da soja atrasou pouco em relação à maturidade</h4>
+      <p>Tomando a maturidade como plantio mais o P25 do ciclo da fazenda (117–118 dias), a
+        colheita observada atrasou em <b>mediana 1 dia</b> e média ponderada 1,8 dia — mas com
+        cauda longa: um pivô esperou <b>29 dias</b>. Total de 20.344 hectares-dia. Aqui a chuva
+        pesa, porque colheita em soja úmida também é uma operação bloqueável.</p>
+    </li>
+    <li>
+      <h4>O algodão entrou colado na colheita — não houve espera relevante</h4>
+      <p>Nos 25 pivôs (3.187 ha) com sucessão soja&nbsp;→&nbsp;algodão documentada, o intervalo
+        entre colher a soja e plantar o algodão foi de <b>mediana 2 dias</b>, mínimo 0 e máximo 14.
+        A operação não ficou parada esperando o solo: assim que o talhão foi liberado, entrou.
+        Isso é o que torna o gargalo tão claro — o limitante é a <em>liberação</em>, não a
+        disponibilidade de dias ou de máquina.</p>
+    </li>
+    <li>
+      <h4>Dentro da campanha, a chuva custou de 2,5 a 7,8 dias</h4>
+      <p>Simulando a mesma fila sem restrição de chuva, o plantio termina 5 dias antes e a área
+        plantada até 31/01 sobe de 58% para 64% (hipótese conservadora). Sob a hipótese superior,
+        a antecipação média chega a 7,8 dias. É um custo real, mas de outra ordem de grandeza
+        que os 94 dias da etapa 1.</p>
+    </li>
+  </ol>
+  <figure>
+    <div class="fig-h">Decomposição dos 108 dias da campanha</div>
+    <div class="fig-s">Cada dia classificado pela restrição que estava ativa naquele momento</div>
+    <div class="tw"><table>
+      <thead><tr><th>Situação do dia</th><th>Karitel</th><th>%</th><th>Rio do Meio</th><th>%</th></tr></thead>
+      <tbody>
+        <tr><td>Bloqueado pela chuva, <b>com</b> área liberada esperando</td><td>42</td><td>39%</td><td>15</td><td>14%</td></tr>
+        <tr><td>Agricultável e houve plantio</td><td>26</td><td>24%</td><td>12</td><td>11%</td></tr>
+        <tr><td>Agricultável, área liberada, sem plantio registrado</td><td>15</td><td>14%</td><td>9</td><td>8%</td></tr>
+        <tr><td>Sem área liberada — esperando a cultura anterior</td><td>25</td><td>23%</td><td>72</td><td>67%</td></tr>
+      </tbody>
+      <tfoot><tr><td>Total</td><td>108</td><td>100%</td><td>108</td><td>100%</td></tr></tfoot>
+    </table></div>
+    <figcaption>As duas fazendas têm gargalos diferentes. <b>Karitel é limitada pela chuva</b> —
+      39% dos dias tinham talhão pronto e não deu para entrar. <b>Rio do Meio é limitada pela
+      sucessão</b> — em 67% dos dias simplesmente não havia pivô liberado, e o clima era
+      irrelevante. Tratar as duas com a mesma receita seria erro. Os 14% e 8% de dias
+      agricultáveis com área liberada e sem plantio registrado não puderam ser atribuídos a uma
+      causa: não há registro de motivo de parada.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Figura 2 · cenários contrafactuais</span>
+  <h2>O que teria mudado</h2>
+  <div class="prose">
+    <p>A reconstrução diária usa a capacidade operacional real (p90 do ha/dia observado: 250 em
+      Karitel, 150 em Rio do Meio), a ordem real de plantio e as datas reais de liberação.
+      Rodando o cenário observado no próprio motor, ele reproduz a realidade com <b>erro mediano
+      de 1 dia</b>, 93% dos pivôs dentro de 5 dias e a data do último plantio exata (19/03) — é
+      isso que autoriza usá-lo para os contrafactuais.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Avanço acumulado da semeadura do algodão</div>
+    <div class="fig-s">Hectares plantados acumulados · observado e cenários sem restrição de chuva</div>
+    <div id="ch-avanco"></div>
+    <figcaption>A linha azul é o observado; a faixa laranja é o cenário sem chuva, entre a
+      hipótese conservadora (borda inferior, colada no observado) e a superior (borda superior).
+      <b>A borda inferior da faixa acompanha o observado quase o tempo todo</b> — quando os
+      talhões só ficam disponíveis na data em que de fato foram plantados, tirar a chuva quase não
+      muda nada. A borda superior se descola porque supõe todos os 43 pivôs sem antecessora
+      conhecida livres desde 02/12. A largura da faixa é, portanto, a medida da nossa ignorância
+      sobre a cultura anterior — não um efeito da chuva. Note também que o formato em degraus
+      permanece nos três casos: cada patamar é um bloco de pivôs liberado pela colheita.</figcaption>
+  </figure>
+  <div class="tw"><table>
+    <thead><tr><th>Cenário</th><th>Último<br>plantio</th><th>Antecipação<br>média (dias)</th>
+      <th>Ponderada<br>por área</th><th>Hectares-dia<br>ganhos</th><th>% da área até<br>31/01</th></tr></thead>
+    <tbody>
+      <tr><td colspan="6" style="font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase;padding-top:14px">H1 · limite inferior do efeito da chuva</td></tr>
+      <tr><td><b>A</b> — observado</td><td>19/03</td><td>—</td><td>—</td><td>—</td><td>58%</td></tr>
+      <tr><td><b>B</b> — sem chuva no plantio do algodão</td><td>14/03</td><td>2,4</td><td>2,5</td><td>20.790</td><td>64%</td></tr>
+      <tr><td><b>C</b> — sem atraso da soja</td><td>09/03</td><td>1,4</td><td>1,4</td><td>11.705</td><td>58%</td></tr>
+      <tr><td><b>D</b> — sem restrição de chuva na sucessão</td><td>09/03</td><td>4,7</td><td>4,9</td><td>40.984</td><td>67%</td></tr>
+      <tr><td><b>E1</b> — capacidade +25%</td><td>19/03</td><td>0,6</td><td>0,6</td><td>5.281</td><td>62%</td></tr>
+      <tr><td><b>E2</b> — capacidade +50%</td><td>19/03</td><td>0,8</td><td>0,9</td><td>7.505</td><td>64%</td></tr>
+      <tr><td><b>E3</b> — capacidade +100%</td><td>19/03</td><td>1,0</td><td>1,1</td><td>9.189</td><td>64%</td></tr>
+      <tr><td colspan="6" style="font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase;padding-top:14px">H2 · limite superior do efeito da chuva</td></tr>
+      <tr><td><b>A</b> — observado</td><td>19/03</td><td>—</td><td>—</td><td>—</td><td>76%</td></tr>
+      <tr><td><b>B</b> — sem chuva no plantio do algodão</td><td>14/03</td><td>7,8</td><td>7,8</td><td>64.469</td><td>76%</td></tr>
+      <tr><td><b>C</b> — sem atraso da soja</td><td>09/03</td><td>1,8</td><td>2,0</td><td>16.532</td><td>80%</td></tr>
+      <tr><td><b>D</b> — sem restrição de chuva na sucessão</td><td>02/03</td><td>10,2</td><td>10,2</td><td>84.963</td><td>80%</td></tr>
+      <tr><td><b>E1</b> — capacidade +25%</td><td>19/03</td><td>1,2</td><td>1,3</td><td>10.555</td><td>76%</td></tr>
+      <tr><td><b>E2</b> — capacidade +50%</td><td>19/03</td><td>2,1</td><td>2,2</td><td>17.988</td><td>76%</td></tr>
+      <tr><td><b>E3</b> — capacidade +100%</td><td>19/03</td><td>3,3</td><td>3,5</td><td>28.944</td><td>76%</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <b>Por que duas hipóteses.</b> Em 43 dos 68 talhões (5.118 ha) a cultura antecessora não
+    aparece em nenhuma das fontes. H1 mantém esses talhões presos à data real — nenhum deles pode
+    antecipar, o que <b>subestima</b> o efeito da chuva. H2 os considera livres desde 02/12, o que
+    o <b>superestima</b>. O valor verdadeiro está entre os dois. Registrar a cultura antecessora
+    desses pivôs é a melhoria de dado com maior retorno para a próxima safra.
+  </div>
+  <div class="prose">
+    <p>O bloco E responde à pergunta sobre máquina: <b>dobrar a capacidade de plantio antecipa
+      1,0 a 3,3 dias e não muda a data do último plantio</b>. Não adianta comprar plantadeira para
+      resolver este problema — a máquina fica esperando talhão, não o contrário.</p>
+  </div>
+</section>
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Figura 3 · produtividade</span>
+  <h2>Quanto custou plantar tarde — o que os dados permitem dizer</h2>
+  <div class="prose">
+    <p>Esta é a pergunta central e é onde a safra 25/26 ainda não tem resposta. Dos 68 eventos de
+      plantio, <b>21 têm produtividade fechada — 2.508 ha, 30% da área</b>, e todos foram
+      plantados entre 02/12 e 11/01. A colheita dos plantios de fevereiro e março, justamente os
+      que testariam a hipótese, ainda não fechou.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Produtividade do algodão por data de plantio</div>
+    <div class="fig-s">Arrobas por hectare · 21 de 68 eventos · área do círculo proporcional aos hectares</div>
+    <div class="legend">
+      <span><i style="background:var(--s1);border-radius:50%"></i>Karitel</span>
+      <span><i style="background:var(--s2);border-radius:50%"></i>Rio do Meio</span>
+      <span style="color:var(--ink-3)">Faixa cinza: 68% da área, sem produtividade fechada</span>
+    </div>
+    <div id="ch-prod"></div>
+    <figcaption>A inclinação bruta é de <b>−1,8 @/ha por dia de atraso</b>, mas o intervalo de
+      confiança 95% vai de −5,0 a +1,0: <b>não é estatisticamente distinguível de zero</b>.
+      Controlando o efeito de fazenda — Rio do Meio rendeu em média 374 @/ha contra 317 em
+      Karitel — a inclinação vai a −2,9 @/ha por dia (IC 95% −5,9 a −0,7), aí sim excluindo o
+      zero. Ainda assim, dentro de uma <em>mesma semana</em> de plantio a amplitude chega a
+      <b>181 @/ha</b>, muito maior que qualquer tendência atribuível à data.</figcaption>
+  </figure>
+  <div class="note warn">
+    <b>O que não se pode concluir.</b> A associação medida vale para uma janela de 40 dias
+    (02/12 a 11/01) e 21 observações em que variedade, pivô e manejo variam junto com a data.
+    <b>Não é causalidade e não pode ser extrapolada para fevereiro e março</b>, que é onde está
+    a maior parte da área e onde o efeito do plantio tardio seria maior. Também não aplicamos
+    percentuais de perda de estudos externos: o comportamento de cada cultivar em cada pivô
+    desta fazenda é o que vale, e ele será mensurável quando a colheita fechar.
+  </div>
+  <div class="prose">
+    <p><b>Recomendação direta:</b> ao fechar a colheita dos 5.797 ha restantes, refazer esta
+      regressão com variedade e pivô como controles. Com 68 pontos cobrindo 108 dias, a curva de
+      resposta à época de plantio fica mensurável na própria fazenda — e aí sim vira número de
+      decisão para a safra 26/27.</p>
+  </div>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Leitura agronômica</span>
+  <h2>Por que a chuva e o plantio tardio pesam</h2>
+  <div class="prose">
+    <p>Os mecanismos abaixo são conhecidos da fisiologia da cultura e explicam <em>por que</em> os
+      dias perdidos importam. Onde há dado da fazenda para sustentar o ponto, ele está citado;
+      onde não há, está sinalizado como hipótese a verificar.</p>
+  </div>
+  <h3>Sobre a operação de semeadura</h3>
+  <div class="cards">
+    <div class="card"><h4>Estande e profundidade</h4>
+      <p>Semear em solo acima da capacidade de campo desregula a profundidade — o disco afunda e a
+        semente fica funda demais. Em algodão, com reserva de semente pequena e hipocótilo
+        sensível, isso vira falha de estande. O encrostamento superficial após chuva forte na
+        emergência agrava: a plântula não rompe a crosta.</p></div>
+    <div class="card"><h4>Compactação e o sistema radicular</h4>
+      <p>Tráfego com solo saturado é o que mais compacta. O algodão tem raiz pivotante e depende
+        de perfil solto para explorar água e potássio em profundidade. Uma camada compactada
+        formada no plantio limita a planta a safra inteira — e não é corrigida por irrigação.</p></div>
+    <div class="card"><h4>Hipoxia e patógenos de solo</h4>
+      <p>Solo saturado nos primeiros dias após a semeadura reduz oxigênio na zona da semente e
+        favorece <i>Pythium</i> e <i>Rhizoctonia</i>. É o período em que o tratamento de semente
+        tem meia-vida curta e o inóculo tem umidade ideal.</p></div>
+    <div class="card"><h4>Nitrogênio</h4>
+      <p>Em solo saturado, o nitrato se perde por desnitrificação e lixiviação. Os relatórios de
+        irrigação registram excesso hídrico médio de <b>688 mm em Karitel e 573 mm em Rio do
+        Meio</b> no ciclo da soja — volume que drena abaixo da zona radicular e leva nitrato
+        junto. Vale checar se a adubação de cobertura do algodão foi parcelada à altura disso.</p></div>
+  </div>
+  <h3>Sobre o plantio tardio</h3>
+  <div class="cards">
+    <div class="card"><h4>Radiação no enchimento</h4>
+      <p>O algodão plantado em março floresce e enche capulho num período de radiação e temperatura
+        declinantes. Menos energia disponível na fase de maior demanda significa menos maçãs
+        retidas por planta e menor peso de capulho — o mecanismo direto pelo qual data de plantio
+        vira produtividade.</p></div>
+    <div class="card"><h4>Abscisão de estruturas</h4>
+      <p>Quando a relação fonte-dreno aperta, a planta aborta botões e maçãs jovens. Estresse
+        hídrico, excesso de nuvens e alta carga simultânea empurram na mesma direção. Em plantio
+        tardio a janela para compensar com nova florada praticamente não existe.</p></div>
+    <div class="card"><h4>Crescimento vegetativo excessivo</h4>
+      <p>Solo úmido e nitrogênio disponível no início do ciclo alongam entrenós. Plantios que
+        pegaram fevereiro e março exigem mais atenção com regulador de crescimento; subdosar aqui
+        custa estrutura e dificulta a colheita.</p></div>
+    <div class="card"><h4>Pressão de pragas e "ponte verde"</h4>
+      <p>Uma campanha de 108 dias mantém algodão em todos os estádios ao mesmo tempo na propriedade.
+        Os plantios tardios recebem populações de bicudo e mosca-branca já multiplicadas nos
+        plantios de dezembro. O escalonamento longo tem custo fitossanitário além do custo
+        fisiológico.</p></div>
+    <div class="card"><h4>Colheita e qualidade de fibra</h4>
+      <p>O algodão de março colhe em agosto e setembro. Atrasar mais empurra a colheita para o
+        início das chuvas seguintes, com risco de perda de nota de folha, micronaire e
+        comprimento — e de capulho no chão.</p></div>
+    <div class="card"><h4>Soja: chuva na colheita</h4>
+      <p>A chuva também bloqueia colheita, não só plantio. Cada dia de espera com soja madura no
+        campo é perda de qualidade de grão e, na cadeia, atraso na liberação do talhão. O pivô que
+        esperou 29 dias entre maturidade e colheita é o caso extremo dessa fila.</p></div>
+  </div>
+</section>
+
+<section id="auditoria">
+  <div class="rule"></div>
+  <span class="eyebrow">Auditoria · antes da modelagem</span>
+  <h2>Qualidade dos dados</h2>
+  <div class="prose">
+    <p>Nenhum número acima foi calculado antes destas verificações.</p>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Verificação</th><th>Resultado</th><th>Decisão</th></tr></thead>
+    <tbody>
+      <tr><td>Dias ausentes na série</td>
+        <td class="txt">42% do calendário em Karitel, 49% em Rio do Meio não têm linha
+          no arquivo. Maior bloco: 99 e 102 dias em plena seca (abr–ago).</td>
+        <td class="txt">Investigado, não descartado — ver linha seguinte.</td></tr>
+      <tr><td>Chuva zero <b>versus</b> falha de pluviômetro</td>
+        <td class="txt">Nenhum dos 366 dias-fazenda presentes tem chuva zero em <em>todos</em>
+          os sensores. O arquivo só exporta dias com chuva.</td>
+        <td class="txt">Dia ausente tratado como 0 mm, não como falha.</td></tr>
+      <tr><td>Confronto com fonte auxiliar</td>
+        <td class="txt">Acumulado por pivô contra o relatório de irrigação (fonte
+          independente): viés mediano <b>+1,1%</b>, 49 de 54 pivôs dentro de ±15%.</td>
+        <td class="txt">Confirma que a série não perde eventos. Hipótese acima validada.</td></tr>
+      <tr><td>Duplicados</td><td class="txt">Nenhum par (data, pluviômetro) repetido em 21.985 registros.</td>
+        <td class="txt">—</td></tr>
+      <tr><td>Unidades</td>
+        <td class="txt">Mín 0, máx 157 mm/dia; acumulados de 340 a 1.390 mm na safra.
+          Compatível com mm/dia no Oeste da Bahia.</td>
+        <td class="txt">Sem conversão. Nenhum indício de cm ou polegada.</td></tr>
+      <tr><td>Comparação entre sensores do mesmo pivô</td>
+        <td class="txt">Cinco pivôs têm sensor redundante. Três secundários acumularam
+          30%, 43% e 44% do primário, com correlação 0,48–0,65.</td>
+        <td class="txt"><b>KRT-004B e KRT-006B reprovados</b> (subregistro por bateria ou
+          entupimento). A análise usa os 106 sensores primários de pivô; os redundantes serviram
+          só para esta verificação cruzada.</td></tr>
+      <tr><td>Outliers</td>
+        <td class="txt">Máximos de 157, 155 e 128 mm ocorreram todos em 21/11, com
+          mediana da fazenda em 83 mm — evento regional confirmado por vários sensores. Nenhum
+          outlier isolado (&gt;80 mm com mediana da fazenda &lt;2 mm).</td>
+        <td class="txt"><b>Mantidos.</b> Excluir seria descartar chuva real.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="limites">
+  <div class="rule"></div>
+  <span class="eyebrow">Rigor</span>
+  <h2>Hipóteses, incertezas e limitações</h2>
+  <div class="prose">
+    <h3>Hipóteses assumidas</h3>
+    <ul>
+      <li><b>Capacidade operacional</b> = p90 do ha/dia observado: 250 ha/dia em Karitel, 150 em
+        Rio do Meio. O motor valida contra a realidade com erro mediano de 1 dia.</li>
+      <li><b>A data de plantio registrada</b> representa o pivô plantado naquele dia. Não há
+        registro de plantio parcial nas fontes.</li>
+      <li><b>Liberação do talhão</b> = data de colheita da soja, para os 25 pivôs com sucessão
+        documentada. Para os 43 restantes, ver as duas hipóteses H1/H2.</li>
+      <li><b>Maturidade da soja</b> = plantio + P25 do ciclo da fazenda (117–118 dias), tomado
+        como a colheita que teria ocorrido sem espera.</li>
+      <li><b>Bloqueio no nível da fazenda</b> usa a mediana dos pluviômetros, porque as máquinas
+        se deslocam entre pivôs. As métricas por talhão usam o pluviômetro do próprio pivô.</li>
+    </ul>
+    <h3>Incertezas</h3>
+    <ul>
+      <li><b>A maior:</b> a cultura antecessora de 43 talhões (5.118 ha, 62% da área) não consta
+        em nenhuma fonte. Por isso todo resultado de cenário é apresentado como intervalo.</li>
+      <li>A calibração do efeito residual usa 114 dias-fazenda. D+1 é significativo (p = 0,0035);
+        D+2 não atinge significância isolado (p = 0,079) e entra no R = 2 pelo teste conjunto.</li>
+      <li>A separação por tamanho de evento tem 3 a 11 dias por célula — é indicativa.</li>
+      <li>O API não separou dias operados de não operados (AUC 0,55, p = 0,15). É reportado como
+        descritor, não como regra.</li>
+    </ul>
+    <h3>Limitações</h3>
+    <ul>
+      <li><b>Produtividade do algodão censurada:</b> 30% da área, janela de 40 dias. O efeito do
+        plantio tardio além de 11/01 não é mensurável nesta safra.</li>
+      <li><b>Sem registro de motivo de parada</b> nem de horas de máquina. Os 24 dias-fazenda
+        agricultáveis com área liberada e sem plantio registrado ficaram sem causa atribuída.</li>
+      <li><b>Sem estação meteorológica externa</b> nem umidade de solo por talhão na janela de
+        plantio. A validação cruzada foi feita contra o relatório de irrigação.</li>
+      <li><b>A regra de 5 mm é operacional, não física.</b> 36% da área foi plantada em dias que
+        ela classifica como bloqueados. Os números de dias bloqueados medem condição adversa, não
+        impossibilidade.</li>
+      <li><b>Correlação não é causalidade.</b> Nenhum número deste relatório demonstra que a chuva
+        causou perda de produtividade — apenas que ela bloqueou dias e deslocou datas.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Encaminhamento</span>
+  <h2>O que fazer com isto</h2>
+  <div class="prose">
+    <ol>
+      <li><b>Atacar a liberação, não o clima.</b> O ganho está em antecipar a soja dos pivôs
+        destinados ao algodão — ciclos mais curtos e prioridade de colheita nesses talhões.
+        Comprimir o escalonamento da soja em 20 dias vale mais que qualquer ganho de máquina.</li>
+      <li><b>Não investir em capacidade de plantio para este problema.</b> Dobrar a capacidade
+        antecipa 1 a 3 dias e não muda a data do último plantio.</li>
+      <li><b>Tratar Karitel e Rio do Meio de forma diferente.</b> Karitel perde 39% dos dias com
+        talhão pronto e chuva na frente — ali vale trabalhar trafegabilidade (pneus, carretas,
+        janelas curtas de operação). Rio do Meio passa 67% do tempo sem pivô liberado — ali o
+        problema é inteiramente de sucessão.</li>
+      <li><b>Fechar a produtividade dos 5.797 ha restantes</b> e refazer a regressão com variedade
+        e pivô como controles. É o único caminho para transformar "plantio tardio custa caro" em
+        um número desta fazenda.</li>
+      <li><b>Registrar três coisas na safra 26/27:</b> a cultura antecessora de cada pivô, os
+        hectares plantados por dia por máquina, e o motivo de cada dia de parada. Com isso, a
+        mesma análise sai sem intervalos de hipótese.</li>
+      <li><b>Corrigir a exportação da chuva</b> para incluir todos os dias com um campo de
+        estado do sensor, e dar manutenção nos pluviômetros KRT-004B e KRT-006B.</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  Fontes: CHUVAS_RDM.xlsx · chuva_karitel.xlsx · relatorio_soja.pdf (Karitel) ·
+  soja_safra_rdm.pdf (Rio do Meio) · Produtividade_e_Época_de_Plantio_Algodão_safra_2526.xlsx<br>
+  Pipeline reprodutível em <span style="color:var(--ink-2)">analise_chuva/scripts/run_all.sh</span> ·
+  tabelas completas em <span style="color:var(--ink-2)">Impacto_da_Chuva_Soja_Algodao_2526.xlsx</span>
+</footer>
+</div>
+<script id="dados" type="application/json">{"calendario": [{"fazenda": "KRT", "dias": [{"d": "02/12", "iso": "2025-12-02", "mm": 2.1, "api": 44.2, "st": "ok", "ha": 120.0}, {"d": "03/12", "iso": "2025-12-03", "mm": 7.6, "api": 45.2, "st": "direto", "ha": 30.0}, {"d": "04/12", "iso": "2025-12-04", "mm": 32.1, "api": 70.5, "st": "direto", "ha": 0.0}, {"d": "05/12", "iso": "2025-12-05", "mm": 14.2, "api": 74.2, "st": "direto", "ha": 0.0}, {"d": "06/12", "iso": "2025-12-06", "mm": 11.0, "api": 74.0, "st": "direto", "ha": 0.0}, {"d": "07/12", "iso": "2025-12-07", "mm": 5.7, "api": 68.6, "st": "direto", "ha": 0.0}, {"d": "08/12", "iso": "2025-12-08", "mm": 40.6, "api": 98.9, "st": "direto", "ha": 250.0}, {"d": "09/12", "iso": "2025-12-09", "mm": 1.0, "api": 85.1, "st": "residual", "ha": 0.0}, {"d": "10/12", "iso": "2025-12-10", "mm": 0.0, "api": 72.3, "st": "residual", "ha": 0.0}, {"d": "11/12", "iso": "2025-12-11", "mm": 0.0, "api": 61.2, "st": "ok", "ha": 150.0}, {"d": "12/12", "iso": "2025-12-12", "mm": 4.1, "api": 53.3, "st": "ok", "ha": 0.0}, {"d": "13/12", "iso": "2025-12-13", "mm": 1.3, "api": 46.6, "st": "ok", "ha": 80.0}, {"d": "14/12", "iso": "2025-12-14", "mm": 3.9, "api": 42.8, "st": "ok", "ha": 0.0}, {"d": "15/12", "iso": "2025-12-15", "mm": 16.9, "api": 52.9, "st": "direto", "ha": 0.0}, {"d": "16/12", "iso": "2025-12-16", "mm": 0.5, "api": 44.5, "st": "residual", "ha": 0.0}, {"d": "17/12", "iso": "2025-12-17", "mm": 11.9, "api": 49.2, "st": "direto", "ha": 73.0}, {"d": "18/12", "iso": "2025-12-18", "mm": 3.3, "api": 44.9, "st": "residual", "ha": 0.0}, {"d": "19/12", "iso": "2025-12-19", "mm": 0.0, "api": 38.1, "st": "residual", "ha": 140.0}, {"d": "20/12", "iso": "2025-12-20", "mm": 0.0, "api": 32.4, "st": "ok", "ha": 150.0}, {"d": "21/12", "iso": "2025-12-21", "mm": 0.0, "api": 27.6, "st": "ok", "ha": 0.0}, {"d": "22/12", "iso": "2025-12-22", "mm": 0.0, "api": 23.4, "st": "ok", "ha": 0.0}, {"d": "23/12", "iso": "2025-12-23", "mm": 0.0, "api": 19.8, "st": "ok", "ha": 0.0}, {"d": "24/12", "iso": "2025-12-24", "mm": 0.0, "api": 16.6, "st": "ok", "ha": 0.0}, {"d": "25/12", "iso": "2025-12-25", "mm": 0.0, "api": 13.1, "st": "ok", "ha": 0.0}, {"d": "26/12", "iso": "2025-12-26", "mm": 0.0, "api": 10.6, "st": "ok", "ha": 150.0}, {"d": "27/12", "iso": "2025-12-27", "mm": 0.0, "api": 8.7, "st": "ok", "ha": 0.0}, {"d": "28/12", "iso": "2025-12-28", "mm": 1.8, "api": 9.0, "st": "ok", "ha": 0.0}, {"d": "29/12", "iso": "2025-12-29", "mm": 0.0, "api": 6.3, "st": "ok", "ha": 145.0}, {"d": "30/12", "iso": "2025-12-30", "mm": 17.6, "api": 22.9, "st": "direto", "ha": 0.0}, {"d": "31/12", "iso": "2025-12-31", "mm": 0.0, "api": 19.5, "st": "residual", "ha": 0.0}, {"d": "01/01", "iso": "2026-01-01", "mm": 0.0, "api": 16.5, "st": "residual", "ha": 160.0}, {"d": "02/01", "iso": "2026-01-02", "mm": 24.1, "api": 38.1, "st": "direto", "ha": 0.0}, {"d": "03/01", "iso": "2026-01-03", "mm": 37.1, "api": 69.4, "st": "direto", "ha": 73.0}, {"d": "04/01", "iso": "2026-01-04", "mm": 0.0, "api": 58.9, "st": "residual", "ha": 0.0}, {"d": "05/01", "iso": "2026-01-05", "mm": 0.0, "api": 49.5, "st": "residual", "ha": 0.0}, {"d": "06/01", "iso": "2026-01-06", "mm": 22.6, "api": 64.6, "st": "direto", "ha": 0.0}, {"d": "07/01", "iso": "2026-01-07", "mm": 0.2, "api": 54.8, "st": "residual", "ha": 0.0}, {"d": "08/01", "iso": "2026-01-08", "mm": 0.0, "api": 46.5, "st": "residual", "ha": 0.0}, {"d": "09/01", "iso": "2026-01-09", "mm": 1.1, "api": 40.6, "st": "ok", "ha": 0.0}, {"d": "10/01", "iso": "2026-01-10", "mm": 0.0, "api": 34.5, "st": "ok", "ha": 0.0}, {"d": "11/01", "iso": "2026-01-11", "mm": 0.0, "api": 29.3, "st": "ok", "ha": 140.0}, {"d": "12/01", "iso": "2026-01-12", "mm": 37.5, "api": 62.4, "st": "direto", "ha": 0.0}, {"d": "13/01", "iso": "2026-01-13", "mm": 0.0, "api": 53.1, "st": "residual", "ha": 0.0}, {"d": "14/01", "iso": "2026-01-14", "mm": 0.0, "api": 45.1, "st": "residual", "ha": 0.0}, {"d": "15/01", "iso": "2026-01-15", "mm": 0.0, "api": 38.3, "st": "ok", "ha": 0.0}, {"d": "16/01", "iso": "2026-01-16", "mm": 0.0, "api": 32.6, "st": "ok", "ha": 300.0}, {"d": "17/01", "iso": "2026-01-17", "mm": 0.0, "api": 27.7, "st": "ok", "ha": 0.0}, {"d": "18/01", "iso": "2026-01-18", "mm": 0.0, "api": 23.5, "st": "ok", "ha": 285.0}, {"d": "19/01", "iso": "2026-01-19", "mm": 8.8, "api": 28.8, "st": "direto", "ha": 150.0}, {"d": "20/01", "iso": "2026-01-20", "mm": 20.6, "api": 44.4, "st": "direto", "ha": 0.0}, {"d": "21/01", "iso": "2026-01-21", "mm": 10.6, "api": 48.4, "st": "direto", "ha": 150.0}, {"d": "22/01", "iso": "2026-01-22", "mm": 6.3, "api": 47.4, "st": "direto", "ha": 0.0}, {"d": "23/01", "iso": "2026-01-23", "mm": 9.4, "api": 48.9, "st": "direto", "ha": 0.0}, {"d": "24/01", "iso": "2026-01-24", "mm": 10.8, "api": 51.1, "st": "direto", "ha": 150.0}, {"d": "25/01", "iso": "2026-01-25", "mm": 0.0, "api": 43.4, "st": "residual", "ha": 150.0}, {"d": "26/01", "iso": "2026-01-26", "mm": 0.0, "api": 36.9, "st": "residual", "ha": 150.0}, {"d": "27/01", "iso": "2026-01-27", "mm": 0.0, "api": 30.6, "st": "ok", "ha": 150.0}, {"d": "28/01", "iso": "2026-01-28", "mm": 0.0, "api": 26.0, "st": "ok", "ha": 80.0}, {"d": "29/01", "iso": "2026-01-29", "mm": 0.0, "api": 22.1, "st": "ok", "ha": 150.0}, {"d": "30/01", "iso": "2026-01-30", "mm": 0.0, "api": 18.8, "st": "ok", "ha": 80.0}, {"d": "31/01", "iso": "2026-01-31", "mm": 14.0, "api": 29.9, "st": "direto", "ha": 0.0}, {"d": "01/02", "iso": "2026-02-01", "mm": 1.9, "api": 27.3, "st": "residual", "ha": 0.0}, {"d": "02/02", "iso": "2026-02-02", "mm": 3.5, "api": 25.5, "st": "residual", "ha": 0.0}, {"d": "03/02", "iso": "2026-02-03", "mm": 9.7, "api": 31.4, "st": "direto", "ha": 0.0}, {"d": "04/02", "iso": "2026-02-04", "mm": 0.5, "api": 27.2, "st": "residual", "ha": 0.0}, {"d": "05/02", "iso": "2026-02-05", "mm": 0.5, "api": 23.6, "st": "residual", "ha": 0.0}, {"d": "06/02", "iso": "2026-02-06", "mm": 0.0, "api": 20.1, "st": "ok", "ha": 450.0}, {"d": "07/02", "iso": "2026-02-07", "mm": 2.5, "api": 19.6, "st": "ok", "ha": 250.0}, {"d": "08/02", "iso": "2026-02-08", "mm": 0.0, "api": 16.7, "st": "ok", "ha": 0.0}, {"d": "09/02", "iso": "2026-02-09", "mm": 0.0, "api": 13.9, "st": "ok", "ha": 0.0}, {"d": "10/02", "iso": "2026-02-10", "mm": 7.4, "api": 18.5, "st": "direto", "ha": 80.0}, {"d": "11/02", "iso": "2026-02-11", "mm": 57.8, "api": 73.2, "st": "direto", "ha": 0.0}, {"d": "12/02", "iso": "2026-02-12", "mm": 0.0, "api": 62.0, "st": "residual", "ha": 0.0}, {"d": "13/02", "iso": "2026-02-13", "mm": 0.0, "api": 52.4, "st": "residual", "ha": 288.0}, {"d": "14/02", "iso": "2026-02-14", "mm": 0.0, "api": 44.2, "st": "ok", "ha": 124.0}, {"d": "15/02", "iso": "2026-02-15", "mm": 0.0, "api": 37.5, "st": "ok", "ha": 80.0}, {"d": "16/02", "iso": "2026-02-16", "mm": 0.0, "api": 31.9, "st": "ok", "ha": 75.0}, {"d": "17/02", "iso": "2026-02-17", "mm": 0.0, "api": 27.1, "st": "ok", "ha": 150.0}, {"d": "18/02", "iso": "2026-02-18", "mm": 0.0, "api": 23.1, "st": "ok", "ha": 120.0}, {"d": "19/02", "iso": "2026-02-19", "mm": 10.2, "api": 29.8, "st": "direto", "ha": 127.0}, {"d": "20/02", "iso": "2026-02-20", "mm": 42.2, "api": 67.6, "st": "direto", "ha": 0.0}, {"d": "21/02", "iso": "2026-02-21", "mm": 8.2, "api": 65.2, "st": "direto", "ha": 0.0}, {"d": "22/02", "iso": "2026-02-22", "mm": 62.3, "api": 117.6, "st": "direto", "ha": 0.0}, {"d": "23/02", "iso": "2026-02-23", "mm": 20.0, "api": 119.8, "st": "direto", "ha": 0.0}, {"d": "24/02", "iso": "2026-02-24", "mm": 12.3, "api": 113.8, "st": "direto", "ha": 0.0}, {"d": "25/02", "iso": "2026-02-25", "mm": 1.0, "api": 97.8, "st": "residual", "ha": 0.0}, {"d": "26/02", "iso": "2026-02-26", "mm": 0.2, "api": 83.3, "st": "residual", "ha": 0.0}, {"d": "27/02", "iso": "2026-02-27", "mm": 2.0, "api": 72.9, "st": "ok", "ha": 0.0}, {"d": "28/02", "iso": "2026-02-28", "mm": 19.7, "api": 81.5, "st": "direto", "ha": 160.0}, {"d": "01/03", "iso": "2026-03-01", "mm": 16.8, "api": 86.1, "st": "direto", "ha": 0.0}, {"d": "02/03", "iso": "2026-03-02", "mm": 0.5, "api": 73.7, "st": "residual", "ha": 0.0}, {"d": "03/03", "iso": "2026-03-03", "mm": 0.0, "api": 62.4, "st": "residual", "ha": 0.0}, {"d": "04/03", "iso": "2026-03-04", "mm": 0.0, "api": 51.1, "st": "ok", "ha": 0.0}, {"d": "05/03", "iso": "2026-03-05", "mm": 3.9, "api": 47.3, "st": "ok", "ha": 90.0}, {"d": "06/03", "iso": "2026-03-06", "mm": 13.3, "api": 53.6, "st": "direto", "ha": 0.0}, {"d": "07/03", "iso": "2026-03-07", "mm": 0.0, "api": 45.5, "st": "residual", "ha": 0.0}, {"d": "08/03", "iso": "2026-03-08", "mm": 0.0, "api": 38.7, "st": "residual", "ha": 0.0}, {"d": "09/03", "iso": "2026-03-09", "mm": 0.0, "api": 32.9, "st": "ok", "ha": 150.0}, {"d": "10/03", "iso": "2026-03-10", "mm": 0.0, "api": 28.0, "st": "ok", "ha": 100.0}, {"d": "11/03", "iso": "2026-03-11", "mm": 0.0, "api": 23.8, "st": "ok", "ha": 150.0}, {"d": "12/03", "iso": "2026-03-12", "mm": 0.0, "api": 19.9, "st": "ok", "ha": 125.0}, {"d": "13/03", "iso": "2026-03-13", "mm": 6.6, "api": 22.1, "st": "direto", "ha": 0.0}, {"d": "14/03", "iso": "2026-03-14", "mm": 0.0, "api": 18.5, "st": "residual", "ha": 0.0}, {"d": "15/03", "iso": "2026-03-15", "mm": 0.0, "api": 13.7, "st": "residual", "ha": 0.0}, {"d": "16/03", "iso": "2026-03-16", "mm": 0.0, "api": 11.0, "st": "ok", "ha": 0.0}, {"d": "17/03", "iso": "2026-03-17", "mm": 0.0, "api": 8.9, "st": "ok", "ha": 0.0}, {"d": "18/03", "iso": "2026-03-18", "mm": 0.0, "api": 7.5, "st": "ok", "ha": 0.0}, {"d": "19/03", "iso": "2026-03-19", "mm": 0.0, "api": 6.4, "st": "ok", "ha": 30.0}]}, {"fazenda": "RDM", "dias": [{"d": "02/12", "iso": "2025-12-02", "mm": 9.3, "api": 27.4, "st": "direto", "ha": 0.0}, {"d": "03/12", "iso": "2025-12-03", "mm": 0.2, "api": 23.5, "st": "residual", "ha": 0.0}, {"d": "04/12", "iso": "2025-12-04", "mm": 49.8, "api": 69.8, "st": "direto", "ha": 0.0}, {"d": "05/12", "iso": "2025-12-05", "mm": 14.4, "api": 73.7, "st": "direto", "ha": 0.0}, {"d": "06/12", "iso": "2025-12-06", "mm": 10.8, "api": 73.4, "st": "direto", "ha": 0.0}, {"d": "07/12", "iso": "2025-12-07", "mm": 9.8, "api": 72.2, "st": "direto", "ha": 0.0}, {"d": "08/12", "iso": "2025-12-08", "mm": 16.3, "api": 77.6, "st": "direto", "ha": 0.0}, {"d": "09/12", "iso": "2025-12-09", "mm": 26.8, "api": 92.8, "st": "direto", "ha": 0.0}, {"d": "10/12", "iso": "2025-12-10", "mm": 3.4, "api": 82.3, "st": "residual", "ha": 0.0}, {"d": "11/12", "iso": "2025-12-11", "mm": 0.0, "api": 69.9, "st": "residual", "ha": 0.0}, {"d": "12/12", "iso": "2025-12-12", "mm": 3.6, "api": 63.0, "st": "ok", "ha": 0.0}, {"d": "13/12", "iso": "2025-12-13", "mm": 28.8, "api": 82.4, "st": "direto", "ha": 0.0}, {"d": "14/12", "iso": "2025-12-14", "mm": 0.0, "api": 69.3, "st": "residual", "ha": 0.0}, {"d": "15/12", "iso": "2025-12-15", "mm": 3.5, "api": 61.6, "st": "residual", "ha": 0.0}, {"d": "16/12", "iso": "2025-12-16", "mm": 0.0, "api": 52.3, "st": "ok", "ha": 0.0}, {"d": "17/12", "iso": "2025-12-17", "mm": 16.4, "api": 60.6, "st": "direto", "ha": 0.0}, {"d": "18/12", "iso": "2025-12-18", "mm": 4.1, "api": 55.4, "st": "residual", "ha": 0.0}, {"d": "19/12", "iso": "2025-12-19", "mm": 0.0, "api": 47.1, "st": "residual", "ha": 0.0}, {"d": "20/12", "iso": "2025-12-20", "mm": 0.0, "api": 40.0, "st": "ok", "ha": 100.0}, {"d": "21/12", "iso": "2025-12-21", "mm": 0.0, "api": 34.0, "st": "ok", "ha": 100.0}, {"d": "22/12", "iso": "2025-12-22", "mm": 0.0, "api": 28.9, "st": "ok", "ha": 100.0}, {"d": "23/12", "iso": "2025-12-23", "mm": 0.0, "api": 24.3, "st": "ok", "ha": 200.0}, {"d": "24/12", "iso": "2025-12-24", "mm": 0.0, "api": 20.6, "st": "ok", "ha": 0.0}, {"d": "25/12", "iso": "2025-12-25", "mm": 0.0, "api": 15.9, "st": "ok", "ha": 100.0}, {"d": "26/12", "iso": "2025-12-26", "mm": 0.0, "api": 13.0, "st": "ok", "ha": 0.0}, {"d": "27/12", "iso": "2025-12-27", "mm": 0.0, "api": 10.7, "st": "ok", "ha": 100.0}, {"d": "28/12", "iso": "2025-12-28", "mm": 0.0, "api": 8.8, "st": "ok", "ha": 0.0}, {"d": "29/12", "iso": "2025-12-29", "mm": 0.0, "api": 6.9, "st": "ok", "ha": 100.0}, {"d": "30/12", "iso": "2025-12-30", "mm": 23.8, "api": 28.8, "st": "direto", "ha": 0.0}, {"d": "31/12", "iso": "2025-12-31", "mm": 0.0, "api": 24.4, "st": "residual", "ha": 0.0}, {"d": "01/01", "iso": "2026-01-01", "mm": 1.4, "api": 22.1, "st": "residual", "ha": 0.0}, {"d": "02/01", "iso": "2026-01-02", "mm": 0.0, "api": 18.7, "st": "ok", "ha": 100.0}, {"d": "03/01", "iso": "2026-01-03", "mm": 4.1, "api": 19.0, "st": "ok", "ha": 0.0}, {"d": "04/01", "iso": "2026-01-04", "mm": 0.2, "api": 16.4, "st": "ok", "ha": 0.0}, {"d": "05/01", "iso": "2026-01-05", "mm": 0.0, "api": 13.8, "st": "ok", "ha": 0.0}, {"d": "06/01", "iso": "2026-01-06", "mm": 17.6, "api": 29.4, "st": "direto", "ha": 150.0}, {"d": "07/01", "iso": "2026-01-07", "mm": 0.0, "api": 24.4, "st": "residual", "ha": 0.0}, {"d": "08/01", "iso": "2026-01-08", "mm": 0.0, "api": 20.6, "st": "residual", "ha": 0.0}, {"d": "09/01", "iso": "2026-01-09", "mm": 0.0, "api": 17.5, "st": "ok", "ha": 0.0}, {"d": "10/01", "iso": "2026-01-10", "mm": 0.0, "api": 14.9, "st": "ok", "ha": 0.0}, {"d": "11/01", "iso": "2026-01-11", "mm": 0.0, "api": 12.7, "st": "ok", "ha": 0.0}, {"d": "12/01", "iso": "2026-01-12", "mm": 36.3, "api": 47.1, "st": "direto", "ha": 0.0}, {"d": "13/01", "iso": "2026-01-13", "mm": 0.0, "api": 40.0, "st": "residual", "ha": 0.0}, {"d": "14/01", "iso": "2026-01-14", "mm": 0.0, "api": 34.0, "st": "residual", "ha": 0.0}, {"d": "15/01", "iso": "2026-01-15", "mm": 0.0, "api": 28.9, "st": "ok", "ha": 0.0}, {"d": "16/01", "iso": "2026-01-16", "mm": 0.0, "api": 24.6, "st": "ok", "ha": 0.0}, {"d": "17/01", "iso": "2026-01-17", "mm": 0.0, "api": 20.9, "st": "ok", "ha": 0.0}, {"d": "18/01", "iso": "2026-01-18", "mm": 2.4, "api": 20.2, "st": "ok", "ha": 0.0}, {"d": "19/01", "iso": "2026-01-19", "mm": 5.2, "api": 22.4, "st": "direto", "ha": 0.0}, {"d": "20/01", "iso": "2026-01-20", "mm": 54.9, "api": 73.1, "st": "direto", "ha": 0.0}, {"d": "21/01", "iso": "2026-01-21", "mm": 1.5, "api": 63.6, "st": "residual", "ha": 0.0}, {"d": "22/01", "iso": "2026-01-22", "mm": 18.0, "api": 72.1, "st": "direto", "ha": 0.0}, {"d": "23/01", "iso": "2026-01-23", "mm": 2.9, "api": 64.2, "st": "residual", "ha": 0.0}, {"d": "24/01", "iso": "2026-01-24", "mm": 17.9, "api": 72.3, "st": "direto", "ha": 0.0}, {"d": "25/01", "iso": "2026-01-25", "mm": 0.0, "api": 61.5, "st": "residual", "ha": 0.0}, {"d": "26/01", "iso": "2026-01-26", "mm": 0.0, "api": 52.3, "st": "residual", "ha": 0.0}, {"d": "27/01", "iso": "2026-01-27", "mm": 0.0, "api": 43.8, "st": "ok", "ha": 100.0}, {"d": "28/01", "iso": "2026-01-28", "mm": 0.0, "api": 37.3, "st": "ok", "ha": 114.0}, {"d": "29/01", "iso": "2026-01-29", "mm": 0.1, "api": 31.8, "st": "ok", "ha": 0.0}, {"d": "30/01", "iso": "2026-01-30", "mm": 11.9, "api": 39.0, "st": "direto", "ha": 120.0}, {"d": "31/01", "iso": "2026-01-31", "mm": 0.5, "api": 33.6, "st": "residual", "ha": 0.0}, {"d": "01/02", "iso": "2026-02-01", "mm": 21.3, "api": 49.9, "st": "direto", "ha": 0.0}, {"d": "02/02", "iso": "2026-02-02", "mm": 47.7, "api": 88.9, "st": "direto", "ha": 150.0}, {"d": "03/02", "iso": "2026-02-03", "mm": 0.8, "api": 76.3, "st": "residual", "ha": 0.0}, {"d": "04/02", "iso": "2026-02-04", "mm": 1.2, "api": 66.1, "st": "residual", "ha": 0.0}, {"d": "05/02", "iso": "2026-02-05", "mm": 0.0, "api": 56.2, "st": "ok", "ha": 0.0}, {"d": "06/02", "iso": "2026-02-06", "mm": 5.6, "api": 53.4, "st": "direto", "ha": 0.0}, {"d": "07/02", "iso": "2026-02-07", "mm": 0.0, "api": 45.4, "st": "residual", "ha": 0.0}, {"d": "08/02", "iso": "2026-02-08", "mm": 0.4, "api": 38.9, "st": "residual", "ha": 0.0}, {"d": "09/02", "iso": "2026-02-09", "mm": 0.5, "api": 33.4, "st": "ok", "ha": 0.0}, {"d": "10/02", "iso": "2026-02-10", "mm": 0.0, "api": 26.6, "st": "ok", "ha": 0.0}, {"d": "11/02", "iso": "2026-02-11", "mm": 26.5, "api": 49.0, "st": "direto", "ha": 0.0}, {"d": "12/02", "iso": "2026-02-12", "mm": 0.0, "api": 41.0, "st": "residual", "ha": 0.0}, {"d": "13/02", "iso": "2026-02-13", "mm": 0.0, "api": 34.8, "st": "residual", "ha": 0.0}, {"d": "14/02", "iso": "2026-02-14", "mm": 0.0, "api": 29.0, "st": "ok", "ha": 0.0}, {"d": "15/02", "iso": "2026-02-15", "mm": 0.0, "api": 24.6, "st": "ok", "ha": 0.0}, {"d": "16/02", "iso": "2026-02-16", "mm": 0.0, "api": 20.9, "st": "ok", "ha": 0.0}, {"d": "17/02", "iso": "2026-02-17", "mm": 0.0, "api": 17.8, "st": "ok", "ha": 0.0}, {"d": "18/02", "iso": "2026-02-18", "mm": 0.0, "api": 15.1, "st": "ok", "ha": 150.0}, {"d": "19/02", "iso": "2026-02-19", "mm": 3.0, "api": 15.9, "st": "ok", "ha": 0.0}, {"d": "20/02", "iso": "2026-02-20", "mm": 33.0, "api": 46.1, "st": "direto", "ha": 100.0}, {"d": "21/02", "iso": "2026-02-21", "mm": 5.1, "api": 44.3, "st": "direto", "ha": 0.0}, {"d": "22/02", "iso": "2026-02-22", "mm": 5.0, "api": 41.9, "st": "residual", "ha": 0.0}, {"d": "23/02", "iso": "2026-02-23", "mm": 4.3, "api": 38.3, "st": "residual", "ha": 0.0}, {"d": "24/02", "iso": "2026-02-24", "mm": 5.2, "api": 37.8, "st": "direto", "ha": 0.0}, {"d": "25/02", "iso": "2026-02-25", "mm": 0.8, "api": 32.8, "st": "residual", "ha": 0.0}, {"d": "26/02", "iso": "2026-02-26", "mm": 1.6, "api": 29.6, "st": "residual", "ha": 0.0}, {"d": "27/02", "iso": "2026-02-27", "mm": 9.3, "api": 34.3, "st": "direto", "ha": 0.0}, {"d": "28/02", "iso": "2026-02-28", "mm": 14.5, "api": 43.6, "st": "direto", "ha": 0.0}, {"d": "01/03", "iso": "2026-03-01", "mm": 12.8, "api": 49.9, "st": "direto", "ha": 0.0}, {"d": "02/03", "iso": "2026-03-02", "mm": 1.5, "api": 43.9, "st": "residual", "ha": 0.0}, {"d": "03/03", "iso": "2026-03-03", "mm": 5.8, "api": 43.1, "st": "direto", "ha": 0.0}, {"d": "04/03", "iso": "2026-03-04", "mm": 4.2, "api": 40.0, "st": "residual", "ha": 150.0}, {"d": "05/03", "iso": "2026-03-05", "mm": 13.7, "api": 47.7, "st": "direto", "ha": 0.0}, {"d": "06/03", "iso": "2026-03-06", "mm": 0.2, "api": 40.8, "st": "residual", "ha": 0.0}, {"d": "07/03", "iso": "2026-03-07", "mm": 0.0, "api": 34.7, "st": "residual", "ha": 150.0}, {"d": "08/03", "iso": "2026-03-08", "mm": 0.0, "api": 29.5, "st": "ok", "ha": 0.0}, {"d": "09/03", "iso": "2026-03-09", "mm": 0.0, "api": 25.0, "st": "ok", "ha": 0.0}, {"d": "10/03", "iso": "2026-03-10", "mm": 0.0, "api": 21.3, "st": "ok", "ha": 150.0}, {"d": "11/03", "iso": "2026-03-11", "mm": 0.0, "api": 18.1, "st": "ok", "ha": 0.0}, {"d": "12/03", "iso": "2026-03-12", "mm": 5.1, "api": 20.4, "st": "direto", "ha": 0.0}, {"d": "13/03", "iso": "2026-03-13", "mm": 7.2, "api": 23.5, "st": "direto", "ha": 0.0}, {"d": "14/03", "iso": "2026-03-14", "mm": 0.0, "api": 19.8, "st": "residual", "ha": 66.0}, {"d": "15/03", "iso": "2026-03-15", "mm": 22.9, "api": 39.5, "st": "direto", "ha": 0.0}, {"d": "16/03", "iso": "2026-03-16", "mm": 10.7, "api": 44.2, "st": "direto", "ha": 0.0}, {"d": "17/03", "iso": "2026-03-17", "mm": 0.0, "api": 37.4, "st": "residual", "ha": 0.0}, {"d": "18/03", "iso": "2026-03-18", "mm": 0.0, "api": 31.7, "st": "residual", "ha": 0.0}, {"d": "19/03", "iso": "2026-03-19", "mm": 0.0, "api": 26.9, "st": "ok", "ha": 0.0}]}], "avanco": {"observado": [{"iso": "2025-12-02", "ha": 120}, {"iso": "2025-12-03", "ha": 150}, {"iso": "2025-12-04", "ha": 150}, {"iso": "2025-12-05", "ha": 150}, {"iso": "2025-12-06", "ha": 150}, {"iso": "2025-12-07", "ha": 150}, {"iso": "2025-12-08", "ha": 400}, {"iso": "2025-12-09", "ha": 400}, {"iso": "2025-12-10", "ha": 400}, {"iso": "2025-12-11", "ha": 550}, {"iso": "2025-12-12", "ha": 550}, {"iso": "2025-12-13", "ha": 630}, {"iso": "2025-12-14", "ha": 630}, {"iso": "2025-12-15", "ha": 630}, {"iso": "2025-12-16", "ha": 630}, {"iso": "2025-12-17", "ha": 703}, {"iso": "2025-12-18", "ha": 703}, {"iso": "2025-12-19", "ha": 843}, {"iso": "2025-12-20", "ha": 1093}, {"iso": "2025-12-21", "ha": 1193}, {"iso": "2025-12-22", "ha": 1293}, {"iso": "2025-12-23", "ha": 1493}, {"iso": "2025-12-24", "ha": 1493}, {"iso": "2025-12-25", "ha": 1593}, {"iso": "2025-12-26", "ha": 1743}, {"iso": "2025-12-27", "ha": 1843}, {"iso": "2025-12-28", "ha": 1843}, {"iso": "2025-12-29", "ha": 2088}, {"iso": "2025-12-30", "ha": 2088}, {"iso": "2025-12-31", "ha": 2088}, {"iso": "2026-01-01", "ha": 2248}, {"iso": "2026-01-02", "ha": 2348}, {"iso": "2026-01-03", "ha": 2421}, {"iso": "2026-01-04", "ha": 2421}, {"iso": "2026-01-05", "ha": 2421}, {"iso": "2026-01-06", "ha": 2571}, {"iso": "2026-01-07", "ha": 2571}, {"iso": "2026-01-08", "ha": 2571}, {"iso": "2026-01-09", "ha": 2571}, {"iso": "2026-01-10", "ha": 2571}, {"iso": "2026-01-11", "ha": 2711}, {"iso": "2026-01-12", "ha": 2711}, {"iso": "2026-01-13", "ha": 2711}, {"iso": "2026-01-14", "ha": 2711}, {"iso": "2026-01-15", "ha": 2711}, {"iso": "2026-01-16", "ha": 3011}, {"iso": "2026-01-17", "ha": 3011}, {"iso": "2026-01-18", "ha": 3296}, {"iso": "2026-01-19", "ha": 3446}, {"iso": "2026-01-20", "ha": 3446}, {"iso": "2026-01-21", "ha": 3596}, {"iso": "2026-01-22", "ha": 3596}, {"iso": "2026-01-23", "ha": 3596}, {"iso": "2026-01-24", "ha": 3746}, {"iso": "2026-01-25", "ha": 3896}, {"iso": "2026-01-26", "ha": 4046}, {"iso": "2026-01-27", "ha": 4296}, {"iso": "2026-01-28", "ha": 4490}, {"iso": "2026-01-29", "ha": 4640}, {"iso": "2026-01-30", "ha": 4840}, {"iso": "2026-01-31", "ha": 4840}, {"iso": "2026-02-01", "ha": 4840}, {"iso": "2026-02-02", "ha": 4990}, {"iso": "2026-02-03", "ha": 4990}, {"iso": "2026-02-04", "ha": 4990}, {"iso": "2026-02-05", "ha": 4990}, {"iso": "2026-02-06", "ha": 5440}, {"iso": "2026-02-07", "ha": 5690}, {"iso": "2026-02-08", "ha": 5690}, {"iso": "2026-02-09", "ha": 5690}, {"iso": "2026-02-10", "ha": 5770}, {"iso": "2026-02-11", "ha": 5770}, {"iso": "2026-02-12", "ha": 5770}, {"iso": "2026-02-13", "ha": 6058}, {"iso": "2026-02-14", "ha": 6182}, {"iso": "2026-02-15", "ha": 6262}, {"iso": "2026-02-16", "ha": 6337}, {"iso": "2026-02-17", "ha": 6487}, {"iso": "2026-02-18", "ha": 6757}, {"iso": "2026-02-19", "ha": 6884}, {"iso": "2026-02-20", "ha": 6984}, {"iso": "2026-02-21", "ha": 6984}, {"iso": "2026-02-22", "ha": 6984}, {"iso": "2026-02-23", "ha": 6984}, {"iso": "2026-02-24", "ha": 6984}, {"iso": "2026-02-25", "ha": 6984}, {"iso": "2026-02-26", "ha": 6984}, {"iso": "2026-02-27", "ha": 6984}, {"iso": "2026-02-28", "ha": 7144}, {"iso": "2026-03-01", "ha": 7144}, {"iso": "2026-03-02", "ha": 7144}, {"iso": "2026-03-03", "ha": 7144}, {"iso": "2026-03-04", "ha": 7294}, {"iso": "2026-03-05", "ha": 7384}, {"iso": "2026-03-06", "ha": 7384}, {"iso": "2026-03-07", "ha": 7534}, {"iso": "2026-03-08", "ha": 7534}, {"iso": "2026-03-09", "ha": 7684}, {"iso": "2026-03-10", "ha": 7934}, {"iso": "2026-03-11", "ha": 8084}, {"iso": "2026-03-12", "ha": 8209}, {"iso": "2026-03-13", "ha": 8209}, {"iso": "2026-03-14", "ha": 8275}, {"iso": "2026-03-15", "ha": 8275}, {"iso": "2026-03-16", "ha": 8275}, {"iso": "2026-03-17", "ha": 8275}, {"iso": "2026-03-18", "ha": 8275}, {"iso": "2026-03-19", "ha": 8305}], "B_H1": [{"iso": "2025-12-02", "ha": 150}, {"iso": "2025-12-03", "ha": 150}, {"iso": "2025-12-04", "ha": 150}, {"iso": "2025-12-05", "ha": 150}, {"iso": "2025-12-06", "ha": 400}, {"iso": "2025-12-07", "ha": 400}, {"iso": "2025-12-08", "ha": 400}, {"iso": "2025-12-09", "ha": 550}, {"iso": "2025-12-10", "ha": 550}, {"iso": "2025-12-11", "ha": 630}, {"iso": "2025-12-12", "ha": 630}, {"iso": "2025-12-13", "ha": 630}, {"iso": "2025-12-14", "ha": 630}, {"iso": "2025-12-15", "ha": 776}, {"iso": "2025-12-16", "ha": 776}, {"iso": "2025-12-17", "ha": 916}, {"iso": "2025-12-18", "ha": 1166}, {"iso": "2025-12-19", "ha": 1266}, {"iso": "2025-12-20", "ha": 1366}, {"iso": "2025-12-21", "ha": 1466}, {"iso": "2025-12-22", "ha": 1566}, {"iso": "2025-12-23", "ha": 1666}, {"iso": "2025-12-24", "ha": 1816}, {"iso": "2025-12-25", "ha": 1916}, {"iso": "2025-12-26", "ha": 1916}, {"iso": "2025-12-27", "ha": 2161}, {"iso": "2025-12-28", "ha": 2161}, {"iso": "2025-12-29", "ha": 2161}, {"iso": "2025-12-30", "ha": 2321}, {"iso": "2025-12-31", "ha": 2421}, {"iso": "2026-01-01", "ha": 2421}, {"iso": "2026-01-02", "ha": 2421}, {"iso": "2026-01-03", "ha": 2421}, {"iso": "2026-01-04", "ha": 2571}, {"iso": "2026-01-05", "ha": 2571}, {"iso": "2026-01-06", "ha": 2571}, {"iso": "2026-01-07", "ha": 2571}, {"iso": "2026-01-08", "ha": 2571}, {"iso": "2026-01-09", "ha": 2711}, {"iso": "2026-01-10", "ha": 2711}, {"iso": "2026-01-11", "ha": 2711}, {"iso": "2026-01-12", "ha": 2711}, {"iso": "2026-01-13", "ha": 2711}, {"iso": "2026-01-14", "ha": 2861}, {"iso": "2026-01-15", "ha": 3161}, {"iso": "2026-01-16", "ha": 3321}, {"iso": "2026-01-17", "ha": 3596}, {"iso": "2026-01-18", "ha": 3596}, {"iso": "2026-01-19", "ha": 3746}, {"iso": "2026-01-20", "ha": 3746}, {"iso": "2026-01-21", "ha": 3746}, {"iso": "2026-01-22", "ha": 3746}, {"iso": "2026-01-23", "ha": 3896}, {"iso": "2026-01-24", "ha": 4046}, {"iso": "2026-01-25", "ha": 4146}, {"iso": "2026-01-26", "ha": 4376}, {"iso": "2026-01-27", "ha": 4640}, {"iso": "2026-01-28", "ha": 4870}, {"iso": "2026-01-29", "ha": 5140}, {"iso": "2026-01-30", "ha": 5290}, {"iso": "2026-01-31", "ha": 5290}, {"iso": "2026-02-01", "ha": 5440}, {"iso": "2026-02-02", "ha": 5564}, {"iso": "2026-02-03", "ha": 5564}, {"iso": "2026-02-04", "ha": 5714}, {"iso": "2026-02-05", "ha": 5814}, {"iso": "2026-02-06", "ha": 5894}, {"iso": "2026-02-07", "ha": 5894}, {"iso": "2026-02-08", "ha": 6032}, {"iso": "2026-02-09", "ha": 6182}, {"iso": "2026-02-10", "ha": 6182}, {"iso": "2026-02-11", "ha": 6182}, {"iso": "2026-02-12", "ha": 6332}, {"iso": "2026-02-13", "ha": 6412}, {"iso": "2026-02-14", "ha": 6487}, {"iso": "2026-02-15", "ha": 6487}, {"iso": "2026-02-16", "ha": 6607}, {"iso": "2026-02-17", "ha": 6884}, {"iso": "2026-02-18", "ha": 6884}, {"iso": "2026-02-19", "ha": 6984}, {"iso": "2026-02-20", "ha": 6984}, {"iso": "2026-02-21", "ha": 6984}, {"iso": "2026-02-22", "ha": 6984}, {"iso": "2026-02-23", "ha": 6984}, {"iso": "2026-02-24", "ha": 6984}, {"iso": "2026-02-25", "ha": 6984}, {"iso": "2026-02-26", "ha": 7144}, {"iso": "2026-02-27", "ha": 7144}, {"iso": "2026-02-28", "ha": 7144}, {"iso": "2026-03-01", "ha": 7144}, {"iso": "2026-03-02", "ha": 7144}, {"iso": "2026-03-03", "ha": 7144}, {"iso": "2026-03-04", "ha": 7294}, {"iso": "2026-03-05", "ha": 7414}, {"iso": "2026-03-06", "ha": 7564}, {"iso": "2026-03-07", "ha": 7564}, {"iso": "2026-03-08", "ha": 7814}, {"iso": "2026-03-09", "ha": 8114}, {"iso": "2026-03-10", "ha": 8239}, {"iso": "2026-03-11", "ha": 8239}, {"iso": "2026-03-12", "ha": 8239}, {"iso": "2026-03-13", "ha": 8239}, {"iso": "2026-03-14", "ha": 8305}, {"iso": "2026-03-15", "ha": 8305}, {"iso": "2026-03-16", "ha": 8305}, {"iso": "2026-03-17", "ha": 8305}, {"iso": "2026-03-18", "ha": 8305}, {"iso": "2026-03-19", "ha": 8305}], "B_H2": [{"iso": "2025-12-02", "ha": 400}, {"iso": "2025-12-03", "ha": 850}, {"iso": "2025-12-04", "ha": 1316}, {"iso": "2025-12-05", "ha": 1666}, {"iso": "2025-12-06", "ha": 2061}, {"iso": "2025-12-07", "ha": 2561}, {"iso": "2025-12-08", "ha": 2861}, {"iso": "2025-12-09", "ha": 3171}, {"iso": "2025-12-10", "ha": 3446}, {"iso": "2025-12-11", "ha": 3596}, {"iso": "2025-12-12", "ha": 3976}, {"iso": "2025-12-13", "ha": 4206}, {"iso": "2025-12-14", "ha": 4461}, {"iso": "2025-12-15", "ha": 4708}, {"iso": "2025-12-16", "ha": 4968}, {"iso": "2025-12-17", "ha": 5118}, {"iso": "2025-12-18", "ha": 5118}, {"iso": "2025-12-19", "ha": 5118}, {"iso": "2025-12-20", "ha": 5118}, {"iso": "2025-12-21", "ha": 5118}, {"iso": "2025-12-22", "ha": 5118}, {"iso": "2025-12-23", "ha": 5118}, {"iso": "2025-12-24", "ha": 5118}, {"iso": "2025-12-25", "ha": 5118}, {"iso": "2025-12-26", "ha": 5118}, {"iso": "2025-12-27", "ha": 5118}, {"iso": "2025-12-28", "ha": 5118}, {"iso": "2025-12-29", "ha": 5118}, {"iso": "2025-12-30", "ha": 5118}, {"iso": "2025-12-31", "ha": 5118}, {"iso": "2026-01-01", "ha": 5118}, {"iso": "2026-01-02", "ha": 5118}, {"iso": "2026-01-03", "ha": 5118}, {"iso": "2026-01-04", "ha": 5118}, {"iso": "2026-01-05", "ha": 5118}, {"iso": "2026-01-06", "ha": 5118}, {"iso": "2026-01-07", "ha": 5118}, {"iso": "2026-01-08", "ha": 5118}, {"iso": "2026-01-09", "ha": 5118}, {"iso": "2026-01-10", "ha": 5118}, {"iso": "2026-01-11", "ha": 5118}, {"iso": "2026-01-12", "ha": 5118}, {"iso": "2026-01-13", "ha": 5118}, {"iso": "2026-01-14", "ha": 5268}, {"iso": "2026-01-15", "ha": 5268}, {"iso": "2026-01-16", "ha": 5418}, {"iso": "2026-01-17", "ha": 5418}, {"iso": "2026-01-18", "ha": 5418}, {"iso": "2026-01-19", "ha": 5418}, {"iso": "2026-01-20", "ha": 5418}, {"iso": "2026-01-21", "ha": 5418}, {"iso": "2026-01-22", "ha": 5418}, {"iso": "2026-01-23", "ha": 5418}, {"iso": "2026-01-24", "ha": 5418}, {"iso": "2026-01-25", "ha": 5518}, {"iso": "2026-01-26", "ha": 5668}, {"iso": "2026-01-27", "ha": 5782}, {"iso": "2026-01-28", "ha": 5932}, {"iso": "2026-01-29", "ha": 6202}, {"iso": "2026-01-30", "ha": 6352}, {"iso": "2026-01-31", "ha": 6352}, {"iso": "2026-02-01", "ha": 6502}, {"iso": "2026-02-02", "ha": 6626}, {"iso": "2026-02-03", "ha": 6626}, {"iso": "2026-02-04", "ha": 6626}, {"iso": "2026-02-05", "ha": 6626}, {"iso": "2026-02-06", "ha": 6706}, {"iso": "2026-02-07", "ha": 6706}, {"iso": "2026-02-08", "ha": 6844}, {"iso": "2026-02-09", "ha": 6994}, {"iso": "2026-02-10", "ha": 6994}, {"iso": "2026-02-11", "ha": 6994}, {"iso": "2026-02-12", "ha": 7144}, {"iso": "2026-02-13", "ha": 7144}, {"iso": "2026-02-14", "ha": 7144}, {"iso": "2026-02-15", "ha": 7144}, {"iso": "2026-02-16", "ha": 7144}, {"iso": "2026-02-17", "ha": 7294}, {"iso": "2026-02-18", "ha": 7294}, {"iso": "2026-02-19", "ha": 7394}, {"iso": "2026-02-20", "ha": 7394}, {"iso": "2026-02-21", "ha": 7394}, {"iso": "2026-02-22", "ha": 7394}, {"iso": "2026-02-23", "ha": 7394}, {"iso": "2026-02-24", "ha": 7394}, {"iso": "2026-02-25", "ha": 7394}, {"iso": "2026-02-26", "ha": 7394}, {"iso": "2026-02-27", "ha": 7394}, {"iso": "2026-02-28", "ha": 7394}, {"iso": "2026-03-01", "ha": 7394}, {"iso": "2026-03-02", "ha": 7394}, {"iso": "2026-03-03", "ha": 7394}, {"iso": "2026-03-04", "ha": 7544}, {"iso": "2026-03-05", "ha": 7664}, {"iso": "2026-03-06", "ha": 7814}, {"iso": "2026-03-07", "ha": 7814}, {"iso": "2026-03-08", "ha": 7964}, {"iso": "2026-03-09", "ha": 8114}, {"iso": "2026-03-10", "ha": 8239}, {"iso": "2026-03-11", "ha": 8239}, {"iso": "2026-03-12", "ha": 8239}, {"iso": "2026-03-13", "ha": 8239}, {"iso": "2026-03-14", "ha": 8305}, {"iso": "2026-03-15", "ha": 8305}, {"iso": "2026-03-16", "ha": 8305}, {"iso": "2026-03-17", "ha": 8305}, {"iso": "2026-03-18", "ha": 8305}, {"iso": "2026-03-19", "ha": 8305}], "D_H2": [{"iso": "2025-12-02", "ha": 400}, {"iso": "2025-12-03", "ha": 850}, {"iso": "2025-12-04", "ha": 1316}, {"iso": "2025-12-05", "ha": 1666}, {"iso": "2025-12-06", "ha": 2061}, {"iso": "2025-12-07", "ha": 2561}, {"iso": "2025-12-08", "ha": 2861}, {"iso": "2025-12-09", "ha": 3171}, {"iso": "2025-12-10", "ha": 3446}, {"iso": "2025-12-11", "ha": 3596}, {"iso": "2025-12-12", "ha": 3976}, {"iso": "2025-12-13", "ha": 4206}, {"iso": "2025-12-14", "ha": 4461}, {"iso": "2025-12-15", "ha": 4708}, {"iso": "2025-12-16", "ha": 4968}, {"iso": "2025-12-17", "ha": 5118}, {"iso": "2025-12-18", "ha": 5118}, {"iso": "2025-12-19", "ha": 5118}, {"iso": "2025-12-20", "ha": 5118}, {"iso": "2025-12-21", "ha": 5118}, {"iso": "2025-12-22", "ha": 5118}, {"iso": "2025-12-23", "ha": 5118}, {"iso": "2025-12-24", "ha": 5118}, {"iso": "2025-12-25", "ha": 5118}, {"iso": "2025-12-26", "ha": 5118}, {"iso": "2025-12-27", "ha": 5118}, {"iso": "2025-12-28", "ha": 5118}, {"iso": "2025-12-29", "ha": 5118}, {"iso": "2025-12-30", "ha": 5118}, {"iso": "2025-12-31", "ha": 5118}, {"iso": "2026-01-01", "ha": 5118}, {"iso": "2026-01-02", "ha": 5118}, {"iso": "2026-01-03", "ha": 5118}, {"iso": "2026-01-04", "ha": 5118}, {"iso": "2026-01-05", "ha": 5118}, {"iso": "2026-01-06", "ha": 5118}, {"iso": "2026-01-07", "ha": 5118}, {"iso": "2026-01-08", "ha": 5118}, {"iso": "2026-01-09", "ha": 5118}, {"iso": "2026-01-10", "ha": 5118}, {"iso": "2026-01-11", "ha": 5118}, {"iso": "2026-01-12", "ha": 5118}, {"iso": "2026-01-13", "ha": 5118}, {"iso": "2026-01-14", "ha": 5268}, {"iso": "2026-01-15", "ha": 5268}, {"iso": "2026-01-16", "ha": 5418}, {"iso": "2026-01-17", "ha": 5418}, {"iso": "2026-01-18", "ha": 5418}, {"iso": "2026-01-19", "ha": 5418}, {"iso": "2026-01-20", "ha": 5418}, {"iso": "2026-01-21", "ha": 5418}, {"iso": "2026-01-22", "ha": 5568}, {"iso": "2026-01-23", "ha": 5568}, {"iso": "2026-01-24", "ha": 5568}, {"iso": "2026-01-25", "ha": 5668}, {"iso": "2026-01-26", "ha": 5818}, {"iso": "2026-01-27", "ha": 6082}, {"iso": "2026-01-28", "ha": 6232}, {"iso": "2026-01-29", "ha": 6502}, {"iso": "2026-01-30", "ha": 6652}, {"iso": "2026-01-31", "ha": 6652}, {"iso": "2026-02-01", "ha": 6802}, {"iso": "2026-02-02", "ha": 6926}, {"iso": "2026-02-03", "ha": 6926}, {"iso": "2026-02-04", "ha": 6926}, {"iso": "2026-02-05", "ha": 7214}, {"iso": "2026-02-06", "ha": 7294}, {"iso": "2026-02-07", "ha": 7294}, {"iso": "2026-02-08", "ha": 7294}, {"iso": "2026-02-09", "ha": 7294}, {"iso": "2026-02-10", "ha": 7444}, {"iso": "2026-02-11", "ha": 7444}, {"iso": "2026-02-12", "ha": 7444}, {"iso": "2026-02-13", "ha": 7444}, {"iso": "2026-02-14", "ha": 7444}, {"iso": "2026-02-15", "ha": 7444}, {"iso": "2026-02-16", "ha": 7594}, {"iso": "2026-02-17", "ha": 7594}, {"iso": "2026-02-18", "ha": 7594}, {"iso": "2026-02-19", "ha": 7694}, {"iso": "2026-02-20", "ha": 7694}, {"iso": "2026-02-21", "ha": 7844}, {"iso": "2026-02-22", "ha": 7910}, {"iso": "2026-02-23", "ha": 7910}, {"iso": "2026-02-24", "ha": 7910}, {"iso": "2026-02-25", "ha": 8030}, {"iso": "2026-02-26", "ha": 8180}, {"iso": "2026-02-27", "ha": 8180}, {"iso": "2026-02-28", "ha": 8180}, {"iso": "2026-03-01", "ha": 8180}, {"iso": "2026-03-02", "ha": 8305}, {"iso": "2026-03-03", "ha": 8305}, {"iso": "2026-03-04", "ha": 8305}, {"iso": "2026-03-05", "ha": 8305}, {"iso": "2026-03-06", "ha": 8305}, {"iso": "2026-03-07", "ha": 8305}, {"iso": "2026-03-08", "ha": 8305}, {"iso": "2026-03-09", "ha": 8305}, {"iso": "2026-03-10", "ha": 8305}, {"iso": "2026-03-11", "ha": 8305}, {"iso": "2026-03-12", "ha": 8305}, {"iso": "2026-03-13", "ha": 8305}, {"iso": "2026-03-14", "ha": 8305}, {"iso": "2026-03-15", "ha": 8305}, {"iso": "2026-03-16", "ha": 8305}, {"iso": "2026-03-17", "ha": 8305}, {"iso": "2026-03-18", "ha": 8305}, {"iso": "2026-03-19", "ha": 8305}]}, "residual": [{"lab": "D+1", "p": 0.12, "n": 24, "lo": 0.0, "hi": 0.25}, {"lab": "D+2", "p": 0.25, "n": 20, "lo": 0.05, "hi": 0.45}, {"lab": "D+3", "p": 0.56, "n": 16, "lo": 0.312, "hi": 0.812}, {"lab": "D+4", "p": 0.57, "n": 14, "lo": 0.286, "hi": 0.857}, {"lab": "D+5", "p": 0.54, "n": 13, "lo": 0.308, "hi": 0.769}, {"lab": "sem chuva>5mm ha >=5d (BASE)", "p": 0.52, "n": 27, "lo": 0.333, "hi": 0.704}], "prod": [{"pivo": "KRT-001", "faz": "KRT", "iso": "2025-12-02", "dia": 1, "ar": 399.6, "area": 120.0, "var": "FM 990 STP"}, {"pivo": "KRT-033", "faz": "KRT", "iso": "2025-12-19", "dia": 18, "ar": 337.2, "area": 140.0, "var": "FM 985 GLTP"}, {"pivo": "KRT-034", "faz": "KRT", "iso": "2025-12-20", "dia": 19, "ar": 282.7, "area": 150.0, "var": "FM 974 GLT"}, {"pivo": "KRT-057", "faz": "KRT", "iso": "2025-12-11", "dia": 10, "ar": 268.5, "area": 150.0, "var": "FM 911 GLTP"}, {"pivo": "KRT-059", "faz": "KRT", "iso": "2025-12-17", "dia": 16, "ar": 452.9, "area": 73.0, "var": "FM 911 GLTP"}, {"pivo": "KRT-060", "faz": "KRT", "iso": "2025-12-08", "dia": 7, "ar": 312.3, "area": 150.0, "var": "DP 1949 B3RF"}, {"pivo": "KRT-061", "faz": "KRT", "iso": "2025-12-29", "dia": 28, "ar": 272.7, "area": 145.0, "var": "FM 911 GLTP"}, {"pivo": "KRT-062", "faz": "KRT", "iso": "2026-01-11", "dia": 41, "ar": 281.4, "area": 140.0, "var": "DP 2111 B3RF"}, {"pivo": "KRT-066", "faz": "KRT", "iso": "2025-12-08", "dia": 7, "ar": 298.1, "area": 100.0, "var": "DP 1949 B3RF"}, {"pivo": "KRT-067", "faz": "KRT", "iso": "2025-12-13", "dia": 12, "ar": 384.8, "area": 80.0, "var": "FM 979 STP"}, {"pivo": "KRT-070", "faz": "KRT", "iso": "2025-12-26", "dia": 25, "ar": 354.2, "area": 150.0, "var": "FM 911 GLTP"}, {"pivo": "KRT-073", "faz": "KRT", "iso": "2026-01-01", "dia": 31, "ar": 161.7, "area": 160.0, "var": "FM 985 GLTP"}, {"pivo": "RDM-102", "faz": "RDM", "iso": "2025-12-20", "dia": 19, "ar": 370.2, "area": 100.0, "var": "FM 974 GLT"}, {"pivo": "RDM-104", "faz": "RDM", "iso": "2025-12-23", "dia": 22, "ar": 481.6, "area": 100.0, "var": "FM 985 GLTP"}, {"pivo": "RDM-105", "faz": "RDM", "iso": "2025-12-21", "dia": 20, "ar": 369.3, "area": 100.0, "var": "FM 974 GLT"}, {"pivo": "RDM-107", "faz": "RDM", "iso": "2025-12-22", "dia": 21, "ar": 476.2, "area": 100.0, "var": "FM 974 GLT"}, {"pivo": "RDM-109", "faz": "RDM", "iso": "2025-12-29", "dia": 28, "ar": 342.8, "area": 100.0, "var": "FM 985 GLTP"}, {"pivo": "RDM-110", "faz": "RDM", "iso": "2025-12-27", "dia": 26, "ar": 319.3, "area": 100.0, "var": "FM 985 GLTP"}, {"pivo": "RDM-115", "faz": "RDM", "iso": "2026-01-06", "dia": 36, "ar": 362.9, "area": 150.0, "var": "DP 1949 B3RF"}, {"pivo": "RDM-131", "faz": "RDM", "iso": "2026-01-02", "dia": 32, "ar": 312.3, "area": 100.0, "var": "FM 985 GLTP"}, {"pivo": "RDM-132", "faz": "RDM", "iso": "2025-12-25", "dia": 24, "ar": 328.7, "area": 100.0, "var": "FM 985 GLTP"}], "cenarios": [{"hipotese": "H1", "cenario": "A", "ultimo": "2026-03-19", "antecip_media": 0.0, "antecip_pond": 0.0, "ha_dia": 0, "ha_ate_31dez": 2161, "ha_ate_31jan": 4840, "pct_ate_31jan": "58%"}, {"hipotese": "H1", "cenario": "B", "ultimo": "2026-03-14", "antecip_media": 2.4, "antecip_pond": 2.5, "ha_dia": 20790, "ha_ate_31dez": 2421, "ha_ate_31jan": 5290, "pct_ate_31jan": "64%"}, {"hipotese": "H1", "cenario": "C", "ultimo": "2026-03-09", "antecip_media": 1.4, "antecip_pond": 1.4, "ha_dia": 11705, "ha_ate_31dez": 2161, "ha_ate_31jan": 4840, "pct_ate_31jan": "58%"}, {"hipotese": "H1", "cenario": "D", "ultimo": "2026-03-09", "antecip_media": 4.7, "antecip_pond": 4.9, "ha_dia": 40984, "ha_ate_31dez": 2421, "ha_ate_31jan": 5590, "pct_ate_31jan": "67%"}, {"hipotese": "H1", "cenario": "E1", "ultimo": "2026-03-19", "antecip_media": 0.6, "antecip_pond": 0.6, "ha_dia": 5281, "ha_ate_31dez": 2161, "ha_ate_31jan": 5140, "pct_ate_31jan": "62%"}, {"hipotese": "H1", "cenario": "E2", "ultimo": "2026-03-19", "antecip_media": 0.8, "antecip_pond": 0.9, "ha_dia": 7505, "ha_ate_31dez": 2161, "ha_ate_31jan": 5290, "pct_ate_31jan": "64%"}, {"hipotese": "H1", "cenario": "E3", "ultimo": "2026-03-19", "antecip_media": 1.0, "antecip_pond": 1.1, "ha_dia": 9189, "ha_ate_31dez": 2161, "ha_ate_31jan": 5290, "pct_ate_31jan": "64%"}, {"hipotese": "H2", "cenario": "A", "ultimo": "2026-03-19", "antecip_media": 0.0, "antecip_pond": 0.0, "ha_dia": 0, "ha_ate_31dez": 4968, "ha_ate_31jan": 6352, "pct_ate_31jan": "76%"}, {"hipotese": "H2", "cenario": "B", "ultimo": "2026-03-14", "antecip_media": 7.8, "antecip_pond": 7.8, "ha_dia": 64469, "ha_ate_31dez": 5118, "ha_ate_31jan": 6352, "pct_ate_31jan": "76%"}, {"hipotese": "H2", "cenario": "C", "ultimo": "2026-03-09", "antecip_media": 1.8, "antecip_pond": 2.0, "ha_dia": 16532, "ha_ate_31dez": 4968, "ha_ate_31jan": 6652, "pct_ate_31jan": "80%"}, {"hipotese": "H2", "cenario": "D", "ultimo": "2026-03-02", "antecip_media": 10.2, "antecip_pond": 10.2, "ha_dia": 84963, "ha_ate_31dez": 5118, "ha_ate_31jan": 6652, "pct_ate_31jan": "80%"}, {"hipotese": "H2", "cenario": "E1", "ultimo": "2026-03-19", "antecip_media": 1.2, "antecip_pond": 1.3, "ha_dia": 10555, "ha_ate_31dez": 5118, "ha_ate_31jan": 6352, "pct_ate_31jan": "76%"}, {"hipotese": "H2", "cenario": "E2", "ultimo": "2026-03-19", "antecip_media": 2.1, "antecip_pond": 2.2, "ha_dia": 17988, "ha_ate_31dez": 5118, "ha_ate_31jan": 6352, "pct_ate_31jan": "76%"}, {"hipotese": "H2", "cenario": "E3", "ultimo": "2026-03-19", "antecip_media": 3.3, "antecip_pond": 3.5, "ha_dia": 28944, "ha_ate_31dez": 5118, "ha_ate_31jan": 6352, "pct_ate_31jan": "76%"}], "decomp": [{"fazenda": "KRT", "classe": "BLOQUEADO PELA CHUVA com area liberada", "dias": 42}, {"fazenda": "KRT", "classe": "agricultavel e trabalhou", "dias": 26}, {"fazenda": "KRT", "classe": "agricultavel, area liberada, sem registro", "dias": 15}, {"fazenda": "KRT", "classe": "sem area liberada (espera da soja/cultura anterior)", "dias": 25}, {"fazenda": "RDM", "classe": "BLOQUEADO PELA CHUVA com area liberada", "dias": 15}, {"fazenda": "RDM", "classe": "agricultavel e trabalhou", "dias": 12}, {"fazenda": "RDM", "classe": "agricultavel, area liberada, sem registro", "dias": 9}, {"fazenda": "RDM", "classe": "sem area liberada (espera da soja/cultura anterior)", "dias": 72}]}</script>
+<script>
+(function(){
+"use strict";
+const DADOS = JSON.parse(document.getElementById("dados").textContent);
+const NS = "http://www.w3.org/2000/svg";
+const tt = document.getElementById("tt");
+const fmt = n => n.toLocaleString("pt-BR");
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function mostra(e, html){
+  tt.innerHTML = html; tt.style.opacity = 1;
+  const r = tt.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY - r.height - 12;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y < 8) y = e.clientY + 18;
+  tt.style.left = x + "px"; tt.style.top = y + "px";
+}
+const esconde = () => { tt.style.opacity = 0; };
+addEventListener("scroll", esconde, {passive:true});
+
+function el(tag, attrs, parent){
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function svg(host, w, h){
+  const s = el("svg", {viewBox:`0 0 ${w} ${h}`, role:"img"});
+  host.appendChild(s); return s;
+}
+
+/* ---------------------------------------------------- 1. calendario */
+(function(){
+  const host = document.getElementById("cal");
+  const ROT = {direto:"Chuva acima de 5 mm", residual:"Efeito residual do solo", ok:"Agricultável"};
+  DADOS.calendario.forEach(f => {
+    const row = document.createElement("div"); row.className = "cal-row";
+    row.innerHTML = `<div class="cal-lab">${f.fazenda}</div>`;
+    const strip = document.createElement("div"); strip.className = "cal-strip";
+    f.dias.forEach(d => {
+      const c = document.createElement("div");
+      c.className = "cal-d" + (d.ha > 0 ? " pl" : "");
+      c.dataset.st = d.st;
+      c.tabIndex = -1;
+      const info = `<b>${f.fazenda} · ${d.d}</b><br>
+        <span class="k">Chuva</span> ${d.mm.toLocaleString("pt-BR")} mm<br>
+        <span class="k">API</span> ${d.api.toLocaleString("pt-BR")} mm<br>
+        <span class="k">Estado</span> ${ROT[d.st]}<br>
+        <span class="k">Plantado</span> ${d.ha > 0 ? fmt(d.ha) + " ha" : "—"}`;
+      c.addEventListener("mousemove", e => mostra(e, info));
+      c.addEventListener("mouseleave", esconde);
+      strip.appendChild(c);
+    });
+    row.appendChild(strip); host.appendChild(row);
+  });
+  // eixo de meses
+  const dias = DADOS.calendario[0].dias, ax = document.createElement("div");
+  ax.className = "cal-ax";
+  let ini = 0;
+  for (let i = 1; i <= dias.length; i++){
+    const mudou = i === dias.length || dias[i].iso.slice(5,7) !== dias[ini].iso.slice(5,7);
+    if (mudou){
+      const d = document.createElement("div");
+      d.style.width = (100 * (i - ini) / dias.length) + "%";
+      const M = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+      d.textContent = M[+dias[ini].iso.slice(5,7) - 1];
+      ax.appendChild(d); ini = i;
+    }
+  }
+  host.appendChild(ax);
+})();
+
+/* ---------------------------------------------------- 2. efeito residual */
+(function(){
+  const host = document.getElementById("ch-resid");
+  const D = DADOS.residual.map(r => ({...r,
+    lab: r.lab.startsWith("sem") ? "base" : r.lab }));
+  const W = 780, H = 300, ml = 46, mr = 16, mt = 16, mb = 52;
+  const s = svg(host, W, H);
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const x = i => ml + iw * (i + .5) / D.length;
+  const bw = Math.min(56, iw / D.length * .58);
+  const y = v => mt + ih * (1 - v);
+  const base = D[D.length - 1].p;
+
+  for (let v = 0; v <= 1.0001; v += .25){
+    el("line", {x1:ml, x2:W-mr, y1:y(v), y2:y(v), class:"gridline"}, s);
+    el("text", {x:ml-9, y:y(v)+3.5, class:"axt", "text-anchor":"end"}, s)
+      .textContent = v.toFixed(2).replace(".", ",");
+  }
+  // linha da base
+  const bl = el("line", {x1:ml, x2:W-mr, y1:y(base), y2:y(base),
+    stroke:"var(--ink-3)", "stroke-width":1.5, "stroke-dasharray":"5 4"}, s);
+  el("text", {x:ml+8, y:y(base)+22, class:"dlab", "text-anchor":"start", fill:"var(--ink-2)"}, s)
+    .textContent = "base: solo recuperado";
+
+  D.forEach((d, i) => {
+    const cor = d.lab === "base" ? "var(--ink-3)" : "var(--s1)";
+    const g = el("g", {}, s);
+    el("rect", {x:x(i)-bw/2, y:y(d.p), width:bw, height:Math.max(2, y(0)-y(d.p)),
+      fill:cor, rx:4}, g);
+    // intervalo de confianca
+    el("line", {x1:x(i), x2:x(i), y1:y(d.lo), y2:y(d.hi), stroke:"var(--ink)",
+      "stroke-width":1.5, opacity:.55}, g);
+    [d.lo, d.hi].forEach(v => el("line", {x1:x(i)-5, x2:x(i)+5, y1:y(v), y2:y(v),
+      stroke:"var(--ink)", "stroke-width":1.5, opacity:.55}, g));
+    el("text", {x:x(i), y:y(d.hi)-9, class:"dlab", "text-anchor":"middle", fill:"var(--ink)"}, g)
+      .textContent = d.p.toFixed(2).replace(".", ",");
+    el("text", {x:x(i), y:H-mb+19, class:"axt", "text-anchor":"middle",
+      "font-weight": d.lab === "base" ? 400 : 500}, s).textContent = d.lab;
+    el("text", {x:x(i), y:H-mb+34, class:"axt", "text-anchor":"middle", opacity:.75}, s)
+      .textContent = "n=" + d.n;
+    const hit = el("rect", {x:x(i)-iw/D.length/2, y:mt, width:iw/D.length, height:ih,
+      fill:"transparent"}, g);
+    const txt = `<b>${d.lab === "base" ? "Base — sem chuva &gt;5 mm há 5+ dias" : d.lab + " após chuva &gt;5 mm"}</b><br>
+      <span class="k">P(operar)</span> ${d.p.toFixed(2).replace(".", ",")}<br>
+      <span class="k">IC 95%</span> ${d.lo.toFixed(2).replace(".", ",")} – ${d.hi.toFixed(2).replace(".", ",")}<br>
+      <span class="k">Dias observados</span> ${d.n}`;
+    hit.addEventListener("mousemove", e => mostra(e, txt));
+    hit.addEventListener("mouseleave", esconde);
+  });
+  el("line", {x1:ml, x2:W-mr, y1:y(0), y2:y(0), class:"axis"}, s);
+  el("text", {x:0, y:mt-7, class:"axt", "text-anchor":"start"}, s).textContent = "P(operar)";
+})();
+
+/* ---------------------------------------------------- 3. avanço acumulado */
+(function(){
+  const host = document.getElementById("ch-avanco");
+  const dias = DADOS.avanco.observado.map(d => d.iso);
+  const t0 = +new Date(dias[0]), t1 = +new Date(dias[dias.length-1]);
+  const W = 780, H = 340, ml = 54, mr = 22, mt = 44, mb = 46;
+  const s = svg(host, W, H);
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const x = iso => ml + iw * (+new Date(iso) - t0) / (t1 - t0);
+  const ymax = 8500, y = v => mt + ih * (1 - v / ymax);
+
+  for (let v = 0; v <= 8000; v += 2000){
+    el("line", {x1:ml, x2:ml+iw, y1:y(v), y2:y(v), class:"gridline"}, s);
+    el("text", {x:ml-9, y:y(v)+3.5, class:"axt", "text-anchor":"end"}, s).textContent = fmt(v);
+  }
+  el("text", {x:ml-9, y:mt-8, class:"axt", "text-anchor":"end"}, s).textContent = "ha";
+  const M = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  let mAnt = null;
+  dias.forEach(iso => {
+    const m = iso.slice(5,7);
+    if (m !== mAnt){ mAnt = m;
+      el("line", {x1:x(iso), x2:x(iso), y1:mt, y2:y(0), class:"gridline"}, s);
+      el("text", {x:x(iso)+4, y:H-mb+17, class:"axt"}, s).textContent = M[+m-1];
+    }
+  });
+
+  // faixa "sem chuva": entre a hipotese conservadora (H1) e a superior (H2)
+  const A = DADOS.avanco.observado, B1 = DADOS.avanco.B_H1, B2 = DADOS.avanco.B_H2;
+  const banda = B2.map(p => `${x(p.iso).toFixed(1)} ${y(p.ha).toFixed(1)}`).join(" L ") +
+    " L " + B1.slice().reverse().map(p => `${x(p.iso).toFixed(1)} ${y(p.ha).toFixed(1)}`).join(" L ");
+  el("path", {d:"M " + banda + " Z", fill:"var(--s2)", "fill-opacity":.16}, s);
+  [[B1,.55],[B2,.55]].forEach(([pts,op]) =>
+    el("path", {d:pts.map((p,i)=>(i?"L":"M")+x(p.iso).toFixed(1)+" "+y(p.ha).toFixed(1)).join(" "),
+      fill:"none", stroke:"var(--s2)", "stroke-width":1.5, "stroke-opacity":op}, s));
+  el("path", {d:A.map((p,i)=>(i?"L":"M")+x(p.iso).toFixed(1)+" "+y(p.ha).toFixed(1)).join(" "),
+    fill:"none", stroke:"var(--s1)", "stroke-width":2.4, "stroke-linejoin":"round"}, s);
+  el("line", {x1:ml, x2:ml+iw, y1:y(0), y2:y(0), class:"axis"}, s);
+
+  // rotulos diretos, acima da area de plotagem
+  const leg = [["A · observado","var(--s1)",ml], ["B · sem chuva (faixa H1–H2)","var(--s2)",ml+210]];
+  leg.forEach(([txt,cor,px]) => {
+    el("line", {x1:px, x2:px+16, y1:mt-24, y2:mt-24, stroke:cor, "stroke-width":2.4}, s);
+    el("text", {x:px+22, y:mt-20, class:"dlab", fill:"var(--ink-2)"}, s).textContent = txt;
+  });
+  el("text", {x:x("2026-03-19")-6, y:y(8305)-12, class:"dlab", "text-anchor":"end",
+    fill:"var(--ink-2)"}, s).textContent = "8.305 ha · 19/03";
+
+  const cross = el("line", {y1:mt, y2:y(0), stroke:"var(--ink-3)", "stroke-width":1,
+    "stroke-dasharray":"3 3", opacity:0}, s);
+  const cap = el("rect", {x:ml, y:mt, width:iw, height:ih, fill:"transparent"}, s);
+  const val = (a, iso) => { let r = a[0]; for (const p of a){ if (p.iso <= iso) r = p; else break; } return r.ha; };
+  cap.addEventListener("mousemove", e => {
+    const bb = s.getBoundingClientRect();
+    const i = Math.round(((e.clientX - bb.left) / bb.width * W - ml) / iw * (dias.length - 1));
+    const iso = dias[Math.max(0, Math.min(dias.length-1, i))];
+    cross.setAttribute("x1", x(iso)); cross.setAttribute("x2", x(iso)); cross.setAttribute("opacity", 1);
+    mostra(e, `<b>${iso.split("-").reverse().join("/")}</b><br>
+      <span class="k">Observado</span> ${fmt(val(A, iso))} ha<br>
+      <span class="k">Sem chuva</span> ${fmt(val(B1, iso))} – ${fmt(val(B2, iso))} ha`);
+  });
+  cap.addEventListener("mouseleave", () => { cross.setAttribute("opacity", 0); esconde(); });
+})();
+
+/* ---------------------------------------------------- 4. produtividade */
+(function(){
+  const host = document.getElementById("ch-prod");
+  const P = DADOS.prod;
+  const W = 780, H = 330, ml = 50, mr = 18, mt = 18, mb = 48;
+  const s = svg(host, W, H);
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const t0 = +new Date("2025-12-01"), t1 = +new Date("2026-03-20");
+  const x = iso => ml + iw * (+new Date(iso) - t0) / (t1 - t0);
+  const y = v => mt + ih * (1 - (v - 100) / 420);
+  const r = ha => 4 + Math.sqrt(ha) * .42;
+
+  // faixa sem dado
+  const xc = x("2026-01-12");
+  el("rect", {x:xc, y:mt, width:ml+iw-xc, height:ih, fill:"var(--ink-3)", opacity:.13}, s);
+  el("text", {x:(xc + ml + iw)/2, y:mt+ih/2-8, class:"dlab", "text-anchor":"middle",
+    fill:"var(--ink-2)"}, s).textContent = "5.797 ha plantados aqui";
+  el("text", {x:(xc + ml + iw)/2, y:mt+ih/2+10, class:"dlab", "text-anchor":"middle",
+    fill:"var(--ink-2)"}, s).textContent = "sem produtividade fechada";
+
+  for (let v = 100; v <= 500; v += 100){
+    el("line", {x1:ml, x2:ml+iw, y1:y(v), y2:y(v), class:"gridline"}, s);
+    el("text", {x:ml-9, y:y(v)+3.5, class:"axt", "text-anchor":"end"}, s).textContent = v;
+  }
+  el("text", {x:ml-9, y:mt-5, class:"axt", "text-anchor":"end"}, s).textContent = "@/ha";
+  const M = {12:"dez", 1:"jan", 2:"fev", 3:"mar"};
+  ["2025-12-01","2026-01-01","2026-02-01","2026-03-01"].forEach(iso => {
+    el("line", {x1:x(iso), x2:x(iso), y1:mt, y2:y(100), class:"gridline"}, s);
+    el("text", {x:x(iso)+4, y:H-mb+17, class:"axt"}, s).textContent = M[+iso.slice(5,7)];
+  });
+  el("line", {x1:ml, x2:ml+iw, y1:y(100), y2:y(100), class:"axis"}, s);
+
+  // tendencia controlando fazenda: -2,87 @/ha/dia, ancorada na media da amostra
+  const mx = P.reduce((a,p) => a + p.dia, 0) / P.length;
+  const my = P.reduce((a,p) => a + p.ar, 0) / P.length;
+  const dt = d => new Date(+new Date("2025-12-01") + d * 864e5).toISOString().slice(0,10);
+  el("line", {x1:x(dt(0)), y1:y(my + (0 - mx) * -2.87), x2:x(dt(41)), y2:y(my + (41 - mx) * -2.87),
+    stroke:"var(--ink-3)", "stroke-width":1.5, "stroke-dasharray":"6 4"}, s);
+  el("text", {x:x(dt(1)), y:y(168), class:"dlab", fill:"var(--ink-2)"}, s)
+    .textContent = "tendência: −2,9 @/ha por dia";
+  el("text", {x:x(dt(1)), y:y(168)+15, class:"dlab", fill:"var(--ink-3)"}, s)
+    .textContent = "IC 95%: −5,9 a −0,7";
+
+  P.forEach(p => {
+    const cor = p.faz === "KRT" ? "var(--s1)" : "var(--s2)";
+    const c = el("circle", {cx:x(p.iso), cy:y(p.ar), r:r(p.area), fill:cor,
+      "fill-opacity":.78, stroke:"var(--surface)", "stroke-width":2}, s);
+    const txt = `<b>${p.pivo}</b><br>
+      <span class="k">Plantio</span> ${p.iso.split("-").reverse().join("/")}<br>
+      <span class="k">Produtividade</span> ${p.ar.toLocaleString("pt-BR")} @/ha<br>
+      <span class="k">Área</span> ${fmt(p.area)} ha<br>
+      <span class="k">Variedade</span> ${p.var}`;
+    c.addEventListener("mousemove", e => mostra(e, txt));
+    c.addEventListener("mouseleave", esconde);
+  });
+})();
+})();
+</script>

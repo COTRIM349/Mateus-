@@ -1,0 +1,20 @@
+================================================================================
+METRICAS POR TALHAO — resumo (janela comum da campanha 02/12 a 19/03)
+        camp_chuva_mm               camp_dias_maior5            camp_dias_resid            camp_dias_bloq           
+                  min median    max              min median max             min median max            min median max
+fazenda                                                                                                             
+KRT             532.0  764.0  979.0               28   34.0  40              25   30.0  35             57   64.0  72
+RDM             604.0  662.0  920.0               30   34.0  40              30   32.0  35             62   67.0  73
+
+  Janela da campanha: 108 dias
+  KRT: mediana de 34 dias >5mm + 30 residuais = 64 dias bloqueados (59% da campanha)
+  RDM: mediana de 34 dias >5mm + 32 residuais = 67 dias bloqueados (62% da campanha)
+
+================================================================================
+BLOQUEIO NO NIVEL DA FAZENDA (chuva mediana — base da simulacao)
+  KRT R=1: diretos 33 | residuais 15 | bloqueados  48/108 (44%) | agricultaveis 60 | maior sequencia bloqueada 7 d
+  KRT R=2: diretos 33 | residuais 29 | bloqueados  62/108 (57%) | agricultaveis 46 | maior sequencia bloqueada 10 d
+  KRT R=3: diretos 33 | residuais 40 | bloqueados  73/108 (68%) | agricultaveis 35 | maior sequencia bloqueada 14 d
+  RDM R=1: diretos 33 | residuais 21 | bloqueados  54/108 (50%) | agricultaveis 54 | maior sequencia bloqueada 9 d
+  RDM R=2: diretos 33 | residuais 35 | bloqueados  68/108 (63%) | agricultaveis 40 | maior sequencia bloqueada 16 d
+  RDM R=3: diretos 33 | residuais 47 | bloqueados  80/108 (74%) | agricultaveis 28 | maior sequencia bloqueada 19 d

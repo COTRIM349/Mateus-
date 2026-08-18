@@ -1,0 +1,29 @@
+================================================================================
+COBERTURA DA AMOSTRA DE PRODUTIVIDADE
+  21 de 68 eventos | 2508 de 8305 ha (30%) | plantios de 2025-12-02 a 2026-01-11
+  area SEM produtividade: 5797 ha, plantada entre 2025-12-03 e 2026-03-19
+  => a amostra cobre apenas 40 dos 108 dias da campanha. Censura por colheita ainda em curso.
+
+================================================================================
+EFEITO FAZENDA (confundidor)
+         count   mean   std    min    max
+fazenda                                  
+KRT         12  317.2  75.6  161.7  452.9
+RDM          9  373.7  63.2  312.3  481.6
+
+================================================================================
+REGRESSAO arrobas/ha ~ dia de plantio
+  todos                        n=21 | inclinacao  -1.81 @/ha/dia (IC95% -4.99 a +0.99) | r=-0.24 R2=0.06 | NAO significativo (IC cruza zero)
+  so KRT                       n=12 | inclinacao  -3.03 @/ha/dia (IC95% -6.79 a +0.28) | r=-0.46 R2=0.22 | NAO significativo (IC cruza zero)
+  so RDM                       n= 9 | inclinacao  -5.04 @/ha/dia (IC95% -15.30 a -0.24) | r=-0.46 R2=0.21 | significativo
+  controlando fazenda          n=21 | inclinacao  -2.87 @/ha/dia (IC95% -5.94 a -0.72)
+
+================================================================================
+VARIABILIDADE NAO EXPLICADA PELA DATA
+  Pivos plantados na MESMA semana e suas produtividades:
+   2025-12-08/2025-12-14: KRT-057 269, KRT-060 312, KRT-066 298, KRT-067 385  -> amplitude 116 @/ha
+   2025-12-15/2025-12-21: KRT-033 337, KRT-034 283, KRT-059 453, RDM-102 370, RDM-105 369  -> amplitude 170 @/ha
+   2025-12-22/2025-12-28: KRT-070 354, RDM-104 482, RDM-107 476, RDM-110 319, RDM-132 329  -> amplitude 162 @/ha
+   2025-12-29/2026-01-04: KRT-061 273, KRT-073 162, RDM-109 343, RDM-131 312  -> amplitude 181 @/ha
+  => a amplitude DENTRO da mesma semana chega a ~180 @/ha, maior que qualquer
+     tendencia atribuivel a data. Variedade, solo e manejo dominam nesta amostra.

@@ -1,0 +1,225 @@
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Figura 3 · produtividade</span>
+  <h2>Quanto custou plantar tarde — o que os dados permitem dizer</h2>
+  <div class="prose">
+    <p>Esta é a pergunta central e é onde a safra 25/26 ainda não tem resposta. Dos 68 eventos de
+      plantio, <b>21 têm produtividade fechada — 2.508 ha, 30% da área</b>, e todos foram
+      plantados entre 02/12 e 11/01. A colheita dos plantios de fevereiro e março, justamente os
+      que testariam a hipótese, ainda não fechou.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Produtividade do algodão por data de plantio</div>
+    <div class="fig-s">Arrobas por hectare · 21 de 68 eventos · área do círculo proporcional aos hectares</div>
+    <div class="legend">
+      <span><i style="background:var(--s1);border-radius:50%"></i>Karitel</span>
+      <span><i style="background:var(--s2);border-radius:50%"></i>Rio do Meio</span>
+      <span style="color:var(--ink-3)">Faixa cinza: 68% da área, sem produtividade fechada</span>
+    </div>
+    <div id="ch-prod"></div>
+    <figcaption>A inclinação bruta é de <b>−1,8 @/ha por dia de atraso</b>, mas o intervalo de
+      confiança 95% vai de −5,0 a +1,0: <b>não é estatisticamente distinguível de zero</b>.
+      Controlando o efeito de fazenda — Rio do Meio rendeu em média 374 @/ha contra 317 em
+      Karitel — a inclinação vai a −2,9 @/ha por dia (IC 95% −5,9 a −0,7), aí sim excluindo o
+      zero. Ainda assim, dentro de uma <em>mesma semana</em> de plantio a amplitude chega a
+      <b>181 @/ha</b>, muito maior que qualquer tendência atribuível à data.</figcaption>
+  </figure>
+  <div class="note warn">
+    <b>O que não se pode concluir.</b> A associação medida vale para uma janela de 40 dias
+    (02/12 a 11/01) e 21 observações em que variedade, pivô e manejo variam junto com a data.
+    <b>Não é causalidade e não pode ser extrapolada para fevereiro e março</b>, que é onde está
+    a maior parte da área e onde o efeito do plantio tardio seria maior. Também não aplicamos
+    percentuais de perda de estudos externos: o comportamento de cada cultivar em cada pivô
+    desta fazenda é o que vale, e ele será mensurável quando a colheita fechar.
+  </div>
+  <div class="prose">
+    <p><b>Recomendação direta:</b> ao fechar a colheita dos 5.797 ha restantes, refazer esta
+      regressão com variedade e pivô como controles. Com 68 pontos cobrindo 108 dias, a curva de
+      resposta à época de plantio fica mensurável na própria fazenda — e aí sim vira número de
+      decisão para a safra 26/27.</p>
+  </div>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Leitura agronômica</span>
+  <h2>Por que a chuva e o plantio tardio pesam</h2>
+  <div class="prose">
+    <p>Os mecanismos abaixo são conhecidos da fisiologia da cultura e explicam <em>por que</em> os
+      dias perdidos importam. Onde há dado da fazenda para sustentar o ponto, ele está citado;
+      onde não há, está sinalizado como hipótese a verificar.</p>
+  </div>
+  <h3>Sobre a operação de semeadura</h3>
+  <div class="cards">
+    <div class="card"><h4>Estande e profundidade</h4>
+      <p>Semear em solo acima da capacidade de campo desregula a profundidade — o disco afunda e a
+        semente fica funda demais. Em algodão, com reserva de semente pequena e hipocótilo
+        sensível, isso vira falha de estande. O encrostamento superficial após chuva forte na
+        emergência agrava: a plântula não rompe a crosta.</p></div>
+    <div class="card"><h4>Compactação e o sistema radicular</h4>
+      <p>Tráfego com solo saturado é o que mais compacta. O algodão tem raiz pivotante e depende
+        de perfil solto para explorar água e potássio em profundidade. Uma camada compactada
+        formada no plantio limita a planta a safra inteira — e não é corrigida por irrigação.</p></div>
+    <div class="card"><h4>Hipoxia e patógenos de solo</h4>
+      <p>Solo saturado nos primeiros dias após a semeadura reduz oxigênio na zona da semente e
+        favorece <i>Pythium</i> e <i>Rhizoctonia</i>. É o período em que o tratamento de semente
+        tem meia-vida curta e o inóculo tem umidade ideal.</p></div>
+    <div class="card"><h4>Nitrogênio</h4>
+      <p>Em solo saturado, o nitrato se perde por desnitrificação e lixiviação. Os relatórios de
+        irrigação registram excesso hídrico médio de <b>688 mm em Karitel e 573 mm em Rio do
+        Meio</b> no ciclo da soja — volume que drena abaixo da zona radicular e leva nitrato
+        junto. Vale checar se a adubação de cobertura do algodão foi parcelada à altura disso.</p></div>
+  </div>
+  <h3>Sobre o plantio tardio</h3>
+  <div class="cards">
+    <div class="card"><h4>Radiação no enchimento</h4>
+      <p>O algodão plantado em março floresce e enche capulho num período de radiação e temperatura
+        declinantes. Menos energia disponível na fase de maior demanda significa menos maçãs
+        retidas por planta e menor peso de capulho — o mecanismo direto pelo qual data de plantio
+        vira produtividade.</p></div>
+    <div class="card"><h4>Abscisão de estruturas</h4>
+      <p>Quando a relação fonte-dreno aperta, a planta aborta botões e maçãs jovens. Estresse
+        hídrico, excesso de nuvens e alta carga simultânea empurram na mesma direção. Em plantio
+        tardio a janela para compensar com nova florada praticamente não existe.</p></div>
+    <div class="card"><h4>Crescimento vegetativo excessivo</h4>
+      <p>Solo úmido e nitrogênio disponível no início do ciclo alongam entrenós. Plantios que
+        pegaram fevereiro e março exigem mais atenção com regulador de crescimento; subdosar aqui
+        custa estrutura e dificulta a colheita.</p></div>
+    <div class="card"><h4>Pressão de pragas e "ponte verde"</h4>
+      <p>Uma campanha de 108 dias mantém algodão em todos os estádios ao mesmo tempo na propriedade.
+        Os plantios tardios recebem populações de bicudo e mosca-branca já multiplicadas nos
+        plantios de dezembro. O escalonamento longo tem custo fitossanitário além do custo
+        fisiológico.</p></div>
+    <div class="card"><h4>Colheita e qualidade de fibra</h4>
+      <p>O algodão de março colhe em agosto e setembro. Atrasar mais empurra a colheita para o
+        início das chuvas seguintes, com risco de perda de nota de folha, micronaire e
+        comprimento — e de capulho no chão.</p></div>
+    <div class="card"><h4>Soja: chuva na colheita</h4>
+      <p>A chuva também bloqueia colheita, não só plantio. Cada dia de espera com soja madura no
+        campo é perda de qualidade de grão e, na cadeia, atraso na liberação do talhão. O pivô que
+        esperou 29 dias entre maturidade e colheita é o caso extremo dessa fila.</p></div>
+  </div>
+</section>
+
+<section id="auditoria">
+  <div class="rule"></div>
+  <span class="eyebrow">Auditoria · antes da modelagem</span>
+  <h2>Qualidade dos dados</h2>
+  <div class="prose">
+    <p>Nenhum número acima foi calculado antes destas verificações.</p>
+  </div>
+  <div class="tw"><table>
+    <thead><tr><th>Verificação</th><th>Resultado</th><th>Decisão</th></tr></thead>
+    <tbody>
+      <tr><td>Dias ausentes na série</td>
+        <td class="txt">42% do calendário em Karitel, 49% em Rio do Meio não têm linha
+          no arquivo. Maior bloco: 99 e 102 dias em plena seca (abr–ago).</td>
+        <td class="txt">Investigado, não descartado — ver linha seguinte.</td></tr>
+      <tr><td>Chuva zero <b>versus</b> falha de pluviômetro</td>
+        <td class="txt">Nenhum dos 366 dias-fazenda presentes tem chuva zero em <em>todos</em>
+          os sensores. O arquivo só exporta dias com chuva.</td>
+        <td class="txt">Dia ausente tratado como 0 mm, não como falha.</td></tr>
+      <tr><td>Confronto com fonte auxiliar</td>
+        <td class="txt">Acumulado por pivô contra o relatório de irrigação (fonte
+          independente): viés mediano <b>+1,1%</b>, 49 de 54 pivôs dentro de ±15%.</td>
+        <td class="txt">Confirma que a série não perde eventos. Hipótese acima validada.</td></tr>
+      <tr><td>Duplicados</td><td class="txt">Nenhum par (data, pluviômetro) repetido em 21.985 registros.</td>
+        <td class="txt">—</td></tr>
+      <tr><td>Unidades</td>
+        <td class="txt">Mín 0, máx 157 mm/dia; acumulados de 340 a 1.390 mm na safra.
+          Compatível com mm/dia no Oeste da Bahia.</td>
+        <td class="txt">Sem conversão. Nenhum indício de cm ou polegada.</td></tr>
+      <tr><td>Comparação entre sensores do mesmo pivô</td>
+        <td class="txt">Cinco pivôs têm sensor redundante. Três secundários acumularam
+          30%, 43% e 44% do primário, com correlação 0,48–0,65.</td>
+        <td class="txt"><b>KRT-004B e KRT-006B reprovados</b> (subregistro por bateria ou
+          entupimento). A análise usa os 106 sensores primários de pivô; os redundantes serviram
+          só para esta verificação cruzada.</td></tr>
+      <tr><td>Outliers</td>
+        <td class="txt">Máximos de 157, 155 e 128 mm ocorreram todos em 21/11, com
+          mediana da fazenda em 83 mm — evento regional confirmado por vários sensores. Nenhum
+          outlier isolado (&gt;80 mm com mediana da fazenda &lt;2 mm).</td>
+        <td class="txt"><b>Mantidos.</b> Excluir seria descartar chuva real.</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="limites">
+  <div class="rule"></div>
+  <span class="eyebrow">Rigor</span>
+  <h2>Hipóteses, incertezas e limitações</h2>
+  <div class="prose">
+    <h3>Hipóteses assumidas</h3>
+    <ul>
+      <li><b>Capacidade operacional</b> = p90 do ha/dia observado: 250 ha/dia em Karitel, 150 em
+        Rio do Meio. O motor valida contra a realidade com erro mediano de 1 dia.</li>
+      <li><b>A data de plantio registrada</b> representa o pivô plantado naquele dia. Não há
+        registro de plantio parcial nas fontes.</li>
+      <li><b>Liberação do talhão</b> = data de colheita da soja, para os 25 pivôs com sucessão
+        documentada. Para os 43 restantes, ver as duas hipóteses H1/H2.</li>
+      <li><b>Maturidade da soja</b> = plantio + P25 do ciclo da fazenda (117–118 dias), tomado
+        como a colheita que teria ocorrido sem espera.</li>
+      <li><b>Bloqueio no nível da fazenda</b> usa a mediana dos pluviômetros, porque as máquinas
+        se deslocam entre pivôs. As métricas por talhão usam o pluviômetro do próprio pivô.</li>
+    </ul>
+    <h3>Incertezas</h3>
+    <ul>
+      <li><b>A maior:</b> a cultura antecessora de 43 talhões (5.118 ha, 62% da área) não consta
+        em nenhuma fonte. Por isso todo resultado de cenário é apresentado como intervalo.</li>
+      <li>A calibração do efeito residual usa 114 dias-fazenda. D+1 é significativo (p = 0,0035);
+        D+2 não atinge significância isolado (p = 0,079) e entra no R = 2 pelo teste conjunto.</li>
+      <li>A separação por tamanho de evento tem 3 a 11 dias por célula — é indicativa.</li>
+      <li>O API não separou dias operados de não operados (AUC 0,55, p = 0,15). É reportado como
+        descritor, não como regra.</li>
+    </ul>
+    <h3>Limitações</h3>
+    <ul>
+      <li><b>Produtividade do algodão censurada:</b> 30% da área, janela de 40 dias. O efeito do
+        plantio tardio além de 11/01 não é mensurável nesta safra.</li>
+      <li><b>Sem registro de motivo de parada</b> nem de horas de máquina. Os 24 dias-fazenda
+        agricultáveis com área liberada e sem plantio registrado ficaram sem causa atribuída.</li>
+      <li><b>Sem estação meteorológica externa</b> nem umidade de solo por talhão na janela de
+        plantio. A validação cruzada foi feita contra o relatório de irrigação.</li>
+      <li><b>A regra de 5 mm é operacional, não física.</b> 36% da área foi plantada em dias que
+        ela classifica como bloqueados. Os números de dias bloqueados medem condição adversa, não
+        impossibilidade.</li>
+      <li><b>Correlação não é causalidade.</b> Nenhum número deste relatório demonstra que a chuva
+        causou perda de produtividade — apenas que ela bloqueou dias e deslocou datas.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Encaminhamento</span>
+  <h2>O que fazer com isto</h2>
+  <div class="prose">
+    <ol>
+      <li><b>Atacar a liberação, não o clima.</b> O ganho está em antecipar a soja dos pivôs
+        destinados ao algodão — ciclos mais curtos e prioridade de colheita nesses talhões.
+        Comprimir o escalonamento da soja em 20 dias vale mais que qualquer ganho de máquina.</li>
+      <li><b>Não investir em capacidade de plantio para este problema.</b> Dobrar a capacidade
+        antecipa 1 a 3 dias e não muda a data do último plantio.</li>
+      <li><b>Tratar Karitel e Rio do Meio de forma diferente.</b> Karitel perde 39% dos dias com
+        talhão pronto e chuva na frente — ali vale trabalhar trafegabilidade (pneus, carretas,
+        janelas curtas de operação). Rio do Meio passa 67% do tempo sem pivô liberado — ali o
+        problema é inteiramente de sucessão.</li>
+      <li><b>Fechar a produtividade dos 5.797 ha restantes</b> e refazer a regressão com variedade
+        e pivô como controles. É o único caminho para transformar "plantio tardio custa caro" em
+        um número desta fazenda.</li>
+      <li><b>Registrar três coisas na safra 26/27:</b> a cultura antecessora de cada pivô, os
+        hectares plantados por dia por máquina, e o motivo de cada dia de parada. Com isso, a
+        mesma análise sai sem intervalos de hipótese.</li>
+      <li><b>Corrigir a exportação da chuva</b> para incluir todos os dias com um campo de
+        estado do sensor, e dar manutenção nos pluviômetros KRT-004B e KRT-006B.</li>
+    </ol>
+  </div>
+</section>
+
+<footer>
+  Fontes: CHUVAS_RDM.xlsx · chuva_karitel.xlsx · relatorio_soja.pdf (Karitel) ·
+  soja_safra_rdm.pdf (Rio do Meio) · Produtividade_e_Época_de_Plantio_Algodão_safra_2526.xlsx<br>
+  Pipeline reprodutível em <span style="color:var(--ink-2)">analise_chuva/scripts/run_all.sh</span> ·
+  tabelas completas em <span style="color:var(--ink-2)">Impacto_da_Chuva_Soja_Algodao_2526.xlsx</span>
+</footer>
+</div>

@@ -1,0 +1,87 @@
+Janela da campanha de algodao: 2025-12-02 a 2026-03-19 (108 dias)
+
+Painel: 162 fazenda-dias | com operacao: 60 (37%) | ha cobertos 8305 de 8305
+
+================================================================================
+1. EFEITO DA CHUVA DO PROPRIO DIA
+          dias  operou  p_operar  ic_lo  ic_hi  ha_medio
+fx                                                      
+0 (seco)  83.0    41.0      0.49  0.386  0.602      70.5
+0,2-2     16.0     1.0      0.06  0.000  0.188       5.0
+2-5       15.0     4.0      0.27  0.067  0.467      40.7
+5-10      11.0     3.0      0.27  0.000  0.545      23.6
+10-20     20.0     7.0      0.35  0.150  0.550      46.5
+>20       17.0     4.0      0.24  0.059  0.412      33.7
+================================================================================
+2. EFEITO RESIDUAL — dias SECOS (<=5mm) por distancia ao ultimo evento >5mm
+                              dias  p_operar  ic_lo  ic_hi  ha_medio
+D+1                           24.0      0.12  0.000  0.250      15.2
+D+2                           20.0      0.25  0.050  0.450      44.4
+D+3                           16.0      0.56  0.312  0.812      92.1
+D+4                           14.0      0.57  0.286  0.857      79.6
+D+5                           13.0      0.54  0.308  0.769      65.0
+sem chuva>5mm ha >=5d (BASE)  27.0      0.52  0.333  0.704      68.7
+
+  Base (solo ja recuperado) = 0.52.
+  D+1: 0.12 -> ABAIXO da base (24 dias)
+  D+2: 0.25 -> ABAIXO da base (20 dias)
+  D+3: 0.56 -> no nivel da base (16 dias)
+
+  Por TAMANHO do evento (amostras pequenas — indicativo):
+               dias  p_operar
+fx_ev   desde                
+5-15mm  1        11      0.27
+        2         8      0.38
+        3         6      0.67
+15-30mm 1         9      0.00
+        2         8      0.12
+        3         7      0.43
+>30mm   1         4      0.00
+        2         4      0.25
+        3         3      0.67
+================================================================================
+3. API (Antecedent Precipitation Index)
+   k  auc_bloqueio
+0.50         0.548
+0.55         0.547
+0.60         0.543
+0.65         0.539
+0.70         0.533
+0.75         0.526
+0.80         0.516
+0.85         0.501
+0.90         0.492
+0.95         0.489
+  => k = 0.5 | AUC = 0.548 | p (permutacao) = 0.148
+     k baixo confirma memoria CURTA do solo: peso 0,5 em D-1 e 0,25 em D-2.
+  => limiar de Youden: API = 23.8 mm | P(operar) abaixo do limiar = 0.40 | acima = 0.16
+                  dias  p_operar  ha_medio
+fx_api                                    
+(-0.001, 0.0113]    27      0.22     27.04
+(0.0113, 0.941]     27      0.52     66.70
+(0.941, 3.68]       27      0.63     98.48
+(3.68, 9.044]       27      0.30     36.07
+(9.044, 18.521]     27      0.30     44.74
+(18.521, 78.226]    27      0.26     34.56
+================================================================================
+4. CENARIOS DE RECUPERACAO DO SOLO (analise de sensibilidade)
+                  cenario  R                                                    base
+                   Rapida  1           D+1 ja agricultavel; solo arenoso/evento leve
+Intermediaria (CALIBRADA)  2 D+1 e D+2 bloqueados; volta a base em D+3 (dados 25/26)
+                    Lenta  3       D+1 a D+3 bloqueados; eventos >30mm / solo pesado
+  R = dias adicionais bloqueados APOS o dia da chuva >5mm.
+  A calibracao (bloco 2) sustenta R=2: D+1 e D+2 abaixo da base, D+3 no nivel dela.
+================================================================================
+5. CONTROLE — dia da semana
+     dias  p_operar  mm_med
+seg    23      0.39    8.49
+ter    25      0.36    6.85
+qua    24      0.38    4.75
+qui    23      0.35    5.00
+sex    23      0.39    7.84
+sab    22      0.50    6.73
+dom    22      0.23    5.62
+  Sem parada fixa de fim de semana: o domingo é o menor (0,23), mas a amplitude
+  entre dias da semana é bem menor que o efeito da chuva. Nao explica os bloqueios.
+
+PARAMETROS -> k=0.5 | API_LIM=23.8 | R calibrado = 2 dias

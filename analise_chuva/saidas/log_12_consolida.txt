@@ -1,0 +1,24 @@
+==========================================================================================
+CONSOLIDADO — TOTAIS PONDERADOS PELA AREA
+  area total de algodao: 8,305 ha em 68 eventos de plantio
+  dias com chuva >5mm na campanha                     : media pond.   34.2 | min 28 | max 40
+  dias bloqueados por efeito residual                 : media pond.   30.9 | min 25 | max 35
+  TOTAL de dias nao agricultaveis                     : media pond.   65.1 | min 57 | max 73
+  maior sequencia de dias bloqueados seguidos         : media pond.   12.3 | min 8 | max 19
+  API medio na campanha (mm)                          : media pond.   46.4 | min 33 | max 62
+  chuva acumulada na campanha (mm)                    : media pond.  748.9 | min 532 | max 979
+
+  atraso da semeadura da soja (vs fila sem restricao) : media pond.   4.8 d | mediana   11 | max   34 | ha-dia     39,518
+  atraso da colheita da soja (vs maturidade P25)      : media pond.   1.8 d | mediana    1 | max   29 | ha-dia     20,344
+  espera colheita da soja -> plantio (so 25 pivos)    : media pond.   1.4 d | mediana    2 | max   14 | ha-dia     11,802
+  atraso do algodao pela chuva (H1, limite inferior)  : media pond.   2.5 d | mediana    1 | max   12 | ha-dia     20,790
+  atraso do algodao pela chuva (H2, limite superior)  : media pond.   7.8 d | mediana    8 | max   23 | ha-dia     64,469
+  atraso TOTAL do algodao (H1)                        : media pond.   4.9 d | mediana    2 | max   32 | ha-dia     40,984
+  atraso TOTAL do algodao (H2)                        : media pond.  10.2 d | mediana   13 | max   32 | ha-dia     84,963
+
+==========================================================================================
+SERIE DIARIA DE API POR FAZENDA (K=0.85) — exportada
+         dias  chuva_mm  api_medio  api_max  diretos  residuais  agricultaveis
+fazenda                                                                       
+KRT       108     681.7       42.7    119.8       33         29             46
+RDM       108     666.0       39.6     92.8       33         35             40

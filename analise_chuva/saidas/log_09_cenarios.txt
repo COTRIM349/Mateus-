@@ -1,0 +1,27 @@
+Capacidade operacional calibrada (p90 do ha/dia observado): {'KRT': 250.0, 'RDM': 150.0}
+Ciclo de referencia da soja (P25, colheita sem espera): {'KRT': 117.5, 'RDM': 117.0}
+
+================================================================================
+VALIDACAO DO MOTOR (cenario A simulado x datas reais)
+  vies mediano +0 d | erro absoluto mediano 1 d | |erro|<=5d em 93% dos pivos | ultimo plantio: real 2026-03-19 x simulado 2026-03-19
+
+================================================================================
+CENARIOS — data de termino do plantio e antecipacao media
+                  cenario ultimo_plantio   p50_data  antecip_media_d  antecip_ponderada_d  ha_dia_ganhos  ha_plantados_ate_31dez  ha_plantados_ate_31jan
+ A_sim (observado, motor)     2026-03-19 2026-01-28              0.0                  0.0            0.0                  2161.0                  4840.0
+ B (sem chuva no algodao)     2026-03-14 2026-01-25              2.4                  2.5        20790.0                  2421.0                  5290.0
+   C (sem atraso da soja)     2026-03-09 2026-01-28              1.4                  1.4        11705.0                  2161.0                  4840.0
+D (sem chuva na sucessao)     2026-03-09 2026-01-24              4.7                  4.9        40984.0                  2421.0                  5590.0
+     E1 (capacidade +25%)     2026-03-19 2026-01-28              0.6                  0.6         5281.0                  2161.0                  5140.0
+     E2 (capacidade +50%)     2026-03-19 2026-01-27              0.8                  0.9         7505.0                  2161.0                  5290.0
+    E3 (capacidade +100%)     2026-03-19 2026-01-27              1.0                  1.1         9189.0                  2161.0                  5290.0
+
+================================================================================
+ATRASO DA COLHEITA DA SOJA (obs. x maturidade = plantio + ciclo P25)
+  n=25 pivos | mediana 1 d | media 4.7 d | max 29 d | ha-dia 20,344
+
+================================================================================
+SENSIBILIDADE AO CENARIO DE RECUPERACAO (R)
+  R=1: ultimo plantio simulado 2026-03-18 | antecipacao media vs R=2: +1.3 d
+  R=2: ultimo plantio simulado 2026-03-19 | antecipacao media vs R=2: +0.0 d
+  R=3: ultimo plantio simulado 2026-03-29 | antecipacao media vs R=2: -3.6 d

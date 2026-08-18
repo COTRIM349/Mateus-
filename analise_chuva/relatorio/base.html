@@ -1,0 +1,153 @@
+<title>Chuva e o Calendário do Algodão</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@500;600&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --ground:#F4F7F7; --surface:#FFFFFF; --surface-2:#EDF2F2;
+  --ink:#0E1A1C; --ink-2:#48595C; --ink-3:#7A8C8F;
+  --rule:#D9E3E3; --rule-2:#C3D2D2;
+  --accent:#1F6FB2; --accent-ink:#155585;
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a;
+  --blk-direto:#1F5F9E; --blk-resid:#8FB6D8; --livre:#E2EAEA; --plant:#EB6834;
+  --serif:"IBM Plex Serif",Georgia,serif;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --prose:68ch; --wide:1120px;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  color-scheme:dark;
+  --ground:#0C1416; --surface:#131F21; --surface-2:#1A282A;
+  --ink:#E9F1F1; --ink-2:#A6B8BA; --ink-3:#7D9092;
+  --rule:#243436; --rule-2:#2F4245;
+  --accent:#5AA9E6; --accent-ink:#8CC5F0;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --blk-direto:#3B87CE; --blk-resid:#1F4463; --livre:#223134; --plant:#D95926;
+}}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --ground:#0C1416; --surface:#131F21; --surface-2:#1A282A;
+  --ink:#E9F1F1; --ink-2:#A6B8BA; --ink-3:#7D9092;
+  --rule:#243436; --rule-2:#2F4245;
+  --accent:#5AA9E6; --accent-ink:#8CC5F0;
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70;
+  --blk-direto:#3B87CE; --blk-resid:#1F4463; --livre:#223134; --plant:#D95926;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ground);color:var(--ink);font-family:var(--sans);
+  font-size:16px;line-height:1.62;-webkit-font-smoothing:antialiased}
+.wrap{max-width:var(--wide);margin:0 auto;padding:0 24px 96px}
+.prose{max-width:var(--prose)}
+h1,h2,h3{font-family:var(--serif);text-wrap:balance;margin:0}
+h1{font-size:clamp(2rem,4.4vw,3.1rem);line-height:1.08;font-weight:600;letter-spacing:-.015em}
+h2{font-size:clamp(1.4rem,2.4vw,1.85rem);line-height:1.2;font-weight:600;margin-bottom:.5rem}
+h3{font-size:1.06rem;font-weight:600;margin:2rem 0 .4rem}
+p{margin:0 0 1rem}
+a{color:var(--accent-ink)}
+strong{font-weight:600}
+.eyebrow{font-family:var(--mono);font-size:.7rem;letter-spacing:.14em;text-transform:uppercase;
+  color:var(--ink-3);display:block;margin-bottom:.55rem}
+.num{font-variant-numeric:tabular-nums}
+
+/* --- cabecalho --- */
+header{border-bottom:1px solid var(--rule);background:var(--surface)}
+header .wrap{padding-top:56px;padding-bottom:40px}
+.kicker{font-family:var(--mono);font-size:.72rem;letter-spacing:.16em;text-transform:uppercase;
+  color:var(--accent-ink);margin-bottom:1.1rem}
+.lede{font-size:1.12rem;color:var(--ink-2);max-width:62ch;margin-top:1.1rem}
+.meta{display:flex;flex-wrap:wrap;gap:8px 28px;margin-top:1.8rem;font-family:var(--mono);
+  font-size:.75rem;color:var(--ink-3)}
+
+/* --- secoes --- */
+section{padding-top:56px}
+section > .rule{height:1px;background:var(--rule);margin-bottom:26px}
+
+/* --- destaque numerico --- */
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:1px;
+  background:var(--rule);border:1px solid var(--rule);margin:28px 0}
+.tile{background:var(--surface);padding:20px 18px}
+.tile .v{font-family:var(--mono);font-size:1.85rem;font-weight:600;line-height:1.05;
+  letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tile .k{font-size:.82rem;color:var(--ink-2);margin-top:.45rem;line-height:1.35}
+.tile .s{font-family:var(--mono);font-size:.68rem;color:var(--ink-3);margin-top:.5rem;
+  letter-spacing:.04em}
+.tile.hi .v{color:var(--accent-ink)}
+
+/* --- blocos de dados --- */
+figure{margin:34px 0;background:var(--surface);border:1px solid var(--rule);padding:22px}
+figcaption{font-size:.83rem;color:var(--ink-2);margin-top:14px;line-height:1.5;max-width:78ch}
+figcaption b{color:var(--ink);font-weight:600}
+.fig-h{font-family:var(--serif);font-size:1.02rem;font-weight:600;margin-bottom:2px}
+.fig-s{font-size:.8rem;color:var(--ink-3);margin-bottom:16px}
+
+table{border-collapse:collapse;width:100%;font-size:.84rem;font-variant-numeric:tabular-nums}
+.tw{overflow-x:auto}
+th,td{padding:8px 12px;text-align:right;border-bottom:1px solid var(--rule);white-space:nowrap}
+th:first-child,td:first-child{text-align:left;white-space:normal}
+thead th{font-family:var(--mono);font-size:.68rem;letter-spacing:.07em;text-transform:uppercase;
+  color:var(--ink-3);border-bottom:1px solid var(--rule-2);font-weight:500;vertical-align:bottom}
+tbody tr:hover{background:var(--surface-2)}
+td.em{font-weight:600;color:var(--ink)}
+td.txt{white-space:normal;text-align:left;min-width:26ch}
+tfoot td{font-weight:600;border-top:1px solid var(--rule-2);border-bottom:none}
+
+.legend{display:flex;flex-wrap:wrap;gap:6px 20px;font-size:.78rem;color:var(--ink-2);
+  margin-bottom:14px;align-items:center}
+.legend i{width:11px;height:11px;display:inline-block;margin-right:7px;vertical-align:-1px;border-radius:2px}
+.legend span{display:inline-flex;align-items:center}
+
+/* --- calendario --- */
+.cal-row{display:flex;align-items:center;gap:12px;margin-bottom:9px}
+.cal-lab{font-family:var(--mono);font-size:.72rem;color:var(--ink-2);width:38px;flex:none;font-weight:500}
+.cal-strip{display:flex;gap:1.5px;flex:1;min-width:0}
+.cal-d{flex:1;height:34px;background:var(--livre);position:relative;cursor:default;
+  border-radius:1px;transition:transform .08s}
+.cal-d[data-st="direto"]{background:var(--blk-direto)}
+.cal-d[data-st="residual"]{background:var(--blk-resid)}
+.cal-d.pl::after{content:"";position:absolute;left:0;right:0;bottom:2px;height:5px;
+  background:var(--plant);border-radius:1px;box-shadow:0 0 0 1.5px var(--surface)}
+.cal-d:hover{transform:scaleY(1.14);outline:1.5px solid var(--ink);outline-offset:0;z-index:3}
+.cal-ax{display:flex;margin:10px 0 0 50px;font-family:var(--mono);font-size:.68rem;color:var(--ink-3)}
+.cal-ax div{flex:none;border-left:1px solid var(--rule-2);padding-left:5px}
+
+/* --- tooltip --- */
+#tt{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;background:var(--ink);
+  color:var(--ground);font-family:var(--mono);font-size:.72rem;line-height:1.55;padding:8px 11px;
+  border-radius:3px;z-index:99;max-width:240px;box-shadow:0 4px 16px rgba(0,0,0,.22)}
+#tt .k{opacity:.68}
+#tt b{font-weight:600}
+
+svg{display:block;width:100%;height:auto;overflow:visible}
+.gridline{stroke:var(--rule);stroke-width:1}
+.axis{stroke:var(--rule-2);stroke-width:1}
+.axt{font-family:var(--mono);font-size:10px;fill:var(--ink-3)}
+.dlab{font-family:var(--mono);font-size:10.5px;font-weight:500}
+
+/* --- caixas --- */
+.note{border-left:3px solid var(--accent);background:var(--surface);padding:16px 20px;margin:26px 0;
+  font-size:.92rem;color:var(--ink-2)}
+.note b{color:var(--ink)}
+.warn{border-left:3px solid var(--s2)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:16px;margin:26px 0}
+.card{background:var(--surface);border:1px solid var(--rule);padding:18px 20px}
+.card h4{font-family:var(--serif);font-size:.98rem;font-weight:600;margin:0 0 .45rem}
+.card p{font-size:.87rem;color:var(--ink-2);margin:0}
+ul,ol{padding-left:1.15rem;margin:0 0 1rem}
+li{margin-bottom:.5rem}
+li::marker{color:var(--ink-3)}
+.chain{counter-reset:c;list-style:none;padding:0;margin:26px 0}
+.chain li{counter-increment:c;position:relative;padding-left:52px;margin-bottom:22px}
+.chain li::before{content:counter(c);position:absolute;left:0;top:1px;width:30px;height:30px;
+  border:1px solid var(--rule-2);border-radius:50%;display:grid;place-items:center;
+  font-family:var(--mono);font-size:.78rem;color:var(--accent-ink);font-weight:600}
+.chain h4{font-family:var(--serif);font-size:1rem;font-weight:600;margin:0 0 .3rem}
+.chain p{font-size:.9rem;color:var(--ink-2);margin:0}
+footer{border-top:1px solid var(--rule);margin-top:70px;padding-top:26px;font-size:.8rem;
+  color:var(--ink-3);font-family:var(--mono);line-height:1.7}
+@media (max-width:640px){
+  .cal-d{height:26px}.tile .v{font-size:1.5rem}
+  figure{padding:16px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+</style>

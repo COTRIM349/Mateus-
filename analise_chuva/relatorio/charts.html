@@ -1,0 +1,247 @@
+<script id="dados" type="application/json">/*__DADOS__*/</script>
+<script>
+(function(){
+"use strict";
+const DADOS = JSON.parse(document.getElementById("dados").textContent);
+const NS = "http://www.w3.org/2000/svg";
+const tt = document.getElementById("tt");
+const fmt = n => n.toLocaleString("pt-BR");
+const cssv = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+
+function mostra(e, html){
+  tt.innerHTML = html; tt.style.opacity = 1;
+  const r = tt.getBoundingClientRect();
+  let x = e.clientX + 14, y = e.clientY - r.height - 12;
+  if (x + r.width > innerWidth - 8) x = e.clientX - r.width - 14;
+  if (y < 8) y = e.clientY + 18;
+  tt.style.left = x + "px"; tt.style.top = y + "px";
+}
+const esconde = () => { tt.style.opacity = 0; };
+addEventListener("scroll", esconde, {passive:true});
+
+function el(tag, attrs, parent){
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function svg(host, w, h){
+  const s = el("svg", {viewBox:`0 0 ${w} ${h}`, role:"img"});
+  host.appendChild(s); return s;
+}
+
+/* ---------------------------------------------------- 1. calendario */
+(function(){
+  const host = document.getElementById("cal");
+  const ROT = {direto:"Chuva acima de 5 mm", residual:"Efeito residual do solo", ok:"Agricultável"};
+  DADOS.calendario.forEach(f => {
+    const row = document.createElement("div"); row.className = "cal-row";
+    row.innerHTML = `<div class="cal-lab">${f.fazenda}</div>`;
+    const strip = document.createElement("div"); strip.className = "cal-strip";
+    f.dias.forEach(d => {
+      const c = document.createElement("div");
+      c.className = "cal-d" + (d.ha > 0 ? " pl" : "");
+      c.dataset.st = d.st;
+      c.tabIndex = -1;
+      const info = `<b>${f.fazenda} · ${d.d}</b><br>
+        <span class="k">Chuva</span> ${d.mm.toLocaleString("pt-BR")} mm<br>
+        <span class="k">API</span> ${d.api.toLocaleString("pt-BR")} mm<br>
+        <span class="k">Estado</span> ${ROT[d.st]}<br>
+        <span class="k">Plantado</span> ${d.ha > 0 ? fmt(d.ha) + " ha" : "—"}`;
+      c.addEventListener("mousemove", e => mostra(e, info));
+      c.addEventListener("mouseleave", esconde);
+      strip.appendChild(c);
+    });
+    row.appendChild(strip); host.appendChild(row);
+  });
+  // eixo de meses
+  const dias = DADOS.calendario[0].dias, ax = document.createElement("div");
+  ax.className = "cal-ax";
+  let ini = 0;
+  for (let i = 1; i <= dias.length; i++){
+    const mudou = i === dias.length || dias[i].iso.slice(5,7) !== dias[ini].iso.slice(5,7);
+    if (mudou){
+      const d = document.createElement("div");
+      d.style.width = (100 * (i - ini) / dias.length) + "%";
+      const M = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+      d.textContent = M[+dias[ini].iso.slice(5,7) - 1];
+      ax.appendChild(d); ini = i;
+    }
+  }
+  host.appendChild(ax);
+})();
+
+/* ---------------------------------------------------- 2. efeito residual */
+(function(){
+  const host = document.getElementById("ch-resid");
+  const D = DADOS.residual.map(r => ({...r,
+    lab: r.lab.startsWith("sem") ? "base" : r.lab }));
+  const W = 780, H = 300, ml = 46, mr = 16, mt = 16, mb = 52;
+  const s = svg(host, W, H);
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const x = i => ml + iw * (i + .5) / D.length;
+  const bw = Math.min(56, iw / D.length * .58);
+  const y = v => mt + ih * (1 - v);
+  const base = D[D.length - 1].p;
+
+  for (let v = 0; v <= 1.0001; v += .25){
+    el("line", {x1:ml, x2:W-mr, y1:y(v), y2:y(v), class:"gridline"}, s);
+    el("text", {x:ml-9, y:y(v)+3.5, class:"axt", "text-anchor":"end"}, s)
+      .textContent = v.toFixed(2).replace(".", ",");
+  }
+  // linha da base
+  const bl = el("line", {x1:ml, x2:W-mr, y1:y(base), y2:y(base),
+    stroke:"var(--ink-3)", "stroke-width":1.5, "stroke-dasharray":"5 4"}, s);
+  el("text", {x:ml+8, y:y(base)+22, class:"dlab", "text-anchor":"start", fill:"var(--ink-2)"}, s)
+    .textContent = "base: solo recuperado";
+
+  D.forEach((d, i) => {
+    const cor = d.lab === "base" ? "var(--ink-3)" : "var(--s1)";
+    const g = el("g", {}, s);
+    el("rect", {x:x(i)-bw/2, y:y(d.p), width:bw, height:Math.max(2, y(0)-y(d.p)),
+      fill:cor, rx:4}, g);
+    // intervalo de confianca
+    el("line", {x1:x(i), x2:x(i), y1:y(d.lo), y2:y(d.hi), stroke:"var(--ink)",
+      "stroke-width":1.5, opacity:.55}, g);
+    [d.lo, d.hi].forEach(v => el("line", {x1:x(i)-5, x2:x(i)+5, y1:y(v), y2:y(v),
+      stroke:"var(--ink)", "stroke-width":1.5, opacity:.55}, g));
+    el("text", {x:x(i), y:y(d.hi)-9, class:"dlab", "text-anchor":"middle", fill:"var(--ink)"}, g)
+      .textContent = d.p.toFixed(2).replace(".", ",");
+    el("text", {x:x(i), y:H-mb+19, class:"axt", "text-anchor":"middle",
+      "font-weight": d.lab === "base" ? 400 : 500}, s).textContent = d.lab;
+    el("text", {x:x(i), y:H-mb+34, class:"axt", "text-anchor":"middle", opacity:.75}, s)
+      .textContent = "n=" + d.n;
+    const hit = el("rect", {x:x(i)-iw/D.length/2, y:mt, width:iw/D.length, height:ih,
+      fill:"transparent"}, g);
+    const txt = `<b>${d.lab === "base" ? "Base — sem chuva &gt;5 mm há 5+ dias" : d.lab + " após chuva &gt;5 mm"}</b><br>
+      <span class="k">P(operar)</span> ${d.p.toFixed(2).replace(".", ",")}<br>
+      <span class="k">IC 95%</span> ${d.lo.toFixed(2).replace(".", ",")} – ${d.hi.toFixed(2).replace(".", ",")}<br>
+      <span class="k">Dias observados</span> ${d.n}`;
+    hit.addEventListener("mousemove", e => mostra(e, txt));
+    hit.addEventListener("mouseleave", esconde);
+  });
+  el("line", {x1:ml, x2:W-mr, y1:y(0), y2:y(0), class:"axis"}, s);
+  el("text", {x:0, y:mt-7, class:"axt", "text-anchor":"start"}, s).textContent = "P(operar)";
+})();
+
+/* ---------------------------------------------------- 3. avanço acumulado */
+(function(){
+  const host = document.getElementById("ch-avanco");
+  const dias = DADOS.avanco.observado.map(d => d.iso);
+  const t0 = +new Date(dias[0]), t1 = +new Date(dias[dias.length-1]);
+  const W = 780, H = 340, ml = 54, mr = 22, mt = 44, mb = 46;
+  const s = svg(host, W, H);
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const x = iso => ml + iw * (+new Date(iso) - t0) / (t1 - t0);
+  const ymax = 8500, y = v => mt + ih * (1 - v / ymax);
+
+  for (let v = 0; v <= 8000; v += 2000){
+    el("line", {x1:ml, x2:ml+iw, y1:y(v), y2:y(v), class:"gridline"}, s);
+    el("text", {x:ml-9, y:y(v)+3.5, class:"axt", "text-anchor":"end"}, s).textContent = fmt(v);
+  }
+  el("text", {x:ml-9, y:mt-8, class:"axt", "text-anchor":"end"}, s).textContent = "ha";
+  const M = ["jan","fev","mar","abr","mai","jun","jul","ago","set","out","nov","dez"];
+  let mAnt = null;
+  dias.forEach(iso => {
+    const m = iso.slice(5,7);
+    if (m !== mAnt){ mAnt = m;
+      el("line", {x1:x(iso), x2:x(iso), y1:mt, y2:y(0), class:"gridline"}, s);
+      el("text", {x:x(iso)+4, y:H-mb+17, class:"axt"}, s).textContent = M[+m-1];
+    }
+  });
+
+  // faixa "sem chuva": entre a hipotese conservadora (H1) e a superior (H2)
+  const A = DADOS.avanco.observado, B1 = DADOS.avanco.B_H1, B2 = DADOS.avanco.B_H2;
+  const banda = B2.map(p => `${x(p.iso).toFixed(1)} ${y(p.ha).toFixed(1)}`).join(" L ") +
+    " L " + B1.slice().reverse().map(p => `${x(p.iso).toFixed(1)} ${y(p.ha).toFixed(1)}`).join(" L ");
+  el("path", {d:"M " + banda + " Z", fill:"var(--s2)", "fill-opacity":.16}, s);
+  [[B1,.55],[B2,.55]].forEach(([pts,op]) =>
+    el("path", {d:pts.map((p,i)=>(i?"L":"M")+x(p.iso).toFixed(1)+" "+y(p.ha).toFixed(1)).join(" "),
+      fill:"none", stroke:"var(--s2)", "stroke-width":1.5, "stroke-opacity":op}, s));
+  el("path", {d:A.map((p,i)=>(i?"L":"M")+x(p.iso).toFixed(1)+" "+y(p.ha).toFixed(1)).join(" "),
+    fill:"none", stroke:"var(--s1)", "stroke-width":2.4, "stroke-linejoin":"round"}, s);
+  el("line", {x1:ml, x2:ml+iw, y1:y(0), y2:y(0), class:"axis"}, s);
+
+  // rotulos diretos, acima da area de plotagem
+  const leg = [["A · observado","var(--s1)",ml], ["B · sem chuva (faixa H1–H2)","var(--s2)",ml+210]];
+  leg.forEach(([txt,cor,px]) => {
+    el("line", {x1:px, x2:px+16, y1:mt-24, y2:mt-24, stroke:cor, "stroke-width":2.4}, s);
+    el("text", {x:px+22, y:mt-20, class:"dlab", fill:"var(--ink-2)"}, s).textContent = txt;
+  });
+  el("text", {x:x("2026-03-19")-6, y:y(8305)-12, class:"dlab", "text-anchor":"end",
+    fill:"var(--ink-2)"}, s).textContent = "8.305 ha · 19/03";
+
+  const cross = el("line", {y1:mt, y2:y(0), stroke:"var(--ink-3)", "stroke-width":1,
+    "stroke-dasharray":"3 3", opacity:0}, s);
+  const cap = el("rect", {x:ml, y:mt, width:iw, height:ih, fill:"transparent"}, s);
+  const val = (a, iso) => { let r = a[0]; for (const p of a){ if (p.iso <= iso) r = p; else break; } return r.ha; };
+  cap.addEventListener("mousemove", e => {
+    const bb = s.getBoundingClientRect();
+    const i = Math.round(((e.clientX - bb.left) / bb.width * W - ml) / iw * (dias.length - 1));
+    const iso = dias[Math.max(0, Math.min(dias.length-1, i))];
+    cross.setAttribute("x1", x(iso)); cross.setAttribute("x2", x(iso)); cross.setAttribute("opacity", 1);
+    mostra(e, `<b>${iso.split("-").reverse().join("/")}</b><br>
+      <span class="k">Observado</span> ${fmt(val(A, iso))} ha<br>
+      <span class="k">Sem chuva</span> ${fmt(val(B1, iso))} – ${fmt(val(B2, iso))} ha`);
+  });
+  cap.addEventListener("mouseleave", () => { cross.setAttribute("opacity", 0); esconde(); });
+})();
+
+/* ---------------------------------------------------- 4. produtividade */
+(function(){
+  const host = document.getElementById("ch-prod");
+  const P = DADOS.prod;
+  const W = 780, H = 330, ml = 50, mr = 18, mt = 18, mb = 48;
+  const s = svg(host, W, H);
+  const iw = W - ml - mr, ih = H - mt - mb;
+  const t0 = +new Date("2025-12-01"), t1 = +new Date("2026-03-20");
+  const x = iso => ml + iw * (+new Date(iso) - t0) / (t1 - t0);
+  const y = v => mt + ih * (1 - (v - 100) / 420);
+  const r = ha => 4 + Math.sqrt(ha) * .42;
+
+  // faixa sem dado
+  const xc = x("2026-01-12");
+  el("rect", {x:xc, y:mt, width:ml+iw-xc, height:ih, fill:"var(--ink-3)", opacity:.13}, s);
+  el("text", {x:(xc + ml + iw)/2, y:mt+ih/2-8, class:"dlab", "text-anchor":"middle",
+    fill:"var(--ink-2)"}, s).textContent = "5.797 ha plantados aqui";
+  el("text", {x:(xc + ml + iw)/2, y:mt+ih/2+10, class:"dlab", "text-anchor":"middle",
+    fill:"var(--ink-2)"}, s).textContent = "sem produtividade fechada";
+
+  for (let v = 100; v <= 500; v += 100){
+    el("line", {x1:ml, x2:ml+iw, y1:y(v), y2:y(v), class:"gridline"}, s);
+    el("text", {x:ml-9, y:y(v)+3.5, class:"axt", "text-anchor":"end"}, s).textContent = v;
+  }
+  el("text", {x:ml-9, y:mt-5, class:"axt", "text-anchor":"end"}, s).textContent = "@/ha";
+  const M = {12:"dez", 1:"jan", 2:"fev", 3:"mar"};
+  ["2025-12-01","2026-01-01","2026-02-01","2026-03-01"].forEach(iso => {
+    el("line", {x1:x(iso), x2:x(iso), y1:mt, y2:y(100), class:"gridline"}, s);
+    el("text", {x:x(iso)+4, y:H-mb+17, class:"axt"}, s).textContent = M[+iso.slice(5,7)];
+  });
+  el("line", {x1:ml, x2:ml+iw, y1:y(100), y2:y(100), class:"axis"}, s);
+
+  // tendencia controlando fazenda: -2,87 @/ha/dia, ancorada na media da amostra
+  const mx = P.reduce((a,p) => a + p.dia, 0) / P.length;
+  const my = P.reduce((a,p) => a + p.ar, 0) / P.length;
+  const dt = d => new Date(+new Date("2025-12-01") + d * 864e5).toISOString().slice(0,10);
+  el("line", {x1:x(dt(0)), y1:y(my + (0 - mx) * -2.87), x2:x(dt(41)), y2:y(my + (41 - mx) * -2.87),
+    stroke:"var(--ink-3)", "stroke-width":1.5, "stroke-dasharray":"6 4"}, s);
+  el("text", {x:x(dt(1)), y:y(168), class:"dlab", fill:"var(--ink-2)"}, s)
+    .textContent = "tendência: −2,9 @/ha por dia";
+  el("text", {x:x(dt(1)), y:y(168)+15, class:"dlab", fill:"var(--ink-3)"}, s)
+    .textContent = "IC 95%: −5,9 a −0,7";
+
+  P.forEach(p => {
+    const cor = p.faz === "KRT" ? "var(--s1)" : "var(--s2)";
+    const c = el("circle", {cx:x(p.iso), cy:y(p.ar), r:r(p.area), fill:cor,
+      "fill-opacity":.78, stroke:"var(--surface)", "stroke-width":2}, s);
+    const txt = `<b>${p.pivo}</b><br>
+      <span class="k">Plantio</span> ${p.iso.split("-").reverse().join("/")}<br>
+      <span class="k">Produtividade</span> ${p.ar.toLocaleString("pt-BR")} @/ha<br>
+      <span class="k">Área</span> ${fmt(p.area)} ha<br>
+      <span class="k">Variedade</span> ${p.var}`;
+    c.addEventListener("mousemove", e => mostra(e, txt));
+    c.addEventListener("mouseleave", esconde);
+  });
+})();
+})();
+</script>

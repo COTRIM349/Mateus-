@@ -1,0 +1,122 @@
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">A cadeia da sucessão</span>
+  <h2>Onde o calendário do algodão realmente se perdeu</h2>
+  <div class="prose">
+    <p>O algodão plantado em 19 de março não chegou lá por causa da chuva de março. Ele herdou
+      uma fila que começou em setembro. Seguindo a cadeia, etapa por etapa:</p>
+  </div>
+  <ol class="chain">
+    <li>
+      <h4>A soja foi semeada em 111 dias — por decisão, não por chuva</h4>
+      <p>Karitel plantou 5.096 ha entre 20/09 e 08/01. Com a capacidade observada de 300 ha/dia,
+        essa área sairia em <b>17 dias de máquina</b>; mesmo descontando os 42 dias bloqueados por
+        chuva na janela, sobraram <b>38 dias agricultáveis ociosos</b>. A fila sem restrição
+        terminaria em 06/10 — o real terminou em 08/01. São <b>94 dias de escalonamento
+        deliberado</b> (64 dias em Rio do Meio), que a chuva não explica. É uma escolha de manejo,
+        e é ela que fixa a data em que cada pivô será liberado.</p>
+    </li>
+    <li>
+      <h4>A colheita da soja atrasou pouco em relação à maturidade</h4>
+      <p>Tomando a maturidade como plantio mais o P25 do ciclo da fazenda (117–118 dias), a
+        colheita observada atrasou em <b>mediana 1 dia</b> e média ponderada 1,8 dia — mas com
+        cauda longa: um pivô esperou <b>29 dias</b>. Total de 20.344 hectares-dia. Aqui a chuva
+        pesa, porque colheita em soja úmida também é uma operação bloqueável.</p>
+    </li>
+    <li>
+      <h4>O algodão entrou colado na colheita — não houve espera relevante</h4>
+      <p>Nos 25 pivôs (3.187 ha) com sucessão soja&nbsp;→&nbsp;algodão documentada, o intervalo
+        entre colher a soja e plantar o algodão foi de <b>mediana 2 dias</b>, mínimo 0 e máximo 14.
+        A operação não ficou parada esperando o solo: assim que o talhão foi liberado, entrou.
+        Isso é o que torna o gargalo tão claro — o limitante é a <em>liberação</em>, não a
+        disponibilidade de dias ou de máquina.</p>
+    </li>
+    <li>
+      <h4>Dentro da campanha, a chuva custou de 2,5 a 7,8 dias</h4>
+      <p>Simulando a mesma fila sem restrição de chuva, o plantio termina 5 dias antes e a área
+        plantada até 31/01 sobe de 58% para 64% (hipótese conservadora). Sob a hipótese superior,
+        a antecipação média chega a 7,8 dias. É um custo real, mas de outra ordem de grandeza
+        que os 94 dias da etapa 1.</p>
+    </li>
+  </ol>
+  <figure>
+    <div class="fig-h">Decomposição dos 108 dias da campanha</div>
+    <div class="fig-s">Cada dia classificado pela restrição que estava ativa naquele momento</div>
+    <div class="tw"><table>
+      <thead><tr><th>Situação do dia</th><th>Karitel</th><th>%</th><th>Rio do Meio</th><th>%</th></tr></thead>
+      <tbody>
+        <tr><td>Bloqueado pela chuva, <b>com</b> área liberada esperando</td><td>42</td><td>39%</td><td>15</td><td>14%</td></tr>
+        <tr><td>Agricultável e houve plantio</td><td>26</td><td>24%</td><td>12</td><td>11%</td></tr>
+        <tr><td>Agricultável, área liberada, sem plantio registrado</td><td>15</td><td>14%</td><td>9</td><td>8%</td></tr>
+        <tr><td>Sem área liberada — esperando a cultura anterior</td><td>25</td><td>23%</td><td>72</td><td>67%</td></tr>
+      </tbody>
+      <tfoot><tr><td>Total</td><td>108</td><td>100%</td><td>108</td><td>100%</td></tr></tfoot>
+    </table></div>
+    <figcaption>As duas fazendas têm gargalos diferentes. <b>Karitel é limitada pela chuva</b> —
+      39% dos dias tinham talhão pronto e não deu para entrar. <b>Rio do Meio é limitada pela
+      sucessão</b> — em 67% dos dias simplesmente não havia pivô liberado, e o clima era
+      irrelevante. Tratar as duas com a mesma receita seria erro. Os 14% e 8% de dias
+      agricultáveis com área liberada e sem plantio registrado não puderam ser atribuídos a uma
+      causa: não há registro de motivo de parada.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <div class="rule"></div>
+  <span class="eyebrow">Figura 2 · cenários contrafactuais</span>
+  <h2>O que teria mudado</h2>
+  <div class="prose">
+    <p>A reconstrução diária usa a capacidade operacional real (p90 do ha/dia observado: 250 em
+      Karitel, 150 em Rio do Meio), a ordem real de plantio e as datas reais de liberação.
+      Rodando o cenário observado no próprio motor, ele reproduz a realidade com <b>erro mediano
+      de 1 dia</b>, 93% dos pivôs dentro de 5 dias e a data do último plantio exata (19/03) — é
+      isso que autoriza usá-lo para os contrafactuais.</p>
+  </div>
+  <figure>
+    <div class="fig-h">Avanço acumulado da semeadura do algodão</div>
+    <div class="fig-s">Hectares plantados acumulados · observado e cenários sem restrição de chuva</div>
+    <div id="ch-avanco"></div>
+    <figcaption>A linha azul é o observado; a faixa laranja é o cenário sem chuva, entre a
+      hipótese conservadora (borda inferior, colada no observado) e a superior (borda superior).
+      <b>A borda inferior da faixa acompanha o observado quase o tempo todo</b> — quando os
+      talhões só ficam disponíveis na data em que de fato foram plantados, tirar a chuva quase não
+      muda nada. A borda superior se descola porque supõe todos os 43 pivôs sem antecessora
+      conhecida livres desde 02/12. A largura da faixa é, portanto, a medida da nossa ignorância
+      sobre a cultura anterior — não um efeito da chuva. Note também que o formato em degraus
+      permanece nos três casos: cada patamar é um bloco de pivôs liberado pela colheita.</figcaption>
+  </figure>
+  <div class="tw"><table>
+    <thead><tr><th>Cenário</th><th>Último<br>plantio</th><th>Antecipação<br>média (dias)</th>
+      <th>Ponderada<br>por área</th><th>Hectares-dia<br>ganhos</th><th>% da área até<br>31/01</th></tr></thead>
+    <tbody>
+      <tr><td colspan="6" style="font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase;padding-top:14px">H1 · limite inferior do efeito da chuva</td></tr>
+      <tr><td><b>A</b> — observado</td><td>19/03</td><td>—</td><td>—</td><td>—</td><td>58%</td></tr>
+      <tr><td><b>B</b> — sem chuva no plantio do algodão</td><td>14/03</td><td>2,4</td><td>2,5</td><td>20.790</td><td>64%</td></tr>
+      <tr><td><b>C</b> — sem atraso da soja</td><td>09/03</td><td>1,4</td><td>1,4</td><td>11.705</td><td>58%</td></tr>
+      <tr><td><b>D</b> — sem restrição de chuva na sucessão</td><td>09/03</td><td>4,7</td><td>4,9</td><td>40.984</td><td>67%</td></tr>
+      <tr><td><b>E1</b> — capacidade +25%</td><td>19/03</td><td>0,6</td><td>0,6</td><td>5.281</td><td>62%</td></tr>
+      <tr><td><b>E2</b> — capacidade +50%</td><td>19/03</td><td>0,8</td><td>0,9</td><td>7.505</td><td>64%</td></tr>
+      <tr><td><b>E3</b> — capacidade +100%</td><td>19/03</td><td>1,0</td><td>1,1</td><td>9.189</td><td>64%</td></tr>
+      <tr><td colspan="6" style="font-family:var(--mono);font-size:.7rem;letter-spacing:.08em;color:var(--ink-3);text-transform:uppercase;padding-top:14px">H2 · limite superior do efeito da chuva</td></tr>
+      <tr><td><b>A</b> — observado</td><td>19/03</td><td>—</td><td>—</td><td>—</td><td>76%</td></tr>
+      <tr><td><b>B</b> — sem chuva no plantio do algodão</td><td>14/03</td><td>7,8</td><td>7,8</td><td>64.469</td><td>76%</td></tr>
+      <tr><td><b>C</b> — sem atraso da soja</td><td>09/03</td><td>1,8</td><td>2,0</td><td>16.532</td><td>80%</td></tr>
+      <tr><td><b>D</b> — sem restrição de chuva na sucessão</td><td>02/03</td><td>10,2</td><td>10,2</td><td>84.963</td><td>80%</td></tr>
+      <tr><td><b>E1</b> — capacidade +25%</td><td>19/03</td><td>1,2</td><td>1,3</td><td>10.555</td><td>76%</td></tr>
+      <tr><td><b>E2</b> — capacidade +50%</td><td>19/03</td><td>2,1</td><td>2,2</td><td>17.988</td><td>76%</td></tr>
+      <tr><td><b>E3</b> — capacidade +100%</td><td>19/03</td><td>3,3</td><td>3,5</td><td>28.944</td><td>76%</td></tr>
+    </tbody>
+  </table></div>
+  <div class="note warn">
+    <b>Por que duas hipóteses.</b> Em 43 dos 68 talhões (5.118 ha) a cultura antecessora não
+    aparece em nenhuma das fontes. H1 mantém esses talhões presos à data real — nenhum deles pode
+    antecipar, o que <b>subestima</b> o efeito da chuva. H2 os considera livres desde 02/12, o que
+    o <b>superestima</b>. O valor verdadeiro está entre os dois. Registrar a cultura antecessora
+    desses pivôs é a melhoria de dado com maior retorno para a próxima safra.
+  </div>
+  <div class="prose">
+    <p>O bloco E responde à pergunta sobre máquina: <b>dobrar a capacidade de plantio antecipa
+      1,0 a 3,3 dias e não muda a data do último plantio</b>. Não adianta comprar plantadeira para
+      resolver este problema — a máquina fica esperando talhão, não o contrário.</p>
+  </div>
+</section>
