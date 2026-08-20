@@ -253,9 +253,19 @@ export default function BalancoHidricoPage() {
       const a = pca as CropAssignment;
       setAssignment(a);
 
+      // Sprint 14 · Etapa 7 — solo agora vem do pivô. Fallback para o
+      // soil_id legado da parcela quando o pivô não tem solo cadastrado.
+      const { data: pivotSoil } = await supabase
+        .from("pivots")
+        .select("soil_id")
+        .eq("id", selectedPivotId)
+        .single();
+      const effectiveSoilId =
+        (pivotSoil as { soil_id: string | null } | null)?.soil_id ?? a.soil_id;
+
       const [{ data: cultureData }, { data: soilData }, { data: phaseData }] = await Promise.all([
         supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", a.culture_id).single(),
-        supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", a.soil_id).single(),
+        supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", effectiveSoilId).single(),
         supabase.from("culture_phases").select("*").eq("culture_id", a.culture_id).order("phase_order"),
       ]);
 

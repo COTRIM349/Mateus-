@@ -64,7 +64,7 @@ interface Assignment {
   total_cost: number | null;
 }
 
-interface PivotLite { id: string; name: string; efficiency: number }
+interface PivotLite { id: string; name: string; efficiency: number; soil_id: string | null }
 interface SeasonLite { id: string; name: string }
 interface CultureLite { id: string; name: string; root_depth: number; depletion_factor: number }
 interface SoilLite { id: string; name: string }
@@ -177,7 +177,7 @@ export default function VinculacaoPage() {
     setLookupsLoading(true);
     (async () => {
       const [pv, ss, cu, so, va] = await Promise.all([
-        supabase.from("pivots").select("id, name, efficiency").eq("farm_id", activeFarmId).eq("active", true).order("name"),
+        supabase.from("pivots").select("id, name, efficiency, soil_id").eq("farm_id", activeFarmId).eq("active", true).order("name"),
         supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("start_date", { ascending: false }),
         supabase.from("cultures").select("id, name, root_depth, depletion_factor").eq("active", true).order("name"),
         supabase.from("soils").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
@@ -297,6 +297,16 @@ export default function VinculacaoPage() {
 
   const patch = (changes: Partial<FormState>) => setForm((f) => ({ ...f, ...changes }));
 
+  // Sprint 14 · Etapa 4 — quando escolhe o pivô, herda o solo dele.
+  // Solo deixa de ser campo editável da parcela.
+  const handlePivotChange = (pivot_id: string) => {
+    const pivot = pivots.find((p) => p.id === pivot_id);
+    patch({
+      pivot_id,
+      soil_id: pivot?.soil_id ?? "",
+    });
+  };
+
   const handleCultureChange = (culture_id: string) => {
     const culture = cultureMap.get(culture_id);
     const changes: Partial<FormState> = { culture_id, culture_variety_id: "" };
@@ -327,7 +337,11 @@ export default function VinculacaoPage() {
     if (!form.pivot_id) return "Selecione o pivô.";
     if (!form.season_id) return "Selecione a safra.";
     if (!form.culture_id) return "Selecione a cultura.";
-    if (!form.soil_id) return "Selecione o solo.";
+    // Sprint 14 · Etapa 4 — solo herdado do pivô, não é mais obrigatório
+    // pela UI. Se o pivô não tem solo cadastrado, avisa para editar o pivô.
+    if (!form.soil_id) {
+      return "O pivô selecionado não tem solo cadastrado. Edite o pivô em Cadastros → Pivôs e associe um solo.";
+    }
     if (!form.planting_date) return "Informe a data de plantio.";
     if (form.emergence_date && form.emergence_date < form.planting_date)
       return "A data de emergência não pode ser anterior ao plantio.";
@@ -535,7 +549,7 @@ export default function VinculacaoPage() {
         : cultures.length === 0
           ? { title: "Cadastre uma cultura primeiro", description: "A vinculação precisa de uma cultura com suas fases fenológicas.", actionLabel: "Ir para Culturas", actionHref: "/culturas" }
           : soils.length === 0
-            ? { title: "Cadastre um solo primeiro", description: "O solo define a capacidade de água disponível usada no balanço hídrico.", actionLabel: "Ir para Solos", actionHref: "/solos" }
+            ? { title: "Cadastre um solo primeiro", description: "O solo define a capacidade de água disponível. A partir da Sprint 14, o solo é vinculado ao pivô (equipamento) e todas as parcelas dele herdam.", actionLabel: "Ir para Solos", actionHref: "/solos" }
             : null
     : null;
 
@@ -629,7 +643,7 @@ export default function VinculacaoPage() {
             <Select
               id="pivot_id" label="Pivô" required
               value={form.pivot_id}
-              onChange={(e) => patch({ pivot_id: e.target.value })}
+              onChange={(e) => handlePivotChange(e.target.value)}
               options={pivots.map((p) => ({ value: p.id, label: p.name }))}
             />
             <Select
@@ -651,12 +665,22 @@ export default function VinculacaoPage() {
               options={varietiesForCulture.map((v) => ({ value: v.id, label: v.name }))}
               disabled={!form.culture_id}
             />
-            <Select
-              id="soil_id" label="Solo" required
-              value={form.soil_id}
-              onChange={(e) => patch({ soil_id: e.target.value })}
-              options={soils.map((s) => ({ value: s.id, label: s.name }))}
-            />
+            {/* Sprint 14 · Etapa 4 — solo herdado do pivô (read-only). */}
+            <div>
+              <label className="mb-1.5 block text-xs font-semibold text-graphite-600 dark:text-gray-400">
+                Solo (herdado do pivô)
+              </label>
+              <div className="flex h-10 items-center rounded-lg border border-dashed border-brand-200 bg-brand-50/40 px-3 text-sm dark:border-brand-800/40 dark:bg-brand-900/10">
+                {form.soil_id
+                  ? <span className="text-graphite-900 dark:text-white font-medium">{soilMap.get(form.soil_id) ?? form.soil_id}</span>
+                  : form.pivot_id
+                    ? <span className="text-amber-700 dark:text-amber-400">⚠ Pivô sem solo — <a href="/pivos" className="underline">cadastre em Pivôs</a></span>
+                    : <span className="text-graphite-400 dark:text-gray-500">Selecione um pivô primeiro</span>
+                }
+              </div>
+              {/* Hidden input mantém o valor no FormData para compat */}
+              <input type="hidden" name="soil_id" value={form.soil_id} />
+            </div>
             <div />
             <Input
               id="planting_date" label="Data de plantio" type="date" required

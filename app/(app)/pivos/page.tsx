@@ -69,6 +69,8 @@ interface Pivot {
   energy_cost: number | null;
   cost_per_mm: number | null;
   cost_per_hectare: number | null;
+  // Sprint 14 · Etapa 4 — Solo passa a ser característica do pivô
+  soil_id: string | null;
 }
 
 interface ProdModule {
@@ -77,6 +79,11 @@ interface ProdModule {
 }
 
 interface Culture {
+  id: string;
+  name: string;
+}
+
+interface Soil {
   id: string;
   name: string;
 }
@@ -107,6 +114,8 @@ export default function PivosPage() {
 
   const [modules, setModules] = useState<ProdModule[]>([]);
   const [cultures, setCultures] = useState<Culture[]>([]);
+  const [soils, setSoils] = useState<Soil[]>([]);
+  const [soilId, setSoilId] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Pivot | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Pivot | null>(null);
@@ -142,6 +151,14 @@ export default function PivosPage() {
       .eq("active", true)
       .order("name")
       .then(({ data: cults }) => { if (cults) setCultures(cults); });
+    // Sprint 14 · Etapa 4 — solos da fazenda para vincular ao pivô
+    supabase
+      .from("soils")
+      .select("id, name")
+      .eq("farm_id", activeFarmId)
+      .eq("active", true)
+      .order("name")
+      .then(({ data: sls }) => { if (sls) setSoils(sls); });
   }, [activeFarmId]);
 
   const activePivots = useMemo(() => data.filter((p) => p.active), [data]);
@@ -154,6 +171,10 @@ export default function PivosPage() {
     () => new Map(modules.map((m) => [m.id, m.name])),
     [modules]
   );
+  const soilMap = useMemo(
+    () => new Map(soils.map((s) => [s.id, s.name])),
+    [soils]
+  );
 
   const openNew = () => {
     setEditing(null);
@@ -165,6 +186,7 @@ export default function PivosPage() {
       motorEff: 88, installedKw: null, cuc: 85, specificCons: null,
     });
     setEnergyCost(null);
+    setSoilId("");
     setModalOpen(true);
   };
 
@@ -187,6 +209,7 @@ export default function PivosPage() {
       specificCons: pivot.specific_consumption,
     });
     setEnergyCost(pivot.energy_cost);
+    setSoilId(pivot.soil_id ?? "");
     setModalOpen(true);
   };
 
@@ -273,6 +296,8 @@ export default function PivosPage() {
       cost_per_mm: numOrNull("cost_per_mm"),
       // cost_per_hectare NÃO é gravado aqui — vira campo derivado da parcela
       // (Sprint 13, Etapa 5).
+      // Sprint 14 · Etapa 4 — solo é característica do pivô (parcela herda).
+      soil_id: soilId || null,
     };
 
     try {
@@ -312,6 +337,7 @@ export default function PivosPage() {
     },
     { header: "Módulo", render: (r) => r.module_id ? moduleMap.get(r.module_id) ?? "—" : "—" },
     { header: "Cultura", render: (r) => r.culture_id ? cultureMap.get(r.culture_id) ?? "—" : "—" },
+    { header: "Solo", render: (r) => r.soil_id ? soilMap.get(r.soil_id) ?? "—" : "—" },
     { header: "Área (ha)", render: (r) => r.area?.toLocaleString("pt-BR"), align: "right" },
     { header: "Vazão (m³/h)", render: (r) => r.flow_rate?.toLocaleString("pt-BR"), align: "right" },
     {
@@ -390,6 +416,9 @@ export default function PivosPage() {
                 editing={editing}
                 modules={modules}
                 cultures={cultures}
+                soils={soils}
+                soilId={soilId}
+                onSoilChange={setSoilId}
               />
             </div>
             <div className={activeTab === "caracteristicas" ? "" : "hidden"}>
@@ -463,42 +492,79 @@ function TabGeral({
   editing,
   modules,
   cultures,
+  soils,
+  soilId,
+  onSoilChange,
 }: {
   editing: Pivot | null;
   modules: ProdModule[];
   cultures: Culture[];
+  soils: Soil[];
+  soilId: string;
+  onSoilChange: (v: string) => void;
 }) {
   return (
-    <div className="grid gap-5 sm:grid-cols-2">
-      <Input
-        id="name"
-        name="name"
-        label="Nome do pivô"
-        placeholder="Pivô 14"
-        required
-        defaultValue={editing?.name}
-      />
-      <Input
-        id="code"
-        name="code"
-        label="Código"
-        placeholder="P14"
-        defaultValue={editing?.code ?? ""}
-      />
-      <Select
-        id="module_id"
-        name="module_id"
-        label="Módulo produtivo"
-        options={modules.map((m) => ({ value: m.id, label: m.name }))}
-        defaultValue={editing?.module_id ?? ""}
-      />
-      <Select
-        id="culture_id"
-        name="culture_id"
-        label="Cultura atual"
-        options={cultures.map((c) => ({ value: c.id, label: c.name }))}
-        defaultValue={editing?.culture_id ?? ""}
-      />
+    <div className="space-y-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <Input
+          id="name"
+          name="name"
+          label="Nome do pivô"
+          placeholder="Pivô 14"
+          required
+          defaultValue={editing?.name}
+        />
+        <Input
+          id="code"
+          name="code"
+          label="Código"
+          placeholder="P14"
+          defaultValue={editing?.code ?? ""}
+        />
+        <Select
+          id="module_id"
+          name="module_id"
+          label="Módulo produtivo"
+          options={modules.map((m) => ({ value: m.id, label: m.name }))}
+          defaultValue={editing?.module_id ?? ""}
+        />
+        <Select
+          id="culture_id"
+          name="culture_id"
+          label="Cultura atual"
+          options={cultures.map((c) => ({ value: c.id, label: c.name }))}
+          defaultValue={editing?.culture_id ?? ""}
+        />
+      </div>
+
+      {/* Sprint 14 · Etapa 4 — Solo é característica do pivô. Novas parcelas
+          herdam este solo automaticamente. */}
+      <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
+        <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
+          Solo dominante do pivô
+        </legend>
+        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
+          <Select
+            id="soil_id"
+            label="Solo"
+            value={soilId}
+            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSoilChange(e.target.value)}
+            options={[
+              { value: "", label: "— sem solo definido —" },
+              ...soils.map((s) => ({ value: s.id, label: s.name })),
+            ]}
+          />
+          <a
+            href="/solos"
+            className="self-end whitespace-nowrap rounded-lg border border-gray-200 px-3 py-2 text-sm text-graphite-700 hover:border-brand-500 hover:text-brand-700 dark:border-white/[0.08] dark:text-gray-300"
+          >
+            Cadastrar solo →
+          </a>
+        </div>
+        <p className="mt-2 text-xs text-graphite-500 dark:text-gray-400">
+          Novas parcelas neste pivô <b>herdam automaticamente este solo</b>. Se precisar mudar, edite aqui e o balanço hídrico de todas as parcelas ativas passa a usar o novo solo.
+        </p>
+      </fieldset>
     </div>
   );
 }
