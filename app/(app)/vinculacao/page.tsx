@@ -177,7 +177,7 @@ const EMPTY_FORM: FormState = {
   irrigation_efficiency: "",
   depletion_factor: "",
   notes: "",
-  current_phase_id: "",
+  current_phase_id: "auto",
   management_start_date: "",
   management_end_date: "",
 };
@@ -332,7 +332,7 @@ export default function VinculacaoPage() {
       irrigation_efficiency: a.irrigation_efficiency != null ? String(Math.round(a.irrigation_efficiency * 100)) : "",
       depletion_factor: a.depletion_factor != null ? String(a.depletion_factor) : "",
       notes: a.notes ?? "",
-      current_phase_id: a.current_phase_id ?? "",
+      current_phase_id: a.current_phase_id ?? "auto",
       management_start_date: a.management_start_date ?? "",
       management_end_date: a.management_end_date ?? "",
     });
@@ -387,7 +387,7 @@ export default function VinculacaoPage() {
 
   const handleCultureChange = (culture_id: string) => {
     const culture = cultureMap.get(culture_id);
-    const changes: Partial<FormState> = { culture_id, culture_variety_id: "", current_phase_id: "" };
+    const changes: Partial<FormState> = { culture_id, culture_variety_id: "", current_phase_id: "auto" };
     // when personalizando, pré-preenche os padrões da cultura como ponto de partida
     if (form.parameter_mode === "personalizado" && culture) {
       changes.max_root_depth = String(culture.root_depth);
@@ -509,7 +509,7 @@ export default function VinculacaoPage() {
       max_root_depth: custom && form.max_root_depth ? Number(form.max_root_depth) : null,
       irrigation_efficiency: custom && form.irrigation_efficiency ? Number(form.irrigation_efficiency) / 100 : null,
       depletion_factor: custom && form.depletion_factor ? Number(form.depletion_factor) : null,
-      current_phase_id: form.current_phase_id || null,
+      current_phase_id: form.current_phase_id && form.current_phase_id !== "auto" ? form.current_phase_id : null,
       management_start_date: form.management_start_date || null,
       management_end_date: form.management_end_date || null,
     };
@@ -834,7 +834,7 @@ export default function VinculacaoPage() {
                 value={form.current_phase_id}
                 onChange={(e) => patch({ current_phase_id: e.target.value })}
                 options={[
-                  { value: "", label: "Automático (pelo DAP)" },
+                  { value: "auto", label: "Automático (pelo DAP)" },
                   ...culturePhases.map((p) => ({
                     value: p.id,
                     label: `${p.phase_order}. ${p.name} (DAP ${p.days_after_plant})`,
@@ -850,7 +850,7 @@ export default function VinculacaoPage() {
                   {form.planting_date && culturePhases.length > 0 ? (() => {
                     const dap = daysAfterPlanting(form.planting_date);
                     const auto = identifyPhase(culturePhases, dap);
-                    const manual = form.current_phase_id
+                    const manual = form.current_phase_id && form.current_phase_id !== "auto"
                       ? culturePhases.find((p) => p.id === form.current_phase_id)
                       : null;
                     return (
