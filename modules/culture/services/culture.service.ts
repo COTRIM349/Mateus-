@@ -12,6 +12,8 @@ export interface CulturePhase {
   root_depth_start: number;
   root_depth_end: number;
   depletion_factor: number;
+  phase_key?: string | null;
+  id?: string;
 }
 
 export interface PhaseIdentification {

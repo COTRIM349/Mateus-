@@ -17,6 +17,7 @@ import { useAuth } from "@/components/providers";
 import { useCrud } from "@/lib/hooks";
 import { PrerequisiteNotice } from "@/components/onboarding";
 import { createClient } from "@/lib/supabase/client";
+import { MATURITY_TYPES } from "@/constants/brazil";
 import {
   buildParcelClosePayload,
   buildParcelInsertRow,
@@ -25,6 +26,11 @@ import {
   suggestParcelName,
   validateParcelCycle,
 } from "@/modules/assignment/services";
+import { identifyPhase } from "@/modules/culture/services";
+import {
+  daysAfterPlanting,
+  validateManagementDates,
+} from "@/modules/culture/services/culture-phases";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -71,6 +77,9 @@ interface Assignment {
   total_water_applied_mm: number | null;
   total_energy_kwh: number | null;
   total_cost: number | null;
+  current_phase_id: string | null;
+  management_start_date: string | null;
+  management_end_date: string | null;
 }
 
 interface PivotLite {
@@ -82,10 +91,24 @@ interface PivotLite {
   module_id: string | null;
 }
 interface SeasonLite { id: string; name: string }
-interface CultureLite { id: string; name: string; root_depth: number; depletion_factor: number }
+interface CultureLite { id: string; name: string; root_depth: number; depletion_factor: number; cycle_days: number }
 interface SoilLite { id: string; name: string }
-interface VarietyLite { id: string; culture_id: string; name: string }
+interface VarietyLite { id: string; culture_id: string; name: string; maturity: string | null }
 interface ModuleLite { id: string; name: string }
+interface PhaseLite {
+  id: string;
+  culture_id: string;
+  name: string;
+  phase_order: number;
+  days_after_plant: number;
+  duration_days: number;
+  kc_start: number;
+  kc_end: number;
+  root_depth_start: number;
+  root_depth_end: number;
+  depletion_factor: number;
+  phase_key: string | null;
+}
 
 interface FormState {
   // Identidade
@@ -120,6 +143,9 @@ interface FormState {
   irrigation_efficiency: string;
   depletion_factor: string;
   notes: string;
+  current_phase_id: string;
+  management_start_date: string;
+  management_end_date: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -151,6 +177,9 @@ const EMPTY_FORM: FormState = {
   irrigation_efficiency: "",
   depletion_factor: "",
   notes: "",
+  current_phase_id: "",
+  management_start_date: "",
+  management_end_date: "",
 };
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -171,6 +200,7 @@ export default function VinculacaoPage() {
   const [soils, setSoils] = useState<SoilLite[]>([]);
   const [varieties, setVarieties] = useState<VarietyLite[]>([]);
   const [modules, setModules] = useState<ModuleLite[]>([]);
+  const [culturePhases, setCulturePhases] = useState<PhaseLite[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
 
   const [modalOpen, setModalOpen] = useState(false);
@@ -199,9 +229,9 @@ export default function VinculacaoPage() {
       const [pv, ss, cu, so, va, mo] = await Promise.all([
         supabase.from("pivots").select("id, name, efficiency, soil_id, area, module_id").eq("farm_id", activeFarmId).eq("active", true).order("name"),
         supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("start_date", { ascending: false }),
-        supabase.from("cultures").select("id, name, root_depth, depletion_factor").eq("active", true).order("name"),
+        supabase.from("cultures").select("id, name, root_depth, depletion_factor, cycle_days").eq("active", true).order("name"),
         supabase.from("soils").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
-        supabase.from("culture_varieties").select("id, culture_id, name").eq("active", true).order("name"),
+        supabase.from("culture_varieties").select("id, culture_id, name, maturity").eq("active", true).order("name"),
         supabase.from("production_modules").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
       ]);
       setPivots((pv.data ?? []) as PivotLite[]);
@@ -213,6 +243,19 @@ export default function VinculacaoPage() {
       setLookupsLoading(false);
     })();
   }, [activeFarmId, supabase]);
+
+  useEffect(() => {
+    if (!form.culture_id) {
+      setCulturePhases([]);
+      return;
+    }
+    supabase
+      .from("culture_phases")
+      .select("id, culture_id, name, phase_order, days_after_plant, duration_days, kc_start, kc_end, root_depth_start, root_depth_end, depletion_factor, phase_key")
+      .eq("culture_id", form.culture_id)
+      .order("phase_order")
+      .then(({ data }) => setCulturePhases((data ?? []) as PhaseLite[]));
+  }, [form.culture_id, supabase]);
 
   const pivotIds = useMemo(() => new Set(pivots.map((p) => p.id)), [pivots]);
   const farmAssignments = useMemo(
@@ -240,6 +283,10 @@ export default function VinculacaoPage() {
   const selectedPivot = pivots.find((p) => p.id === form.pivot_id);
   const selectedModuleName = selectedPivot?.module_id ? moduleMap.get(selectedPivot.module_id) ?? "—" : "—";
 
+  const maturityLabels = useMemo(
+    () => Object.fromEntries(MATURITY_TYPES.map((m) => [m.value, m.label])),
+    [],
+  );
   const varietiesForCulture = useMemo(
     () => varieties.filter((v) => v.culture_id === form.culture_id),
     [varieties, form.culture_id],
@@ -285,6 +332,9 @@ export default function VinculacaoPage() {
       irrigation_efficiency: a.irrigation_efficiency != null ? String(Math.round(a.irrigation_efficiency * 100)) : "",
       depletion_factor: a.depletion_factor != null ? String(a.depletion_factor) : "",
       notes: a.notes ?? "",
+      current_phase_id: a.current_phase_id ?? "",
+      management_start_date: a.management_start_date ?? "",
+      management_end_date: a.management_end_date ?? "",
     });
     setFormError("");
     setFormTab("caracteristicas");
@@ -337,7 +387,7 @@ export default function VinculacaoPage() {
 
   const handleCultureChange = (culture_id: string) => {
     const culture = cultureMap.get(culture_id);
-    const changes: Partial<FormState> = { culture_id, culture_variety_id: "" };
+    const changes: Partial<FormState> = { culture_id, culture_variety_id: "", current_phase_id: "" };
     // when personalizando, pré-preenche os padrões da cultura como ponto de partida
     if (form.parameter_mode === "personalizado" && culture) {
       changes.max_root_depth = String(culture.root_depth);
@@ -387,6 +437,12 @@ export default function VinculacaoPage() {
       editingId: editing?.id ?? null,
     });
     if (cycleError) return cycleError;
+    const mgmtError = validateManagementDates({
+      plantingDate: form.planting_date,
+      managementStart: form.management_start_date || null,
+      managementEnd: form.management_end_date || null,
+    });
+    if (mgmtError) return mgmtError;
     if (form.parameter_mode === "personalizado") {
       const init = form.initial_root_depth ? Number(form.initial_root_depth) : null;
       const max = form.max_root_depth ? Number(form.max_root_depth) : null;
@@ -453,6 +509,9 @@ export default function VinculacaoPage() {
       max_root_depth: custom && form.max_root_depth ? Number(form.max_root_depth) : null,
       irrigation_efficiency: custom && form.irrigation_efficiency ? Number(form.irrigation_efficiency) / 100 : null,
       depletion_factor: custom && form.depletion_factor ? Number(form.depletion_factor) : null,
+      current_phase_id: form.current_phase_id || null,
+      management_start_date: form.management_start_date || null,
+      management_end_date: form.management_end_date || null,
     };
     const persist = Object.fromEntries(
       Object.entries(payload).filter(([, v]) => v !== undefined),
@@ -738,13 +797,16 @@ export default function VinculacaoPage() {
                 id="culture_id" label="Cultura" required
                 value={form.culture_id}
                 onChange={(e) => handleCultureChange(e.target.value)}
-                options={cultures.map((c) => ({ value: c.id, label: c.name }))}
+                options={cultures.map((c) => ({ value: c.id, label: `${c.name} (${c.cycle_days}d)` }))}
               />
               <Select
                 id="culture_variety_id" label="Cultivar (opcional)"
                 value={form.culture_variety_id}
                 onChange={(e) => patch({ culture_variety_id: e.target.value })}
-                options={varietiesForCulture.map((v) => ({ value: v.id, label: v.name }))}
+                options={varietiesForCulture.map((v) => ({
+                  value: v.id,
+                  label: v.maturity ? `${v.name} · ${maturityLabels[v.maturity] ?? v.maturity}` : v.name,
+                }))}
                 disabled={!form.culture_id}
               />
               <Input
@@ -757,8 +819,56 @@ export default function VinculacaoPage() {
                 value={form.expected_harvest_date}
                 onChange={(e) => patch({ expected_harvest_date: e.target.value })}
               />
+              <Input
+                id="management_start_date" label="Início do manejo" type="date"
+                value={form.management_start_date}
+                onChange={(e) => patch({ management_start_date: e.target.value })}
+              />
+              <Input
+                id="management_end_date" label="Fim do manejo (opcional)" type="date"
+                value={form.management_end_date}
+                onChange={(e) => patch({ management_end_date: e.target.value })}
+              />
+              <Select
+                id="current_phase_id" label="Estádio fenológico"
+                value={form.current_phase_id}
+                onChange={(e) => patch({ current_phase_id: e.target.value })}
+                options={[
+                  { value: "", label: "Automático (pelo DAP)" },
+                  ...culturePhases.map((p) => ({
+                    value: p.id,
+                    label: `${p.phase_order}. ${p.name} (DAP ${p.days_after_plant})`,
+                  })),
+                ]}
+                disabled={!form.culture_id}
+              />
+              <div>
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
+                  Estádio automático agora
+                </p>
+                <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
+                  {form.planting_date && culturePhases.length > 0 ? (() => {
+                    const dap = daysAfterPlanting(form.planting_date);
+                    const auto = identifyPhase(culturePhases, dap);
+                    const manual = form.current_phase_id
+                      ? culturePhases.find((p) => p.id === form.current_phase_id)
+                      : null;
+                    return (
+                      <span className="text-graphite-900 dark:text-white">
+                        DAP {dap} · {auto?.phase.name ?? "—"}
+                        {manual ? ` · correção: ${manual.name}` : ""}
+                      </span>
+                    );
+                  })() : (
+                    <span className="text-graphite-400 dark:text-gray-500">
+                      {form.culture_id ? "Informe o plantio e cadastre fases na cultura" : "Selecione a cultura"}
+                    </span>
+                  )}
+                </div>
+              </div>
               <p className="sm:col-span-2 text-[11px] text-graphite-400 dark:text-gray-500">
-                Fases, Kc, Ks e Ky ficam no cadastro da cultura (próximas etapas). Aqui a parcela só escolhe o ciclo.
+                Cultivar, ciclo e estádio pertencem à parcela. Fases e Kc/Ks/Ky ficam no cadastro da cultura.
+                A correção manual grava a fase atual; o motor contínuo de Kc entra na próxima etapa.
               </p>
             </div>
           )}

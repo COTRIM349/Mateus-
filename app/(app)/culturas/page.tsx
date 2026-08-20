@@ -31,6 +31,13 @@ import {
   type CulturePhase,
   type CultureValidation,
 } from "@/modules/culture/services";
+import {
+  buildPhasesFromTemplate,
+  inferCultureKind,
+  insertPayloadFromTimeline,
+  rebuildPhaseTimeline,
+  type CultureKind,
+} from "@/modules/culture/services/culture-phases";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -101,6 +108,8 @@ interface PhaseRow {
   ends_cycle: boolean | null;
   // Sprint 14 · Etapa 5 — coeficiente Ky para método FAO 33
   ky: number | null;
+  kl: number | null;
+  phase_key: string | null;
 }
 
 interface AssignmentRow {
@@ -131,6 +140,18 @@ export default function CulturasPage() {
   const [activeTab, setActiveTab] = useState("cadastro");
   const [selectedCultureId, setSelectedCultureId] = useState<string | null>(null);
   const [cultures, setCultures] = useState<Culture[]>([]);
+
+  useEffect(() => {
+    const supabase = createClient();
+    supabase
+      .from("cultures")
+      .select("*")
+      .eq("active", true)
+      .order("name")
+      .then(({ data }) => {
+        if (data) setCultures(data as Culture[]);
+      });
+  }, [activeTab]);
 
   return (
     <div className="space-y-8">
@@ -658,8 +679,10 @@ function PhasesTab({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [warnings, setWarnings] = useState<CultureValidation[]>([]);
+  const [templateTarget, setTemplateTarget] = useState<Exclude<CultureKind, "outro"> | null>(null);
 
   const selectedCulture = cultures.find((c) => c.id === selectedCultureId);
+  const suggestedKind = selectedCulture ? inferCultureKind(selectedCulture.name) : "outro";
 
   const fetchPhases = useCallback(async () => {
     if (!selectedCultureId) { setPhases([]); return; }
@@ -693,6 +716,7 @@ function PhasesTab({
       align: "center",
     },
     { header: "Fase", render: (r) => <span className="font-medium">{r.name}</span> },
+    { header: "Chave", render: (r) => r.phase_key ?? "—", align: "center" },
     { header: "DAP", render: (r) => r.days_after_plant, align: "right" },
     { header: "Duração", render: (r) => `${r.duration_days} dias`, align: "right" },
     { header: "Kc início", render: (r) => r.kc_start.toFixed(2), align: "right" },
@@ -724,7 +748,6 @@ function PhasesTab({
 
     const newPhase = {
       phase_order: Number(fd.get("phase_order")),
-      days_after_plant: Number(fd.get("days_after_plant")),
       duration_days: Number(fd.get("duration_days")),
       kc_start: Number(fd.get("kc_start")),
       kc_end: Number(fd.get("kc_end")),
@@ -733,10 +756,15 @@ function PhasesTab({
     const otherPhases = editing
       ? phases.filter((p) => p.id !== editing.id)
       : phases;
-    const allPhases = [...otherPhases.map((p) => ({
-      phase_order: p.phase_order, days_after_plant: p.days_after_plant,
-      duration_days: p.duration_days, kc_start: p.kc_start, kc_end: p.kc_end,
-    })), newPhase];
+    const allPhases = rebuildPhaseTimeline([
+      ...otherPhases.map((p) => ({
+        phase_order: p.phase_order,
+        duration_days: p.duration_days,
+        kc_start: p.kc_start,
+        kc_end: p.kc_end,
+      })),
+      newPhase,
+    ]);
 
     const issues = validatePhases(allPhases, selectedCulture.cycle_days);
     const errors = issues.filter((i) => i.level === "error");
@@ -752,11 +780,13 @@ function PhasesTab({
       return v ? Number(v) : null;
     };
 
+    const rebuiltRow = allPhases.find((p) => p.phase_order === newPhase.phase_order) ?? allPhases[0];
     const payload = {
       culture_id: selectedCultureId,
       phase_order: newPhase.phase_order,
       name: fd.get("name") as string,
-      days_after_plant: newPhase.days_after_plant,
+      phase_key: ((fd.get("phase_key") as string) || "").trim() || null,
+      days_after_plant: rebuiltRow.days_after_plant,
       duration_days: newPhase.duration_days,
       kc_start: newPhase.kc_start,
       kc_end: newPhase.kc_end,
@@ -773,8 +803,8 @@ function PhasesTab({
       itn_pct: numOrNull("itn_pct") ?? 100,
       cycle_count: numOrNull("cycle_count") ?? 1,
       ends_cycle: fd.get("ends_cycle") === "on",
-      // Sprint 14 · Etapa 5 — Ky para FAO 33
       ky: numOrNull("ky"),
+      kl: numOrNull("kl") ?? 1,
     };
 
     try {
@@ -795,11 +825,70 @@ function PhasesTab({
       }
       setModalOpen(false);
       setEditing(null);
+      await persistRebuiltTimeline(selectedCultureId);
       fetchPhases();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao salvar");
     }
     setSaving(false);
+  };
+
+  const persistRebuiltTimeline = async (cultureId: string) => {
+    const { data } = await supabase
+      .from("culture_phases")
+      .select("id, phase_order, duration_days")
+      .eq("culture_id", cultureId)
+      .order("phase_order");
+    if (!data) return;
+    const rebuilt = rebuildPhaseTimeline(
+      data.map((p) => ({
+        id: p.id as string,
+        phase_order: p.phase_order as number,
+        duration_days: p.duration_days as number,
+      })),
+    );
+    await Promise.all(
+      rebuilt.map((p) =>
+        supabase.from("culture_phases").update({ days_after_plant: p.days_after_plant }).eq("id", p.id),
+      ),
+    );
+  };
+
+  const applyTemplate = async (kind: Exclude<CultureKind, "outro">) => {
+    if (!selectedCultureId || !selectedCulture) return;
+    setSaving(true);
+    setFormError("");
+    try {
+      if (phases.length > 0) {
+        const { error: delErr } = await supabase
+          .from("culture_phases")
+          .delete()
+          .eq("culture_id", selectedCultureId);
+        if (delErr) throw new Error(delErr.message);
+      }
+      const rows = buildPhasesFromTemplate(kind, selectedCulture.cycle_days);
+      const payload = insertPayloadFromTimeline(selectedCultureId, rows);
+      const { error } = await supabase.from("culture_phases").insert(payload);
+      if (error) throw new Error(error.message);
+      await supabase.from("culture_history").insert({
+        culture_id: selectedCultureId,
+        change_type: "fase_add",
+        description: `Modelo ${kind === "soja" ? "soja" : "algodão"} aplicado (${rows.length} fases, ${rows.reduce((s, p) => s + p.duration_days, 0)} dias)`,
+      });
+      setTemplateTarget(null);
+      fetchPhases();
+    } catch (err) {
+      setFormError(err instanceof Error ? err.message : "Erro ao aplicar modelo");
+    }
+    setSaving(false);
+  };
+
+  const requestTemplate = (kind: Exclude<CultureKind, "outro">) => {
+    if (phases.length > 0) {
+      setTemplateTarget(kind);
+      return;
+    }
+    void applyTemplate(kind);
   };
 
   const handleDelete = async () => {
@@ -810,6 +899,7 @@ function PhasesTab({
       culture_id: selectedCultureId, change_type: "fase_del",
       description: `Fase "${deleteTarget.name}" removida`,
     });
+    await persistRebuiltTimeline(selectedCultureId);
     setDeleteTarget(null);
     setSaving(false);
     fetchPhases();
@@ -834,7 +924,15 @@ function PhasesTab({
           />
         </div>
         {selectedCultureId && (
-          <Button onClick={() => { setEditing(null); setModalOpen(true); setWarnings([]); }}>Nova fase</Button>
+          <>
+            <Button variant="secondary" type="button" onClick={() => requestTemplate("soja")}>
+              Aplicar modelo soja
+            </Button>
+            <Button variant="secondary" type="button" onClick={() => requestTemplate("algodao")}>
+              Aplicar modelo algodão
+            </Button>
+            <Button onClick={() => { setEditing(null); setModalOpen(true); setWarnings([]); }}>Nova fase</Button>
+          </>
         )}
       </div>
 
@@ -842,6 +940,12 @@ function PhasesTab({
         <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para gerenciar fases fenológicas.</p></Card>
       ) : (
         <>
+          <p className="mb-4 text-[11px] text-graphite-400 dark:text-gray-500">
+            A duração (dias) é a linha do tempo editável. O DAP de cada fase é calculado na sequência — não interpola Kc no motor ainda (Etapa E).
+          </p>
+          {formError && !modalOpen && (
+            <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>
+          )}
           {previewDay !== null && phases.length > 0 && (
             <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-white/[0.06] dark:bg-white/[0.03] sm:grid-cols-4">
               <div>
@@ -873,7 +977,10 @@ function PhasesTab({
             {loading ? (
               <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
             ) : phases.length === 0 ? (
-              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma fase cadastrada. Adicione fases para definir o perfil fenológico.</p>
+              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
+                Nenhuma fase cadastrada. Aplique o modelo soja ou algodão, ou adicione fases manualmente.
+                {suggestedKind !== "outro" && ` Esta cultura parece ${suggestedKind === "soja" ? "soja" : "algodão"}.`}
+              </p>
             ) : (
               <Table columns={columns} data={phases} getKey={(r) => r.id} />
             )}
@@ -885,9 +992,11 @@ function PhasesTab({
         <form onSubmit={handleSubmit} className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="phase_order" name="phase_order" label="Ordem" type="number" min="1" required defaultValue={editing?.phase_order ?? nextOrder} />
-            <Input id="name" name="name" label="Nome da fase" placeholder="Germinação" required defaultValue={editing?.name} />
-            <Input id="days_after_plant" name="days_after_plant" label="Dias após plantio (início)" type="number" min="0" required defaultValue={editing?.days_after_plant ?? nextDAP} />
+            <Input id="name" name="name" label="Nome da fase" placeholder="Emergência" required defaultValue={editing?.name} />
+            <Input id="phase_key" name="phase_key" label="Chave (opcional)" placeholder="emergencia" defaultValue={editing?.phase_key ?? ""} />
+            <Input id="days_after_plant" name="days_after_plant" label="DAP início (calculado)" type="number" min="0" readOnly defaultValue={editing?.days_after_plant ?? nextDAP} />
             <Input id="duration_days" name="duration_days" label="Duração (dias)" type="number" min="1" required defaultValue={editing?.duration_days} />
+            <Input id="kl" name="kl" label="KL (0–1)" type="number" step="0.01" min="0" max="1" defaultValue={editing?.kl ?? 1} />
           </div>
 
           <p className="text-sm font-medium text-graphite-900 dark:text-gray-200">Kc (interpolação linear)</p>
@@ -1041,6 +1150,15 @@ function PhasesTab({
         title="Excluir fase"
         message={`Excluir a fase "${deleteTarget?.name}"?`}
         confirmLabel="Excluir"
+        loading={saving}
+      />
+      <ConfirmDialog
+        open={!!templateTarget}
+        onClose={() => setTemplateTarget(null)}
+        onConfirm={() => { if (templateTarget) void applyTemplate(templateTarget); }}
+        title={templateTarget === "algodao" ? "Aplicar modelo algodão" : "Aplicar modelo soja"}
+        message="Isso substitui as fases atuais desta cultura. Parcelas com estádio manual perdem a referência (voltam ao automático pelo DAP). Continuar?"
+        confirmLabel="Substituir fases"
         loading={saving}
       />
     </>
