@@ -62,6 +62,8 @@ interface Culture {
   basal_temperature_c: number | null;
   by_phase: boolean | null;
   kc_constant: boolean | null;
+  // Sprint 14 · Etapa 5 — Kl como função selecionável
+  kl_function: string | null;
 }
 
 interface Variety {
@@ -97,6 +99,8 @@ interface PhaseRow {
   itn_pct: number | null;
   cycle_count: number | null;
   ends_cycle: boolean | null;
+  // Sprint 14 · Etapa 5 — coeficiente Ky para método FAO 33
+  ky: number | null;
 }
 
 interface AssignmentRow {
@@ -269,6 +273,7 @@ function CulturesTab({
       // Sprint 13 · Etapa 4 — manejo de irrigação
       kl: numOrNull("kl"),
       ks_function: (fd.get("ks_function") as string) || "linear",
+      kl_function: (fd.get("kl_function") as string) || "constant",
       optimal_temperature_c: numOrNull("optimal_temperature_c"),
       basal_temperature_c: numOrNull("basal_temperature_c"),
       by_phase: fd.get("by_phase") === "on",
@@ -352,10 +357,24 @@ function CulturesTab({
               Manejo de irrigação
             </legend>
             <div className="grid gap-4 sm:grid-cols-3">
+              <Select
+                id="kl_function"
+                name="kl_function"
+                label="Kl — Função (Sprint 14)"
+                options={[
+                  { value: "constant", label: "Constante (valor fixo)" },
+                  { value: "custom", label: "Personalizado" },
+                  { value: "fereres", label: "Fereres 1981 (área sombreada)" },
+                  { value: "keller_karmeli", label: "Keller-Karmeli 1975 (área molhada)" },
+                  { value: "freitas", label: "Freitas (Vermeiren-Jobling)" },
+                  { value: "bernardo", label: "Bernardo 2019 (conservador)" },
+                ]}
+                defaultValue={editing?.kl_function ?? "constant"}
+              />
               <Input
                 id="kl"
                 name="kl"
-                label="Kl — Coef. de localização (0-1)"
+                label="Kl — valor (usado se função = constant/custom)"
                 type="number"
                 step="0.01"
                 min="0"
@@ -369,8 +388,9 @@ function CulturesTab({
                 label="Ks — Função de estresse"
                 options={[
                   { value: "linear", label: "Linear (FAO-56 padrão)" },
-                  { value: "exponential", label: "Exponencial" },
-                  { value: "sigmoid", label: "Sigmoide" },
+                  { value: "fao33", label: "FAO 33 (Doorenbos-Kassam, usa Ky por fase)" },
+                  { value: "exponential", label: "Exponencial (castiga estresse mais rápido)" },
+                  { value: "sigmoid", label: "Sigmoide (transição suave)" },
                   { value: "none", label: "Nenhum (Ks fixo em 1)" },
                 ]}
                 defaultValue={editing?.ks_function ?? "linear"}
@@ -753,6 +773,8 @@ function PhasesTab({
       itn_pct: numOrNull("itn_pct") ?? 100,
       cycle_count: numOrNull("cycle_count") ?? 1,
       ends_cycle: fd.get("ends_cycle") === "on",
+      // Sprint 14 · Etapa 5 — Ky para FAO 33
+      ky: numOrNull("ky"),
     };
 
     try {
@@ -942,11 +964,23 @@ function PhasesTab({
                 options={[
                   { value: "", label: "Herda da cultura" },
                   { value: "linear", label: "Linear (FAO-56)" },
+                  { value: "fao33", label: "FAO 33 (Doorenbos-Kassam)" },
                   { value: "exponential", label: "Exponencial" },
                   { value: "sigmoid", label: "Sigmoide" },
                   { value: "none", label: "Nenhum (Ks = 1)" },
                 ]}
                 defaultValue={editing?.ks_function ?? ""}
+              />
+              <Input
+                id="ky"
+                name="ky"
+                label="Ky (só para FAO 33)"
+                type="number"
+                step="0.05"
+                min="0"
+                max="3"
+                placeholder="Ex.: milho floração 1.5"
+                defaultValue={editing?.ky ?? ""}
               />
               <Input
                 id="cycle_count"

@@ -193,10 +193,20 @@ export default function ProgramacaoPage() {
       if (!pcaData) return null;
       const pca = pcaData as CropAssignment;
 
+      // Sprint 14 · Etapa 7 — solo agora vem do pivô. Fallback para o
+      // soil_id legado da parcela quando o pivô não tem solo cadastrado.
+      const { data: pivotSoilRow } = await supabase
+        .from("pivots")
+        .select("soil_id")
+        .eq("id", pivot.id)
+        .single();
+      const effectiveSoilId =
+        (pivotSoilRow as { soil_id: string | null } | null)?.soil_id ?? pca.soil_id;
+
       const [{ data: cultureData }, { data: soilData }, { data: phasesData }] =
         await Promise.all([
           supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", pca.culture_id).single(),
-          supabase.from("soils").select("id, field_capacity, wilting_point, effective_depth").eq("id", pca.soil_id).single(),
+          supabase.from("soils").select("id, field_capacity, wilting_point, effective_depth").eq("id", effectiveSoilId).single(),
           supabase.from("culture_phases").select("*").eq("culture_id", pca.culture_id).order("phase_order"),
         ]);
 

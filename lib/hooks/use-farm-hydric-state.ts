@@ -49,15 +49,18 @@ export function useFarmHydricState(): FarmHydricState {
       .toISOString()
       .slice(0, 10);
 
-    // 1. pivôs da fazenda
+    // 1. pivôs da fazenda (Sprint 14 · Etapa 7 — inclui soil_id)
     const { data: pivotRows } = await supabase
       .from("pivots")
-      .select("id, name, area, flow_rate, efficiency, latitude, longitude")
+      .select("id, name, area, flow_rate, efficiency, latitude, longitude, soil_id")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name");
     const pivots = pivotRows ?? [];
     const pivotIds = pivots.map((p) => p.id as string);
+    const pivotSoilMap = new Map(
+      pivots.map((p) => [p.id as string, (p.soil_id as string | null) ?? null]),
+    );
 
     if (pivotIds.length === 0) {
       setStates([]);
@@ -84,7 +87,11 @@ export function useFarmHydricState(): FarmHydricState {
 
     const assignments = Array.from(assignmentByPivot.values());
     const cultureIds = Array.from(new Set(assignments.map((a) => a.culture_id as string)));
-    const soilIds = Array.from(new Set(assignments.map((a) => a.soil_id as string)));
+    // Sprint 14 · Etapa 7 — solo prioritariamente do pivô; fallback parcela.
+    const soilIds = Array.from(new Set([
+      ...Array.from(pivotSoilMap.values()).filter(Boolean) as string[],
+      ...assignments.map((a) => a.soil_id as string).filter(Boolean),
+    ]));
     const seasonIds = Array.from(new Set(assignments.map((a) => a.season_id as string).filter(Boolean)));
     const varietyIds = Array.from(new Set(assignments.map((a) => a.culture_variety_id as string).filter(Boolean)));
 
@@ -188,7 +195,11 @@ export function useFarmHydricState(): FarmHydricState {
     for (const pivot of pivots) {
       const assignment = assignmentByPivot.get(pivot.id as string);
       const culture = assignment ? cultureMap.get(assignment.culture_id as string) : null;
-      const soil = assignment ? soilMap.get(assignment.soil_id as string) : null;
+      // Sprint 14 · Etapa 7 — solo do pivô > fallback parcela
+      const effectiveSoilId =
+        pivotSoilMap.get(pivot.id as string) ??
+        (assignment ? (assignment.soil_id as string) : null);
+      const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) : null;
 
       if (!assignment || !culture || !soil) {
         // sem vínculo/cultura/solo → sem dados para cálculo (cinza)
