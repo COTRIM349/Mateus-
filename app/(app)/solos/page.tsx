@@ -22,13 +22,12 @@ import { createClient } from "@/lib/supabase/client";
 import {
   calculateCAD,
   calculateAFD,
-  calculateMaxStorage,
   validateSoil,
   validateLayers,
   calculateLayerCAD,
   calculateLayerAFD,
   calculateTotalCADFromLayers,
-  inferTextureFromGranulometry,
+  DEFAULT_CENTER_PIVOT_KL,
   type SoilValidation,
 } from "@/modules/soil/services";
 
@@ -66,6 +65,8 @@ interface SoilLayer {
   cad: number | null;
   afd: number | null;
   infiltration_rate: number | null;
+  kl: number | null;
+  observations: string | null;
 }
 
 interface SoilHistoryEntry {
@@ -78,13 +79,11 @@ interface SoilHistoryEntry {
   created_at: string;
 }
 
-interface PivotAssignment {
+interface FarmPivot {
   id: string;
-  pivot_id: string;
-  soil_id: string;
-  pivot_name?: string;
-  season_name?: string;
-  culture_name?: string;
+  name: string;
+  area: number;
+  soil_id: string | null;
 }
 
 const soloTabs = [
@@ -102,10 +101,10 @@ export default function SolosPage() {
   if (!activeFarmId) {
     return (
       <div className="space-y-8">
-        <PageHeader titulo="Solos" descricao="Motor de dados de solo para balanço hídrico" />
+        <PageHeader titulo="Solos" descricao="Perfil físico do pivô (Fazenda → Pivô → solo). CC e PMP em cm³/cm³; CAD/AFD em mm; KL adimensional." />
         <PrerequisiteNotice
           title="Cadastre uma fazenda primeiro"
-          description="Os perfis de solo pertencem a uma fazenda. Cadastre e selecione uma fazenda ativa para registrar os solos."
+          description="Os perfis de solo pertencem à fazenda e são associados a cada pivô. Cadastre e selecione uma fazenda ativa para registrar os solos."
           actionLabel="Ir para Fazendas"
           actionHref="/fazendas"
         />
@@ -115,7 +114,7 @@ export default function SolosPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader titulo="Solos" descricao="Motor de dados de solo para balanço hídrico" />
+      <PageHeader titulo="Solos" descricao="Perfil físico do pivô (Fazenda → Pivô → solo). CC e PMP em cm³/cm³; CAD/AFD em mm; KL adimensional." />
       <Tabs tabs={soloTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
         {activeTab === "cadastro" && (
@@ -174,8 +173,8 @@ function SoilsTab({
     },
     { header: "Nome", render: (r) => <span className="font-medium">{r.name}</span> },
     { header: "Textura", render: (r) => textureLabels[r.texture] ?? r.texture },
-    { header: "CC", render: (r) => r.field_capacity.toFixed(3), align: "right" },
-    { header: "PMP", render: (r) => r.wilting_point.toFixed(3), align: "right" },
+    { header: "CC (cm³/cm³)", render: (r) => r.field_capacity.toFixed(3), align: "right" },
+    { header: "PMP (cm³/cm³)", render: (r) => r.wilting_point.toFixed(3), align: "right" },
     {
       header: "CAD (mm)",
       render: (r) => {
@@ -337,7 +336,7 @@ function SoilsTab({
         {loading ? (
           <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeSoils.length === 0 ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum solo cadastrado para esta fazenda.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhum perfil cadastrado. Crie o perfil da fazenda e associe-o ao pivô na aba Associação.</p>
         ) : (
           <Table columns={columns} data={activeSoils} getKey={(r) => r.id} />
         )}
@@ -462,11 +461,16 @@ function LayersTab({
   );
 
   const columns: Column<SoilLayer>[] = [
-    { header: "Camada", render: (r) => <span className="font-medium">{r.depth_start}–{r.depth_end} cm</span> },
+    { header: "Camada (cm)", render: (r) => <span className="font-medium">{r.depth_start}–{r.depth_end}</span> },
     { header: "Textura", render: (r) => textureLabels[r.texture] ?? r.texture },
-    { header: "Dens.", render: (r) => r.bulk_density.toFixed(2), align: "right" },
-    { header: "CC", render: (r) => r.field_capacity.toFixed(3), align: "right" },
-    { header: "PMP", render: (r) => r.wilting_point.toFixed(3), align: "right" },
+    { header: "Da (g/cm³)", render: (r) => r.bulk_density.toFixed(2), align: "right" },
+    { header: "CC (cm³/cm³)", render: (r) => r.field_capacity.toFixed(3), align: "right" },
+    { header: "PMP (cm³/cm³)", render: (r) => r.wilting_point.toFixed(3), align: "right" },
+    {
+      header: "KL",
+      render: (r) => (r.kl == null ? `${DEFAULT_CENTER_PIVOT_KL.toFixed(2)}*` : r.kl.toFixed(2)),
+      align: "right",
+    },
     {
       header: "CAD (mm)",
       render: (r) => {
@@ -525,6 +529,13 @@ function LayersTab({
 
     const cad = calculateLayerCAD(newLayer);
     const afd = calculateLayerAFD(newLayer);
+    const klRaw = String(fd.get("kl") ?? "").trim();
+    const kl = klRaw === "" ? null : Number(klRaw);
+    if (kl != null && (Number.isNaN(kl) || kl < 0 || kl > 1)) {
+      setFormError("KL deve estar entre 0 e 1. Em pivô central com molhamento total use 1 (ou deixe em branco).");
+      setSaving(false);
+      return;
+    }
 
     const payload = {
       soil_id: selectedSoilId,
@@ -537,6 +548,8 @@ function LayersTab({
       cad,
       afd,
       infiltration_rate: fd.get("infiltration_rate") ? Number(fd.get("infiltration_rate")) : null,
+      kl,
+      observations: (fd.get("observations") as string) || null,
     };
 
     try {
@@ -593,7 +606,7 @@ function LayersTab({
           <Select
             id="soil_select_layers"
             name="soil_select_layers"
-            label="Solo"
+            label="Perfil de solo"
             options={soils.map((s) => ({ value: s.id, label: s.name }))}
             value={selectedSoilId ?? ""}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectSoil(e.target.value || null)}
@@ -615,8 +628,9 @@ function LayersTab({
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">{selectedSoil?.name}</p>
               </div>
               <div>
-                <p className="text-xs text-graphite-400 dark:text-gray-500">CAD total (camadas)</p>
+                <p className="text-xs text-graphite-400 dark:text-gray-500">CAD total das camadas (mm)</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">{totalCAD.toFixed(1)} mm</p>
+                <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">Volumétrica: (CC−PMP)×espessura. O motor recorta pela profundidade da raiz.</p>
               </div>
               <div>
                 <p className="text-xs text-graphite-400 dark:text-gray-500">Camadas</p>
@@ -629,9 +643,12 @@ function LayersTab({
             {loading ? (
               <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
             ) : layers.length === 0 ? (
-              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma camada cadastrada. Adicione camadas para detalhar o perfil do solo.</p>
+              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma camada cadastrada. Adicione faixas (ex.: 0–20, 20–40, 40–60 cm) com CC, PMP, densidade e KL.</p>
             ) : (
-              <Table columns={columns} data={layers} getKey={(r) => r.id} />
+              <>
+                <Table columns={columns} data={layers} getKey={(r) => r.id} />
+                <p className="mt-3 text-[11px] text-graphite-400 dark:text-gray-500">* KL em branco assume 1 (pivô central com molhamento total).</p>
+              </>
             )}
           </Card>
         </>
@@ -643,11 +660,16 @@ function LayersTab({
             <Input id="depth_start" name="depth_start" label="Início (cm)" type="number" min="0" required defaultValue={editing?.depth_start ?? (layers.length > 0 ? layers[layers.length - 1].depth_end : 0)} />
             <Input id="depth_end" name="depth_end" label="Fim (cm)" type="number" min="1" required defaultValue={editing?.depth_end ?? (layers.length > 0 ? layers[layers.length - 1].depth_end + 20 : 20)} />
             <Select id="texture" name="texture" label="Textura" options={[...SOIL_TEXTURES]} required defaultValue={editing?.texture ?? selectedSoil?.texture ?? "franco"} />
-            <Input id="bulk_density" name="bulk_density" label="Densidade (g/cm³)" type="number" step="0.01" required defaultValue={editing?.bulk_density ?? selectedSoil?.bulk_density} />
-            <Input id="field_capacity" name="field_capacity" label="CC (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.field_capacity ?? selectedSoil?.field_capacity} placeholder="0.380" />
-            <Input id="wilting_point" name="wilting_point" label="PMP (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.wilting_point ?? selectedSoil?.wilting_point} placeholder="0.180" />
+            <Input id="bulk_density" name="bulk_density" label="Densidade aparente (g/cm³)" type="number" step="0.01" required defaultValue={editing?.bulk_density ?? selectedSoil?.bulk_density} />
+            <Input id="field_capacity" name="field_capacity" label="CC volumétrica (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.field_capacity ?? selectedSoil?.field_capacity} placeholder="0.380" />
+            <Input id="wilting_point" name="wilting_point" label="PMP volumétrico (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.wilting_point ?? selectedSoil?.wilting_point} placeholder="0.180" />
             <Input id="infiltration_rate" name="infiltration_rate" label="Infiltração (mm/h)" type="number" step="0.1" defaultValue={editing?.infiltration_rate ?? ""} />
+            <Input id="kl" name="kl" label="KL (0–1, vazio = 1)" type="number" step="0.01" min="0" max="1" defaultValue={editing?.kl ?? ""} placeholder="1.00" />
           </div>
+          <TextArea id="observations" name="observations" label="Observações da camada" defaultValue={editing?.observations ?? ""} placeholder="Textura local, restrição de raiz, pedregosidade..." />
+          <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+            CC e PMP são volumétricos (cm³/cm³). Se o laboratório informou % em massa, converta θv = θg × Da antes de cadastrar. KL = 1 em pivô central com molhamento total; não aplicar outro valor às cegas.
+          </p>
           {layerWarnings.length > 0 && (
             <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3.5 dark:border-yellow-900/50 dark:bg-yellow-900/20">
               {layerWarnings.map((w, i) => (
@@ -689,61 +711,100 @@ function AssociationTab({
   const supabase = createClient();
 
   const [soils, setSoils] = useState<Soil[]>([]);
-  const [assignments, setAssignments] = useState<PivotAssignment[]>([]);
+  const [pivots, setPivots] = useState<FarmPivot[]>([]);
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState("");
+  const [pivotToBind, setPivotToBind] = useState("");
 
-  useEffect(() => {
+  const loadFarm = useCallback(async () => {
     if (!activeFarmId) return;
-    supabase
-      .from("soils")
-      .select("*")
-      .eq("farm_id", activeFarmId)
-      .eq("active", true)
-      .order("name")
-      .then(({ data }) => { if (data) setSoils(data as Soil[]); });
+    setLoading(true);
+    const [soilsRes, pivotsRes] = await Promise.all([
+      supabase.from("soils").select("*").eq("farm_id", activeFarmId).eq("active", true).order("name"),
+      supabase.from("pivots").select("id, name, area, soil_id").eq("farm_id", activeFarmId).eq("active", true).order("name"),
+    ]);
+    if (soilsRes.data) setSoils(soilsRes.data as Soil[]);
+    if (pivotsRes.data) setPivots(pivotsRes.data as FarmPivot[]);
+    setLoading(false);
   }, [activeFarmId, supabase]);
 
-  const fetchAssignments = useCallback(async () => {
-    if (!selectedSoilId) { setAssignments([]); return; }
-    setLoading(true);
-    // Sprint 13 · Etapa 6 — só parcelas ativas neste solo.
-    const { data } = await supabase
-      .from("pivot_crop_assignments")
-      .select("id, pivot_id, soil_id, pivots(name), seasons(name), cultures(name)")
-      .eq("soil_id", selectedSoilId)
-      .eq("active", true)
-      .or("status.is.null,status.eq.ativa");
-    if (data) {
-      setAssignments(
-        data.map((d) => ({
-          id: d.id,
-          pivot_id: d.pivot_id,
-          soil_id: d.soil_id,
-          pivot_name: (d.pivots as unknown as { name: string })?.name ?? "—",
-          season_name: (d.seasons as unknown as { name: string })?.name ?? "—",
-          culture_name: (d.cultures as unknown as { name: string })?.name ?? "—",
-        }))
-      );
+  useEffect(() => { loadFarm(); }, [loadFarm]);
+
+  const bound = pivots.filter((p) => p.soil_id === selectedSoilId);
+  const unbound = pivots.filter((p) => p.soil_id !== selectedSoilId);
+  const selectedSoil = soils.find((s) => s.id === selectedSoilId);
+
+  const logAssociation = async (pivot: FarmPivot, action: "vincular" | "desvincular") => {
+    if (!selectedSoilId) return;
+    await supabase.from("soil_history").insert({
+      soil_id: selectedSoilId,
+      change_type: "associacao",
+      description:
+        action === "vincular"
+          ? `Pivô "${pivot.name}" vinculado a este perfil`
+          : `Pivô "${pivot.name}" desvinculado deste perfil`,
+      new_values: { pivot_id: pivot.id, soil_id: action === "vincular" ? selectedSoilId : null },
+    });
+  };
+
+  const handleBind = async () => {
+    if (!selectedSoilId || !pivotToBind) return;
+    const pivot = pivots.find((p) => p.id === pivotToBind);
+    if (!pivot) return;
+    setSaving(true);
+    setFormError("");
+    const { error } = await supabase.from("pivots").update({ soil_id: selectedSoilId }).eq("id", pivot.id);
+    if (error) {
+      setFormError(error.message);
+      setSaving(false);
+      return;
     }
-    setLoading(false);
-  }, [selectedSoilId, supabase]);
+    await logAssociation(pivot, "vincular");
+    setPivotToBind("");
+    setSaving(false);
+    loadFarm();
+  };
 
-  useEffect(() => { fetchAssignments(); }, [fetchAssignments]);
+  const handleUnbind = async (pivot: FarmPivot) => {
+    setSaving(true);
+    setFormError("");
+    const { error } = await supabase.from("pivots").update({ soil_id: null }).eq("id", pivot.id);
+    if (error) {
+      setFormError(error.message);
+      setSaving(false);
+      return;
+    }
+    await logAssociation(pivot, "desvincular");
+    setSaving(false);
+    loadFarm();
+  };
 
-  const columns: Column<PivotAssignment>[] = [
-    { header: "Pivô", render: (r) => <span className="font-medium">{r.pivot_name}</span> },
-    { header: "Safra", render: (r) => r.season_name },
-    { header: "Cultura", render: (r) => r.culture_name },
+  const columns: Column<FarmPivot>[] = [
+    { header: "Pivô", render: (r) => <span className="font-medium">{r.name}</span> },
+    { header: "Área (ha)", render: (r) => r.area.toFixed(1), align: "right" },
+    {
+      header: "Ações",
+      align: "right",
+      render: (r) => (
+        <Button variant="ghost" size="sm" disabled={saving} onClick={() => handleUnbind(r)}>
+          Desvincular
+        </Button>
+      ),
+    },
   ];
 
   return (
     <>
+      <p className="mb-4 text-sm text-graphite-500 dark:text-gray-400">
+        O perfil de solo pertence ao pivô, não à parcela. Hierarquia: Fazenda → Pivô → solo.
+      </p>
       <div className="mb-4 flex flex-wrap items-end gap-4">
         <div className="min-w-[220px]">
           <Select
             id="soil_select_assoc"
             name="soil_select_assoc"
-            label="Solo"
+            label="Perfil de solo"
             options={soils.map((s) => ({ value: s.id, label: s.name }))}
             value={selectedSoilId ?? ""}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectSoil(e.target.value || null)}
@@ -752,20 +813,49 @@ function AssociationTab({
       </div>
 
       {!selectedSoilId ? (
-        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione um solo para ver seus vínculos com pivôs.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione um perfil para vincular aos pivôs da fazenda.</p></Card>
       ) : (
-        <Card>
-          {loading ? (
-            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-          ) : assignments.length === 0 ? (
-            <div className="py-8 text-center">
-              <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô vinculado a este solo.</p>
-              <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">A associação solo ↔ pivô é feita via Vínculo Pivô-Cultura-Solo (pivot_crop_assignments).</p>
-            </div>
-          ) : (
-            <Table columns={columns} data={assignments} getKey={(r) => r.id} />
+        <div className="space-y-4">
+          {unbound.length > 0 && (
+            <Card>
+              <div className="flex flex-wrap items-end gap-3">
+                <div className="min-w-[240px] flex-1">
+                  <Select
+                    id="pivot_to_bind"
+                    name="pivot_to_bind"
+                    label={`Vincular pivô a “${selectedSoil?.name ?? "perfil"}”`}
+                    options={[
+                      { value: "", label: "Selecione o pivô" },
+                      ...unbound.map((p) => ({
+                        value: p.id,
+                        label: p.soil_id ? `${p.name} (outro perfil)` : p.name,
+                      })),
+                    ]}
+                    value={pivotToBind}
+                    onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setPivotToBind(e.target.value)}
+                  />
+                </div>
+                <Button type="button" disabled={!pivotToBind || saving} onClick={handleBind}>
+                  {saving ? "Salvando..." : "Vincular ao perfil"}
+                </Button>
+              </div>
+              {formError && <p role="alert" className="mt-3 text-sm text-red-600 dark:text-red-400">{formError}</p>}
+            </Card>
           )}
-        </Card>
+
+          <Card>
+            {loading ? (
+              <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+            ) : bound.length === 0 ? (
+              <div className="py-8 text-center">
+                <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô usa este perfil.</p>
+                <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">Vincule um pivô acima. A parcela não escolhe solo.</p>
+              </div>
+            ) : (
+              <Table columns={columns} data={bound} getKey={(r) => r.id} />
+            )}
+          </Card>
+        </div>
       )}
     </>
   );
@@ -854,7 +944,7 @@ function HistoryTab({
           <Select
             id="soil_select_hist"
             name="soil_select_hist"
-            label="Solo"
+            label="Perfil de solo"
             options={soils.map((s) => ({ value: s.id, label: s.name }))}
             value={selectedSoilId ?? ""}
             onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectSoil(e.target.value || null)}

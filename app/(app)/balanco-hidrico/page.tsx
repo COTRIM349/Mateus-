@@ -24,6 +24,7 @@ import {
   type HydricStatus,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
+import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
 import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
 
@@ -176,6 +177,7 @@ export default function BalancoHidricoPage() {
   const [assignment, setAssignment] = useState<CropAssignment | null>(null);
   const [culture, setCulture] = useState<Culture | null>(null);
   const [soil, setSoil] = useState<Soil | null>(null);
+  const [soilLayers, setSoilLayers] = useState<SoilProfileLayer[]>([]);
   const [phases, setPhases] = useState<CulturePhase[]>([]);
   const [balanceRows, setBalanceRows] = useState<DailyBalanceRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -228,6 +230,7 @@ export default function BalancoHidricoPage() {
       setAssignment(null);
       setCulture(null);
       setSoil(null);
+      setSoilLayers([]);
       setPhases([]);
       return;
     }
@@ -247,6 +250,7 @@ export default function BalancoHidricoPage() {
         setAssignment(null);
         setCulture(null);
         setSoil(null);
+        setSoilLayers([]);
         setPhases([]);
         return;
       }
@@ -263,14 +267,22 @@ export default function BalancoHidricoPage() {
       const effectiveSoilId =
         (pivotSoil as { soil_id: string | null } | null)?.soil_id ?? a.soil_id;
 
-      const [{ data: cultureData }, { data: soilData }, { data: phaseData }] = await Promise.all([
+      const [{ data: cultureData }, { data: soilData }, { data: phaseData }, { data: layerData }] = await Promise.all([
         supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", a.culture_id).single(),
         supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", effectiveSoilId).single(),
         supabase.from("culture_phases").select("*").eq("culture_id", a.culture_id).order("phase_order"),
+        effectiveSoilId
+          ? supabase
+              .from("soil_layers")
+              .select("depth_start, depth_end, field_capacity, wilting_point, bulk_density, kl")
+              .eq("soil_id", effectiveSoilId)
+              .order("depth_start")
+          : Promise.resolve({ data: [] }),
       ]);
 
       setCulture(cultureData as Culture | null);
       setSoil(soilData as Soil | null);
+      setSoilLayers(mapDbLayersToProfile(layerData ?? []));
       setPhases((phaseData ?? []) as CulturePhase[]);
 
       if (a.planting_date) {
@@ -400,6 +412,7 @@ export default function BalancoHidricoPage() {
           wilting_point: soil.wilting_point,
           bulk_density: soil.bulk_density,
           effective_depth: soil.effective_depth,
+          layers: soilLayers,
         },
         pivot: { efficiency: pivot.efficiency, area: pivot.area, flow_rate: pivot.flow_rate },
         weatherByDate: engineWeatherByDate,
@@ -480,7 +493,7 @@ export default function BalancoHidricoPage() {
     } finally {
       setCalculating(false);
     }
-  }, [assignment, culture, soil, phases, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
+  }, [assignment, culture, soil, soilLayers, phases, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
 
   // Load existing balance from DB when pivot/dates change
   const loadExistingBalance = useCallback(async () => {

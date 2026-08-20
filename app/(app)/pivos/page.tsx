@@ -643,7 +643,8 @@ function TabGeral({
           </a>
         </div>
         <p className="mt-2 text-xs text-graphite-500 dark:text-gray-400">
-          Novas parcelas neste pivô herdam este solo. Camadas (CC/PMP/KL) são detalhadas no cadastro de solos.
+          O solo é o perfil físico deste equipamento (Fazenda → Pivô → solo). Cadastre camadas
+          (profundidade, textura, CC, PMP, densidade e KL) em Solos. A parcela não define o solo.
         </p>
       </fieldset>
 

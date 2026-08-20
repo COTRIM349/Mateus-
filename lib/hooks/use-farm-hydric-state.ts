@@ -11,6 +11,7 @@ import {
   type EngineWeatherDay,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
+import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -96,10 +97,17 @@ export function useFarmHydricState(): FarmHydricState {
     const varietyIds = Array.from(new Set(assignments.map((a) => a.culture_variety_id as string).filter(Boolean)));
 
     // 3. cultura, fases, solo, safra, cultivar, clima, irrigação
-    const [culturesRes, phasesRes, soilsRes, seasonsRes, varietiesRes, stationsRes] = await Promise.all([
+    const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes] = await Promise.all([
       cultureIds.length ? supabase.from("cultures").select("id, name, root_depth, depletion_factor").in("id", cultureIds) : Promise.resolve({ data: [] }),
       cultureIds.length ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order") : Promise.resolve({ data: [] }),
       soilIds.length ? supabase.from("soils").select("id, field_capacity, wilting_point, bulk_density, effective_depth").in("id", soilIds) : Promise.resolve({ data: [] }),
+      soilIds.length
+        ? supabase
+            .from("soil_layers")
+            .select("soil_id, depth_start, depth_end, field_capacity, wilting_point, bulk_density, kl")
+            .in("soil_id", soilIds)
+            .order("depth_start")
+        : Promise.resolve({ data: [] }),
       seasonIds.length ? supabase.from("seasons").select("id, name").in("id", seasonIds) : Promise.resolve({ data: [] }),
       varietyIds.length ? supabase.from("culture_varieties").select("id, name").in("id", varietyIds) : Promise.resolve({ data: [] }),
       supabase.from("weather_stations").select("id").eq("farm_id", activeFarmId).eq("active", true),
@@ -109,6 +117,20 @@ export function useFarmHydricState(): FarmHydricState {
     const soilMap = new Map((soilsRes.data ?? []).map((s: Record<string, unknown>) => [s.id as string, s]));
     const seasonMap = new Map((seasonsRes.data ?? []).map((s: Record<string, unknown>) => [s.id as string, s.name as string]));
     const varietyMap = new Map((varietiesRes.data ?? []).map((v: Record<string, unknown>) => [v.id as string, v.name as string]));
+    const layersBySoil = new Map<string, SoilProfileLayer[]>();
+    for (const row of (layersRes.data ?? []) as Array<{
+      soil_id: string;
+      depth_start: number;
+      depth_end: number;
+      field_capacity: number;
+      wilting_point: number;
+      bulk_density: number | null;
+      kl: number | null;
+    }>) {
+      const existing = layersBySoil.get(row.soil_id) ?? [];
+      existing.push(...mapDbLayersToProfile([row]));
+      layersBySoil.set(row.soil_id, existing);
+    }
 
     const phasesByCulture = new Map<string, CulturePhase[]>();
     for (const p of (phasesRes.data ?? []) as CulturePhase[] & { culture_id: string }[]) {
@@ -250,6 +272,7 @@ export function useFarmHydricState(): FarmHydricState {
             wilting_point: soil.wilting_point as number,
             bulk_density: soil.bulk_density as number,
             effective_depth: (soil.effective_depth as number) ?? 0.6,
+            layers: layersBySoil.get(effectiveSoilId) ?? [],
           },
           pivot: {
             efficiency: (pivot.efficiency as number) ?? 0.85,

@@ -15,6 +15,11 @@ import {
   computeRootDepth,
   resolveDepletionFactor,
 } from "@/modules/assignment/services";
+import {
+  calculateADTFromLayers,
+  soilProfileIsUsable,
+  type SoilProfileLayer,
+} from "@/modules/soil/services";
 
 // ── Status hídrico (3 níveis + sem dados) ────────────────────────────────
 
@@ -92,6 +97,8 @@ export interface EngineSoil {
   wilting_point: number;
   bulk_density: number;
   effective_depth: number;
+  /** Camadas do perfil do pivô (cm, CC/PMP volumétricos). Se presentes, ADT recorta em Z. */
+  layers?: SoilProfileLayer[];
 }
 
 export interface EnginePivot {
@@ -222,7 +229,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     custom && assignment.irrigation_efficiency != null ? assignment.irrigation_efficiency : pivot.efficiency;
 
   // solo válido (base volumétrica; densidade não é exigida para o cálculo)
-  const hasSoil = soil.field_capacity > soil.wilting_point && soil.effective_depth > 0;
+  const hasSoil = soilProfileIsUsable(soil, soil.layers);
   // clima válido: ao menos uma leitura de ET0 > 0 no período (senão não há cálculo)
   const hasWeather = Object.values(weatherByDate).some((w) => w.et0 > 0);
   const dataOk = hasSoil && hasWeather;
@@ -248,7 +255,9 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const pFactor = resolveDepletionFactor(assignment, phaseId?.phase.depletion_factor, culture.depletion_factor);
 
     const adt = hasSoil
-      ? calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth)
+      ? soil.layers && soil.layers.length > 0
+        ? calculateADTFromLayers(soil.layers, rootDepth)
+        : calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth)
       : 0;
     const afd = calculateAFD(adt, pFactor);
 
