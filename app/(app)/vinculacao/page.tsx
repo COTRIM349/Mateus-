@@ -138,7 +138,8 @@ const EMPTY_FORM: FormState = {
 // ── Page ───────────────────────────────────────────────────────────────────
 
 export default function VinculacaoPage() {
-  const { activeFarmId } = useAuth();
+  const { activeFarmId, farms } = useAuth();
+  const activeFarm = useMemo(() => farms?.find((f) => f.id === activeFarmId) ?? null, [farms, activeFarmId]);
   const supabase = createClient();
 
   const { data: assignments, loading, create, update, softDelete } = useCrud<Assignment>({
@@ -700,36 +701,65 @@ export default function VinculacaoPage() {
                 </legend>
                 {(() => {
                   const p = pivots.find((x) => x.id === form.pivot_id);
+                  const tipoLabel = p?.pivot_type
+                    ? p.pivot_type === "central" ? "Pivô Central"
+                      : p.pivot_type === "linear" ? "Linear"
+                      : p.pivot_type === "rebocavel" ? "Rebocável"
+                      : p.pivot_type
+                    : null;
                   return (
                     <div className="space-y-4">
+                      <ReadOnlyField
+                        label="Tipo do equipamento"
+                        value={tipoLabel}
+                        hint="Vem do cadastro do pivô"
+                      />
                       <Select
-                        id="pivot_id" label="Pivô" required
+                        id="pivot_id" label="Equipamento" required
                         value={form.pivot_id}
                         onChange={(e) => handlePivotChange(e.target.value)}
-                        options={pivots.map((pv) => ({ value: pv.id, label: pv.name }))}
+                        options={[{ value: "", label: "— selecione —" }, ...pivots.map((pv) => ({ value: pv.id, label: pv.name }))]}
                       />
-                      <div className="grid gap-3 sm:grid-cols-2">
-                        <ReadOnlyField
-                          label="Tipo do equipamento"
-                          value={p?.pivot_type
-                            ? p.pivot_type === "central" ? "Pivô Central"
-                              : p.pivot_type === "linear" ? "Linear"
-                              : p.pivot_type === "rebocavel" ? "Rebocável"
-                              : p.pivot_type
-                            : null}
-                        />
+                      <ReadOnlyField
+                        label="Setor"
+                        value={null}
+                        hint="Reservado — para pivôs setorizados (futuro)"
+                      />
+                      <ReadOnlyField
+                        label="Espaçamento entre emissores (m)"
+                        value={null}
+                        hint="Aplicável a irrigação localizada. Editar no cadastro do pivô."
+                      />
+                      <div>
+                        <label className="mb-1.5 block text-xs font-semibold text-graphite-600 dark:text-gray-400">
+                          Espaçamento entre linhas laterais (m)
+                        </label>
+                        <div className="flex items-center gap-2">
+                          <ReadOnlyField label="" value={null} />
+                          <span className="text-graphite-400">×</span>
+                          <ReadOnlyField label="" value={null} />
+                        </div>
+                        <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
+                          Aplicável a irrigação localizada. Editar no cadastro do pivô.
+                        </p>
+                      </div>
+                      <ReadOnlyField
+                        label="Porcentagem de área molhada (%)"
+                        value={null}
+                        hint="Vem do cadastro do pivô. Pivô central = 100%."
+                      />
+                      <div className="grid gap-3 sm:grid-cols-2 border-t border-gray-100 pt-3 dark:border-white/[0.06]">
                         <ReadOnlyField
                           label="Vazão nominal"
                           value={p?.flow_rate != null ? `${p.flow_rate.toLocaleString("pt-BR")} m³/h` : null}
                         />
+                        <ReadOnlyField
+                          label="Área do pivô"
+                          value={p?.area != null ? `${p.area.toLocaleString("pt-BR")} ha` : null}
+                        />
                       </div>
-                      <ReadOnlyField
-                        label="Área total do pivô"
-                        value={p?.area != null ? `${p.area.toLocaleString("pt-BR")} ha` : null}
-                        hint="Área plantada pode ser menor (informe acima)"
-                      />
                       <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-                        Dados técnicos completos: <a href="/pivos" className="text-brand-600 hover:underline dark:text-brand-400">Cadastros → Pivôs</a>
+                        Dados técnicos completos em <a href="/pivos" className="text-brand-600 hover:underline dark:text-brand-400">Cadastros → Pivôs</a>
                       </p>
                     </div>
                   );
