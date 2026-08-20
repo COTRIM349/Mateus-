@@ -272,7 +272,7 @@ export function useFarmHydricState(): FarmHydricState {
             wilting_point: soil.wilting_point as number,
             bulk_density: soil.bulk_density as number,
             effective_depth: (soil.effective_depth as number) ?? 0.6,
-            layers: layersBySoil.get(effectiveSoilId) ?? [],
+            layers: effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
           },
           pivot: {
             efficiency: (pivot.efficiency as number) ?? 0.85,
