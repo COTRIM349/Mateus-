@@ -4,6 +4,7 @@ export * from "./cost";
 export * from "./culture";
 export * from "./energy";
 export * from "./farm";
+export * from "./parcel";
 export * from "./pivot";
 export * from "./reservoir";
 export * from "./season";
