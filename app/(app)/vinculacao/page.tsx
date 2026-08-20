@@ -154,6 +154,8 @@ export default function VinculacaoPage() {
   const [soils, setSoils] = useState<SoilLite[]>([]);
   const [varieties, setVarieties] = useState<VarietyLite[]>([]);
   const [lookupsLoading, setLookupsLoading] = useState(true);
+  // Sprint 15 · flag para avisar que a migration 00029 ainda não foi aplicada
+  const [migrationMissing, setMigrationMissing] = useState(false);
 
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Assignment | null>(null);
@@ -187,14 +189,41 @@ export default function VinculacaoPage() {
     }
     setLookupsLoading(true);
     (async () => {
-      const [pv, ss, cu, so, va] = await Promise.all([
-        supabase.from("pivots").select("id, name, efficiency, soil_id, pivot_type, flow_rate, area").eq("farm_id", activeFarmId).eq("active", true).order("name"),
+      // Sprint 15 · Defensivo — se migration 00029 não foi aplicada, a coluna
+      // pivots.soil_id (e/ou outras do 00013/00025) não existe e a query falha.
+      // Tenta primeiro a versão enriquecida; se falhar, cai pra select mínimo
+      // e marca migrationMissing para a UI exibir mensagem específica.
+      let pivotList: PivotLite[] = [];
+      const enriched = await supabase
+        .from("pivots")
+        .select("id, name, efficiency, soil_id, pivot_type, flow_rate, area")
+        .eq("farm_id", activeFarmId).eq("active", true).order("name");
+
+      if (enriched.error) {
+        console.warn("[Parcelas] Enriched pivots query failed, using fallback:", enriched.error);
+        setMigrationMissing(true);
+        const fallback = await supabase
+          .from("pivots")
+          .select("id, name, efficiency")
+          .eq("farm_id", activeFarmId).eq("active", true).order("name");
+        pivotList = (fallback.data ?? []).map((p) => ({
+          id: p.id as string,
+          name: p.name as string,
+          efficiency: (p.efficiency as number) ?? 1,
+          soil_id: null, pivot_type: null, flow_rate: null, area: null,
+        }));
+      } else {
+        setMigrationMissing(false);
+        pivotList = (enriched.data ?? []) as PivotLite[];
+      }
+
+      const [ss, cu, so, va] = await Promise.all([
         supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("start_date", { ascending: false }),
         supabase.from("cultures").select("id, name, root_depth, depletion_factor").eq("active", true).order("name"),
         supabase.from("soils").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
         supabase.from("culture_varieties").select("id, culture_id, name").eq("active", true).order("name"),
       ]);
-      setPivots((pv.data ?? []) as PivotLite[]);
+      setPivots(pivotList);
       setSeasons((ss.data ?? []) as SeasonLite[]);
       setCultures((cu.data ?? []) as CultureLite[]);
       setSoils((so.data ?? []) as SoilLite[]);
@@ -570,6 +599,7 @@ export default function VinculacaoPage() {
     return (
       <div className="space-y-8">
         <PageHeader titulo="Parcelas" descricao="Cadastro operacional de parcelas (pivô + cultura + solo). Encerre ao colher para gerar histórico da safra." />
+        {migrationMissing && <MigrationMissingBanner />}
         <PrerequisiteNotice {...prerequisite} />
       </div>
     );
@@ -577,7 +607,8 @@ export default function VinculacaoPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader titulo="Vinculação Operacional" descricao="Vincule pivô, safra, cultura e solo para habilitar o balanço hídrico" />
+      <PageHeader titulo="Parcelas" descricao="Cadastro operacional de parcelas (pivô + cultura + solo). Encerre ao colher para gerar histórico da safra." />
+      {migrationMissing && <MigrationMissingBanner />}
 
       {/* Tabs Ativas / Histórico */}
       <div className="flex gap-2 border-b border-gray-100 dark:border-white/[0.06]">
@@ -1162,6 +1193,31 @@ export default function VinculacaoPage() {
 }
 
 // ── ReadOnlyField — display de valor herdado (Sprint 15) ─────────────────
+
+function MigrationMissingBanner() {
+  return (
+    <div className="rounded-xl border border-amber-300 bg-amber-50 p-4 dark:border-amber-700/50 dark:bg-amber-900/20">
+      <div className="flex items-start gap-3">
+        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M12 9v4M12 17h.01M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+          </svg>
+        </div>
+        <div className="flex-1">
+          <p className="text-sm font-bold text-amber-800 dark:text-amber-300">
+            Migration do Sprint 14 ainda não foi aplicada no banco
+          </p>
+          <p className="mt-1 text-xs text-amber-700 dark:text-amber-400/90">
+            A tabela <code className="rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">pivots</code> não tem a coluna <code className="rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">soil_id</code> esperada. A tela funciona no modo defensivo (solo herdado do pivô fica indisponível), mas <b>alguns fluxos podem ficar quebrados</b>.
+          </p>
+          <p className="mt-2 text-xs text-amber-700 dark:text-amber-400/90">
+            <b>Como corrigir:</b> aplique <code className="rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">sprint14-etapa1-consolidado.sql</code> no SQL Editor do Supabase (00029 + 00030 + 00031). Depois rode <code className="rounded bg-amber-100 px-1 py-0.5 dark:bg-amber-900/40">NOTIFY pgrst, &apos;reload schema&apos;;</code>.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function ReadOnlyField({
   label, value, hint,

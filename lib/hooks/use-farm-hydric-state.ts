@@ -49,14 +49,28 @@ export function useFarmHydricState(): FarmHydricState {
       .toISOString()
       .slice(0, 10);
 
-    // 1. pivôs da fazenda (Sprint 14 · Etapa 7 — inclui soil_id)
-    const { data: pivotRows } = await supabase
+    // 1. pivôs da fazenda (Sprint 14 · Etapa 7 — inclui soil_id se disponível)
+    // Sprint 15 · defensivo: se a coluna soil_id não existe (migration 00029
+    // não aplicada), cai pra select sem soil_id em vez de quebrar toda a tela.
+    let pivots: Record<string, unknown>[] = [];
+    const enriched = await supabase
       .from("pivots")
       .select("id, name, area, flow_rate, efficiency, latitude, longitude, soil_id")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name");
-    const pivots = pivotRows ?? [];
+    if (enriched.error) {
+      console.warn("[FarmHydricState] pivots.soil_id ausente, usando fallback:", enriched.error);
+      const fallback = await supabase
+        .from("pivots")
+        .select("id, name, area, flow_rate, efficiency, latitude, longitude")
+        .eq("farm_id", activeFarmId)
+        .eq("active", true)
+        .order("name");
+      pivots = (fallback.data ?? []).map((p) => ({ ...p, soil_id: null }));
+    } else {
+      pivots = enriched.data ?? [];
+    }
     const pivotIds = pivots.map((p) => p.id as string);
     const pivotSoilMap = new Map(
       pivots.map((p) => [p.id as string, (p.soil_id as string | null) ?? null]),
