@@ -1,16 +1,19 @@
 export type OperationalStatus = "irrigando" | "parado" | "manutencao" | "alerta";
 export type Priority = "alta" | "media" | "baixa";
 
+/**
+ * Equipamento permanente (ficha técnica).
+ * Cultura, cultivar, estádio, safra e Kc pertencem à parcela — não ao pivô.
+ * Status operacional não é cadastro: deriva da operação.
+ */
 export interface Pivot {
   id: string;
   farmId: string;
-  moduleId: string;
-  seasonId: string;
+  moduleId: string | null;
+  soilId: string | null;
   name: string;
-  cultureId: string;
-  soilId: string;
-  cropStage: string;
-  /** Área irrigada em hectares. */
+  code: string | null;
+  /** Área irrigável em hectares. */
   area: number;
   /** Raio do pivô em metros. */
   radius: number;
@@ -18,11 +21,10 @@ export interface Pivot {
   flowRate: number;
   /** Potência da bomba em CV. */
   pumpPower: number;
-  /** Eficiência do sistema de irrigação — 0 a 1. */
+  /** Eficiência de aplicação — 0 a 1. Distinta do CUC. */
   efficiency: number;
   latitude: number;
   longitude: number;
-  status: OperationalStatus;
   active: boolean;
   createdAt: Date;
   updatedAt: Date;

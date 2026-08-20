@@ -12,6 +12,7 @@ import {
   Modal,
   Tabs,
   ConfirmDialog,
+  TextArea,
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -25,6 +26,11 @@ import {
   checkTypicalRanges,
   type PivotCalculationInput,
 } from "@/modules/irrigation/services/pivot-calculations";
+import {
+  PIVOT_WATER_SOURCES,
+  buildPivotEquipmentRow,
+  validatePivotEquipmentInput,
+} from "@/modules/irrigation/services/pivot-equipment";
 
 const MapPicker = dynamic(() => import("@/components/maps/MapPicker").then((mod) => mod.MapPicker), {
   ssr: false,
@@ -41,7 +47,6 @@ interface Pivot {
   id: string;
   farm_id: string;
   module_id: string | null;
-  culture_id: string | null;
   name: string;
   code: string | null;
   area: number;
@@ -52,7 +57,6 @@ interface Pivot {
   efficiency: number;
   latitude: number;
   longitude: number;
-  status: string;
   active: boolean;
   manufacturer: string | null;
   model: string | null;
@@ -62,6 +66,8 @@ interface Pivot {
   speed_100_pct: number | null;
   full_turn_time: number | null;
   depth_100_pct: number | null;
+  min_depth_mm: number | null;
+  max_depth_mm: number | null;
   max_operating_time: number | null;
   installed_power_kw: number | null;
   specific_consumption: number | null;
@@ -69,8 +75,11 @@ interface Pivot {
   energy_cost: number | null;
   cost_per_mm: number | null;
   cost_per_hectare: number | null;
-  // Sprint 14 · Etapa 4 — Solo passa a ser característica do pivô
   soil_id: string | null;
+  tower_count: number | null;
+  length_m: number | null;
+  technical_notes: string | null;
+  water_source: string | null;
 }
 
 interface ProdModule {
@@ -78,12 +87,12 @@ interface ProdModule {
   name: string;
 }
 
-interface Culture {
+interface Soil {
   id: string;
   name: string;
 }
 
-interface Soil {
+interface PumpHouseLite {
   id: string;
   name: string;
 }
@@ -105,7 +114,7 @@ const TABS = [
 
 export default function PivosPage() {
   const { activeFarmId } = useAuth();
-  const { data, loading, create, update, softDelete } = useCrud<Pivot>({
+  const { data, loading, update, softDelete, fetch } = useCrud<Pivot>({
     table: "pivots",
     filters: { farm_id: activeFarmId },
     orderBy: "name",
@@ -113,9 +122,16 @@ export default function PivosPage() {
   });
 
   const [modules, setModules] = useState<ProdModule[]>([]);
-  const [cultures, setCultures] = useState<Culture[]>([]);
   const [soils, setSoils] = useState<Soil[]>([]);
+  const [pumpHouses, setPumpHouses] = useState<PumpHouseLite[]>([]);
   const [soilId, setSoilId] = useState<string>("");
+  const [pumpHouseId, setPumpHouseId] = useState<string>("");
+  const [waterSource, setWaterSource] = useState<string>("");
+  const [towerCount, setTowerCount] = useState<number | null>(null);
+  const [lengthM, setLengthM] = useState<number | null>(null);
+  const [minDepthMm, setMinDepthMm] = useState<number | null>(null);
+  const [maxDepthMm, setMaxDepthMm] = useState<number | null>(null);
+  const [technicalNotes, setTechnicalNotes] = useState<string>("");
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Pivot | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Pivot | null>(null);
@@ -128,7 +144,7 @@ export default function PivosPage() {
   const [tech, setTech] = useState<TechFields>({
     area: null, radius: null, flow: null, velocity: null,
     fullTurnTime: null, depth100: null, pumpCv: null,
-    motorEff: 88, installedKw: null, cuc: 85, specificCons: null,
+    motorEff: 88, installedKw: null, cuc: 85, applicationEff: 85, specificCons: null,
   });
   const [energyCost, setEnergyCost] = useState<number | null>(null);
 
@@ -146,27 +162,23 @@ export default function PivosPage() {
       .order("name")
       .then(({ data: mods }) => { if (mods) setModules(mods); });
     supabase
-      .from("cultures")
-      .select("id, name")
-      .eq("active", true)
-      .order("name")
-      .then(({ data: cults }) => { if (cults) setCultures(cults); });
-    // Sprint 14 · Etapa 4 — solos da fazenda para vincular ao pivô
-    supabase
       .from("soils")
       .select("id, name")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name")
       .then(({ data: sls }) => { if (sls) setSoils(sls); });
+    supabase
+      .from("pump_houses")
+      .select("id, name")
+      .eq("farm_id", activeFarmId)
+      .eq("active", true)
+      .order("name")
+      .then(({ data: houses }) => { if (houses) setPumpHouses(houses); });
   }, [activeFarmId]);
 
   const activePivots = useMemo(() => data.filter((p) => p.active), [data]);
 
-  const cultureMap = useMemo(
-    () => new Map(cultures.map((c) => [c.id, c.name])),
-    [cultures]
-  );
   const moduleMap = useMemo(
     () => new Map(modules.map((m) => [m.id, m.name])),
     [modules]
@@ -183,10 +195,17 @@ export default function PivosPage() {
     setTech({
       area: null, radius: null, flow: null, velocity: null,
       fullTurnTime: null, depth100: null, pumpCv: null,
-      motorEff: 88, installedKw: null, cuc: 85, specificCons: null,
+      motorEff: 88, installedKw: null, cuc: 85, applicationEff: 85, specificCons: null,
     });
     setEnergyCost(null);
     setSoilId("");
+    setPumpHouseId("");
+    setWaterSource("");
+    setTowerCount(null);
+    setLengthM(null);
+    setMinDepthMm(null);
+    setMaxDepthMm(null);
+    setTechnicalNotes("");
     setModalOpen(true);
   };
 
@@ -204,13 +223,31 @@ export default function PivosPage() {
       pumpCv: pivot.pump_power,
       motorEff: pivot.motor_efficiency != null ? pivot.motor_efficiency * 100 : 88,
       installedKw: pivot.installed_power_kw,
-      // cuc pode vir da coluna nova; fallback para efficiency (backfill do 00025)
-      cuc: pivot.cuc != null ? pivot.cuc * 100 : (pivot.efficiency ? pivot.efficiency * 100 : 85),
+      cuc: pivot.cuc != null ? pivot.cuc * 100 : 85,
+      applicationEff: pivot.efficiency != null ? pivot.efficiency * 100 : 85,
       specificCons: pivot.specific_consumption,
     });
     setEnergyCost(pivot.energy_cost);
     setSoilId(pivot.soil_id ?? "");
+    setWaterSource(pivot.water_source ?? "");
+    setTowerCount(pivot.tower_count);
+    setLengthM(pivot.length_m);
+    setMinDepthMm(pivot.min_depth_mm);
+    setMaxDepthMm(pivot.max_depth_mm);
+    setTechnicalNotes(pivot.technical_notes ?? "");
+    setPumpHouseId("");
     setModalOpen(true);
+
+    const supabase = createClient();
+    supabase
+      .from("pump_house_pivots")
+      .select("pump_house_id")
+      .eq("pivot_id", pivot.id)
+      .limit(1)
+      .maybeSingle()
+      .then(({ data: link }) => {
+        if (link?.pump_house_id) setPumpHouseId(link.pump_house_id as string);
+      });
   };
 
   const closeModal = () => {
@@ -232,80 +269,85 @@ export default function PivosPage() {
     // Fonte da verdade: estado controlado (tech) para os campos técnicos;
     // FormData para os demais (identificação, localização).
     const area = tech.area ?? 0;
-    if (area <= 0) {
-      setFormError("Informe a área irrigada (aba Características).");
-      setActiveTab("caracteristicas");
-      setSaving(false);
-      return;
-    }
-
-    if (tech.motorEff == null || tech.motorEff < 50 || tech.motorEff > 100) {
-      setFormError("Eficiência do motor deve estar entre 50 e 100%.");
-      setActiveTab("caracteristicas");
-      setSaving(false);
-      return;
-    }
-
-    if (tech.cuc == null || tech.cuc < 0 || tech.cuc > 100) {
-      setFormError("CUC deve estar entre 0 e 100%.");
-      setActiveTab("caracteristicas");
-      setSaving(false);
-      return;
-    }
-
     const name = ((fd.get("name") as string) ?? "").trim();
-    if (!name) {
-      setFormError("Informe o nome do pivô (aba Geral).");
-      setActiveTab("geral");
-      setSaving(false);
-      return;
-    }
-
-    // Raio: manual > auto (do estado controlado ou hidden input do auto)
     const radius = tech.radius ?? numOrNull("radius") ?? Math.round(radiusFromArea(area));
+    const applicationEffPct = tech.applicationEff ?? 85;
 
-    const payload = {
-      farm_id: activeFarmId!,
+    const equipmentInput = {
+      farmId: activeFarmId!,
       name,
       code: (fd.get("code") as string) || null,
-      module_id: (fd.get("module_id") as string) || null,
-      culture_id: (fd.get("culture_id") as string) || null,
+      moduleId: (fd.get("module_id") as string) || null,
       manufacturer: (fd.get("manufacturer") as string) || null,
       model: (fd.get("model") as string) || null,
-      pivot_type: (fd.get("pivot_type") as string) || "central",
+      pivotType: (fd.get("pivot_type") as string) || "central",
       area,
       radius,
-      last_tower_radius: tech.radius,
-      flow_rate: tech.flow ?? 0,
-      service_pressure: numOrNull("service_pressure"),
-      speed_100_pct: tech.velocity,
-      full_turn_time: tech.fullTurnTime ?? numOrNull("full_turn_time"),
-      depth_100_pct: tech.depth100 ?? numOrNull("depth_100_pct"),
-      max_operating_time: numOrNull("max_operating_time"),
-      pump_power: tech.pumpCv ?? 0,
-      installed_power_kw: numOrNull("installed_power_kw"),
-      motor_efficiency: tech.motorEff / 100,
-      // cuc é a fonte da verdade a partir de agora; mantemos efficiency
-      // preenchido também (backfill legado — Etapa 6 removerá).
-      cuc: tech.cuc / 100,
-      efficiency: tech.cuc / 100,
-      specific_consumption: numOrNull("specific_consumption"),
+      lastTowerRadius: tech.radius,
+      flowRate: tech.flow ?? 0,
+      servicePressure: numOrNull("service_pressure"),
+      speed100Pct: tech.velocity,
+      fullTurnTime: tech.fullTurnTime ?? numOrNull("full_turn_time"),
+      depth100Pct: tech.depth100 ?? numOrNull("depth_100_pct"),
+      minDepthMm,
+      maxDepthMm,
+      maxOperatingTime: numOrNull("max_operating_time"),
+      pumpPower: tech.pumpCv ?? 0,
+      installedPowerKw: numOrNull("installed_power_kw"),
+      motorEfficiency: (tech.motorEff ?? 88) / 100,
+      cuc: (tech.cuc ?? 85) / 100,
+      applicationEfficiency: applicationEffPct / 100,
+      specificConsumption: numOrNull("specific_consumption"),
       latitude: Number(fd.get("latitude")) || 0,
       longitude: Number(fd.get("longitude")) || 0,
-      energy_cost: energyCost,
-      cost_per_mm: numOrNull("cost_per_mm"),
-      // cost_per_hectare NÃO é gravado aqui — vira campo derivado da parcela
-      // (Sprint 13, Etapa 5).
-      // Sprint 14 · Etapa 4 — solo é característica do pivô (parcela herda).
-      soil_id: soilId || null,
+      energyCost,
+      costPerMm: numOrNull("cost_per_mm"),
+      soilId: soilId || null,
+      towerCount,
+      lengthM,
+      technicalNotes: technicalNotes.trim() || null,
+      waterSource: waterSource || null,
     };
 
+    const validationError = validatePivotEquipmentInput(equipmentInput);
+    if (validationError) {
+      setFormError(validationError);
+      if (validationError.includes("nome")) setActiveTab("geral");
+      else setActiveTab("caracteristicas");
+      setSaving(false);
+      return;
+    }
+
+    const payload = buildPivotEquipmentRow(equipmentInput);
+
     try {
+      const supabase = createClient();
+      let pivotId = editing?.id ?? null;
+
       if (editing) {
-        await update(editing.id, payload);
+        await update(editing.id, payload as Partial<Pivot>);
       } else {
-        await create(payload as Omit<Pivot, "id" | "created_at" | "updated_at">);
+        const { data: created, error } = await supabase
+          .from("pivots")
+          .insert(payload)
+          .select("id")
+          .single();
+        if (error) throw new Error(error.message);
+        pivotId = created?.id ?? null;
+        await fetch();
       }
+
+      if (pivotId) {
+        await supabase.from("pump_house_pivots").delete().eq("pivot_id", pivotId);
+        if (pumpHouseId) {
+          const { error: linkError } = await supabase.from("pump_house_pivots").insert({
+            pivot_id: pivotId,
+            pump_house_id: pumpHouseId,
+          });
+          if (linkError) throw new Error(linkError.message);
+        }
+      }
+
       closeModal();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao salvar");
@@ -336,7 +378,6 @@ export default function PivosPage() {
       ),
     },
     { header: "Módulo", render: (r) => r.module_id ? moduleMap.get(r.module_id) ?? "—" : "—" },
-    { header: "Cultura", render: (r) => r.culture_id ? cultureMap.get(r.culture_id) ?? "—" : "—" },
     { header: "Solo", render: (r) => r.soil_id ? soilMap.get(r.soil_id) ?? "—" : "—" },
     { header: "Área (ha)", render: (r) => r.area?.toLocaleString("pt-BR"), align: "right" },
     { header: "Vazão (m³/h)", render: (r) => r.flow_rate?.toLocaleString("pt-BR"), align: "right" },
@@ -365,7 +406,7 @@ export default function PivosPage() {
   if (!activeFarmId) {
     return (
       <div className="space-y-8">
-        <PageHeader titulo="Pivôs" descricao="Cadastro e monitoramento de pivôs centrais" />
+        <PageHeader titulo="Pivôs (Equipamentos)" descricao="Ficha técnica do equipamento. Cultura e estádio ficam na parcela." />
         <PrerequisiteNotice
           title="Cadastre uma fazenda primeiro"
           description="Os pivôs pertencem a uma fazenda. Cadastre e selecione uma fazenda ativa para começar a registrar seus pivôs."
@@ -378,7 +419,7 @@ export default function PivosPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader titulo="Pivôs" descricao="Cadastro e monitoramento de pivôs centrais" />
+      <PageHeader titulo="Pivôs (Equipamentos)" descricao="Ficha técnica do equipamento. Cultura e estádio ficam na parcela." />
 
       <div className="flex items-center justify-between">
         <p className="text-sm text-graphite-400 dark:text-gray-500">
@@ -415,14 +456,32 @@ export default function PivosPage() {
               <TabGeral
                 editing={editing}
                 modules={modules}
-                cultures={cultures}
                 soils={soils}
                 soilId={soilId}
                 onSoilChange={setSoilId}
+                pumpHouses={pumpHouses}
+                pumpHouseId={pumpHouseId}
+                onPumpHouseChange={setPumpHouseId}
+                waterSource={waterSource}
+                onWaterSourceChange={setWaterSource}
+                technicalNotes={technicalNotes}
+                onTechnicalNotesChange={setTechnicalNotes}
               />
             </div>
             <div className={activeTab === "caracteristicas" ? "" : "hidden"}>
-              <TabCaracteristicas editing={editing} tech={tech} onChange={updateTech} />
+              <TabCaracteristicas
+                editing={editing}
+                tech={tech}
+                onChange={updateTech}
+                towerCount={towerCount}
+                onTowerCountChange={setTowerCount}
+                lengthM={lengthM}
+                onLengthMChange={setLengthM}
+                minDepthMm={minDepthMm}
+                onMinDepthMmChange={setMinDepthMm}
+                maxDepthMm={maxDepthMm}
+                onMaxDepthMmChange={setMaxDepthMm}
+              />
             </div>
             <div className={activeTab === "localizacao" ? "" : "hidden"}>
               <TabLocalizacao editing={editing} allPivots={activePivots} areaValue={tech.area ?? 0} />
@@ -491,20 +550,35 @@ export default function PivosPage() {
 function TabGeral({
   editing,
   modules,
-  cultures,
   soils,
   soilId,
   onSoilChange,
+  pumpHouses,
+  pumpHouseId,
+  onPumpHouseChange,
+  waterSource,
+  onWaterSourceChange,
+  technicalNotes,
+  onTechnicalNotesChange,
 }: {
   editing: Pivot | null;
   modules: ProdModule[];
-  cultures: Culture[];
   soils: Soil[];
   soilId: string;
   onSoilChange: (v: string) => void;
+  pumpHouses: PumpHouseLite[];
+  pumpHouseId: string;
+  onPumpHouseChange: (v: string) => void;
+  waterSource: string;
+  onWaterSourceChange: (v: string) => void;
+  technicalNotes: string;
+  onTechnicalNotesChange: (v: string) => void;
 }) {
   return (
     <div className="space-y-5">
+      <div className="rounded-xl border border-brand-100 bg-brand-50/40 p-3 text-xs text-graphite-600 dark:border-brand-800/40 dark:bg-brand-900/10 dark:text-gray-400">
+        Pivô é equipamento permanente. Cultura, cultivar e estádio são cadastrados na parcela.
+      </div>
       <div className="grid gap-5 sm:grid-cols-2">
         <Input
           id="name"
@@ -529,16 +603,23 @@ function TabGeral({
           defaultValue={editing?.module_id ?? ""}
         />
         <Select
-          id="culture_id"
-          name="culture_id"
-          label="Cultura atual"
-          options={cultures.map((c) => ({ value: c.id, label: c.name }))}
-          defaultValue={editing?.culture_id ?? ""}
+          id="pump_house_id"
+          name="pump_house_id"
+          label="Casa de bomba"
+          options={pumpHouses.map((h) => ({ value: h.id, label: h.name }))}
+          value={pumpHouseId}
+          onChange={(e) => onPumpHouseChange(e.target.value)}
+        />
+        <Select
+          id="water_source"
+          name="water_source"
+          label="Fonte de água"
+          options={[...PIVOT_WATER_SOURCES]}
+          value={waterSource}
+          onChange={(e) => onWaterSourceChange(e.target.value)}
         />
       </div>
 
-      {/* Sprint 14 · Etapa 4 — Solo é característica do pivô. Novas parcelas
-          herdam este solo automaticamente. */}
       <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
         <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
           Solo dominante do pivô
@@ -562,9 +643,19 @@ function TabGeral({
           </a>
         </div>
         <p className="mt-2 text-xs text-graphite-500 dark:text-gray-400">
-          Novas parcelas neste pivô <b>herdam automaticamente este solo</b>. Se precisar mudar, edite aqui e o balanço hídrico de todas as parcelas ativas passa a usar o novo solo.
+          Novas parcelas neste pivô herdam este solo. Camadas (CC/PMP/KL) são detalhadas no cadastro de solos.
         </p>
       </fieldset>
+
+      <TextArea
+        id="technical_notes"
+        name="technical_notes"
+        label="Observações técnicas"
+        rows={3}
+        value={technicalNotes}
+        onChange={(e) => onTechnicalNotesChange(e.target.value)}
+        placeholder="Bomba, filtros, particularidades do equipamento..."
+      />
     </div>
   );
 }
@@ -582,6 +673,7 @@ interface TechFields {
   motorEff: number | null;   // 0-100 (fração exibida em %)
   installedKw: number | null;
   cuc: number | null;         // 0-100 (%)
+  applicationEff: number | null; // 0-100 (%) — eficiência de aplicação, distinta do CUC
   specificCons: number | null;
 }
 
@@ -626,10 +718,26 @@ function TabCaracteristicas({
   editing,
   tech,
   onChange,
+  towerCount,
+  onTowerCountChange,
+  lengthM,
+  onLengthMChange,
+  minDepthMm,
+  onMinDepthMmChange,
+  maxDepthMm,
+  onMaxDepthMmChange,
 }: {
   editing: Pivot | null;
   tech: TechFields;
   onChange: <K extends keyof TechFields>(field: K, value: TechFields[K]) => void;
+  towerCount: number | null;
+  onTowerCountChange: (v: number | null) => void;
+  lengthM: number | null;
+  onLengthMChange: (v: number | null) => void;
+  minDepthMm: number | null;
+  onMinDepthMmChange: (v: number | null) => void;
+  maxDepthMm: number | null;
+  onMaxDepthMmChange: (v: number | null) => void;
 }) {
   // Auto-cálculos derivados ao vivo do motor puro (Etapa 2).
   const auto = useMemo(() => {
@@ -688,6 +796,25 @@ function TabCaracteristicas({
             label="Tipo"
             options={[...PIVOT_TYPES]}
             defaultValue={editing?.pivot_type ?? "central"}
+          />
+          <Input
+            id="tower_count"
+            name="tower_count"
+            label="Número de torres"
+            type="number"
+            min="1"
+            step="1"
+            value={towerCount == null ? "" : String(towerCount)}
+            onChange={(e) => onTowerCountChange(e.target.value ? Number(e.target.value) : null)}
+          />
+          <Input
+            id="length_m"
+            name="length_m"
+            label="Comprimento (m)"
+            type="number"
+            step="any"
+            value={lengthM == null ? "" : String(lengthM)}
+            onChange={(e) => onLengthMChange(e.target.value ? Number(e.target.value) : null)}
           />
         </div>
       </fieldset>
@@ -804,6 +931,24 @@ function TabCaracteristicas({
               warning={warningFor("depth100PctMm")}
             />
           )}
+          <Input
+            id="min_depth_mm"
+            name="min_depth_mm"
+            label="Lâmina mínima (mm)"
+            type="number"
+            step="any"
+            value={minDepthMm == null ? "" : String(minDepthMm)}
+            onChange={(e) => onMinDepthMmChange(e.target.value ? Number(e.target.value) : null)}
+          />
+          <Input
+            id="max_depth_mm"
+            name="max_depth_mm"
+            label="Lâmina máxima (mm)"
+            type="number"
+            step="any"
+            value={maxDepthMm == null ? "" : String(maxDepthMm)}
+            onChange={(e) => onMaxDepthMmChange(e.target.value ? Number(e.target.value) : null)}
+          />
         </div>
       </fieldset>
 
@@ -855,6 +1000,16 @@ function TabCaracteristicas({
             required
             value={numInput(tech.cuc)}
             onChange={(e) => onChange("cuc", e.target.value ? Number(e.target.value) : null)}
+          />
+          <Input
+            id="application_efficiency"
+            name="application_efficiency"
+            label="Eficiência de aplicação (%)"
+            type="number"
+            step="any"
+            required
+            value={numInput(tech.applicationEff)}
+            onChange={(e) => onChange("applicationEff", e.target.value ? Number(e.target.value) : null)}
           />
           <AutoField
             label="Consumo específico"
