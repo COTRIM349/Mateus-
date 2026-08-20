@@ -9,6 +9,7 @@ import {
   Select,
   Table,
   Modal,
+  Tabs,
   ConfirmDialog,
   TextArea,
   type Column,
@@ -64,7 +65,7 @@ interface Assignment {
   total_cost: number | null;
 }
 
-interface PivotLite { id: string; name: string; efficiency: number; soil_id: string | null }
+interface PivotLite { id: string; name: string; efficiency: number; soil_id: string | null; pivot_type: string | null; flow_rate: number | null; area: number | null }
 interface SeasonLite { id: string; name: string }
 interface CultureLite { id: string; name: string; root_depth: number; depletion_factor: number }
 interface SoilLite { id: string; name: string }
@@ -169,6 +170,15 @@ export default function VinculacaoPage() {
     yield_kg_ha: "",
   });
 
+  // Sprint 15 · reorganização do modal de parcela em 4 abas
+  const [modalTab, setModalTab] = useState<"caract" | "manejo" | "geo" | "corp">("caract");
+  const MODAL_TABS = [
+    { id: "caract", label: "Características" },
+    { id: "manejo", label: "Manejo de Irrigação" },
+    { id: "geo", label: "Geolocalização" },
+    { id: "corp", label: "Corporação" },
+  ];
+
   useEffect(() => {
     if (!activeFarmId) {
       setLookupsLoading(false);
@@ -177,7 +187,7 @@ export default function VinculacaoPage() {
     setLookupsLoading(true);
     (async () => {
       const [pv, ss, cu, so, va] = await Promise.all([
-        supabase.from("pivots").select("id, name, efficiency, soil_id").eq("farm_id", activeFarmId).eq("active", true).order("name"),
+        supabase.from("pivots").select("id, name, efficiency, soil_id, pivot_type, flow_rate, area").eq("farm_id", activeFarmId).eq("active", true).order("name"),
         supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("start_date", { ascending: false }),
         supabase.from("cultures").select("id, name, root_depth, depletion_factor").eq("active", true).order("name"),
         supabase.from("soils").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
@@ -223,6 +233,7 @@ export default function VinculacaoPage() {
     setEditing(null);
     setForm(EMPTY_FORM);
     setFormError("");
+    setModalTab("caract");
     setModalOpen(true);
   };
 
@@ -258,6 +269,7 @@ export default function VinculacaoPage() {
       notes: a.notes ?? "",
     });
     setFormError("");
+    setModalTab("caract");
     setModalOpen(true);
   };
 
@@ -623,102 +635,37 @@ export default function VinculacaoPage() {
         )}
       </Card>
 
-      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar parcela" : "Nova parcela"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {/* Identidade da parcela */}
-          <div className="grid gap-4 sm:grid-cols-2">
+      <Modal open={modalOpen} onClose={closeModal} title={editing ? "Editar parcela" : "Nova parcela"} size="xl">
+        <form onSubmit={handleSubmit} noValidate className="space-y-5">
+          {/* Nome sempre no topo, largura total */}
+          <div>
             <Input
-              id="parcel_name" label="Nome da parcela (opcional)" placeholder="Ex: Pivô 05 · Algodão 2025/26"
+              id="parcel_name"
+              label="Nome da parcela"
+              placeholder="Ex.: Pivô 05 · Algodão 2025/26 (opcional — gera automático se vazio)"
               value={form.name}
               onChange={(e) => patch({ name: e.target.value })}
             />
-            <Input
-              id="planted_area" label="Área plantada (ha)" type="number" step="0.1" min="0"
-              value={form.planted_area}
-              onChange={(e) => patch({ planted_area: e.target.value })}
-              placeholder="Se diferente da área total do pivô"
-            />
-          </div>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select
-              id="pivot_id" label="Pivô" required
-              value={form.pivot_id}
-              onChange={(e) => handlePivotChange(e.target.value)}
-              options={pivots.map((p) => ({ value: p.id, label: p.name }))}
-            />
-            <Select
-              id="season_id" label="Safra" required
-              value={form.season_id}
-              onChange={(e) => patch({ season_id: e.target.value })}
-              options={seasons.map((s) => ({ value: s.id, label: s.name }))}
-            />
-            <Select
-              id="culture_id" label="Cultura" required
-              value={form.culture_id}
-              onChange={(e) => handleCultureChange(e.target.value)}
-              options={cultures.map((c) => ({ value: c.id, label: c.name }))}
-            />
-            <Select
-              id="culture_variety_id" label="Cultivar (opcional)"
-              value={form.culture_variety_id}
-              onChange={(e) => patch({ culture_variety_id: e.target.value })}
-              options={varietiesForCulture.map((v) => ({ value: v.id, label: v.name }))}
-              disabled={!form.culture_id}
-            />
-            {/* Sprint 14 · Etapa 4 — solo herdado do pivô (read-only). */}
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold text-graphite-600 dark:text-gray-400">
-                Solo (herdado do pivô)
-              </label>
-              <div className="flex h-10 items-center rounded-lg border border-dashed border-brand-200 bg-brand-50/40 px-3 text-sm dark:border-brand-800/40 dark:bg-brand-900/10">
-                {form.soil_id
-                  ? <span className="text-graphite-900 dark:text-white font-medium">{soilMap.get(form.soil_id) ?? form.soil_id}</span>
-                  : form.pivot_id
-                    ? <span className="text-amber-700 dark:text-amber-400">⚠ Pivô sem solo — <a href="/pivos" className="underline">cadastre em Pivôs</a></span>
-                    : <span className="text-graphite-400 dark:text-gray-500">Selecione um pivô primeiro</span>
-                }
-              </div>
-              {/* Hidden input mantém o valor no FormData para compat */}
-              <input type="hidden" name="soil_id" value={form.soil_id} />
-            </div>
-            <div />
-            <Input
-              id="planting_date" label="Data de plantio" type="date" required
-              value={form.planting_date}
-              onChange={(e) => patch({ planting_date: e.target.value })}
-            />
-            <Input
-              id="emergence_date" label="Data de emergência (opcional)" type="date"
-              value={form.emergence_date}
-              onChange={(e) => patch({ emergence_date: e.target.value })}
-            />
-            <Input
-              id="expected_harvest_date" label="Colheita prevista (opcional)" type="date"
-              value={form.expected_harvest_date}
-              onChange={(e) => patch({ expected_harvest_date: e.target.value })}
-            />
           </div>
 
-          {/* Água, clima e espaçamento (Sprint 13 · Etapa 5) */}
-          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
-            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
-              Água, clima e manejo
-            </legend>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Select
-                id="water_source" label="Fonte de água"
-                value={form.water_source}
-                onChange={(e) => patch({ water_source: e.target.value })}
-                options={[
-                  { value: "", label: "Não especificada" },
-                  { value: "rio", label: "Rio" },
-                  { value: "poco", label: "Poço" },
-                  { value: "reservatorio", label: "Reservatório" },
-                  { value: "canal", label: "Canal" },
-                  { value: "outorga", label: "Outorga" },
-                  { value: "misto", label: "Misto" },
-                  { value: "outro", label: "Outro" },
-                ]}
+          <Tabs tabs={MODAL_TABS} activeTab={modalTab} onChange={(t) => setModalTab(t as typeof modalTab)} />
+
+          {/* ═══════════════════════════════════════════════════════════════
+              ABA 1 · CARACTERÍSTICAS
+              ═══════════════════════════════════════════════════════════════ */}
+          <div className={modalTab === "caract" ? "" : "hidden"}>
+            {/* Linha superior: 4 colunas compactas */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <Input
+                id="planting_date" label="Data do plantio" type="date" required
+                value={form.planting_date}
+                onChange={(e) => patch({ planting_date: e.target.value })}
+              />
+              <Input
+                id="planted_area" label="Área plantada (ha)" type="number" step="0.1" min="0"
+                value={form.planted_area}
+                onChange={(e) => patch({ planted_area: e.target.value })}
+                placeholder="Se diferente do pivô"
               />
               <Select
                 id="climate_config" label="Fonte de clima"
@@ -727,152 +674,394 @@ export default function VinculacaoPage() {
                 options={[
                   { value: "farm_default", label: "Padrão da fazenda" },
                   { value: "virtual_station", label: "Estação virtual" },
-                  { value: "nearest_station", label: "Estação física mais próxima" },
+                  { value: "nearest_station", label: "Estação próxima" },
                   { value: "manual", label: "Registros manuais" },
                 ]}
               />
               <Select
-                id="rain_option" label="Fonte da chuva"
+                id="rain_option" label="Opções de chuva"
                 value={form.rain_option}
                 onChange={(e) => patch({ rain_option: e.target.value })}
                 options={[
                   { value: "auto", label: "Automática (provedor)" },
                   { value: "manual", label: "Manual" },
-                  { value: "pluviometer", label: "Pluviômetro da fazenda" },
+                  { value: "pluviometer", label: "Pluviômetro" },
                   { value: "ignore", label: "Ignorar chuva" },
                 ]}
               />
             </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-3">
-              <Input
-                id="plant_spacing_m" label="Espaç. entre plantas (m)" type="number" step="0.01" min="0"
-                value={form.plant_spacing_m}
-                onChange={(e) => patch({ plant_spacing_m: e.target.value })}
-              />
-              <Input
-                id="row_spacing_m" label="Espaç. entre linhas (m)" type="number" step="0.01" min="0"
-                value={form.row_spacing_m}
-                onChange={(e) => patch({ row_spacing_m: e.target.value })}
-              />
-              <Input
-                id="additional_row_spacing_m" label="Linha adicional (m)" type="number" step="0.01" min="0"
-                value={form.additional_row_spacing_m}
-                onChange={(e) => patch({ additional_row_spacing_m: e.target.value })}
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-6">
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={form.deficit_irrigation}
-                  onChange={(e) => patch({ deficit_irrigation: e.target.checked })}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Irrigação com déficit
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(ITN &lt; 100% em fases não-críticas)</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={form.stress_point_irrigation}
-                  onChange={(e) => patch({ stress_point_irrigation: e.target.checked })}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Irrigar no ponto de estresse
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(só ao atingir p × ADT)</span>
-              </label>
-            </div>
-            <div className="mt-4 grid gap-4 sm:grid-cols-2">
-              <Input
-                id="initial_soil_moisture_pct" label="Umidade inicial do solo (%)" type="number" step="0.1" min="0" max="100"
-                value={form.initial_soil_moisture_pct}
-                onChange={(e) => patch({ initial_soil_moisture_pct: e.target.value })}
-                disabled={form.initial_moisture_is_cc}
-                placeholder={form.initial_moisture_is_cc ? "Solo em CC" : ""}
-              />
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={form.initial_moisture_is_cc}
-                  onChange={(e) => patch({ initial_moisture_is_cc: e.target.checked })}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Solo em Capacidade de Campo no início do manejo
-              </label>
-            </div>
-          </fieldset>
 
-          {/* Origem dos parâmetros de manejo */}
-          <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.06]">
-            <p className="mb-3 text-sm font-medium text-graphite-900 dark:text-gray-200">Parâmetros de manejo</p>
-            <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="radio" name="parameter_mode" value="padrao"
-                  checked={form.parameter_mode === "padrao"}
-                  onChange={() => handleModeChange("padrao")}
-                  className="text-brand-600 focus:ring-brand-500"
-                />
-                Utilizar parâmetros padrão da cultura
-              </label>
-              <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
-                <input
-                  type="radio" name="parameter_mode" value="personalizado"
-                  checked={form.parameter_mode === "personalizado"}
-                  onChange={() => handleModeChange("personalizado")}
-                  className="text-brand-600 focus:ring-brand-500"
-                />
-                Personalizar parâmetros deste pivô
-              </label>
-            </div>
+            {/* 2 colunas: Equipamento à esquerda, Solo & Água + Espaçamento + CC à direita */}
+            <div className="mt-5 grid gap-5 lg:grid-cols-2">
+              {/* ── LEFT ── Equipamento ── */}
+              <fieldset className="rounded-xl border border-gray-100 p-5 dark:border-white/[0.06]">
+                <legend className="px-2 text-sm font-bold text-brand-700 dark:text-brand-400">
+                  Equipamento
+                </legend>
+                {(() => {
+                  const p = pivots.find((x) => x.id === form.pivot_id);
+                  return (
+                    <div className="space-y-4">
+                      <Select
+                        id="pivot_id" label="Pivô" required
+                        value={form.pivot_id}
+                        onChange={(e) => handlePivotChange(e.target.value)}
+                        options={pivots.map((pv) => ({ value: pv.id, label: pv.name }))}
+                      />
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <ReadOnlyField
+                          label="Tipo do equipamento"
+                          value={p?.pivot_type
+                            ? p.pivot_type === "central" ? "Pivô Central"
+                              : p.pivot_type === "linear" ? "Linear"
+                              : p.pivot_type === "rebocavel" ? "Rebocável"
+                              : p.pivot_type
+                            : null}
+                        />
+                        <ReadOnlyField
+                          label="Vazão nominal"
+                          value={p?.flow_rate != null ? `${p.flow_rate.toLocaleString("pt-BR")} m³/h` : null}
+                        />
+                      </div>
+                      <ReadOnlyField
+                        label="Área total do pivô"
+                        value={p?.area != null ? `${p.area.toLocaleString("pt-BR")} ha` : null}
+                        hint="Área plantada pode ser menor (informe acima)"
+                      />
+                      <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+                        Dados técnicos completos: <a href="/pivos" className="text-brand-600 hover:underline dark:text-brand-400">Cadastros → Pivôs</a>
+                      </p>
+                    </div>
+                  );
+                })()}
+              </fieldset>
 
-            {form.parameter_mode === "padrao" ? (
-              <p className="mt-3 text-xs text-graphite-400 dark:text-gray-500">
-                Kc, fator p, profundidade radicular e eficiência serão carregados automaticamente do cadastro da cultura e do pivô. O crescimento radicular é calculado pelo sistema conforme a fase fenológica e o DAE.
-              </p>
-            ) : (
-              <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                <Input
-                  id="initial_root_depth" label="Prof. inicial da raiz (m)" type="number" step="0.01" min="0"
-                  value={form.initial_root_depth}
-                  onChange={(e) => patch({ initial_root_depth: e.target.value })}
-                  placeholder="0.10"
-                />
-                <Input
-                  id="max_root_depth" label="Prof. máxima da raiz (m)" type="number" step="0.01" min="0"
-                  value={form.max_root_depth}
-                  onChange={(e) => patch({ max_root_depth: e.target.value })}
-                  placeholder="0.60"
-                />
-                <Input
-                  id="irrigation_efficiency" label="Eficiência de irrigação (%)" type="number" step="1" min="1" max="100"
-                  value={form.irrigation_efficiency}
-                  onChange={(e) => patch({ irrigation_efficiency: e.target.value })}
-                  placeholder="85"
-                />
-                <Input
-                  id="depletion_factor" label="Fator de depleção (p)" type="number" step="0.01" min="0" max="1"
-                  value={form.depletion_factor}
-                  onChange={(e) => patch({ depletion_factor: e.target.value })}
-                  placeholder="0.50"
-                />
-                <p className="sm:col-span-2 text-xs text-graphite-400 dark:text-gray-500">
-                  Os valores personalizados valem apenas para este pivô nesta safra e não alteram o cadastro original da cultura.
-                </p>
+              {/* ── RIGHT ── 3 sub-cards ── */}
+              <div className="space-y-5">
+                {/* Solo & Água */}
+                <fieldset className="rounded-xl border border-gray-100 p-5 dark:border-white/[0.06]">
+                  <legend className="px-2 text-sm font-bold text-brand-700 dark:text-brand-400">
+                    Solo &amp; Água
+                  </legend>
+                  <div className="space-y-4">
+                    {/* Solo herdado */}
+                    <div>
+                      <label className="mb-1.5 block text-xs font-semibold text-graphite-600 dark:text-gray-400">
+                        Solo (herdado do pivô)
+                      </label>
+                      <div className="flex h-10 items-center rounded-lg border border-dashed border-brand-200 bg-brand-50/40 px-3 text-sm dark:border-brand-800/40 dark:bg-brand-900/10">
+                        {form.soil_id
+                          ? <span className="font-medium text-graphite-900 dark:text-white">{soilMap.get(form.soil_id) ?? form.soil_id}</span>
+                          : form.pivot_id
+                            ? <span className="text-amber-700 dark:text-amber-400">⚠ Pivô sem solo — <a href="/pivos" className="underline">cadastre em Pivôs</a></span>
+                            : <span className="text-graphite-400 dark:text-gray-500">Selecione um pivô primeiro</span>
+                        }
+                      </div>
+                      <input type="hidden" name="soil_id" value={form.soil_id} />
+                    </div>
+                    <Select
+                      id="water_source" label="Fonte de água"
+                      value={form.water_source}
+                      onChange={(e) => patch({ water_source: e.target.value })}
+                      options={[
+                        { value: "", label: "Não especificada" },
+                        { value: "rio", label: "Rio" },
+                        { value: "poco", label: "Poço" },
+                        { value: "reservatorio", label: "Reservatório" },
+                        { value: "canal", label: "Canal" },
+                        { value: "outorga", label: "Outorga" },
+                        { value: "misto", label: "Misto" },
+                        { value: "outro", label: "Outro" },
+                      ]}
+                    />
+                  </div>
+                </fieldset>
+
+                {/* Espaçamento da cultura */}
+                <fieldset className="rounded-xl border border-gray-100 p-5 dark:border-white/[0.06]">
+                  <legend className="px-2 text-sm font-bold text-brand-700 dark:text-brand-400">
+                    Espaçamento da cultura
+                  </legend>
+                  <div className="flex items-end gap-2">
+                    <Input
+                      id="plant_spacing_m" label="Entre plantas (m)" type="number" step="0.01" min="0"
+                      value={form.plant_spacing_m}
+                      onChange={(e) => patch({ plant_spacing_m: e.target.value })}
+                    />
+                    <span className="mb-2 pb-1 text-graphite-400">×</span>
+                    <Input
+                      id="row_spacing_m" label="Entre linhas (m)" type="number" step="0.01" min="0"
+                      value={form.row_spacing_m}
+                      onChange={(e) => patch({ row_spacing_m: e.target.value })}
+                    />
+                    <span className="mb-2 pb-1 text-graphite-400">×</span>
+                    <Input
+                      id="additional_row_spacing_m" label="Linha adicional (m)" type="number" step="0.01" min="0"
+                      value={form.additional_row_spacing_m}
+                      onChange={(e) => patch({ additional_row_spacing_m: e.target.value })}
+                    />
+                  </div>
+                </fieldset>
+
+                {/* CC após excesso — placeholder pra flow futuro */}
+                <fieldset className="rounded-xl border border-gray-100 p-5 dark:border-white/[0.06]">
+                  <legend className="px-2 text-sm font-bold text-brand-700 dark:text-brand-400">
+                    Capacidade de campo após excesso
+                  </legend>
+                  <p className="mb-3 text-xs text-graphite-500 dark:text-gray-400">
+                    Reinicializa o CC depois de eventos de chuva/irrigação excessivos (quando a lâmina supera a capacidade de retenção).
+                  </p>
+                  <Button variant="secondary" type="button" onClick={() => setFormError("Cadastro de excesso disponível em breve.")}>
+                    Cadastrar excesso →
+                  </Button>
+                </fieldset>
               </div>
-            )}
+            </div>
           </div>
 
-          <TextArea
-            id="notes" label="Observações (opcional)"
-            value={form.notes}
-            onChange={(e) => patch({ notes: e.target.value })}
-          />
+          {/* ═══════════════════════════════════════════════════════════════
+              ABA 2 · MANEJO DE IRRIGAÇÃO
+              ═══════════════════════════════════════════════════════════════ */}
+          <div className={modalTab === "manejo" ? "space-y-5" : "hidden"}>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Select
+                id="culture_id" label="Cultura" required
+                value={form.culture_id}
+                onChange={(e) => handleCultureChange(e.target.value)}
+                options={cultures.map((c) => ({ value: c.id, label: c.name }))}
+              />
+              <Select
+                id="culture_variety_id" label="Cultivar (opcional)"
+                value={form.culture_variety_id}
+                onChange={(e) => patch({ culture_variety_id: e.target.value })}
+                options={varietiesForCulture.map((v) => ({ value: v.id, label: v.name }))}
+                disabled={!form.culture_id}
+              />
+              <Select
+                id="season_id" label="Safra" required
+                value={form.season_id}
+                onChange={(e) => patch({ season_id: e.target.value })}
+                options={seasons.map((s) => ({ value: s.id, label: s.name }))}
+              />
+            </div>
 
-          {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" type="button" onClick={closeModal}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
+            <fieldset className="rounded-xl border border-gray-100 p-5 dark:border-white/[0.06]">
+              <legend className="px-2 text-sm font-bold text-brand-700 dark:text-brand-400">
+                Datas do manejo
+              </legend>
+              <div className="grid gap-4 sm:grid-cols-3">
+                <Input
+                  id="emergence_date" label="Data de emergência (opcional)" type="date"
+                  value={form.emergence_date}
+                  onChange={(e) => patch({ emergence_date: e.target.value })}
+                />
+                <Input
+                  id="expected_harvest_date" label="Colheita prevista (opcional)" type="date"
+                  value={form.expected_harvest_date}
+                  onChange={(e) => patch({ expected_harvest_date: e.target.value })}
+                />
+                <div className="flex items-end pb-2">
+                  <p className="text-[11px] text-graphite-500 dark:text-gray-400">
+                    Data do plantio na aba <b>Características</b>. Fase corrente é derivada automaticamente pelas fases fenológicas da cultura.
+                  </p>
+                </div>
+              </div>
+            </fieldset>
+
+            <fieldset className="rounded-xl border border-gray-100 p-5 dark:border-white/[0.06]">
+              <legend className="px-2 text-sm font-bold text-brand-700 dark:text-brand-400">
+                Estratégia de irrigação
+              </legend>
+              <div className="flex flex-wrap gap-6">
+                <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={form.deficit_irrigation}
+                    onChange={(e) => patch({ deficit_irrigation: e.target.checked })}
+                    className="h-4 w-4 accent-brand-500"
+                  />
+                  Irrigação com déficit
+                  <span className="text-xs text-graphite-400 dark:text-gray-500">(ITN &lt; 100% em fases não-críticas)</span>
+                </label>
+                <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={form.stress_point_irrigation}
+                    onChange={(e) => patch({ stress_point_irrigation: e.target.checked })}
+                    className="h-4 w-4 accent-brand-500"
+                  />
+                  Irrigar no ponto de estresse
+                  <span className="text-xs text-graphite-400 dark:text-gray-500">(só ao atingir p × ADT)</span>
+                </label>
+              </div>
+              <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                <Input
+                  id="initial_soil_moisture_pct" label="Umidade inicial do solo (%)" type="number" step="0.1" min="0" max="100"
+                  value={form.initial_soil_moisture_pct}
+                  onChange={(e) => patch({ initial_soil_moisture_pct: e.target.value })}
+                  disabled={form.initial_moisture_is_cc}
+                  placeholder={form.initial_moisture_is_cc ? "Solo em CC" : ""}
+                />
+                <label className="flex items-end gap-2 pb-2.5 text-sm text-graphite-700 dark:text-gray-300">
+                  <input
+                    type="checkbox"
+                    checked={form.initial_moisture_is_cc}
+                    onChange={(e) => patch({ initial_moisture_is_cc: e.target.checked })}
+                    className="h-4 w-4 accent-brand-500"
+                  />
+                  Solo em CC no início do manejo
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset className="rounded-xl border border-gray-100 p-5 dark:border-white/[0.06]">
+              <legend className="px-2 text-sm font-bold text-brand-700 dark:text-brand-400">
+                Parâmetros de manejo
+              </legend>
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio" name="parameter_mode" value="padrao"
+                    checked={form.parameter_mode === "padrao"}
+                    onChange={() => handleModeChange("padrao")}
+                    className="text-brand-600 focus:ring-brand-500"
+                  />
+                  Padrão da cultura
+                </label>
+                <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
+                  <input
+                    type="radio" name="parameter_mode" value="personalizado"
+                    checked={form.parameter_mode === "personalizado"}
+                    onChange={() => handleModeChange("personalizado")}
+                    className="text-brand-600 focus:ring-brand-500"
+                  />
+                  Personalizado para esta parcela
+                </label>
+              </div>
+
+              {form.parameter_mode === "padrao" ? (
+                <p className="mt-3 text-xs text-graphite-400 dark:text-gray-500">
+                  Kc, fator p, profundidade radicular, Ks e Kl serão carregados automaticamente do cadastro da cultura. O crescimento radicular usa a fase fenológica e o DAE.
+                </p>
+              ) : (
+                <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                  <Input
+                    id="initial_root_depth" label="Prof. inicial raiz (m)" type="number" step="0.01" min="0"
+                    value={form.initial_root_depth}
+                    onChange={(e) => patch({ initial_root_depth: e.target.value })}
+                    placeholder="0.10"
+                  />
+                  <Input
+                    id="max_root_depth" label="Prof. máxima raiz (m)" type="number" step="0.01" min="0"
+                    value={form.max_root_depth}
+                    onChange={(e) => patch({ max_root_depth: e.target.value })}
+                    placeholder="0.60"
+                  />
+                  <Input
+                    id="irrigation_efficiency" label="Eficiência de irrigação (%)" type="number" step="1" min="1" max="100"
+                    value={form.irrigation_efficiency}
+                    onChange={(e) => patch({ irrigation_efficiency: e.target.value })}
+                    placeholder="85"
+                  />
+                  <Input
+                    id="depletion_factor" label="Fator de depleção (p)" type="number" step="0.01" min="0" max="1"
+                    value={form.depletion_factor}
+                    onChange={(e) => patch({ depletion_factor: e.target.value })}
+                    placeholder="0.50"
+                  />
+                  <p className="text-xs text-graphite-400 dark:text-gray-500 sm:col-span-2">
+                    Estes valores substituem os do cadastro da cultura apenas nesta parcela.
+                  </p>
+                </div>
+              )}
+            </fieldset>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════
+              ABA 3 · GEOLOCALIZAÇÃO
+              ═══════════════════════════════════════════════════════════════ */}
+          <div className={modalTab === "geo" ? "" : "hidden"}>
+            <div className="rounded-xl border border-dashed border-gray-200 p-8 text-center dark:border-white/[0.08]">
+              <p className="text-sm font-medium text-graphite-700 dark:text-gray-300">
+                Coordenadas herdadas do pivô
+              </p>
+              <p className="mt-2 text-xs text-graphite-500 dark:text-gray-400">
+                A parcela usa o centro geográfico do pivô. Para editar coordenadas, vá em <a href="/pivos" className="text-brand-600 hover:underline dark:text-brand-400">Cadastros → Pivôs → Localização</a>.
+              </p>
+              <p className="mt-4 text-[11px] text-graphite-400 dark:text-gray-500">
+                Contornos de talhão específicos por parcela virão em sprint futuro.
+              </p>
+            </div>
+          </div>
+
+          {/* ═══════════════════════════════════════════════════════════════
+              ABA 4 · CORPORAÇÃO
+              ═══════════════════════════════════════════════════════════════ */}
+          <div className={modalTab === "corp" ? "space-y-5" : "hidden"}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <ReadOnlyField
+                label="Fazenda"
+                value={activeFarmId ? "Fazenda ativa (selecionada no cabeçalho)" : null}
+                hint="Selecionada no cabeçalho da plataforma"
+              />
+              <ReadOnlyField
+                label="Módulo produtivo"
+                value={null}
+                hint="Herdado do cadastro do pivô"
+              />
+            </div>
+            <TextArea
+              id="notes" label="Observações da parcela"
+              value={form.notes}
+              onChange={(e) => patch({ notes: e.target.value })}
+              placeholder="Ex.: talhão pequeno, borda molhada por linha lateral vizinha, safra experimental"
+            />
+            <TextArea
+              id="water_source_note" label="Observações da fonte de água"
+              value={form.water_source_note}
+              onChange={(e) => patch({ water_source_note: e.target.value })}
+              placeholder="Ex.: outorga vencendo em 03/2027; rio compartilhado com Sr. José"
+            />
+          </div>
+
+          {formError && (
+            <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">
+              {formError}
+            </p>
+          )}
+
+          {/* Rodapé — navegação entre abas + salvar */}
+          <div className="flex items-center justify-between border-t border-gray-100 pt-4 dark:border-white/[0.06]">
+            <div className="flex gap-2">
+              {modalTab !== "caract" && (
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={() => {
+                    const i = MODAL_TABS.findIndex((t) => t.id === modalTab);
+                    if (i > 0) setModalTab(MODAL_TABS[i - 1].id as typeof modalTab);
+                  }}
+                >
+                  ← Anterior
+                </Button>
+              )}
+              {modalTab !== "corp" && (
+                <Button
+                  variant="secondary"
+                  type="button"
+                  onClick={() => {
+                    const i = MODAL_TABS.findIndex((t) => t.id === modalTab);
+                    if (i < MODAL_TABS.length - 1) setModalTab(MODAL_TABS[i + 1].id as typeof modalTab);
+                  }}
+                >
+                  Próximo →
+                </Button>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <Button variant="secondary" type="button" onClick={closeModal}>Cancelar</Button>
+              <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar parcela"}</Button>
+            </div>
           </div>
         </form>
       </Modal>
@@ -938,6 +1127,33 @@ export default function VinculacaoPage() {
           </div>
         </div>
       </Modal>
+    </div>
+  );
+}
+
+// ── ReadOnlyField — display de valor herdado (Sprint 15) ─────────────────
+
+function ReadOnlyField({
+  label, value, hint,
+}: {
+  label: string;
+  value: string | null;
+  hint?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-1.5 block text-xs font-semibold text-graphite-600 dark:text-gray-400">
+        {label}
+      </label>
+      <div className="flex h-10 items-center rounded-lg border border-dashed border-brand-200 bg-brand-50/40 px-3 text-sm dark:border-brand-800/40 dark:bg-brand-900/10">
+        {value
+          ? <span className="font-medium text-graphite-900 dark:text-white">{value}</span>
+          : <span className="text-graphite-400 dark:text-gray-500">—</span>
+        }
+      </div>
+      {hint && (
+        <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">{hint}</p>
+      )}
     </div>
   );
 }
