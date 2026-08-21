@@ -1,12 +1,18 @@
 import { describe, expect, it } from "vitest";
-import { countMapStatuses, hydricMapStates, toHydricMapMarkers } from "./hydric-map-markers";
+import {
+  countMapStatuses,
+  hydricDemandSummary,
+  hydricMapDates,
+  hydricMapStates,
+  mapStatusOf,
+  toHydricMapMarkers,
+} from "./hydric-map-markers";
 import type { PivotHydricState } from "@/modules/water-balance/services";
 
 function stub(partial: Partial<PivotHydricState>): PivotHydricState {
   return {
     pivotId: "p1",
     pivotName: "P01",
-    farmName: "Fazenda",
     cultureName: "Soja",
     varietyName: null,
     seasonName: null,
@@ -19,8 +25,14 @@ function stub(partial: Partial<PivotHydricState>): PivotHydricState {
     soilName: "Latossolo",
     sheetIncomplete: false,
     current: {
+      date: "2026-08-21",
       mapStatus: "boa_umidade",
+      deficit: 10,
     } as PivotHydricState["current"],
+    history: [
+      { date: "2026-08-20", mapStatus: "atencao", deficit: 40 } as NonNullable<PivotHydricState["current"]>,
+      { date: "2026-08-21", mapStatus: "boa_umidade", deficit: 10 } as NonNullable<PivotHydricState["current"]>,
+    ],
     ...partial,
   } as PivotHydricState;
 }
@@ -33,11 +45,17 @@ describe("hydricMapStates", () => {
 });
 
 describe("toHydricMapMarkers", () => {
-  it("pinta o círculo com a cor sólida do status do motor", () => {
+  it("pinta o círculo com a cor do status do motor", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
     expect(markers[0].color).toBe("#22c55e");
     expect(markers[0].radiusMeters).toBe(500);
+  });
+
+  it("recolore pelo dia escolhido no histórico", () => {
+    const markers = toHydricMapMarkers([stub({})], "2026-08-20");
+    expect(markers[0].color).toBe("#eab308");
+    expect(mapStatusOf(stub({}), "2026-08-20")).toBe("atencao");
   });
 
   it("não inventa marcador sem coordenada", () => {
@@ -53,5 +71,27 @@ describe("countMapStatuses", () => {
     ]);
     expect(counts.atencao).toBeUndefined();
     expect(counts.boa_umidade).toBe(1);
+  });
+});
+
+describe("hydricMapDates", () => {
+  it("não inclui data futura e limita a 7 dias", () => {
+    expect(hydricMapDates([stub({})], "2026-08-21")).toEqual(["2026-08-20", "2026-08-21"]);
+    expect(hydricMapDates([stub({})], "2026-08-20")).toEqual(["2026-08-20"]);
+  });
+});
+
+describe("hydricDemandSummary", () => {
+  it("conta amarelo e vermelho como demanda", () => {
+    const summary = hydricDemandSummary([
+      stub({}),
+      stub({
+        pivotId: "p2",
+        pivotName: "P02",
+        current: { date: "2026-08-21", mapStatus: "deficit_hidrico", deficit: 80 } as PivotHydricState["current"],
+        history: [],
+      }),
+    ]);
+    expect(summary).toEqual({ needing: 1, total: 2, highestName: "P02" });
   });
 });

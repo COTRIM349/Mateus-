@@ -31,13 +31,18 @@ interface PivotMapProps {
 const SATELLITE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
-/** Preenchimento sólido no estilo das plataformas de manejo (Scheduling / FieldNET). */
-const SOLID_FILL = 0.9;
-const SOLID_FILL_SELECTED = 0.96;
+/**
+ * Preenchimento deixa a lavoura visível; o anel grosso marca o pivô
+ * (trilha da última torre), como na Agrosmart Aqua.
+ */
+const FIELD_FILL = 0.38;
+const FIELD_FILL_SELECTED = 0.5;
+const TRACK_WEIGHT = 5;
+const TRACK_WEIGHT_SELECTED = 7;
 
 function strokeFor(fill: string, selected: boolean): string {
   if (selected) return "#ffffff";
-  if (fill === "#6b7280") return "#d4d4d8";
+  if (fill === "#9ca3af" || fill === "#6b7280") return "#e5e7eb";
   return fill;
 }
 
@@ -80,7 +85,12 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
     if (!map) return;
 
     map.eachLayer((layer) => {
-      if (layer instanceof L.Circle || layer instanceof L.Marker || layer instanceof L.Polyline) {
+      if (
+        layer instanceof L.Circle ||
+        layer instanceof L.CircleMarker ||
+        layer instanceof L.Marker ||
+        layer instanceof L.Polyline
+      ) {
         map.removeLayer(layer);
       }
     });
@@ -101,15 +111,28 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         continue;
       }
 
+      const trackColor = strokeFor(baseColor, isHighlighted);
+      const trackWeight = isHighlighted ? TRACK_WEIGHT_SELECTED : TRACK_WEIGHT;
+
+      L.circle(latlng, {
+        radius: pivot.radiusMeters,
+        color: "#0b0d0c",
+        fillOpacity: 0,
+        weight: trackWeight + 3,
+        opacity: 0.4,
+        interactive: false,
+        className: "pivot-hydric-circle",
+      }).addTo(map);
+
       const circle = L.circle(latlng, {
         radius: pivot.radiusMeters,
-        color: strokeFor(baseColor, isHighlighted),
+        color: trackColor,
         fillColor: baseColor,
-        fillOpacity: isHighlighted ? SOLID_FILL_SELECTED : SOLID_FILL,
-        weight: isHighlighted ? 3 : 1.5,
+        fillOpacity: isHighlighted ? FIELD_FILL_SELECTED : FIELD_FILL,
+        weight: trackWeight,
         opacity: 1,
         className: "pivot-hydric-circle",
-        dashArray: pivot.sheetIncomplete ? "7 5" : undefined,
+        dashArray: pivot.sheetIncomplete ? "10 7" : undefined,
       })
         .addTo(map)
         .bindTooltip(tooltip, {
@@ -126,17 +149,40 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         pivot.radiusMeters,
         pivot.boomBearingDeg ?? 0,
       );
+
       L.polyline([latlng, [boomEnd.lat, boomEnd.lng]], {
-        color: "#f8fafc",
-        weight: isHighlighted ? 2.5 : 1.75,
-        opacity: 0.95,
+        color: "#0b0d0c",
+        weight: isHighlighted ? 6 : 5,
+        opacity: 0.45,
         lineCap: "round",
         interactive: false,
         className: "pivot-hydric-boom",
       }).addTo(map);
 
+      const boom = L.polyline([latlng, [boomEnd.lat, boomEnd.lng]], {
+        color: "#f8fafc",
+        weight: isHighlighted ? 3 : 2.5,
+        opacity: 0.98,
+        lineCap: "round",
+        interactive: true,
+        className: "pivot-hydric-boom",
+      }).addTo(map);
+
+      const lastTower = L.circleMarker([boomEnd.lat, boomEnd.lng], {
+        radius: isHighlighted ? 6 : 5,
+        color: "#f8fafc",
+        fillColor: trackColor,
+        fillOpacity: 1,
+        weight: 2,
+        interactive: true,
+        className: "pivot-hydric-tower",
+      }).addTo(map);
+
       if (onSelect) {
-        circle.on("click", () => onSelect(pivot.id));
+        const select = () => onSelect(pivot.id);
+        circle.on("click", select);
+        boom.on("click", select);
+        lastTower.on("click", select);
       }
 
       bounds.extend(latlng);
@@ -144,7 +190,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
     }
 
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [56, 56], maxZoom: 16 });
     }
   }, [pivots, highlightId, onSelect]);
 

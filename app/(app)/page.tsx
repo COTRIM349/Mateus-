@@ -9,7 +9,7 @@ import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
-import { countMapStatuses, hydricMapStates, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricMapStates, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import {
   HYDRIC_STATUS_CONFIG,
   MAP_HYDRIC_STATUS_CONFIG,
@@ -197,29 +197,41 @@ function RankRow({ rank, state }: { rank: number; state: PivotHydricState }) {
 // ── Mapa Hídrico (item 17) ────────────────────────────────────────────
 
 function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
+  const dates = useMemo(() => hydricMapDates(states), [states]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(dates[dates.length - 1] ?? null);
+  const activeDate = selectedDate ?? dates[dates.length - 1] ?? null;
   const mapStates = hydricMapStates(states);
   const selected = mapStates.find((s) => s.pivotId === selectedId) ?? null;
-  const mapPivots = useMemo(() => toHydricMapMarkers(states), [states]);
-  const counts = countMapStatuses(states);
+  const mapPivots = useMemo(() => toHydricMapMarkers(states, activeDate), [states, activeDate]);
+  const counts = countMapStatuses(states, activeDate);
+  const demand = hydricDemandSummary(states, activeDate);
   const hasCoords = mapPivots.length > 0;
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-white/[0.06]">
+    <div className="overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-white/[0.06]">
       {hasCoords ? (
         <>
-          <PivotMap
-            pivots={mapPivots}
-            highlightId={selectedId ?? undefined}
-            onSelect={setSelectedId}
-            className="h-[min(78vh,760px)] min-h-[560px] w-full rounded-none border-0"
+          <div className="relative">
+            <PivotMap
+              pivots={mapPivots}
+              highlightId={selectedId ?? undefined}
+              onSelect={setSelectedId}
+              className="h-[min(72vh,700px)] min-h-[520px] w-full rounded-none border-0"
+            />
+            {selected ? (
+              <HydricMapOverlay onClose={() => setSelectedId(null)}>
+                <PivotDetail state={selected} />
+              </HydricMapOverlay>
+            ) : null}
+          </div>
+          <HydricMapLegend
+            counts={counts}
+            dates={dates}
+            selectedDate={activeDate}
+            onSelectDate={setSelectedDate}
+            demand={demand}
           />
-          <HydricMapLegend counts={counts} />
-          {selected ? (
-            <HydricMapOverlay onClose={() => setSelectedId(null)}>
-              <PivotDetail state={selected} />
-            </HydricMapOverlay>
-          ) : null}
         </>
       ) : (
         <EmptyState

@@ -10,7 +10,7 @@ import { useFarmHydricState } from "@/lib/hooks";
 import { cn } from "@/utils/cn";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
-import { countMapStatuses, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { countMapStatuses, hydricDemandSummary, hydricMapDates, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import {
   HYDRIC_STATUS_CONFIG,
   type PivotHydricState,
@@ -577,11 +577,15 @@ export default function VisaoGeralPage() {
   const activeFarm = farms.find((f) => f.id === activeFarmId);
   const { states, summary, loading } = useFarmHydricState();
   const [selectedPivotId, setSelectedPivotId] = useState<string | null>(null);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const latestWeather = states.find((s) => s.current)?.current ?? null;
 
-  const mapPivots = useMemo(() => toHydricMapMarkers(states), [states]);
-  const mapCounts = countMapStatuses(states);
+  const dates = useMemo(() => hydricMapDates(states), [states]);
+  const activeDate = selectedDate ?? dates[dates.length - 1] ?? null;
+  const mapPivots = useMemo(() => toHydricMapMarkers(states, activeDate), [states, activeDate]);
+  const mapCounts = countMapStatuses(states, activeDate);
+  const demand = hydricDemandSummary(states, activeDate);
 
   const selectedPivot = states.find((s) => s.pivotId === selectedPivotId) ?? null;
 
@@ -693,19 +697,25 @@ export default function VisaoGeralPage() {
           </div>
         </div>
         <div className="relative">
-          <PivotMap
-            pivots={mapPivots}
-            highlightId={selectedPivotId ?? undefined}
-            onSelect={setSelectedPivotId}
-            className="h-[min(62vh,640px)] min-h-[480px] w-full rounded-none border-0"
+            <PivotMap
+              pivots={mapPivots}
+              highlightId={selectedPivotId ?? undefined}
+              onSelect={setSelectedPivotId}
+              className="h-[min(62vh,640px)] min-h-[480px] w-full rounded-none border-0"
+            />
+            {selectedPivot ? (
+              <HydricMapOverlay onClose={() => setSelectedPivotId(null)}>
+                <PivotSideDetail pivot={selectedPivot} />
+              </HydricMapOverlay>
+            ) : null}
+          </div>
+          <HydricMapLegend
+            counts={mapCounts}
+            dates={dates}
+            selectedDate={activeDate}
+            onSelectDate={setSelectedDate}
+            demand={demand}
           />
-          <HydricMapLegend counts={mapCounts} />
-          {selectedPivot ? (
-            <HydricMapOverlay onClose={() => setSelectedPivotId(null)}>
-              <PivotSideDetail pivot={selectedPivot} />
-            </HydricMapOverlay>
-          ) : null}
-        </div>
       </Card>
 
       <div className="grid gap-5 lg:grid-cols-2">

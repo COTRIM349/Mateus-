@@ -4,9 +4,9 @@
  * O frontend NÃO escolhe cor. Consome `classifyWaterStatus()` a partir do
  * ARM/CAD/AFD já calculados pelo motor de balanço.
  *
- * Quatro cores operacionais — azul, verde, amarelo, vermelho — como nas
- * plataformas clássicas de manejo. Cinza (`incompleto`) não entra na legenda:
- * é ficha sem dado, não condição hídrica.
+ * Quatro cores operacionais — azul, verde, amarelo, vermelho — no recorte
+ * clássico de manejo (Agrosmart Aqua e similares). Cinza (`incompleto`) é
+ * ficha sem dado, não condição hídrica.
  *
  * O gatilho de irrigação (`classifyHydricStatus`) permanece independente
  * (verde/amarelo/vermelho/cinza pela AFD).
@@ -24,10 +24,6 @@ export interface MapHydricThresholds {
   fieldCapacityRatio: number;
 }
 
-/**
- * Limites padrão (parametrizáveis). Derivados da estrutura CAD / AFD / ARM
- * já usada no motor — não são mm arbitrários por cultura.
- */
 export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
   fieldCapacityRatio: 0.98,
 };
@@ -37,17 +33,17 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
   { label: string; color: string; bgClass: string }
 > = {
   capacidade_campo: {
-    label: "Capacidade de campo",
+    label: "Excesso hídrico",
     color: "#2563eb",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   },
   boa_umidade: {
-    label: "Adequado",
+    label: "Umidade ideal",
     color: "#22c55e",
     bgClass: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   },
   atencao: {
-    label: "Atenção",
+    label: "Umidade de atenção",
     color: "#eab308",
     bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
   },
@@ -57,11 +53,24 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
     bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   },
   incompleto: {
-    label: "Ficha técnica incompleta",
-    color: "#6b7280",
+    label: "Dados indisponíveis",
+    color: "#9ca3af",
     bgClass: "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400",
   },
 };
+
+/** Sem irrigar agora — azul / verde / sem dado. */
+export const MAP_HYDRIC_NO_IRRIGATE: MapHydricStatus[] = [
+  "capacidade_campo",
+  "boa_umidade",
+  "incompleto",
+];
+
+/** Precisa irrigar — amarelo / vermelho. */
+export const MAP_HYDRIC_NEED_IRRIGATE: MapHydricStatus[] = [
+  "atencao",
+  "deficit_hidrico",
+];
 
 export const MAP_HYDRIC_LEGEND_ORDER: MapHydricStatus[] = [
   "capacidade_campo",
@@ -81,7 +90,7 @@ export interface ClassifyWaterStatusInput {
 /**
  * Classifica a condição hídrica do solo para o mapa.
  *
- * - Azul: ARM ≈ CAD (capacidade de campo).
+ * - Azul: ARM ≈ CAD (capacidade de campo / excesso operacional).
  * - Verde: abaixo da CC e acima da umidade de segurança (CAD − AFD) — Ks = 1.
  * - Amarelo: abaixo da segurança, ainda com água (ARM > 0).
  * - Vermelho: ARM ≤ 0 — déficit.

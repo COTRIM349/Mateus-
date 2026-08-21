@@ -30,7 +30,7 @@ import {
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
 import { useFarmHydricState } from "@/lib/hooks";
-import { countMapStatuses, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { countMapStatuses, hydricDemandSummary, hydricMapDates, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
@@ -233,8 +233,12 @@ export default function BalancoHidricoPage() {
   // Estado hídrico atual de todos os pivôs — apenas para colorir o mapa
   // seletor. Não altera o cálculo detalhado (que continua sob demanda).
   const { states: hydricStates } = useFarmHydricState();
-  const mapPivots = useMemo(() => toHydricMapMarkers(hydricStates), [hydricStates]);
-  const mapCounts = countMapStatuses(hydricStates);
+  const mapDates = useMemo(() => hydricMapDates(hydricStates), [hydricStates]);
+  const [mapDate, setMapDate] = useState<string | null>(null);
+  const activeMapDate = mapDate ?? mapDates[mapDates.length - 1] ?? null;
+  const mapPivots = useMemo(() => toHydricMapMarkers(hydricStates, activeMapDate), [hydricStates, activeMapDate]);
+  const mapCounts = countMapStatuses(hydricStates, activeMapDate);
+  const mapDemand = hydricDemandSummary(hydricStates, activeMapDate);
 
   // Load pivots
   useEffect(() => {
@@ -854,7 +858,7 @@ export default function BalancoHidricoPage() {
               <span className="text-[11px] text-graphite-400 dark:text-gray-500">· toque em um pivô para selecionar</span>
             </div>
             <span className="hidden text-[11px] text-graphite-400 sm:inline dark:text-gray-500">
-              cores sólidas do motor hídrico
+              anel do pivô · 4 cores do motor
             </span>
           </div>
           <div className="relative">
@@ -864,8 +868,14 @@ export default function BalancoHidricoPage() {
               onSelect={setSelectedPivotId}
               className="h-[min(52vh,560px)] min-h-[420px] w-full rounded-none border-0"
             />
-            <HydricMapLegend counts={mapCounts} />
           </div>
+          <HydricMapLegend
+            counts={mapCounts}
+            dates={mapDates}
+            selectedDate={activeMapDate}
+            onSelectDate={setMapDate}
+            demand={mapDemand}
+          />
         </Card>
       )}
 
