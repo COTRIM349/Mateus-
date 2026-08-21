@@ -14,6 +14,9 @@ export interface CulturePhase {
   depletion_factor: number;
   phase_key?: string | null;
   id?: string;
+  ky?: number | null;
+  kl?: number | null;
+  ks_function?: string | null;
 }
 
 export interface PhaseIdentification {
@@ -71,8 +74,13 @@ export function interpolateKc(
     return sorted[0].kc_start;
   }
 
-  const kc = id.phase.kc_start + (id.phase.kc_end - id.phase.kc_start) * id.progress;
-  return roundTo(clamp(kc, 0, 2.5), 3);
+  const progress = clamp(id.progress, 0, 1);
+  const start = id.phase.kc_start;
+  const end = id.phase.kc_end;
+  const kc = start + (end - start) * progress;
+  const lo = Math.min(start, end);
+  const hi = Math.max(start, end);
+  return roundTo(clamp(kc, lo, hi), 3);
 }
 
 export function generateDailyKcCurve(

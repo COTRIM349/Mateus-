@@ -98,7 +98,7 @@ export function useFarmHydricState(): FarmHydricState {
 
     // 3. cultura, fases, solo, safra, cultivar, clima, irrigação
     const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes] = await Promise.all([
-      cultureIds.length ? supabase.from("cultures").select("id, name, root_depth, depletion_factor").in("id", cultureIds) : Promise.resolve({ data: [] }),
+      cultureIds.length ? supabase.from("cultures").select("id, name, root_depth, depletion_factor, kl, ks_function, ky").in("id", cultureIds) : Promise.resolve({ data: [] }),
       cultureIds.length ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order") : Promise.resolve({ data: [] }),
       soilIds.length ? supabase.from("soils").select("id, field_capacity, wilting_point, bulk_density, effective_depth").in("id", soilIds) : Promise.resolve({ data: [] }),
       soilIds.length
@@ -261,10 +261,15 @@ export function useFarmHydricState(): FarmHydricState {
             max_root_depth: (assignment.max_root_depth as number) ?? null,
             irrigation_efficiency: (assignment.irrigation_efficiency as number) ?? null,
             depletion_factor: (assignment.depletion_factor as number) ?? null,
+            kl_override: (assignment.kl_override as number) ?? null,
+            ks_function_override: (assignment.ks_function_override as string) ?? null,
           },
           culture: {
             root_depth: (culture.root_depth as number) ?? 0.3,
             depletion_factor: (culture.depletion_factor as number) ?? 0.5,
+            kl: (culture.kl as number) ?? null,
+            ks_function: (culture.ks_function as string) ?? null,
+            ky: (culture.ky as number) ?? null,
           },
           phases: phasesByCulture.get(assignment.culture_id as string) ?? [],
           soil: {

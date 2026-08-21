@@ -52,6 +52,13 @@ export interface DailyBalanceRow extends WaterBalanceResult {
   phase: string;
   pivotId?: string;
   pivotName?: string;
+  ks?: number;
+  kl?: number;
+  kcAdjusted?: number;
+  etcPotential?: number;
+  ky?: number | null;
+  yieldRisk?: number | null;
+  etcFormula?: string;
 }
 
 export interface BalanceSummary {

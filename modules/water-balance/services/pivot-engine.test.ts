@@ -58,6 +58,9 @@ describe("computePivotBalanceSeries — camadas", () => {
     expect(homogeneous[0].adt).toBe(54);
     expect(withLayers[0].adt).toBe(50);
     expect(withLayers[0].rootDepth).toBe(0.3);
+    expect(withLayers[0].ks).toBe(1);
+    expect(withLayers[0].kl).toBe(1);
+    expect(withLayers[0].etc).toBe(withLayers[0].etcPotential);
   });
 
   it("cai no cálculo homogêneo quando a lista de camadas está vazia", () => {
@@ -75,3 +78,89 @@ describe("computePivotBalanceSeries — camadas", () => {
     expect(series[0].adt).toBe(54);
   });
 });
+
+function weatherDays(start: string, days: number, et0: number): Record<string, { et0: number; precipitation: number }> {
+  const out: Record<string, { et0: number; precipitation: number }> = {};
+  const t0 = new Date(`${start}T00:00:00`).getTime();
+  for (let i = 0; i < days; i++) {
+    const date = new Date(t0 + i * 86400000).toISOString().slice(0, 10);
+    out[date] = { et0, precipitation: 0 };
+  }
+  return out;
+}
+
+describe("computePivotBalanceSeries — Ks, KL e Ky (Etapa E)", () => {
+  it("no primeiro dia (solo em CC) Ks=1, KL=1 e ETc = ETo × Kc", () => {
+    const series = computePivotBalanceSeries(sampleInput());
+    expect(series[0].ks).toBe(1);
+    expect(series[0].kl).toBe(1);
+    expect(series[0].etcPotential).toBe(5);
+    expect(series[0].etc).toBe(5);
+    expect(series[0].etcFormula).toContain("ETo × Kc × KL × Ks");
+  });
+
+  it("após Dr > AFD, Ks cai e a ETc ajustada fica menor que a potencial", () => {
+    const series = computePivotBalanceSeries(
+      sampleInput({
+        weatherByDate: weatherDays("2026-01-01", 10, 8),
+        dateEnd: "2026-01-10",
+      }),
+    );
+    const stressed = series.filter((d) => d.ks < 1);
+    expect(stressed.length).toBeGreaterThan(0);
+    expect(stressed[0].etc).toBeLessThan(stressed[0].etcPotential);
+    expect(stressed[0].kcAdjusted).toBeLessThan(stressed[0].kc);
+  });
+
+  it("ks_function=none mantém Ks=1 mesmo depletado", () => {
+    const series = computePivotBalanceSeries(
+      sampleInput({
+        culture: { root_depth: 0.3, depletion_factor: 0.5, ks_function: "none" },
+        weatherByDate: weatherDays("2026-01-01", 10, 8),
+        dateEnd: "2026-01-10",
+      }),
+    );
+    expect(series.every((d) => d.ks === 1)).toBe(true);
+  });
+
+  it("Ky não altera a lâmina recomendada nem a ETc (fao33 vira linear no ETc)", () => {
+    const base = {
+      weatherByDate: weatherDays("2026-01-01", 10, 8),
+      dateEnd: "2026-01-10" as const,
+    };
+    const lowKy = computePivotBalanceSeries(
+      sampleInput({
+        ...base,
+        culture: { root_depth: 0.3, depletion_factor: 0.5, ky: 0.2, ks_function: "fao33" },
+      }),
+    );
+    const highKy = computePivotBalanceSeries(
+      sampleInput({
+        ...base,
+        culture: { root_depth: 0.3, depletion_factor: 0.5, ky: 1.5, ks_function: "fao33" },
+      }),
+    );
+    const lastLo = lowKy[lowKy.length - 1];
+    const lastHi = highKy[highKy.length - 1];
+    expect(lastLo.etc).toBe(lastHi.etc);
+    expect(lastLo.recommendedNetDepth).toBe(lastHi.recommendedNetDepth);
+    expect(lastLo.ks).toBe(lastHi.ks);
+    expect(lastHi.yieldRisk).toBeGreaterThan(lastLo.yieldRisk ?? 0);
+  });
+
+  it("KL da parcela reduz ETc potencial; default continua 1", () => {
+    const full = computePivotBalanceSeries(sampleInput());
+    const localized = computePivotBalanceSeries(
+      sampleInput({
+        assignment: {
+          ...sampleInput().assignment,
+          kl_override: 0.6,
+        },
+      }),
+    );
+    expect(full[0].kl).toBe(1);
+    expect(localized[0].kl).toBe(0.6);
+    expect(localized[0].etcPotential).toBeCloseTo(full[0].etcPotential * 0.6, 2);
+  });
+});
+

@@ -98,6 +98,8 @@ interface CropAssignment {
   max_root_depth: number | null;
   irrigation_efficiency: number | null;
   depletion_factor: number | null;
+  kl_override: number | null;
+  ks_function_override: string | null;
   active: boolean;
 }
 
@@ -107,6 +109,9 @@ interface Culture {
   cycle_days: number;
   root_depth: number;
   depletion_factor: number;
+  kl: number | null;
+  ks_function: string | null;
+  ky: number | null;
 }
 
 interface Soil {
@@ -156,6 +161,13 @@ interface StoredBalance {
   irrigation_time: number;
   water_status: WaterStatus;
   phase: string | null;
+  ks: number | null;
+  kl: number | null;
+  kc_adjusted: number | null;
+  etc_potential: number | null;
+  ky: number | null;
+  yield_risk: number | null;
+  etc_formula: string | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -268,7 +280,7 @@ export default function BalancoHidricoPage() {
         (pivotSoil as { soil_id: string | null } | null)?.soil_id ?? a.soil_id;
 
       const [{ data: cultureData }, { data: soilData }, { data: phaseData }, { data: layerData }] = await Promise.all([
-        supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", a.culture_id).single(),
+        supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor, kl, ks_function, ky").eq("id", a.culture_id).single(),
         supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", effectiveSoilId).single(),
         supabase.from("culture_phases").select("*").eq("culture_id", a.culture_id).order("phase_order"),
         effectiveSoilId
@@ -404,8 +416,16 @@ export default function BalancoHidricoPage() {
           max_root_depth: assignment.max_root_depth,
           irrigation_efficiency: assignment.irrigation_efficiency,
           depletion_factor: assignment.depletion_factor,
+          kl_override: assignment.kl_override,
+          ks_function_override: assignment.ks_function_override,
         },
-        culture: { root_depth: culture.root_depth, depletion_factor: culture.depletion_factor },
+        culture: {
+          root_depth: culture.root_depth,
+          depletion_factor: culture.depletion_factor,
+          kl: culture.kl,
+          ks_function: culture.ks_function,
+          ky: culture.ky,
+        },
         phases,
         soil: {
           field_capacity: soil.field_capacity,
@@ -443,6 +463,13 @@ export default function BalancoHidricoPage() {
         volumeNeeded: d.recommendedVolume,
         irrigationTime: d.estimatedIrrigationTime,
         waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
+        ks: d.ks,
+        kl: d.kl,
+        kcAdjusted: d.kcAdjusted,
+        etcPotential: d.etcPotential,
+        ky: d.ky,
+        yieldRisk: d.yieldRisk,
+        etcFormula: d.etcFormula,
       }));
 
       // fator p real usado pelo motor (afd / adt)
@@ -482,6 +509,13 @@ export default function BalancoHidricoPage() {
           recommendation_reason: d.recommendationReason,
           hydric_status: d.status,
           water_status: HYDRIC_TO_WATER_STATUS[d.status],
+          ks: d.ks,
+          kl: d.kl,
+          kc_adjusted: d.kcAdjusted,
+          etc_potential: d.etcPotential,
+          ky: d.ky,
+          yield_risk: d.yieldRisk,
+          etc_formula: d.etcFormula,
         }));
 
         await supabase
@@ -529,6 +563,13 @@ export default function BalancoHidricoPage() {
         irrigationTime: r.irrigation_time,
         waterStatus: r.water_status,
         phase: r.phase ?? "—",
+        ks: r.ks ?? undefined,
+        kl: r.kl ?? undefined,
+        kcAdjusted: r.kc_adjusted ?? undefined,
+        etcPotential: r.etc_potential ?? undefined,
+        ky: r.ky,
+        yieldRisk: r.yield_risk,
+        etcFormula: r.etc_formula ?? undefined,
       }));
       setBalanceRows(rows);
     }
@@ -851,7 +892,7 @@ const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
     { k: "umidmm", label: "Umidade (mm)", color: "#eab308", kind: "line", axis: "mm", pendente: P },
     { k: "pmmm", label: "PM (mm)", color: "#111827", kind: "line", axis: "mm", pendente: P },
     { k: "cra", label: "CRA", color: "#dc2626", kind: "line", axis: "mm", pendente: P },
-    { k: "ks", label: "Ks", color: "#15803d", kind: "line", axis: "norm", norm: [0, 1], pendente: P },
+    { k: "ks", label: "Ks", color: "#15803d", kind: "line", axis: "norm", norm: [0, 1] },
     { k: "dg", label: "Dg (g/cm³)", color: "#ca8a04", kind: "line", axis: "norm", norm: [0, 2], pendente: P },
     { k: "profabs", label: "Profundidade de absorção", color: "#0d9488", kind: "line", axis: "norm", norm: [0, 1.5], unit: "m", pendente: P },
   ] },
@@ -891,7 +932,7 @@ const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
     { k: "etc", label: "ETc", color: "#22c55e", kind: "line", axis: "mm" },
     { k: "eto", label: "ETo", color: "#166534", kind: "line", axis: "mm" },
     { k: "etp", label: "ETp", color: "#4d7c0f", kind: "line", axis: "mm", pendente: P },
-    { k: "kl", label: "kl", color: "#4ade80", kind: "line", axis: "norm", norm: [0, 1.2], pendente: P },
+    { k: "kl", label: "KL", color: "#4ade80", kind: "line", axis: "norm", norm: [0, 1.2] },
     { k: "tmax", label: "Temperatura máxima", color: "#ef4444", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
     { k: "tmean", label: "Temperatura média", color: "#eab308", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
     { k: "tmin", label: "Temperatura mínima", color: "#8b5cf6", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
@@ -919,6 +960,8 @@ function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): number {
     case "fator": return r.depletionFactor;
     case "eto": return r.et0;
     case "etc": return r.etc;
+    case "ks": return r.ks ?? 1;
+    case "kl": return r.kl ?? 1;
     case "tmax": return wx?.tmax ?? 0;
     case "tmean": return wx?.tmean ?? 0;
     case "tmin": return wx?.tmin ?? 0;
@@ -1123,12 +1166,19 @@ function BalanceTab({
     : rows;
 
   const exportCsv = () => {
-    const headers = ["Data", "Fase", "Kc", "ETo", "ETc", "Chuva", "ChuvaEf", "Irrigacao", "Entradas", "Saidas", "Saldo", "AguaDisp", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Entradas", "Saidas", "Saldo", "AguaDisp", "Deplecao%", "Deficit", "LaminaRec", "Status"];
     const lines = filteredRows.map((r) => {
       const entr = r.effectivePrecipitation + r.irrigationApplied;
       const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
       const lam = r.deficit >= r.afd && r.afd > 0 ? r.grossDepth : 0;
-      return [r.date, r.phase, r.kc.toFixed(2), r.et0.toFixed(1), r.etc.toFixed(1), r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1), entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1), r.storedWater.toFixed(1), depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label].join(";");
+      return [
+        r.date, r.phase, r.kc.toFixed(2), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
+        r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1),
+        r.ky != null ? r.ky.toFixed(2) : "", r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "",
+        r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1),
+        entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1), r.storedWater.toFixed(1),
+        depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label,
+      ].join(";");
     });
     const csv = "﻿" + [headers.join(";"), ...lines].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
@@ -1169,8 +1219,13 @@ function BalanceTab({
     { header: "Data", render: (r) => fmtDia(r.date) },
     { header: "Fase", render: (r) => <span className="text-xs">{r.phase}</span> },
     { header: "Kc", render: (r) => r.kc.toFixed(2) },
+    { header: "Ks", render: (r) => (r.ks ?? 1).toFixed(2) },
+    { header: "KL", render: (r) => (r.kl ?? 1).toFixed(2) },
     { header: "ETo", render: (r) => r.et0.toFixed(1) },
-    { header: "ETc", render: (r) => r.etc.toFixed(1) },
+    { header: "ETc pot.", render: (r) => (r.etcPotential ?? r.etc).toFixed(1) },
+    { header: "ETc", render: (r) => <span title={r.etcFormula}>{r.etc.toFixed(1)}</span> },
+    { header: "Ky", render: (r) => r.ky != null ? r.ky.toFixed(2) : "—" },
+    { header: "Risco", render: (r) => r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "—" },
     { header: "Chuva", render: (r) => r.precipitation.toFixed(1) },
     { header: "Ch. ef.", render: (r) => r.effectivePrecipitation.toFixed(1) },
     { header: "Irrig.", render: (r) => r.irrigationApplied > 0 ? <span className="text-cyan-600 dark:text-cyan-400">{r.irrigationApplied.toFixed(1)}</span> : "0.0" },
@@ -1450,7 +1505,10 @@ function BalanceTab({
       <div className="flex flex-wrap gap-x-7 gap-y-2 rounded-2xl border border-gray-100 bg-gray-50/60 px-6 py-4 text-[11.5px] text-graphite-500 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-gray-400">
         <p className="w-full text-[10px] font-bold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Rastreabilidade</p>
         <span>Método ETo <strong className="font-semibold text-graphite-800 dark:text-white">FAO Penman-Monteith</strong></span>
-        <span>Origem do Kc <strong className="font-semibold text-graphite-800 dark:text-white">Curva da cultura</strong></span>
+        <span>Origem do Kc <strong className="font-semibold text-graphite-800 dark:text-white">Interpolação linear na fase</strong></span>
+        <span>ETc <strong className="font-semibold text-graphite-800 dark:text-white">ETo × Kc × KL × Ks</strong></span>
+        <span>Ks <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56 (Dr vs AFD)</strong></span>
+        <span>Ky <strong className="font-semibold text-graphite-800 dark:text-white">risco produtivo, não lâmina</strong></span>
         <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">USDA-SCS</strong></span>
         <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
         <span>Motor <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56</strong></span>

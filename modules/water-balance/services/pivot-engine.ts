@@ -15,11 +15,20 @@ import {
   computeRootDepth,
   resolveDepletionFactor,
 } from "@/modules/assignment/services";
+import { calculateKs } from "@/modules/assignment/services/parcel-motor-adapter";
 import {
   calculateADTFromLayers,
   soilProfileIsUsable,
   type SoilProfileLayer,
 } from "@/modules/soil/services";
+import {
+  formatEtcFormula,
+  ksFunctionForEtc,
+  resolveManejoKl,
+  resolveKsFunctionName,
+  resolvePhaseKy,
+  yieldRiskFraction,
+} from "./crop-coefficients";
 
 // ── Status hídrico (3 níveis + sem dados) ────────────────────────────────
 
@@ -85,11 +94,16 @@ export interface EngineAssignment {
   max_root_depth: number | null;
   irrigation_efficiency: number | null;
   depletion_factor: number | null;
+  kl_override?: number | null;
+  ks_function_override?: string | null;
 }
 
 export interface EngineCulture {
   root_depth: number;
   depletion_factor: number;
+  kl?: number | null;
+  ks_function?: string | null;
+  ky?: number | null;
 }
 
 export interface EngineSoil {
@@ -131,8 +145,19 @@ export interface BalanceDay {
   dae: number;
   phase: string;
   kc: number;
+  /** Kc × Ks × KL — coeficiente efetivo da ETc ajustada. */
+  kcAdjusted: number;
+  ks: number;
+  kl: number;
   et0: number;
+  /** ETo × Kc × KL (sem estresse). */
+  etcPotential: number;
+  /** ETo × Kc × KL × Ks — consome o balanço. */
   etc: number;
+  etcFormula: string;
+  ky: number | null;
+  /** Ky × (1 − Ks). Risco produtivo FAO-33; não entra na lâmina. */
+  yieldRisk: number | null;
   precipitation: number;
   effectivePrecipitation: number;
   irrigation: number;
@@ -262,15 +287,37 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const afd = calculateAFD(adt, pFactor);
 
     const weather = weatherByDate[date] ?? { et0: 0, precipitation: 0 };
-    const etc = roundTo(Math.max(weather.et0 * kc, 0), 2);
+
+    // KL explícito (pivô central / molhamento pleno = 1). Não aplica sem valor.
+    const kl = resolveManejoKl({
+      parcelOverride: assignment.kl_override,
+      phaseKl: phaseId?.phase.kl,
+      cultureKl: culture.kl,
+    });
+
+    // Ks no início do dia (Dr = ADT − ARM anterior). fao33/Ky não entra no ETc.
+    const prev: number = previousStorage ?? adt;
+    const startDeficit = adt > 0 ? Math.max(adt - prev, 0) : 0;
+    const startDepletion = adt > 0 ? startDeficit / adt : 0;
+    const ksConfigured = resolveKsFunctionName(
+      assignment.ks_function_override,
+      phaseId?.phase.ks_function,
+      culture.ks_function,
+    );
+    const ks = roundTo(calculateKs(startDepletion, pFactor, ksFunctionForEtc(ksConfigured), null), 3);
+
+    const etcPotential = roundTo(Math.max(weather.et0 * kc * kl, 0), 2);
+    const etc = roundTo(etcPotential * ks, 2);
+    const kcAdjusted = roundTo(kc * kl * ks, 3);
+    const ky = resolvePhaseKy(phaseId?.phase.ky, culture.ky);
+    const yieldRisk = yieldRiskFraction(ky, ks);
 
     const irrigation = irrigationByDate[date] ?? 0;
     const effectiveIrrigation = roundTo(irrigation * efficiency, 2);
 
     const registeredRain = Math.max(weather.precipitation, 0);
 
-    // balanço: armazenamento anterior (1º dia parte da capacidade) + entradas − ETc
-    const prev: number = previousStorage ?? adt;
+    // balanço: armazenamento anterior (1º dia parte da capacidade) + entradas − ETc ajustada
     const preCap = prev + registeredRain + effectiveIrrigation - etc;
     let storage = preCap;
     let surplus = 0;
@@ -295,8 +342,15 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       dae,
       phase: phaseName,
       kc: roundTo(kc, 3),
+      kcAdjusted,
+      ks,
+      kl,
       et0: roundTo(weather.et0, 2),
+      etcPotential,
       etc,
+      etcFormula: formatEtcFormula(roundTo(weather.et0, 2), roundTo(kc, 3), kl, ks),
+      ky,
+      yieldRisk,
       precipitation: roundTo(weather.precipitation, 2),
       effectivePrecipitation,
       irrigation: roundTo(irrigation, 2),
