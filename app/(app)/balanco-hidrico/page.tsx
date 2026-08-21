@@ -34,6 +34,7 @@ import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from 
 import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
+import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
@@ -742,6 +743,13 @@ export default function BalancoHidricoPage() {
     if (!selectedPivotId || !lancDate || !lancDepth) return;
     const pivot = pivots.find((p) => p.id === selectedPivotId);
     if (!pivot) return;
+    const launchErr = assertParcelAcceptsOperationalLaunch(
+      assignment ? { status: "ativa", active: assignment.active } : null,
+    );
+    if (launchErr) {
+      setLancMsg(launchErr);
+      return;
+    }
     setLancSaving(true);
     setLancMsg("");
 

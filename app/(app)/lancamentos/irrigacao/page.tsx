@@ -18,7 +18,7 @@ import {
   validateIrrigationDepth,
   validateOperatingHours,
 } from "@/modules/irrigation/services";
-import { isActiveParcel } from "@/modules/assignment/services";
+import { isActiveParcel, isHistoricParcel, assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 
 interface EventRow {
   id: string;
@@ -177,6 +177,10 @@ export default function LancamentoIrrigacaoPage() {
     if (hoursErr) { setFormError(hoursErr); return; }
 
     const parcel = activeParcelFor(form.pivot_id);
+    const launchErr = assertParcelAcceptsOperationalLaunch(
+      editing?.parcel_id ? parcels.find((p) => p.id === editing.parcel_id) ?? parcel : parcel,
+    );
+    if (launchErr) { setFormError(launchErr); return; }
     const payload = buildIrrigationEventInsert({
       pivotId: form.pivot_id,
       parcelId: editing?.parcel_id ?? parcel?.id ?? null,
@@ -216,6 +220,12 @@ export default function LancamentoIrrigacaoPage() {
     fetchEvents();
   };
 
+  const parcelIsHistoric = (parcelId: string | null) => {
+    if (!parcelId) return false;
+    const p = parcels.find((x) => x.id === parcelId);
+    return p ? isHistoricParcel(p.status, p.active) : false;
+  };
+
   const columns: Column<EventRow>[] = [
     { header: "Data / hora", render: (r) => fmtWhen(r.started_at) },
     { header: "Pivô", render: (r) => <span className="font-medium">{pivotMap.get(r.pivot_id)?.name ?? "—"}</span> },
@@ -227,7 +237,9 @@ export default function LancamentoIrrigacaoPage() {
     {
       header: "Ações",
       align: "right",
-      render: (r) => (
+      render: (r) => parcelIsHistoric(r.parcel_id) ? (
+        <span className="text-xs text-graphite-400 dark:text-gray-500">Histórico</span>
+      ) : (
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>Editar</Button>
           <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
@@ -356,7 +368,7 @@ export default function LancamentoIrrigacaoPage() {
           {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" disabled={saving || !selectedParcel}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
       </Modal>

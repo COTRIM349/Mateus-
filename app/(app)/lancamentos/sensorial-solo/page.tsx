@@ -18,7 +18,7 @@ import {
   validateSensoryDepthCm,
   validateSensoryNote,
 } from "@/modules/soil/services";
-import { isActiveParcel } from "@/modules/assignment/services";
+import { isActiveParcel, isHistoricParcel, assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 
 interface Reading {
   id: string;
@@ -175,6 +175,10 @@ export default function SensorialSoloPage() {
     if (depthErr) { setFormError(depthErr); return; }
 
     const parcel = activeParcelFor(form.pivot_id);
+    const launchErr = assertParcelAcceptsOperationalLaunch(
+      editing?.parcel_id ? parcels.find((p) => p.id === editing.parcel_id) ?? parcel : parcel,
+    );
+    if (launchErr) { setFormError(launchErr); return; }
     const payload = buildSensoryInsert({
       farmId: activeFarmId,
       pivotId: form.pivot_id,
@@ -220,6 +224,12 @@ export default function SensorialSoloPage() {
 
   const selectedParcel = form.pivot_id ? activeParcelFor(form.pivot_id) : null;
 
+  const parcelIsHistoric = (parcelId: string | null) => {
+    if (!parcelId) return false;
+    const p = parcels.find((x) => x.id === parcelId);
+    return p ? isHistoricParcel(p.status, p.active) : false;
+  };
+
   const columns: Column<Reading>[] = [
     { header: "Data / hora", render: (r) => formatObserved(r) },
     { header: "Pivô", render: (r) => <span className="font-medium">{pivotMap.get(r.pivot_id) ?? "—"}</span> },
@@ -238,7 +248,9 @@ export default function SensorialSoloPage() {
     {
       header: "Ações",
       align: "right",
-      render: (r) => (
+      render: (r) => parcelIsHistoric(r.parcel_id) ? (
+        <span className="text-xs text-graphite-400 dark:text-gray-500">Histórico</span>
+      ) : (
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={() => openEdit(r)}>Editar</Button>
           <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
@@ -389,7 +401,7 @@ export default function SensorialSoloPage() {
 
           <div className="flex justify-end gap-3 pt-2">
             <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
+            <Button type="submit" disabled={saving || !selectedParcel}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
       </Modal>

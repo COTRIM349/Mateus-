@@ -8,6 +8,7 @@ import { useAuth } from "@/components/providers";
 import { useFarmHydricState } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { buildIrrigationEventInsert } from "@/modules/irrigation/services";
+import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { cn } from "@/utils/cn";
 import {
   HYDRIC_STATUS_CONFIG,
@@ -468,6 +469,13 @@ export default function DecisaoPage() {
   const handleApplyIrrigation = useCallback(
     async (depthMm: number) => {
       if (!selectedPivotId || !selectedPivot) return;
+      const launchErr = assertParcelAcceptsOperationalLaunch(
+        selectedPivot.parcelId ? { status: "ativa", active: true } : null,
+      );
+      if (launchErr) {
+        setMessage(launchErr);
+        return;
+      }
       setApplying(true);
       setMessage("");
 

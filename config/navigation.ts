@@ -52,6 +52,7 @@ const ICON = {
 
 export const topLevelItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: ICON.home },
+  { label: "Histórico", href: "/historico", icon: ICON.boletim },
 ];
 
 export const navGroups: NavGroup[] = [

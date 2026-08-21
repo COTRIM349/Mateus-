@@ -21,9 +21,12 @@ import { MATURITY_TYPES } from "@/constants/brazil";
 import {
   buildParcelClosePayload,
   buildParcelInsertRow,
+  closeDateToIso,
   isActiveParcel,
   isHistoricParcel,
+  snapshotCycleWater,
   suggestParcelName,
+  validateParcelClose,
   validateParcelCycle,
 } from "@/modules/assignment/services";
 import { identifyPhase } from "@/modules/culture/services";
@@ -213,10 +216,12 @@ export default function VinculacaoPage() {
   // Sprint 13 · Etapa 5 — lifecycle da parcela
   const [activeSection, setActiveSection] = useState<"ativas" | "historico">("ativas");
   const [closeTarget, setCloseTarget] = useState<Assignment | null>(null);
+  const todayYmd = () => new Date().toISOString().slice(0, 10);
   const [closeForm, setCloseForm] = useState({
     close_reason: "colheita",
     close_note: "",
     yield_kg_ha: "",
+    closed_at: "",
   });
 
   useEffect(() => {
@@ -348,17 +353,43 @@ export default function VinculacaoPage() {
 
   const openClose = (a: Assignment) => {
     setCloseTarget(a);
-    setCloseForm({ close_reason: "colheita", close_note: "", yield_kg_ha: "" });
+    setFormError("");
+    setCloseForm({
+      close_reason: "colheita",
+      close_note: "",
+      yield_kg_ha: "",
+      closed_at: todayYmd(),
+    });
   };
 
   const handleCloseParcela = async () => {
     if (!closeTarget) return;
+    const yieldKgHa = closeForm.yield_kg_ha ? Number(closeForm.yield_kg_ha) : null;
+    const closeError = validateParcelClose({
+      currentStatus: closeTarget.status,
+      currentActive: closeTarget.active,
+      closeReason: closeForm.close_reason,
+      closedAtYmd: closeForm.closed_at,
+      plantingDate: closeTarget.planting_date,
+      yieldKgHa,
+    });
+    if (closeError) {
+      setFormError(closeError);
+      return;
+    }
     setSaving(true);
     try {
+      const { data: evRows } = await supabase
+        .from("irrigation_events")
+        .select("depth_mm, volume_m3")
+        .eq("parcel_id", closeTarget.id);
+      const water = snapshotCycleWater(evRows ?? []);
       const payload = buildParcelClosePayload({
         closeReason: closeForm.close_reason,
         closeNote: closeForm.close_note,
-        yieldKgHa: closeForm.yield_kg_ha ? Number(closeForm.yield_kg_ha) : null,
+        yieldKgHa,
+        closedAt: closeDateToIso(closeForm.closed_at),
+        totalWaterAppliedMm: water.total_water_applied_mm,
       });
       const { error } = await supabase
         .from("pivot_crop_assignments")
@@ -366,6 +397,7 @@ export default function VinculacaoPage() {
         .eq("id", closeTarget.id);
       if (error) throw new Error(error.message);
       setCloseTarget(null);
+      setActiveSection("historico");
       await refetch();
     } catch (err) {
       setFormError(err instanceof Error ? err.message : "Erro ao encerrar parcela");
@@ -686,6 +718,11 @@ export default function VinculacaoPage() {
         </p>
         {activeSection === "ativas" && (
           <Button onClick={openNew}>Nova parcela</Button>
+        )}
+        {activeSection === "historico" && (
+          <Button variant="secondary" onClick={() => { window.location.href = "/historico"; }}>
+            Abrir histórico operacional
+          </Button>
         )}
       </div>
 
@@ -1053,6 +1090,11 @@ export default function VinculacaoPage() {
           </div>
 
           <div className="grid gap-4">
+            <Input
+              id="closed_at" label="Data de encerramento" type="date" required
+              value={closeForm.closed_at}
+              onChange={(e) => setCloseForm((f) => ({ ...f, closed_at: e.target.value }))}
+            />
             <Select
               id="close_reason" label="Motivo do encerramento" required
               value={closeForm.close_reason}

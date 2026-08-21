@@ -1,11 +1,16 @@
 /**
- * Ciclo de vida da parcela (Etapa C).
+ * Ciclo de vida da parcela (Etapas C e I).
  *
  * Parcela = unidade agronômica e temporal. Nova cultura = novo ciclo.
  * Encerrar preserva o registro; nunca reutilizar nem apagar.
  * Cultura, cultivar, plantio e manejo pertencem à parcela, não ao pivô.
  * Solo e KL de perfil vêm do pivô; a parcela pode só registrar override de KL.
+ *
+ * Etapa I: data de encerramento, bloqueio de lançamentos no ciclo fechado,
+ * snapshot de água aplicada. Custo/energia ficam para a Etapa J.
  */
+
+import { roundTo } from "@/utils/math";
 
 export const PARCEL_STATUSES = ["rascunho", "ativa", "encerrada", "cancelada"] as const;
 export type ParcelStatus = (typeof PARCEL_STATUSES)[number];
@@ -18,6 +23,19 @@ export const PARCEL_CLOSE_REASONS = [
   "outro",
 ] as const;
 export type ParcelCloseReason = (typeof PARCEL_CLOSE_REASONS)[number];
+
+export const PARCEL_CLOSE_REASON_LABELS: Record<ParcelCloseReason, string> = {
+  colheita: "Colheita",
+  falha_lavoura: "Falha da lavoura",
+  clima_adverso: "Clima adverso",
+  decisao_gerencial: "Decisão gerencial",
+  outro: "Outro",
+};
+
+export const CLOSED_PARCEL_NO_LAUNCH =
+  "Parcela encerrada: não é possível lançar neste ciclo. O histórico permanece; abra um novo ciclo no pivô.";
+export const NO_ACTIVE_PARCEL_LAUNCH =
+  "Não há parcela ativa neste pivô. Cadastre ou abra um novo ciclo para lançar.";
 
 export interface ParcelCycleRef {
   id: string;
@@ -41,6 +59,33 @@ export function isActiveParcel(status: string | null | undefined, active?: boole
 /** Encerrada/cancelada nunca volta a ser o ciclo operacional. */
 export function canReuseParcel(status: string | null | undefined): boolean {
   return status !== "encerrada" && status !== "cancelada";
+}
+
+/** Histórico é permanente: não apagar nem reabrir o registro. */
+export function canMutateParcelRecord(
+  status: string | null | undefined,
+  active?: boolean | null,
+): boolean {
+  return !isHistoricParcel(status, active);
+}
+
+export function canDeleteParcel(
+  status: string | null | undefined,
+  active?: boolean | null,
+): boolean {
+  return canMutateParcelRecord(status, active);
+}
+
+/**
+ * Lançamentos normais (irrigação, sensorial, manejo) só no ciclo ativo.
+ * Parcela encerrada sai das listas operacionais e entra no histórico.
+ */
+export function assertParcelAcceptsOperationalLaunch(
+  parcel: { status?: string | null; active?: boolean | null } | null | undefined,
+): string | null {
+  if (!parcel) return NO_ACTIVE_PARCEL_LAUNCH;
+  if (!isActiveParcel(parcel.status, parcel.active)) return CLOSED_PARCEL_NO_LAUNCH;
+  return null;
 }
 
 export function suggestParcelName(pivotName: string, cultureName: string, seasonName: string): string {
@@ -165,6 +210,56 @@ export interface ParcelClosePayload {
   close_reason: ParcelCloseReason;
   close_note: string | null;
   yield_kg_ha: number | null;
+  total_water_applied_mm: number | null;
+}
+
+export function closeDateToIso(ymd: string): string {
+  return `${ymd}T12:00:00.000Z`;
+}
+
+export function validateParcelClose(input: {
+  currentStatus?: string | null;
+  currentActive?: boolean | null;
+  closeReason: string;
+  closedAtYmd: string;
+  plantingDate?: string | null;
+  yieldKgHa?: number | null;
+}): string | null {
+  if (!isActiveParcel(input.currentStatus, input.currentActive)) {
+    return "Só é possível encerrar uma parcela ativa.";
+  }
+  if (!input.closeReason) return "Informe o motivo do encerramento.";
+  if (!(PARCEL_CLOSE_REASONS as readonly string[]).includes(input.closeReason)) {
+    return "Motivo de encerramento inválido.";
+  }
+  if (!input.closedAtYmd) return "Informe a data de encerramento.";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input.closedAtYmd)) {
+    return "Data de encerramento inválida.";
+  }
+  if (input.plantingDate && input.closedAtYmd < input.plantingDate) {
+    return "A data de encerramento não pode ser anterior ao plantio.";
+  }
+  if (input.yieldKgHa != null && (Number.isNaN(input.yieldKgHa) || input.yieldKgHa < 0)) {
+    return "Produtividade deve ser um número ≥ 0.";
+  }
+  return null;
+}
+
+/** Soma a lâmina bruta dos eventos do ciclo. Não calcula energia nem custo. */
+export function snapshotCycleWater(
+  events: Array<{ depth_mm?: number | null; volume_m3?: number | null }>,
+): { total_water_applied_mm: number; total_volume_m3: number; irrigation_count: number } {
+  let mm = 0;
+  let vol = 0;
+  for (const e of events) {
+    mm += Math.max(Number(e.depth_mm) || 0, 0);
+    vol += Math.max(Number(e.volume_m3) || 0, 0);
+  }
+  return {
+    total_water_applied_mm: roundTo(mm, 2),
+    total_volume_m3: roundTo(vol, 2),
+    irrigation_count: events.length,
+  };
 }
 
 export function buildParcelClosePayload(input: {
@@ -172,6 +267,7 @@ export function buildParcelClosePayload(input: {
   closeNote?: string | null;
   yieldKgHa?: number | null;
   closedAt?: string;
+  totalWaterAppliedMm?: number | null;
 }): ParcelClosePayload {
   const reason = (PARCEL_CLOSE_REASONS as readonly string[]).includes(input.closeReason)
     ? (input.closeReason as ParcelCloseReason)
@@ -183,5 +279,6 @@ export function buildParcelClosePayload(input: {
     close_reason: reason,
     close_note: input.closeNote?.trim() ? input.closeNote.trim() : null,
     yield_kg_ha: input.yieldKgHa ?? null,
+    total_water_applied_mm: input.totalWaterAppliedMm ?? null,
   };
 }

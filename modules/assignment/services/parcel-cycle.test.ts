@@ -1,12 +1,20 @@
 import { describe, expect, it } from "vitest";
 import {
+  CLOSED_PARCEL_NO_LAUNCH,
+  NO_ACTIVE_PARCEL_LAUNCH,
+  assertParcelAcceptsOperationalLaunch,
   buildParcelClosePayload,
   buildParcelInsertRow,
+  canDeleteParcel,
+  canMutateParcelRecord,
   canReuseParcel,
+  closeDateToIso,
   findBlockingActiveParcel,
   isActiveParcel,
   isHistoricParcel,
+  snapshotCycleWater,
   suggestParcelName,
+  validateParcelClose,
   validateParcelCycle,
   validatePlantedArea,
   type ParcelCycleDraft,
@@ -121,11 +129,82 @@ describe("buildParcelClosePayload", () => {
       closeNote: "safra encerrada",
       yieldKgHa: 4200,
       closedAt: "2027-03-01T12:00:00.000Z",
+      totalWaterAppliedMm: 187,
     });
     expect(payload.status).toBe("encerrada");
     expect(payload.active).toBe(false);
     expect(payload.close_reason).toBe("colheita");
     expect(payload.yield_kg_ha).toBe(4200);
+    expect(payload.closed_at).toBe("2027-03-01T12:00:00.000Z");
+    expect(payload.total_water_applied_mm).toBe(187);
+    expect(payload).not.toHaveProperty("total_energy_kwh");
+    expect(payload).not.toHaveProperty("total_cost");
+  });
+});
+
+describe("encerramento e bloqueio de lançamento (Etapa I)", () => {
+  it("exige data, motivo e parcela ativa", () => {
+    expect(
+      validateParcelClose({
+        currentStatus: "ativa",
+        closeReason: "colheita",
+        closedAtYmd: "2027-02-20",
+        plantingDate: "2026-10-15",
+      }),
+    ).toBeNull();
+    expect(
+      validateParcelClose({
+        currentStatus: "encerrada",
+        currentActive: false,
+        closeReason: "colheita",
+        closedAtYmd: "2027-02-20",
+      }),
+    ).toMatch(/ativa/);
+    expect(
+      validateParcelClose({
+        currentStatus: "ativa",
+        closeReason: "colheita",
+        closedAtYmd: "",
+      }),
+    ).toMatch(/data/);
+    expect(
+      validateParcelClose({
+        currentStatus: "ativa",
+        closeReason: "colheita",
+        closedAtYmd: "2026-09-01",
+        plantingDate: "2026-10-15",
+      }),
+    ).toMatch(/anterior ao plantio/);
+    expect(closeDateToIso("2027-02-20")).toBe("2027-02-20T12:00:00.000Z");
+  });
+
+  it("bloqueia lançamento no ciclo encerrado e exige parcela ativa", () => {
+    expect(assertParcelAcceptsOperationalLaunch({ status: "ativa", active: true })).toBeNull();
+    expect(assertParcelAcceptsOperationalLaunch({ status: "encerrada", active: false })).toBe(CLOSED_PARCEL_NO_LAUNCH);
+    expect(assertParcelAcceptsOperationalLaunch(null)).toBe(NO_ACTIVE_PARCEL_LAUNCH);
+    expect(canMutateParcelRecord("encerrada", false)).toBe(false);
+    expect(canDeleteParcel("encerrada", false)).toBe(false);
+    expect(canReuseParcel("encerrada")).toBe(false);
+  });
+
+  it("snapshot de água soma eventos e não inventa tarifa", () => {
+    const snap = snapshotCycleWater([
+      { depth_mm: 10, volume_m3: 8000 },
+      { depth_mm: 5, volume_m3: 4000 },
+    ]);
+    expect(snap.total_water_applied_mm).toBe(15);
+    expect(snap.total_volume_m3).toBe(12000);
+    expect(snap.irrigation_count).toBe(2);
+  });
+
+  it("depois de encerrar, o pivô aceita novo ciclo", () => {
+    expect(
+      validateParcelCycle(
+        draft({
+          existingOnPivot: [{ id: "old", pivot_id: "pivot-31", status: "encerrada", active: false }],
+        }),
+      ),
+    ).toBeNull();
   });
 });
 
