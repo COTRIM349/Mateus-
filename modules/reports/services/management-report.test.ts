@@ -75,7 +75,7 @@ describe("relatório de manejo (Etapa K)", () => {
     expect(day.effectiveRainMm).toBe(8);
     expect(day.cadMm).toBe(54);
     expect(day.afdMm).toBe(27);
-    expect(day.armMm).toBe(27);
+    expect(day.armMm).toBe(40);
     expect(day.safetyMoistureMm).toBe(27);
     expect(day.fieldCapacity).toBe(0.3);
     expect(day.wiltingPoint).toBe(0.12);
@@ -225,7 +225,8 @@ describe("telas de relatórios e gráfico", () => {
     expect(src).toContain("filtro_parcela");
     expect(src).toContain("Exportar CSV");
     expect(src).toContain("Gráfico de manejo");
-    expect(src).toContain("Nota sensorial");
+    expect(src).toContain("Sensorial");
+    expect(src).toContain("nota 1–10");
     expect(src).toContain("ARM mm");
     expect(src).not.toContain("Prod. estimada");
     expect(src).not.toContain("estimatedYield");
