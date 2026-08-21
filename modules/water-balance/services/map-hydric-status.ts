@@ -28,33 +28,51 @@ export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
   fieldCapacityRatio: 0.98,
 };
 
+/**
+ * Paleta única do mapa hídrico.
+ * Azul / verde / amarelo / vermelho na mesma escala (Material 500).
+ * Anel, preenchimento, legenda e badge usam estes hex — não misturar Tailwind 400/500/600.
+ */
+export const MAP_HYDRIC_COLORS = {
+  blue: "#2196F3",
+  green: "#4CAF50",
+  yellow: "#FFC107",
+  red: "#F44336",
+  gray: "#9E9E9E",
+} as const;
+
 export const MAP_HYDRIC_STATUS_CONFIG: Record<
   MapHydricStatus,
-  { label: string; color: string; bgClass: string }
+  { label: string; color: string; onColor: string; bgClass: string }
 > = {
   capacidade_campo: {
     label: "Excesso hídrico",
-    color: "#3b82f6",
+    color: MAP_HYDRIC_COLORS.blue,
+    onColor: "#ffffff",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   },
   boa_umidade: {
     label: "Umidade ideal",
-    color: "#22c55e",
+    color: MAP_HYDRIC_COLORS.green,
+    onColor: "#ffffff",
     bgClass: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
   },
   atencao: {
     label: "Umidade de atenção",
-    color: "#eab308",
+    color: MAP_HYDRIC_COLORS.yellow,
+    onColor: "#111827",
     bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
   },
   deficit_hidrico: {
     label: "Déficit hídrico",
-    color: "#ef4444",
+    color: MAP_HYDRIC_COLORS.red,
+    onColor: "#ffffff",
     bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   },
   incompleto: {
     label: "Dados indisponíveis",
-    color: "#9ca3af",
+    color: MAP_HYDRIC_COLORS.gray,
+    onColor: "#111827",
     bgClass: "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400",
   },
 };

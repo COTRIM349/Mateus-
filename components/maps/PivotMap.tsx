@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { destinationLatLng } from "@/utils/geo";
+import { MAP_HYDRIC_COLORS } from "@/modules/water-balance/services";
 
 export interface PivotMarker {
   id: string;
@@ -40,9 +41,8 @@ const FIELD_FILL_SELECTED = 0.45;
 const TRACK_WEIGHT = 5;
 const TRACK_WEIGHT_SELECTED = 7;
 
-function strokeFor(fill: string, selected: boolean): string {
-  if (selected) return "#ffffff";
-  if (fill === "#9ca3af" || fill === "#6b7280") return "#e5e7eb";
+function strokeFor(fill: string): string {
+  if (fill === MAP_HYDRIC_COLORS.gray || fill === "#9ca3af" || fill === "#6b7280") return "#e5e7eb";
   return fill;
 }
 
@@ -101,7 +101,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
       if (!pivot.latitude || !pivot.longitude) continue;
       const latlng: L.LatLngExpression = [pivot.latitude, pivot.longitude];
       const isHighlighted = pivot.id === highlightId;
-      const baseColor = pivot.color ?? "#22c55e";
+      const baseColor = pivot.color ?? MAP_HYDRIC_COLORS.green;
       const tooltip = pivot.statusLabel
         ? `${pivot.name} · ${pivot.statusLabel}`
         : pivot.name;
@@ -111,7 +111,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         continue;
       }
 
-      const trackColor = strokeFor(baseColor, isHighlighted);
+      const trackColor = strokeFor(baseColor);
       const trackWeight = isHighlighted ? TRACK_WEIGHT_SELECTED : TRACK_WEIGHT;
 
       L.circle(latlng, {
@@ -171,7 +171,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
       const lastTower = L.circleMarker([boomEnd.lat, boomEnd.lng], {
         radius: isHighlighted ? 6 : 5,
         color: "#f8fafc",
-        fillColor: trackColor,
+        fillColor: baseColor,
         fillOpacity: 1,
         weight: 2,
         interactive: true,

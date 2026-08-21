@@ -10,9 +10,11 @@ import { useFarmHydricState } from "@/lib/hooks";
 import { cn } from "@/utils/cn";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
-import { countMapStatuses, hydricDemandSummary, hydricMapDates, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { HydricStatusBadge } from "@/components/maps/HydricStatusBadge";
+import { countMapStatuses, hydricDemandSummary, hydricMapDates, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import {
   HYDRIC_STATUS_CONFIG,
+  MAP_HYDRIC_STATUS_CONFIG,
   type PivotHydricState,
   type FarmHydricSummary,
   type BalanceDay,
@@ -265,8 +267,7 @@ function PivotSideDetail({ pivot }: { pivot: PivotHydricState }) {
     );
   }
 
-  const status = day.status;
-  const cfg = HYDRIC_STATUS_CONFIG[status];
+  const mapStatus = mapStatusOf(pivot);
   const armPct = day.adt > 0 ? Math.round((day.storage / day.adt) * 100) : 0;
 
   const metrics = [
@@ -292,15 +293,7 @@ function PivotSideDetail({ pivot }: { pivot: PivotHydricState }) {
               {pivot.seasonName ? ` · ${pivot.seasonName}` : ""}
             </p>
           </div>
-          <span
-            className={cn(
-              "inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[11px] font-semibold",
-              cfg.bgClass,
-            )}
-          >
-            <span className="h-1.5 w-1.5 rounded-full bg-current opacity-80" />
-            {cfg.label}
-          </span>
+          <HydricStatusBadge status={mapStatus} />
         </div>
 
         <div className="mt-4">
@@ -313,7 +306,7 @@ function PivotSideDetail({ pivot }: { pivot: PivotHydricState }) {
               className="h-full rounded-full transition-all"
               style={{
                 width: `${Math.min(armPct, 100)}%`,
-                backgroundColor: cfg.color,
+                backgroundColor: MAP_HYDRIC_STATUS_CONFIG[mapStatus].color,
               }}
             />
           </div>

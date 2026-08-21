@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyWaterStatus,
+  MAP_HYDRIC_COLORS,
   MAP_HYDRIC_LEGEND_ORDER,
   MAP_HYDRIC_NEED_IRRIGATE,
   MAP_HYDRIC_NO_IRRIGATE,
@@ -54,9 +55,15 @@ describe("classifyWaterStatus", () => {
     expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "boa_umidade", "incompleto"]);
     expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["atencao", "deficit_hidrico"]);
     expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(4);
-    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe("#3b82f6");
-    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe("#22c55e");
-    expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe("#eab308");
-    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe("#ef4444");
+    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.blue);
+    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.green);
+    expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe(MAP_HYDRIC_COLORS.yellow);
+    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe(MAP_HYDRIC_COLORS.red);
+    expect(Object.values(MAP_HYDRIC_COLORS).slice(0, 4)).toEqual([
+      "#2196F3",
+      "#4CAF50",
+      "#FFC107",
+      "#F44336",
+    ]);
   });
 });

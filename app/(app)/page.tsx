@@ -9,10 +9,10 @@ import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
+import { HydricStatusBadge } from "@/components/maps/HydricStatusBadge";
 import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricMapStates, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import {
   HYDRIC_STATUS_CONFIG,
-  MAP_HYDRIC_STATUS_CONFIG,
   type PivotHydricState,
   type FarmHydricSummary,
 } from "@/modules/water-balance/services";
@@ -260,7 +260,6 @@ function DetailGroup({ title, rows }: { title: string; rows: [string, string][] 
 function PivotDetail({ state }: { state: PivotHydricState }) {
   const c = state.current;
   const mapStatus = mapStatusOf(state);
-  const conf = MAP_HYDRIC_STATUS_CONFIG[mapStatus];
   const dap = c?.dae ?? (state.plantingDate
     ? Math.max(0, Math.floor((Date.now() - new Date(state.plantingDate + "T12:00:00").getTime()) / 86400000))
     : null);
@@ -269,7 +268,9 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
     return (
       <Card>
         <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">{state.pivotName}</h3>
-        <span className={`mt-2 inline-flex rounded-lg px-2.5 py-1 text-[10px] font-bold ${conf.bgClass}`}>{conf.label}</span>
+        <div className="mt-2">
+          <HydricStatusBadge status={mapStatus} />
+        </div>
         <p className="mt-2 text-sm leading-relaxed text-graphite-400 dark:text-gray-500">
           {state.sheetIncomplete
             ? "Ficha técnica incompleta: cadastre raio ou coordenadas do equipamento para desenhar a geometria real."
@@ -283,7 +284,7 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
     <Card className="space-y-5">
       <div className="flex items-center justify-between gap-3">
         <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">{state.pivotName}</h3>
-        <span className={`rounded-lg px-2.5 py-1 text-[10px] font-bold ${conf.bgClass}`}>{conf.label}</span>
+        <HydricStatusBadge status={mapStatus} />
       </div>
 
       <DetailGroup

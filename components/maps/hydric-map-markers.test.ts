@@ -48,13 +48,13 @@ describe("toHydricMapMarkers", () => {
   it("pinta o círculo com a cor do status do motor", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].color).toBe("#22c55e");
+    expect(markers[0].color).toBe("#4CAF50");
     expect(markers[0].radiusMeters).toBe(500);
   });
 
   it("recolore pelo dia escolhido no histórico", () => {
     const markers = toHydricMapMarkers([stub({})], "2026-08-20");
-    expect(markers[0].color).toBe("#eab308");
+    expect(markers[0].color).toBe("#FFC107");
     expect(mapStatusOf(stub({}), "2026-08-20")).toBe("atencao");
   });
 
