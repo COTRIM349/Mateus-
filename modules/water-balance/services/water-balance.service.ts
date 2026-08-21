@@ -50,8 +50,14 @@ export interface WaterBalanceResult {
 export interface DailyBalanceRow extends WaterBalanceResult {
   date: string;
   phase: string;
+  /** Dias após emergência/plantio, quando o motor persistiu. */
+  dae?: number;
   pivotId?: string;
   pivotName?: string;
+  parcelId?: string;
+  parcelName?: string;
+  cultureId?: string;
+  cultureName?: string;
   ks?: number;
   kl?: number;
   kcAdjusted?: number;

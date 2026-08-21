@@ -13,14 +13,15 @@ import type { WeatherReadingRow } from "@/modules/weather/services";
 // ── Report Types ──────────────────────────────────────────────────────
 
 export type ReportType =
+  | "manejo"
   | "diario"
   | "semanal"
   | "mensal"
   | "por_pivo"
+  | "por_parcela"
   | "por_cultura"
   | "energetico"
-  | "financeiro"
-  | "executivo";
+  | "financeiro";
 
 export type ExportFormat = "pdf" | "xlsx" | "csv";
 
@@ -58,45 +59,50 @@ export const REPORT_TYPE_CONFIG: Record<
   ReportType,
   { label: string; description: string; icon: string }
 > = {
+  manejo: {
+    label: "Relatório de Manejo",
+    description: "ETo, ETc, Kc, Ks, KL, chuva, irrigação, CAD, AFD, ARM e nota sensorial",
+    icon: "M",
+  },
   diario: {
     label: "Relatório Diário",
-    description: "Resumo operacional do dia com irrigações, clima e recomendações",
+    description: "Resumo operacional do dia com irrigação real, clima e balanço",
     icon: "D",
   },
   semanal: {
     label: "Relatório Semanal",
-    description: "Consolidação semanal com tendências e comparativos",
+    description: "Consolidação semanal a partir do balanço e dos eventos",
     icon: "S",
   },
   mensal: {
     label: "Relatório Mensal",
-    description: "Análise completa do mês com indicadores e evolução",
-    icon: "M",
+    description: "Totais do mês com água, energia e custo dos eventos",
+    icon: "N",
   },
   por_pivo: {
     label: "Relatório por Pivô",
-    description: "Desempenho individual do pivô com histórico completo",
+    description: "Desempenho do equipamento com histórico do ciclo",
     icon: "P",
+  },
+  por_parcela: {
+    label: "Relatório por Parcela",
+    description: "Ciclo agronômico: cultura, irrigação, ARM e custo do evento",
+    icon: "L",
   },
   por_cultura: {
     label: "Relatório por Cultura",
-    description: "Indicadores agrupados por cultura com eficiência",
+    description: "Indicadores agrupados por cultura, sem misturar ciclos",
     icon: "C",
   },
   energetico: {
     label: "Relatório Energético",
-    description: "Consumo, demanda, rateio e otimização de energia",
+    description: "Energia dos eventos reais — sem inventar kWh",
     icon: "E",
   },
   financeiro: {
     label: "Relatório Financeiro",
-    description: "Custos operacionais, rateio e projeções",
+    description: "Custo dos eventos reais — sem inventar tarifa",
     icon: "F",
-  },
-  executivo: {
-    label: "Relatório Executivo",
-    description: "Visão consolidada para diretoria com KPIs estratégicos",
-    icon: "X",
   },
 };
 
@@ -312,16 +318,18 @@ export interface CostBreakdownRow {
 
 export interface ReportKPIs {
   irrigationEfficiency: number;
-  energyEfficiency: number;
+  energyEfficiency: number | null;
   totalWaterApplied: number;
   totalETc: number;
-  avgArm: number;
+  /** ARM médio em mm — não é % da CAD. */
+  avgArmMm: number;
+  /** Umidade média em % da CC volumétrico. */
+  avgMoisturePctCc: number;
   avgDeficit: number;
-  energyPerMm: number;
-  energyPerHa: number;
-  costPerMm: number;
-  costPerHa: number;
-  estimatedYield: number;
+  energyPerMm: number | null;
+  energyPerHa: number | null;
+  costPerMm: number | null;
+  costPerHa: number | null;
 }
 
 export function calculateReportKPIs(
@@ -331,13 +339,18 @@ export function calculateReportKPIs(
 ): ReportKPIs {
   const totalIrrigation = sum(balanceRows.map((r) => r.irrigationApplied));
   const totalETc = sum(balanceRows.map((r) => r.etc));
-  const avgArm = balanceRows.length > 0
-    ? average(balanceRows.map((r) => r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0))
+  const avgArmMm = balanceRows.length > 0
+    ? average(balanceRows.map((r) => r.storedWater))
+    : 0;
+  const avgMoisturePctCc = balanceRows.length > 0
+    ? average(balanceRows.map((r) => r.moisturePctCc ?? (r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0)))
     : 0;
   const avgDeficit = balanceRows.length > 0
     ? average(balanceRows.map((r) => r.deficit))
     : 0;
 
+  const hasEnergy = energyResults.some((r) => r.totalKwh > 0);
+  const hasCost = energyResults.some((r) => r.costTotal > 0);
   const totalKwh = sum(energyResults.map((r) => r.totalKwh));
   const totalCost = sum(energyResults.map((r) => r.costTotal));
   const totalVolumeM3 = sum(energyResults.map((r) => r.volumeM3));
@@ -347,30 +360,27 @@ export function calculateReportKPIs(
     ? roundTo(Math.min((totalETc / totalIrrigation) * 100, 100), 1)
     : 0;
 
-  const energyEfficiency = totalVolumeM3 > 0
+  const energyEfficiency = hasEnergy && totalVolumeM3 > 0
     ? roundTo(totalKwh / totalVolumeM3, 4)
-    : 0;
+    : null;
 
-  const energyPerMm = totalDepthMm > 0 ? roundTo(totalKwh / totalDepthMm, 2) : 0;
-  const energyPerHa = totalAreaHa > 0 ? roundTo(totalKwh / totalAreaHa, 2) : 0;
-  const costPerMm = totalDepthMm > 0 ? roundTo(totalCost / totalDepthMm, 2) : 0;
-  const costPerHa = totalAreaHa > 0 ? roundTo(totalCost / totalAreaHa, 2) : 0;
-
-  const yieldFactor = avgArm > 70 ? 1.0 : avgArm > 50 ? 0.85 : avgArm > 30 ? 0.65 : 0.4;
-  const estimatedYield = roundTo(totalAreaHa * 60 * yieldFactor, 0);
+  const energyPerMm = hasEnergy && totalDepthMm > 0 ? roundTo(totalKwh / totalDepthMm, 2) : null;
+  const energyPerHa = hasEnergy && totalAreaHa > 0 ? roundTo(totalKwh / totalAreaHa, 2) : null;
+  const costPerMm = hasCost && totalDepthMm > 0 ? roundTo(totalCost / totalDepthMm, 2) : null;
+  const costPerHa = hasCost && totalAreaHa > 0 ? roundTo(totalCost / totalAreaHa, 2) : null;
 
   return {
     irrigationEfficiency,
     energyEfficiency,
     totalWaterApplied: roundTo(totalIrrigation, 1),
     totalETc: roundTo(totalETc, 1),
-    avgArm: roundTo(avgArm, 1),
+    avgArmMm: roundTo(avgArmMm, 1),
+    avgMoisturePctCc: roundTo(avgMoisturePctCc, 1),
     avgDeficit: roundTo(avgDeficit, 1),
     energyPerMm,
     energyPerHa,
     costPerMm,
     costPerHa,
-    estimatedYield,
   };
 }
 

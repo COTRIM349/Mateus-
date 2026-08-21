@@ -24,7 +24,6 @@ import {
   PE_METHOD,
   moisturePctCcForDisplay,
   safetyPctCcForDisplay,
-  pmpPctCcForDisplay,
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
@@ -36,6 +35,8 @@ import { radiusFromArea } from "@/utils/geo";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
+import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
+import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
@@ -175,6 +176,7 @@ interface StoredBalance {
   irrigation_time: number;
   water_status: WaterStatus;
   phase: string | null;
+  dae: number | null;
   ks: number | null;
   kl: number | null;
   kc_adjusted: number | null;
@@ -488,6 +490,7 @@ export default function BalancoHidricoPage() {
         volumeNeeded: d.recommendedVolume,
         irrigationTime: d.estimatedIrrigationTime,
         waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
+        dae: d.dae,
         ks: d.ks,
         kl: d.kl,
         kcAdjusted: d.kcAdjusted,
@@ -604,6 +607,7 @@ export default function BalancoHidricoPage() {
         irrigationTime: r.irrigation_time,
         waterStatus: r.water_status,
         phase: r.phase ?? "—",
+        dae: r.dae ?? undefined,
         ks: r.ks ?? undefined,
         kl: r.kl ?? undefined,
         kcAdjusted: r.kc_adjusted ?? undefined,
@@ -986,261 +990,9 @@ export default function BalancoHidricoPage() {
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
-type SKey = "umidade" | "cc" | "seg" | "pm" | "deficit" | "excesso"
-  | "chuva" | "irrig" | "justexc"
-  | "kc" | "rootdepth" | "fator"
-  | "eto" | "etc" | "tmax" | "tmean" | "tmin" | "rh" | "wind" | "rad"
-  // sem dado no sistema (mostrados como "pendente", como na referência)
-  | "sensorial" | "umidimg" | "umidsensor" | "umidcalc" | "laminadisp" | "cta" | "aguadisp" | "umidmm" | "pmmm" | "cra" | "ks" | "dg" | "profabs"
-  | "excirr" | "itn" | "lammin" | "tempoirr" | "flag" | "atrasoirr" | "atrasochuva" | "atrasoumid"
-  | "diasmanej" | "diasplant" | "grausf" | "grausacf" | "grausc" | "grausacc" | "tbasal" | "preplantio" | "faseini" | "fasedes" | "faseflor" | "fasefin"
-  | "etp" | "kl" | "radw";
-// axis: pct (% da CC) · mm · norm (escala relativa própria, valor real no tooltip) · marker (evento)
-interface SeriesDef { k: SKey; label: string; color: string; kind: "line" | "dash" | "bar" | "marker"; axis: "pct" | "mm" | "norm"; norm?: [number, number]; unit?: string; pendente?: boolean; }
-const P = true; // pendente (sem dado)
-
-const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
-  { cat: "Solo", items: [
-    { k: "cc", label: "CC", color: "#2f6bff", kind: "line", axis: "pct" },
-    { k: "seg", label: "Umid. segurança", color: "#c0272d", kind: "line", axis: "pct" },
-    { k: "umidade", label: "Umidade", color: "#8a5a2b", kind: "line", axis: "pct" },
-    { k: "sensorial", label: "Nota sensorial", color: "#a855f7", kind: "marker", axis: "norm", norm: [1, 10], unit: "nota" },
-    { k: "umidimg", label: "Umidade imageamento", color: "#8a5a2b", kind: "line", axis: "pct", pendente: P },
-    { k: "umidsensor", label: "Umidade sensor de solo — média", color: "#6b4423", kind: "line", axis: "pct", pendente: P },
-    { k: "pm", label: "PM", color: "#111827", kind: "line", axis: "pct" },
-    { k: "umidcalc", label: "Umidade calculada", color: "#6d28d9", kind: "line", axis: "pct", pendente: P },
-    { k: "laminadisp", label: "Lâmina disponível", color: "#f472b6", kind: "line", axis: "mm", pendente: P },
-    { k: "cta", label: "CTA", color: "#fca5a5", kind: "line", axis: "mm", pendente: P },
-    { k: "aguadisp", label: "Água disp.", color: "#9ca3af", kind: "line", axis: "mm", pendente: P },
-    { k: "umidmm", label: "Umidade (mm)", color: "#eab308", kind: "line", axis: "mm", pendente: P },
-    { k: "pmmm", label: "PM (mm)", color: "#111827", kind: "line", axis: "mm", pendente: P },
-    { k: "cra", label: "CRA", color: "#dc2626", kind: "line", axis: "mm", pendente: P },
-    { k: "ks", label: "Ks", color: "#15803d", kind: "line", axis: "norm", norm: [0, 1] },
-    { k: "dg", label: "Dg (g/cm³)", color: "#ca8a04", kind: "line", axis: "norm", norm: [0, 2], pendente: P },
-    { k: "profabs", label: "Profundidade de absorção", color: "#0d9488", kind: "line", axis: "norm", norm: [0, 1.5], unit: "m", pendente: P },
-  ] },
-  { cat: "Irrigação", items: [
-    { k: "irrig", label: "Irrigação", color: "#14b8c9", kind: "bar", axis: "mm" },
-    { k: "excirr", label: "Excesso de irrigação", color: "#ef4444", kind: "bar", axis: "mm", pendente: P },
-    { k: "excesso", label: "Excesso", color: "#c026d3", kind: "dash", axis: "mm" },
-    { k: "deficit", label: "Déficit", color: "#e5484d", kind: "dash", axis: "mm" },
-    { k: "itn", label: "ITN", color: "#1e3a8a", kind: "line", axis: "mm", pendente: P },
-    { k: "lammin", label: "Lâm. mínima", color: "#3b82f6", kind: "line", axis: "mm", pendente: P },
-    { k: "tempoirr", label: "Tempo irrigação", color: "#86efac", kind: "line", axis: "norm", norm: [0, 24], unit: "h", pendente: P },
-    { k: "flag", label: "Flag", color: "#f59e0b", kind: "marker", axis: "mm", pendente: P },
-    { k: "justexc", label: "Justificativa de excesso", color: "#dc2626", kind: "marker", axis: "mm" },
-    { k: "atrasoirr", label: "Irrigação — lançamento em atraso", color: "#dc2626", kind: "marker", axis: "mm", pendente: P },
-    { k: "atrasochuva", label: "Chuva — lançamento em atraso", color: "#dc2626", kind: "marker", axis: "mm", pendente: P },
-    { k: "atrasoumid", label: "Umidade — lançamento em atraso", color: "#dc2626", kind: "marker", axis: "mm", pendente: P },
-  ] },
-  { cat: "Cultura", items: [
-    { k: "diasmanej", label: "Dias manejados", color: "#22c55e", kind: "line", axis: "norm", norm: [0, 200], pendente: P },
-    { k: "diasplant", label: "Dias plantados", color: "#16a34a", kind: "line", axis: "norm", norm: [0, 200], pendente: P },
-    { k: "kc", label: "Kc (×100)", color: "#16a34a", kind: "dash", axis: "pct" },
-    { k: "fator", label: "Fator disp. hídrica", color: "#4ade80", kind: "dash", axis: "norm", norm: [0, 1], unit: "" },
-    { k: "grausf", label: "Graus dia (°F)", color: "#374151", kind: "line", axis: "norm", norm: [0, 90], unit: "°F", pendente: P },
-    { k: "grausacf", label: "Graus dia acum. (°F)", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 5000], unit: "°F", pendente: P },
-    { k: "grausc", label: "Graus dia (°C)", color: "#374151", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: P },
-    { k: "grausacc", label: "Graus dia acum. (°C)", color: "#9ca3af", kind: "line", axis: "norm", norm: [0, 3000], unit: "°C", pendente: P },
-    { k: "tbasal", label: "Temperatura basal", color: "#6b7280", kind: "line", axis: "norm", norm: [0, 40], unit: "°C", pendente: P },
-    { k: "rootdepth", label: "Profundidade da raiz", color: "#5eaa97", kind: "line", axis: "norm", norm: [0, 1.2], unit: "m" },
-    { k: "preplantio", label: "Pré-plantio", color: "#e5e7eb", kind: "marker", axis: "pct", pendente: P },
-    { k: "faseini", label: "Início", color: "#5eead4", kind: "marker", axis: "pct", pendente: P },
-    { k: "fasedes", label: "Desenvolvimento", color: "#22c55e", kind: "marker", axis: "pct", pendente: P },
-    { k: "faseflor", label: "Floração/maturação", color: "#fde047", kind: "marker", axis: "pct", pendente: P },
-    { k: "fasefin", label: "Final", color: "#f97316", kind: "marker", axis: "pct", pendente: P },
-  ] },
-  { cat: "Clima", items: [
-    { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm" },
-    { k: "etc", label: "ETc", color: "#22c55e", kind: "line", axis: "mm" },
-    { k: "eto", label: "ETo", color: "#166534", kind: "line", axis: "mm" },
-    { k: "etp", label: "ETp", color: "#4d7c0f", kind: "line", axis: "mm", pendente: P },
-    { k: "kl", label: "KL", color: "#4ade80", kind: "line", axis: "norm", norm: [0, 1.2] },
-    { k: "tmax", label: "Temperatura máxima", color: "#ef4444", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
-    { k: "tmean", label: "Temperatura média", color: "#eab308", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
-    { k: "tmin", label: "Temperatura mínima", color: "#8b5cf6", kind: "line", axis: "norm", norm: [0, 45], unit: "°C" },
-    { k: "rh", label: "Umidade relativa", color: "#1e40af", kind: "line", axis: "norm", norm: [0, 100], unit: "%" },
-    { k: "wind", label: "Velocidade do vento", color: "#7dd3fc", kind: "line", axis: "norm", norm: [0, 15], unit: "m/s" },
-    { k: "rad", label: "Radiação (MJ/m²)", color: "#eab308", kind: "line", axis: "norm", norm: [0, 35], unit: "MJ/m²" },
-    { k: "radw", label: "Radiação (W/m²)", color: "#f59e0b", kind: "line", axis: "norm", norm: [0, 400], unit: "W/m²", pendente: P },
-  ] },
-];
-const MANEJO_ALL: SeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
-const MANEJO_DEF = (k: SKey) => MANEJO_ALL.find((s) => s.k === k)!;
-
-function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra, sensory?: number): number {
-  switch (k) {
-    case "umidade": return moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
-    case "cc": return 100;
-    case "seg": return safetyPctCcForDisplay(r.safetyPctCc, r.cad, r.afd);
-    case "pm": return pmpPctCcForDisplay(r.fieldCapacity, r.wiltingPoint);
-    case "deficit": return r.deficit;
-    case "excesso": return r.surplus;
-    case "chuva": return r.precipitation;
-    case "irrig": return r.irrigationApplied;
-    case "kc": return r.kc * 100;
-    case "rootdepth": return r.rootDepth;
-    case "fator": return r.depletionFactor;
-    case "eto": return r.et0;
-    case "etc": return r.etc;
-    case "ks": return r.ks ?? 1;
-    case "kl": return r.kl ?? 1;
-    case "sensorial": return sensory ?? 0;
-    case "tmax": return wx?.tmax ?? 0;
-    case "tmean": return wx?.tmean ?? 0;
-    case "tmin": return wx?.tmin ?? 0;
-    case "rh": return wx?.rh ?? 0;
-    case "wind": return wx?.wind ?? 0;
-    case "rad": return wx?.rad ?? 0;
-    default: return 0; // séries pendentes (sem dado)
-  }
-}
-const sFmt = (k: SKey, r: DailyBalanceRow, wx?: WeatherExtra, sensory?: number): string => {
-  const def = MANEJO_DEF(k);
-  const v = sVal(k, r, wx, sensory);
-  if (k === "kc") return r.kc.toFixed(2);
-  if (k === "sensorial") return v > 0 ? `nota ${v}` : "—";
-  if (def.axis === "pct") return `${v.toFixed(0)}%`;
-  if (def.axis === "mm") return `${v.toFixed(1)} mm`;
-  return `${v.toFixed(k === "wind" || k === "rootdepth" || k === "fator" ? 2 : 1)}${def.unit ? ` ${def.unit}` : ""}`;
-};
-
 /** Entradas do solo no dia: Pe + I_ef (lâmina bruta × eficiência). */
 function soilInflowMm(r: DailyBalanceRow): number {
   return r.effectivePrecipitation + (r.effectiveIrrigation ?? r.irrigationApplied);
-}
-
-function ManejoChart({ rows, visible, weatherByDate, sensoryByDate }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean>; weatherByDate: Record<string, WeatherExtra>; sensoryByDate: Record<string, number> }) {
-  const [hover, setHover] = useState<number | null>(null);
-  const W = 940, H = 350, padL = 40, padR = 52, padT = 20, padB = 42;
-  const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
-  const n = rows.length || 1;
-  const band = (x1 - x0) / n;
-  const cx = (i: number) => x0 + band * i + band / 2;
-  const wxOf = (i: number) => weatherByDate[rows[i]?.date ?? ""];
-  const sensoryOf = (i: number) => sensoryByDate[rows[i]?.date ?? ""];
-
-  const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
-  const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit, r.surplus])) / 10) * 10);
-  const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
-  const yFor = (s: SeriesDef, v: number) =>
-    s.axis === "pct" ? yP(v)
-      : s.axis === "mm" ? yM(v)
-        : yP(clampN(((v - s.norm![0]) / (s.norm![1] - s.norm![0])) * 100, 0, 100));
-
-  const bw = Math.min(4, band * 0.28);
-  // todas as séries de linha (barras/marcadores/pendentes à parte); umidade por último (topo)
-  const lineKeys: SKey[] = [...MANEJO_ALL.filter((s) => s.kind !== "bar" && s.kind !== "marker" && !s.pendente && s.k !== "umidade").map((s) => s.k), "umidade"];
-  const step = Math.max(1, Math.ceil(n / 9));
-
-  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = e.currentTarget.getBoundingClientRect();
-    const svgX = ((e.clientX - rect.left) / rect.width) * W;
-    setHover(clampN(Math.round((svgX - x0) / band - 0.5), 0, n - 1));
-  };
-  const activeVisible = MANEJO_ALL.filter((s) => visible[s.k]);
-  const hasNorm = activeVisible.some((s) => s.axis === "norm");
-
-  // faixas suaves (adequada / atenção / crítica) usando a segurança do último dia
-  const segPct = rows.length
-    ? safetyPctCcForDisplay(rows[n - 1].safetyPctCc, rows[n - 1].cad, rows[n - 1].afd)
-    : 50;
-
-  return (
-    <div className="relative" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
-      <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="overflow-visible">
-        {/* faixas discretas: adequada (verde), atenção (âmbar), crítica (vermelho) */}
-        <rect x={x0} y={yP(100)} width={x1 - x0} height={yP(segPct) - yP(100)} fill="#1ea85b" opacity={0.05} />
-        <rect x={x0} y={yP(segPct)} width={x1 - x0} height={yP(segPct * 0.6) - yP(segPct)} fill="#f97316" opacity={0.05} />
-        <rect x={x0} y={yP(segPct * 0.6)} width={x1 - x0} height={yP(0) - yP(segPct * 0.6)} fill="#e5484d" opacity={0.05} />
-        {/* grade + eixos */}
-        {[0, 25, 50, 75, 100, 125].map((p) => (
-          <g key={p}>
-            <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-100 dark:stroke-white/[0.05]" strokeWidth={1} />
-            <text x={x0 - 6} y={yP(p) + 3} textAnchor="end" className="fill-graphite-300 text-[9px] dark:fill-gray-600">{p}</text>
-          </g>
-        ))}
-        <text x={x0 - 6} y={y0 - 7} textAnchor="end" className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">%CC</text>
-        {[0, mmMax / 2, mmMax].map((v) => (
-          <text key={v} x={x1 + 7} y={yM(v) + 3} className="fill-graphite-300 text-[9px] dark:fill-gray-600">{Math.round(v)}</text>
-        ))}
-        <text x={x1 + 7} y={y0 - 7} className="fill-graphite-400 text-[9px] font-semibold dark:fill-gray-500">mm</text>
-
-        {/* barras chuva + irrigação */}
-        {rows.map((r, i) => (
-          <g key={i}>
-            {visible.chuva && r.precipitation > 0 && <rect x={cx(i) - bw - 0.6} y={yM(r.precipitation)} width={bw} height={y1 - yM(r.precipitation)} rx={1} fill={MANEJO_DEF("chuva").color} opacity={0.85} />}
-            {visible.irrig && r.irrigationApplied > 0 && <rect x={cx(i) + 0.6} y={yM(r.irrigationApplied)} width={bw} height={y1 - yM(r.irrigationApplied)} rx={1} fill={MANEJO_DEF("irrig").color} opacity={0.9} />}
-          </g>
-        ))}
-
-        {/* linhas */}
-        {lineKeys.filter((k) => visible[k]).map((k) => {
-          const s = MANEJO_DEF(k);
-          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r, wxOf(i), sensoryOf(i)))}`).join(" ");
-          return (
-            <polyline key={k} points={pts} fill="none" stroke={s.color} strokeWidth={k === "umidade" ? 2.3 : 1.5}
-              strokeDasharray={s.kind === "dash" ? "5 3" : undefined} strokeLinejoin="round" strokeLinecap="round"
-              opacity={k === "umidade" ? 1 : 0.9} />
-          );
-        })}
-
-        {/* eixo x + datas */}
-        <line x1={x0} x2={x1} y1={y1} y2={y1} className="stroke-gray-200 dark:stroke-white/[0.1]" strokeWidth={1} />
-        {/* marcadores de justificativa de excesso (surplus > 0) — como na referência */}
-        {visible.justexc && rows.map((r, i) => r.surplus > 0 && (
-          <g key={`ex${i}`}>
-            <circle cx={cx(i)} cy={y1} r={2.6} fill="none" stroke="#e5484d" strokeWidth={1.2} />
-            <line x1={cx(i) - 1.8} x2={cx(i) + 1.8} y1={y1} y2={y1} stroke="#e5484d" strokeWidth={1.2} />
-          </g>
-        ))}
-        {visible.sensorial && rows.map((r, i) => {
-          const note = sensoryOf(i);
-          if (note == null) return null;
-          return (
-            <g key={`sens${i}`}>
-              <circle cx={cx(i)} cy={y0 + 12} r={8} fill="#a855f7" />
-              <text x={cx(i)} y={y0 + 15.5} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="700">{note}</text>
-            </g>
-          );
-        })}
-        {rows.map((r, i) => (i % step === 0 || i === n - 1) && (
-          <text key={`d${i}`} x={cx(i)} y={H - 12} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{fmtDia(r.date)}</text>
-        ))}
-
-        {/* crosshair */}
-        {hover != null && (
-          <g>
-            <line x1={cx(hover)} x2={cx(hover)} y1={y0} y2={y1} className="stroke-graphite-300 dark:stroke-white/20" strokeWidth={1} strokeDasharray="3 3" />
-            {activeVisible.filter((s) => s.kind !== "bar" && s.kind !== "marker").map((s) => (
-              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover], wxOf(hover), sensoryOf(hover)))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
-            ))}
-          </g>
-        )}
-      </svg>
-
-      {/* tooltip */}
-      {hover != null && rows[hover] && (
-        <div
-          className="pointer-events-none absolute top-1 z-10 min-w-[150px] -translate-x-1/2 rounded-xl border border-gray-100 bg-white/95 p-2.5 shadow-elevated backdrop-blur dark:border-white/[0.1] dark:bg-graphite-800/95"
-          style={{ left: `${(cx(hover) / W) * 100}%` }}
-        >
-          <p className="mb-1.5 text-[11px] font-bold text-graphite-800 dark:text-white">{fmtDia(rows[hover].date)} <span className="font-normal text-graphite-400">· {rows[hover].phase}</span></p>
-          <div className="space-y-1">
-            {activeVisible.filter((s) => s.kind !== "marker" || (s.k === "sensorial" && sensoryOf(hover) != null)).map((s) => (
-              <div key={s.k} className="flex items-center justify-between gap-4 text-[11px]">
-                <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />{s.label}</span>
-                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover], wxOf(hover), sensoryOf(hover))}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-      {hasNorm && (
-        <p className="mt-1 text-[10px] text-graphite-300 dark:text-gray-600">Séries de clima/cultura em escala relativa — valor real no tooltip.</p>
-      )}
-    </div>
-  );
 }
 
 // ── Balance Tab ─────────────────────────────────────────────────────────
@@ -1294,12 +1046,17 @@ function BalanceTab({
   weatherByDate: Record<string, WeatherExtra>;
   sensoryByDate: Record<string, number>;
 }) {
-  const [visible, setVisible] = useState<Record<SKey, boolean>>(() => {
-    const on = new Set<SKey>(["umidade", "cc", "seg", "pm", "chuva", "irrig", "kc", "justexc", "sensorial"]);
-    return Object.fromEntries(MANEJO_ALL.map((s) => [s.k, on.has(s.k)])) as Record<SKey, boolean>;
-  });
-  const [activeCat, setActiveCat] = useState("Solo");
-  const toggleSeries = (k: SKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
+  const [visible, setVisible] = useState<Record<ManejoSeriesKey, boolean>>(() => initialManejoVisibility());
+  const toggleSeries = (k: ManejoSeriesKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
+  const manejoRows = useMemo(
+    () => rows.map((r) => managementRowFromBalance(r, {
+      sensoryNote: sensoryByDate[r.date] ?? null,
+      weather: weatherByDate[r.date],
+      pivotName: head.pivotName ?? undefined,
+      cultureName: head.cultureName ?? undefined,
+    })),
+    [rows, sensoryByDate, weatherByDate, head.pivotName, head.cultureName],
+  );
   const [tblFilter, setTblFilter] = useState("");
   const [showFilter, setShowFilter] = useState(false);
 
@@ -1475,48 +1232,8 @@ function BalanceTab({
           </div>
         </div>
         <div className="flex flex-col lg:flex-row">
-          {/* painel de séries por categoria */}
-          <div className="border-b border-gray-100 p-4 lg:w-56 lg:shrink-0 lg:border-b-0 lg:border-r dark:border-white/[0.06]">
-            <div className="flex gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
-              {MANEJO_GROUPS.map((g) => (
-                <button
-                  key={g.cat}
-                  type="button"
-                  onClick={() => setActiveCat(g.cat)}
-                  className={`flex-1 rounded-md px-1.5 py-1 text-[11px] font-semibold transition-colors ${activeCat === g.cat ? "bg-white text-graphite-800 shadow-xs dark:bg-white/[0.1] dark:text-white" : "text-graphite-400 hover:text-graphite-600 dark:text-gray-500"}`}
-                >
-                  {g.cat}
-                </button>
-              ))}
-            </div>
-            <div className="mt-3 max-h-[300px] space-y-0.5 overflow-y-auto pr-1">
-              {MANEJO_GROUPS.find((g) => g.cat === activeCat)!.items.map((s) => {
-                const on = visible[s.k];
-                return (
-                  <button
-                    key={s.k}
-                    type="button"
-                    onClick={() => !s.pendente && toggleSeries(s.k)}
-                    aria-pressed={on}
-                    disabled={s.pendente}
-                    title={s.pendente ? "Sem dado no sistema" : undefined}
-                    className={`flex w-full items-center gap-2 rounded-md px-1.5 py-1.5 text-left transition-colors ${s.pendente ? "cursor-default opacity-50" : "hover:bg-gray-50 dark:hover:bg-white/[0.04]"}`}
-                  >
-                    <span className="flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-[4px] border" style={{ borderColor: s.pendente ? "#cbd5e1" : s.color, background: on ? s.color : "transparent" }}>
-                      {on && <svg className="h-2.5 w-2.5 text-white" fill="none" stroke="currentColor" strokeWidth={3} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>}
-                    </span>
-                    <span className={`text-[12px] ${on ? "font-semibold text-graphite-700 dark:text-gray-200" : "text-graphite-400 dark:text-gray-500"}`}>{s.label}</span>
-                    {s.pendente && <span className="ml-auto text-[9px] font-semibold uppercase tracking-wide text-graphite-300 dark:text-gray-600">pendente</span>}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="mt-3 border-t border-gray-100 pt-2.5 text-[10px] leading-relaxed text-graphite-300 dark:border-white/[0.06] dark:text-gray-600">
-              Passe o mouse no gráfico para ver os valores do dia.
-            </p>
-          </div>
-          {/* gráfico */}
-          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} weatherByDate={weatherByDate} sensoryByDate={sensoryByDate} /></div>
+          <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />
+          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={manejoRows} visible={visible} /></div>
         </div>
       </Card>
 
