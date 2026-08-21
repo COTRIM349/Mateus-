@@ -214,7 +214,7 @@ export function useFarmHydricState(): FarmHydricState {
         depth_mm: (ev.depth_mm as number) ?? 0,
       });
     }
-    for (const [pid, list] of eventsByPivot) {
+    for (const [pid, list] of Array.from(eventsByPivot.entries())) {
       irrigationByPivot.set(pid, sumGrossDepthByDate(list));
     }
 
