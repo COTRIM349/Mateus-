@@ -12,6 +12,7 @@ import {
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
+import { sumGrossDepthByDate } from "@/modules/irrigation/services";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -204,12 +205,17 @@ export function useFarmHydricState(): FarmHydricState {
       .gte("started_at", dateStart + "T00:00:00")
       .lte("started_at", dateEnd + "T23:59:59");
     const irrigationByPivot = new Map<string, Record<string, number>>();
+    const eventsByPivot = new Map<string, Array<{ started_at: string; depth_mm: number }>>();
     for (const ev of irrEvents ?? []) {
       const pid = ev.pivot_id as string;
-      const d = (ev.started_at as string).slice(0, 10);
-      if (!irrigationByPivot.has(pid)) irrigationByPivot.set(pid, {});
-      const map = irrigationByPivot.get(pid)!;
-      map[d] = (map[d] ?? 0) + ((ev.depth_mm as number) ?? 0);
+      if (!eventsByPivot.has(pid)) eventsByPivot.set(pid, []);
+      eventsByPivot.get(pid)!.push({
+        started_at: ev.started_at as string,
+        depth_mm: (ev.depth_mm as number) ?? 0,
+      });
+    }
+    for (const [pid, list] of eventsByPivot) {
+      irrigationByPivot.set(pid, sumGrossDepthByDate(list));
     }
 
     // 4. motor: estado atual por pivô
@@ -234,6 +240,7 @@ export function useFarmHydricState(): FarmHydricState {
           area: (pivot.area as number) ?? 0,
           latitude: (pivot.latitude as number) ?? 0,
           longitude: (pivot.longitude as number) ?? 0,
+          parcelId: assignment ? (assignment.id as string) : null,
           current: null,
           history: [],
         });
@@ -250,6 +257,7 @@ export function useFarmHydricState(): FarmHydricState {
           area: (pivot.area as number) ?? 0,
           latitude: (pivot.latitude as number) ?? 0,
           longitude: (pivot.longitude as number) ?? 0,
+          parcelId: assignment.id as string,
         },
         {
           assignment: {

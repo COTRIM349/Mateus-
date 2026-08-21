@@ -7,6 +7,7 @@ import { Card, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
 import { useFarmHydricState } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
+import { buildIrrigationEventInsert } from "@/modules/irrigation/services";
 import { cn } from "@/utils/cn";
 import {
   HYDRIC_STATUS_CONFIG,
@@ -472,16 +473,18 @@ export default function DecisaoPage() {
 
       try {
         const area = selectedPivot.area;
-        const volumeM3 = depthMm * area * 10;
         const today = new Date().toISOString().slice(0, 10);
-
-        const { error } = await supabase.from("irrigation_events").insert({
-          pivot_id: selectedPivotId,
-          started_at: today + "T06:00:00",
-          depth_mm: depthMm,
-          volume_m3: volumeM3,
-          status: "concluida",
-        } as Record<string, unknown>);
+        const payload = buildIrrigationEventInsert({
+          pivotId: selectedPivotId,
+          parcelId: selectedPivot.parcelId,
+          dateYmd: today,
+          timeHm: "06:00",
+          depthMm: depthMm,
+          areaHa: area,
+          flowRateM3h: 0,
+          notes: "lançado pela tela de decisão",
+        });
+        const { error } = await supabase.from("irrigation_events").insert(payload);
 
         if (error) throw new Error(error.message);
         setMessage("Irrigação lançada com sucesso");

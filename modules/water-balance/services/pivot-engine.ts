@@ -421,6 +421,8 @@ export interface PivotHydricState {
   area: number;
   latitude: number;
   longitude: number;
+  /** Parcela (ciclo) ativa — origem do evento de irrigação. */
+  parcelId: string | null;
   current: BalanceDay | null;
   history: BalanceDay[];
 }
@@ -434,6 +436,7 @@ export interface PivotIdentity {
   area: number;
   latitude: number;
   longitude: number;
+  parcelId: string | null;
 }
 
 /** Estado atual = último dia da série calculada (ou null se sem série). */

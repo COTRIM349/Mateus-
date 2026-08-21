@@ -10,6 +10,7 @@ import {
   Table,
   Tabs,
   Input,
+  TextArea,
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -32,6 +33,7 @@ import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
 import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
+import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
@@ -213,7 +215,10 @@ export default function BalancoHidricoPage() {
 
   // Lançamento tab
   const [lancDate, setLancDate] = useState("");
+  const [lancTime, setLancTime] = useState("06:00");
   const [lancDepth, setLancDepth] = useState("");
+  const [lancHours, setLancHours] = useState("");
+  const [lancNotes, setLancNotes] = useState("");
   const [lancSaving, setLancSaving] = useState(false);
   const [lancMsg, setLancMsg] = useState("");
 
@@ -374,11 +379,12 @@ export default function BalancoHidricoPage() {
         .gte("started_at", dateStart + "T00:00:00")
         .lte("started_at", dateEnd + "T23:59:59");
 
-      const irrigationByDate: Record<string, number> = {};
-      for (const ev of (irrEvents ?? []) as IrrigationEvent[]) {
-        const d = ev.started_at.slice(0, 10);
-        irrigationByDate[d] = (irrigationByDate[d] ?? 0) + ev.depth_mm;
-      }
+      const irrigationByDate = sumGrossDepthByDate(
+        ((irrEvents ?? []) as IrrigationEvent[]).map((ev) => ({
+          started_at: ev.started_at,
+          depth_mm: ev.depth_mm,
+        })),
+      );
 
       // 3. Get any manually stored balance entries (applied_depth)
       const { data: storedBalances } = await supabase
@@ -734,21 +740,31 @@ export default function BalancoHidricoPage() {
   // ── Lançamento handler ──────────────────────────────────────────────────
   const handleLancamento = async () => {
     if (!selectedPivotId || !lancDate || !lancDepth) return;
+    const pivot = pivots.find((p) => p.id === selectedPivotId);
+    if (!pivot) return;
     setLancSaving(true);
     setLancMsg("");
 
     try {
-      const { error: err } = await supabase.from("irrigation_events").insert({
-        pivot_id: selectedPivotId,
-        started_at: lancDate + "T06:00:00",
-        depth_mm: parseFloat(lancDepth),
-        volume_m3: parseFloat(lancDepth) * (pivots.find((p) => p.id === selectedPivotId)?.area ?? 0) * 10,
-        status: "concluida",
-      } as Record<string, unknown>);
+      const depth = parseFloat(lancDepth);
+      const payload = buildIrrigationEventInsert({
+        pivotId: selectedPivotId,
+        parcelId: assignment?.id ?? null,
+        dateYmd: lancDate,
+        timeHm: lancTime || "06:00",
+        depthMm: depth,
+        areaHa: pivot.area,
+        flowRateM3h: pivot.flow_rate,
+        hoursOverride: lancHours === "" ? null : parseFloat(lancHours),
+        notes: lancNotes || null,
+      });
+      const { error: err } = await supabase.from("irrigation_events").insert(payload);
 
       if (err) throw new Error(err.message);
-      setLancMsg("Irrigação lançada com sucesso");
+      setLancMsg("Irrigação lançada com sucesso. Recalcule o balanço para ver o ARM.");
       setLancDepth("");
+      setLancHours("");
+      setLancNotes("");
     } catch (err) {
       setLancMsg(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {
@@ -896,15 +912,28 @@ export default function BalancoHidricoPage() {
           <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} weatherByDate={weatherByDate} sensoryByDate={sensoryByDate} /></div>
         )}
         {activeTab === "lancamento" && (
-          <div className="animate-in"><LancamentoTab
+          <div className="animate-in">          <LancamentoTab
             pivotId={selectedPivotId}
             pivots={pivots}
             date={lancDate}
+            time={lancTime}
             depth={lancDepth}
+            hours={lancHours}
+            notes={lancNotes}
             saving={lancSaving}
             message={lancMsg}
             onDateChange={setLancDate}
-            onDepthChange={setLancDepth}
+            onTimeChange={setLancTime}
+            onDepthChange={(v) => {
+              setLancDepth(v);
+              const pivot = pivots.find((p) => p.id === selectedPivotId);
+              const n = parseFloat(v);
+              if (pivot && Number.isFinite(n) && n > 0) {
+                setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
+              }
+            }}
+            onHoursChange={setLancHours}
+            onNotesChange={setLancNotes}
             onSave={handleLancamento}
           /></div>
         )}
@@ -1608,6 +1637,7 @@ function BalanceTab({
         <span>Balanço <strong className="font-semibold text-graphite-800 dark:text-white">{ARM_FORMULA}</strong></span>
         <span>Unidades <strong className="font-semibold text-graphite-800 dark:text-white">CAD/AFD/ARM mm · % da CC volumétrico</strong></span>
         <span>Sensorial <strong className="font-semibold text-graphite-800 dark:text-white">nota 1–10, sem conversão para % da CC</strong></span>
+        <span>Irrigação <strong className="font-semibold text-graphite-800 dark:text-white">evento real · I_ef = I × eficiência</strong></span>
         <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
         <span>Motor <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56</strong></span>
         <span>Fonte climática {head.stationName ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.stationName}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
@@ -1630,56 +1660,78 @@ function LancamentoTab({
   pivotId,
   pivots,
   date,
+  time,
   depth,
+  hours,
+  notes,
   saving,
   message,
   onDateChange,
+  onTimeChange,
   onDepthChange,
+  onHoursChange,
+  onNotesChange,
   onSave,
 }: {
   pivotId: string;
   pivots: Pivot[];
   date: string;
+  time: string;
   depth: string;
+  hours: string;
+  notes: string;
   saving: boolean;
   message: string;
   onDateChange: (v: string) => void;
+  onTimeChange: (v: string) => void;
   onDepthChange: (v: string) => void;
+  onHoursChange: (v: string) => void;
+  onNotesChange: (v: string) => void;
   onSave: () => void;
 }) {
   const pivot = pivots.find((p) => p.id === pivotId);
+  const depthN = parseFloat(depth);
+  const volume = pivot && Number.isFinite(depthN) && depthN > 0
+    ? deriveAppliedVolume(depthN, pivot.area)
+    : null;
 
   return (
     <Card>
       <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
-        Lançar Irrigação Aplicada
+        Registrar irrigação realizada
       </h3>
       {!pivotId ? (
         <p className="text-sm text-graphite-400 dark:text-gray-500">
-          Selecione um pivô acima para lançar irrigação.
+          Selecione um pivô acima para lançar o evento.
         </p>
       ) : (
         <div className="grid max-w-lg grid-cols-1 gap-5 sm:grid-cols-2">
+          <Input label="Data" type="date" value={date} onChange={(e) => onDateChange(e.target.value)} />
+          <Input label="Hora" type="time" value={time} onChange={(e) => onTimeChange(e.target.value)} />
           <Input
-            label="Data"
-            type="date"
-            value={date}
-            onChange={(e) => onDateChange(e.target.value)}
-          />
-          <Input
-            label="Lâmina Aplicada (mm)"
+            label="Lâmina bruta (mm)"
             type="number"
             step="0.1"
             min="0"
             value={depth}
             onChange={(e) => onDepthChange(e.target.value)}
           />
-          {pivot && depth && parseFloat(depth) > 0 && (
-            <div className="col-span-full text-xs text-graphite-400 dark:text-gray-500">
-              Volume estimado: <strong>{(parseFloat(depth) * pivot.area * 10).toFixed(0)} m³</strong>
-              {" | "}Tempo estimado: <strong>{(parseFloat(depth) * pivot.area * 10 / pivot.flow_rate).toFixed(1)} h</strong>
-            </div>
+          <Input
+            label="Horas de operação"
+            type="number"
+            step="0.1"
+            min="0"
+            value={hours}
+            onChange={(e) => onHoursChange(e.target.value)}
+          />
+          {volume != null && (
+            <p className="col-span-full text-xs text-graphite-400 dark:text-gray-500">
+              Volume: <strong>{volume.toLocaleString("pt-BR")} m³</strong>
+            </p>
           )}
+          <div className="col-span-full">
+            <TextArea label="Observação (opcional)" value={notes} onChange={(e) => onNotesChange(e.target.value)} />
+          </div>
           <div className="col-span-full">
             <Button onClick={onSave} disabled={!date || !depth || saving}>
               {saving ? "Salvando..." : "Lançar Irrigação"}
