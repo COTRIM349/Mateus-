@@ -29,7 +29,7 @@ import {
   type HydricStatus,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
-import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
+import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
 import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
 
@@ -624,12 +624,14 @@ export default function BalancoHidricoPage() {
   const [trace, setTrace] = useState<{ stationName: string | null; distanceKm: number | null; lastSync: string | null; qualityPct: number | null }>({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
   const [ops, setOps] = useState<{ volumeM3: number | null; hours: number | null; energyKwh: number | null }>({ volumeM3: null, hours: null, energyKwh: null });
   const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherExtra>>({});
+  const [sensoryByDate, setSensoryByDate] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!activeFarmId || !selectedPivotId || !dateStart || !dateEnd) {
       setTrace({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
       setOps({ volumeM3: null, hours: null, energyKwh: null });
       setWeatherByDate({});
+      setSensoryByDate({});
       return;
     }
     let cancelled = false;
@@ -684,10 +686,30 @@ export default function BalancoHidricoPage() {
         energyKwh = en > 0 ? en : null;
       }
 
+      const { data: sensoryRows } = await supabase
+        .from("soil_sensory_readings")
+        .select("reading_date, note, layer_1_note, layer_2_note, layer_3_note")
+        .eq("pivot_id", selectedPivotId)
+        .gte("reading_date", dateStart)
+        .lte("reading_date", dateEnd);
+
+      const sensory: Record<string, number> = {};
+      for (const row of (sensoryRows ?? []) as Array<{
+        reading_date: string;
+        note: number | null;
+        layer_1_note: number | null;
+        layer_2_note: number | null;
+        layer_3_note: number | null;
+      }>) {
+        const n = resolveSensoryNote(row);
+        if (n != null) sensory[row.reading_date] = n;
+      }
+
       if (!cancelled) {
         setTrace({ stationName: st?.name ?? null, distanceKm, lastSync, qualityPct });
         setOps({ volumeM3, hours, energyKwh });
         setWeatherByDate(wx);
+        setSensoryByDate(sensory);
       }
     })();
     return () => { cancelled = true; };
@@ -871,7 +893,7 @@ export default function BalancoHidricoPage() {
 
       <div className="mt-5">
         {activeTab === "balanco" && (
-          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} weatherByDate={weatherByDate} /></div>
+          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} weatherByDate={weatherByDate} sensoryByDate={sensoryByDate} /></div>
         )}
         {activeTab === "lancamento" && (
           <div className="animate-in"><LancamentoTab
@@ -917,7 +939,7 @@ const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
     { k: "cc", label: "CC", color: "#2f6bff", kind: "line", axis: "pct" },
     { k: "seg", label: "Umid. segurança", color: "#c0272d", kind: "line", axis: "pct" },
     { k: "umidade", label: "Umidade", color: "#8a5a2b", kind: "line", axis: "pct" },
-    { k: "sensorial", label: "Sensorial", color: "#a855f7", kind: "line", axis: "pct", pendente: P },
+    { k: "sensorial", label: "Nota sensorial", color: "#a855f7", kind: "marker", axis: "norm", norm: [1, 10], unit: "nota" },
     { k: "umidimg", label: "Umidade imageamento", color: "#8a5a2b", kind: "line", axis: "pct", pendente: P },
     { k: "umidsensor", label: "Umidade sensor de solo — média", color: "#6b4423", kind: "line", axis: "pct", pendente: P },
     { k: "pm", label: "PM", color: "#111827", kind: "line", axis: "pct" },
@@ -981,7 +1003,7 @@ const MANEJO_GROUPS: { cat: string; items: SeriesDef[] }[] = [
 const MANEJO_ALL: SeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
 const MANEJO_DEF = (k: SKey) => MANEJO_ALL.find((s) => s.k === k)!;
 
-function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): number {
+function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra, sensory?: number): number {
   switch (k) {
     case "umidade": return moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
     case "cc": return 100;
@@ -998,6 +1020,7 @@ function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): number {
     case "etc": return r.etc;
     case "ks": return r.ks ?? 1;
     case "kl": return r.kl ?? 1;
+    case "sensorial": return sensory ?? 0;
     case "tmax": return wx?.tmax ?? 0;
     case "tmean": return wx?.tmean ?? 0;
     case "tmin": return wx?.tmin ?? 0;
@@ -1007,10 +1030,11 @@ function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): number {
     default: return 0; // séries pendentes (sem dado)
   }
 }
-const sFmt = (k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): string => {
+const sFmt = (k: SKey, r: DailyBalanceRow, wx?: WeatherExtra, sensory?: number): string => {
   const def = MANEJO_DEF(k);
-  const v = sVal(k, r, wx);
+  const v = sVal(k, r, wx, sensory);
   if (k === "kc") return r.kc.toFixed(2);
+  if (k === "sensorial") return v > 0 ? `nota ${v}` : "—";
   if (def.axis === "pct") return `${v.toFixed(0)}%`;
   if (def.axis === "mm") return `${v.toFixed(1)} mm`;
   return `${v.toFixed(k === "wind" || k === "rootdepth" || k === "fator" ? 2 : 1)}${def.unit ? ` ${def.unit}` : ""}`;
@@ -1021,7 +1045,7 @@ function soilInflowMm(r: DailyBalanceRow): number {
   return r.effectivePrecipitation + (r.effectiveIrrigation ?? r.irrigationApplied);
 }
 
-function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean>; weatherByDate: Record<string, WeatherExtra> }) {
+function ManejoChart({ rows, visible, weatherByDate, sensoryByDate }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean>; weatherByDate: Record<string, WeatherExtra>; sensoryByDate: Record<string, number> }) {
   const [hover, setHover] = useState<number | null>(null);
   const W = 940, H = 350, padL = 40, padR = 52, padT = 20, padB = 42;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
@@ -1029,6 +1053,7 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
   const band = (x1 - x0) / n;
   const cx = (i: number) => x0 + band * i + band / 2;
   const wxOf = (i: number) => weatherByDate[rows[i]?.date ?? ""];
+  const sensoryOf = (i: number) => sensoryByDate[rows[i]?.date ?? ""];
 
   const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
   const mmMax = Math.max(10, Math.ceil(Math.max(1, ...rows.flatMap((r) => [r.precipitation, r.irrigationApplied, r.etc, r.et0, r.deficit, r.surplus])) / 10) * 10);
@@ -1087,7 +1112,7 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
         {/* linhas */}
         {lineKeys.filter((k) => visible[k]).map((k) => {
           const s = MANEJO_DEF(k);
-          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r, wxOf(i)))}`).join(" ");
+          const pts = rows.map((r, i) => `${cx(i)},${yFor(s, sVal(k, r, wxOf(i), sensoryOf(i)))}`).join(" ");
           return (
             <polyline key={k} points={pts} fill="none" stroke={s.color} strokeWidth={k === "umidade" ? 2.3 : 1.5}
               strokeDasharray={s.kind === "dash" ? "5 3" : undefined} strokeLinejoin="round" strokeLinecap="round"
@@ -1104,6 +1129,16 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
             <line x1={cx(i) - 1.8} x2={cx(i) + 1.8} y1={y1} y2={y1} stroke="#e5484d" strokeWidth={1.2} />
           </g>
         ))}
+        {visible.sensorial && rows.map((r, i) => {
+          const note = sensoryOf(i);
+          if (note == null) return null;
+          return (
+            <g key={`sens${i}`}>
+              <circle cx={cx(i)} cy={y0 + 12} r={8} fill="#a855f7" />
+              <text x={cx(i)} y={y0 + 15.5} textAnchor="middle" fill="#fff" fontSize="8" fontWeight="700">{note}</text>
+            </g>
+          );
+        })}
         {rows.map((r, i) => (i % step === 0 || i === n - 1) && (
           <text key={`d${i}`} x={cx(i)} y={H - 12} textAnchor="middle" className="fill-graphite-400 text-[9px] dark:fill-gray-500">{fmtDia(r.date)}</text>
         ))}
@@ -1113,7 +1148,7 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
           <g>
             <line x1={cx(hover)} x2={cx(hover)} y1={y0} y2={y1} className="stroke-graphite-300 dark:stroke-white/20" strokeWidth={1} strokeDasharray="3 3" />
             {activeVisible.filter((s) => s.kind !== "bar" && s.kind !== "marker").map((s) => (
-              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover], wxOf(hover)))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
+              <circle key={s.k} cx={cx(hover)} cy={yFor(s, sVal(s.k, rows[hover], wxOf(hover), sensoryOf(hover)))} r={2.6} fill={s.color} stroke="#fff" strokeWidth={1} />
             ))}
           </g>
         )}
@@ -1127,10 +1162,10 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
         >
           <p className="mb-1.5 text-[11px] font-bold text-graphite-800 dark:text-white">{fmtDia(rows[hover].date)} <span className="font-normal text-graphite-400">· {rows[hover].phase}</span></p>
           <div className="space-y-1">
-            {activeVisible.filter((s) => s.kind !== "marker").map((s) => (
+            {activeVisible.filter((s) => s.kind !== "marker" || (s.k === "sensorial" && sensoryOf(hover) != null)).map((s) => (
               <div key={s.k} className="flex items-center justify-between gap-4 text-[11px]">
                 <span className="flex items-center gap-1.5 text-graphite-500 dark:text-gray-400"><span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />{s.label}</span>
-                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover], wxOf(hover))}</span>
+                <span className="font-semibold tabular-nums text-graphite-800 dark:text-gray-100">{sFmt(s.k, rows[hover], wxOf(hover), sensoryOf(hover))}</span>
               </div>
             ))}
           </div>
@@ -1185,15 +1220,17 @@ function BalanceTab({
   loading,
   head,
   weatherByDate,
+  sensoryByDate,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
   head: CentroHead;
   weatherByDate: Record<string, WeatherExtra>;
+  sensoryByDate: Record<string, number>;
 }) {
   const [visible, setVisible] = useState<Record<SKey, boolean>>(() => {
-    const on = new Set<SKey>(["umidade", "cc", "seg", "pm", "chuva", "irrig", "kc", "justexc"]);
+    const on = new Set<SKey>(["umidade", "cc", "seg", "pm", "chuva", "irrig", "kc", "justexc", "sensorial"]);
     return Object.fromEntries(MANEJO_ALL.map((s) => [s.k, on.has(s.k)])) as Record<SKey, boolean>;
   });
   const [activeCat, setActiveCat] = useState("Solo");
@@ -1209,12 +1246,13 @@ function BalanceTab({
     : rows;
 
   const exportCsv = () => {
-    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "CAD", "AFD", "ARM", "SegMm", "PctCC", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "CAD", "AFD", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
     const lines = filteredRows.map((r) => {
       const entr = soilInflowMm(r);
       const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
       const lam = r.deficit >= r.afd && r.afd > 0 ? r.grossDepth : 0;
       const pctCc = moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
+      const sens = sensoryByDate[r.date];
       return [
         r.date, r.phase, r.kc.toFixed(2), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
         r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1),
@@ -1224,6 +1262,7 @@ function BalanceTab({
         entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1),
         r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
         (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1), pctCc.toFixed(1),
+        sens != null ? String(sens) : "",
         depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label,
       ].join(";");
     });
@@ -1286,6 +1325,7 @@ function BalanceTab({
     { header: "ARM", render: (r) => <span title={r.balanceFormula}>{r.storedWater.toFixed(1)}</span> },
     { header: "Seg.", render: (r) => (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1) },
     { header: "% CC", render: (r) => `${moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad).toFixed(0)}` },
+    { header: "Sens.", render: (r) => sensoryByDate[r.date] != null ? <span className="font-semibold text-violet-600 dark:text-violet-400">{sensoryByDate[r.date]}</span> : "—" },
     { header: "Déficit", render: (r) => r.deficit > 0 ? <span className="text-red-600 dark:text-red-400">{r.deficit.toFixed(1)}</span> : "0.0" },
     { header: "Lâm. rec.", render: (r) => r.deficit >= r.afd && r.afd > 0 ? r.grossDepth.toFixed(1) : "0.0" },
     {
@@ -1411,7 +1451,7 @@ function BalanceTab({
             </p>
           </div>
           {/* gráfico */}
-          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} weatherByDate={weatherByDate} /></div>
+          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={rows} visible={visible} weatherByDate={weatherByDate} sensoryByDate={sensoryByDate} /></div>
         </div>
       </Card>
 
@@ -1567,6 +1607,7 @@ function BalanceTab({
         <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">{PE_METHOD}</strong></span>
         <span>Balanço <strong className="font-semibold text-graphite-800 dark:text-white">{ARM_FORMULA}</strong></span>
         <span>Unidades <strong className="font-semibold text-graphite-800 dark:text-white">CAD/AFD/ARM mm · % da CC volumétrico</strong></span>
+        <span>Sensorial <strong className="font-semibold text-graphite-800 dark:text-white">nota 1–10, sem conversão para % da CC</strong></span>
         <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
         <span>Motor <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56</strong></span>
         <span>Fonte climática {head.stationName ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.stationName}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>

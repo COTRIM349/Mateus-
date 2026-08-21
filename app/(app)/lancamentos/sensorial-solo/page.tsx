@@ -10,82 +10,68 @@ import { useAuth } from "@/components/providers";
 import { createClient } from "@/lib/supabase/client";
 import { PrerequisiteNotice } from "@/components/onboarding";
 import {
-  SOIL_SENSORY_SCALE,
-  sensoryNoteToPercentCC,
-  sensoryNoteCategory,
-} from "@/modules/assignment/services/parcel-motor-adapter";
-
-// ── Types ────────────────────────────────────────────────────────────────
+  SENSORY_NOTE_OPTIONS,
+  SENSORY_NOTE_UNIT,
+  buildSensoryInsert,
+  combineObservedAt,
+  resolveSensoryNote,
+  validateSensoryDepthCm,
+  validateSensoryNote,
+} from "@/modules/soil/services";
+import { isActiveParcel } from "@/modules/assignment/services";
 
 interface Reading {
   id: string;
   farm_id: string;
   pivot_id: string;
+  parcel_id: string | null;
   reading_date: string;
-  moisture_unit: "weight" | "volume";
-  use_in_balance: boolean;
+  observed_at: string | null;
+  note: number | null;
+  depth_cm: number | null;
   layer_1_note: number | null;
   layer_2_note: number | null;
   layer_3_note: number | null;
-  layer_1_moisture_pct: number | null;
-  layer_2_moisture_pct: number | null;
-  layer_3_moisture_pct: number | null;
   notes: string | null;
-  created_at: string;
 }
 
-interface PivotLite { id: string; name: string; soil_id: string | null }
+interface PivotLite { id: string; name: string }
+
+interface ParcelLite { id: string; name: string | null; pivot_id: string; status: string | null; active: boolean | null }
 
 interface FormState {
   pivot_id: string;
   reading_date: string;
-  moisture_unit: "weight" | "volume";
-  use_in_balance: boolean;
-  layer_1_note: string;
-  layer_2_note: string;
-  layer_3_note: string;
+  reading_time: string;
+  note: string;
+  depth_cm: string;
   notes: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
+const nowHm = () => {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+};
 
 const EMPTY_FORM: FormState = {
   pivot_id: "",
   reading_date: today(),
-  moisture_unit: "weight",
-  use_in_balance: true,
-  layer_1_note: "",
-  layer_2_note: "",
-  layer_3_note: "",
+  reading_time: nowHm(),
+  note: "",
+  depth_cm: "20",
   notes: "",
 };
 
-// ── Category colors ──────────────────────────────────────────────────────
-
-const CATEGORY_STYLE: Record<string, { bg: string; text: string; label: string }> = {
-  umido: {
-    bg: "bg-blue-100 dark:bg-blue-900/30",
-    text: "text-blue-700 dark:text-blue-400",
-    label: "Úmido",
-  },
-  moderado: {
-    bg: "bg-green-100 dark:bg-green-900/30",
-    text: "text-green-700 dark:text-green-400",
-    label: "Moderado",
-  },
-  critico: {
-    bg: "bg-amber-100 dark:bg-amber-900/30",
-    text: "text-amber-700 dark:text-amber-400",
-    label: "Crítico",
-  },
-  seco: {
-    bg: "bg-red-100 dark:bg-red-900/30",
-    text: "text-red-700 dark:text-red-400",
-    label: "Seco",
-  },
-};
-
-// ── Page ────────────────────────────────────────────────────────────────
+function formatObserved(r: Reading): string {
+  if (r.observed_at) {
+    const d = new Date(r.observed_at);
+    if (!Number.isNaN(d.getTime())) {
+      return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+    }
+  }
+  return new Date(r.reading_date + "T12:00:00").toLocaleDateString("pt-BR");
+}
 
 export default function SensorialSoloPage() {
   const { activeFarmId } = useAuth();
@@ -93,6 +79,7 @@ export default function SensorialSoloPage() {
 
   const [readings, setReadings] = useState<Reading[]>([]);
   const [pivots, setPivots] = useState<PivotLite[]>([]);
+  const [parcels, setParcels] = useState<ParcelLite[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<Reading | null>(null);
@@ -106,12 +93,24 @@ export default function SensorialSoloPage() {
     if (!activeFarmId) return;
     supabase
       .from("pivots")
-      .select("id, name, soil_id")
+      .select("id, name")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name")
       .then(({ data }) => { if (data) setPivots(data as PivotLite[]); });
   }, [activeFarmId, supabase]);
+
+  useEffect(() => {
+    if (pivots.length === 0) {
+      setParcels([]);
+      return;
+    }
+    supabase
+      .from("pivot_crop_assignments")
+      .select("id, name, pivot_id, status, active")
+      .in("pivot_id", pivots.map((p) => p.id))
+      .then(({ data }) => { if (data) setParcels(data as ParcelLite[]); });
+  }, [pivots, supabase]);
 
   const fetchReadings = useCallback(async () => {
     if (!activeFarmId) return;
@@ -131,24 +130,31 @@ export default function SensorialSoloPage() {
   useEffect(() => { fetchReadings(); }, [fetchReadings]);
 
   const pivotMap = useMemo(() => new Map(pivots.map((p) => [p.id, p.name])), [pivots]);
+  const parcelMap = useMemo(() => new Map(parcels.map((p) => [p.id, p.name || "Parcela"])), [parcels]);
+
+  const activeParcelFor = useCallback((pivotId: string) => {
+    return parcels.find((p) => p.pivot_id === pivotId && isActiveParcel(p.status, p.active)) ?? null;
+  }, [parcels]);
 
   const openNew = () => {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, reading_date: today() });
+    setForm({ ...EMPTY_FORM, reading_date: today(), reading_time: nowHm() });
     setFormError("");
     setModalOpen(true);
   };
 
   const openEdit = (r: Reading) => {
     setEditing(r);
+    const observed = r.observed_at ? new Date(r.observed_at) : null;
+    const time = observed && !Number.isNaN(observed.getTime())
+      ? `${String(observed.getHours()).padStart(2, "0")}:${String(observed.getMinutes()).padStart(2, "0")}`
+      : "12:00";
     setForm({
       pivot_id: r.pivot_id,
       reading_date: r.reading_date,
-      moisture_unit: r.moisture_unit,
-      use_in_balance: r.use_in_balance,
-      layer_1_note: r.layer_1_note != null ? String(r.layer_1_note) : "",
-      layer_2_note: r.layer_2_note != null ? String(r.layer_2_note) : "",
-      layer_3_note: r.layer_3_note != null ? String(r.layer_3_note) : "",
+      reading_time: time,
+      note: String(resolveSensoryNote(r) ?? ""),
+      depth_cm: r.depth_cm != null ? String(r.depth_cm) : "20",
       notes: r.notes ?? "",
     });
     setFormError("");
@@ -161,28 +167,24 @@ export default function SensorialSoloPage() {
     e.preventDefault();
     if (!activeFarmId) return;
     if (!form.pivot_id) { setFormError("Selecione o pivô."); return; }
-    if (!form.layer_1_note && !form.layer_2_note && !form.layer_3_note) {
-      setFormError("Informe a nota de pelo menos uma camada.");
-      return;
-    }
+    const note = Number(form.note);
+    const noteErr = validateSensoryNote(note);
+    if (noteErr) { setFormError(noteErr); return; }
+    const depth = form.depth_cm ? Number(form.depth_cm) : null;
+    const depthErr = validateSensoryDepthCm(depth);
+    if (depthErr) { setFormError(depthErr); return; }
 
-    const n = (v: string) => v ? Number(v) : null;
-    const noteToPct = (v: string) => v ? sensoryNoteToPercentCC(Number(v)) : null;
-
-    const payload = {
-      farm_id: activeFarmId,
-      pivot_id: form.pivot_id,
-      reading_date: form.reading_date,
-      moisture_unit: form.moisture_unit,
-      use_in_balance: form.use_in_balance,
-      layer_1_note: n(form.layer_1_note),
-      layer_2_note: n(form.layer_2_note),
-      layer_3_note: n(form.layer_3_note),
-      layer_1_moisture_pct: noteToPct(form.layer_1_note),
-      layer_2_moisture_pct: noteToPct(form.layer_2_note),
-      layer_3_moisture_pct: noteToPct(form.layer_3_note),
+    const parcel = activeParcelFor(form.pivot_id);
+    const payload = buildSensoryInsert({
+      farmId: activeFarmId,
+      pivotId: form.pivot_id,
+      parcelId: editing?.parcel_id ?? parcel?.id ?? null,
+      readingDate: form.reading_date,
+      observedAt: combineObservedAt(form.reading_date, form.reading_time),
+      note,
+      depthCm: depth as number,
       notes: form.notes || null,
-    };
+    });
 
     setSaving(true);
     setFormError("");
@@ -216,35 +218,23 @@ export default function SensorialSoloPage() {
     fetchReadings();
   };
 
-  const noteOptions = [
-    { value: "", label: "— sem leitura —" },
-    ...SOIL_SENSORY_SCALE.map((s) => ({
-      value: String(s.note),
-      label: `${s.note.toFixed(1)} — ${s.moisturePctCc}% CC`,
-    })),
-  ];
-
-  const scaleReference = SOIL_SENSORY_SCALE.filter((s) => Number.isInteger(s.note));
+  const selectedParcel = form.pivot_id ? activeParcelFor(form.pivot_id) : null;
 
   const columns: Column<Reading>[] = [
+    { header: "Data / hora", render: (r) => formatObserved(r) },
+    { header: "Pivô", render: (r) => <span className="font-medium">{pivotMap.get(r.pivot_id) ?? "—"}</span> },
+    { header: "Parcela", render: (r) => r.parcel_id ? (parcelMap.get(r.parcel_id) ?? "ciclo") : "—" },
     {
-      header: "Data",
-      render: (r) => new Date(r.reading_date + "T12:00:00").toLocaleDateString("pt-BR"),
+      header: "Nota",
+      render: (r) => {
+        const n = resolveSensoryNote(r);
+        return n == null
+          ? <span className="text-xs text-gray-400">—</span>
+          : <span className="inline-flex rounded-lg bg-brand-50 px-2 py-0.5 text-xs font-bold tabular-nums text-brand-700 dark:bg-brand-900/30 dark:text-brand-300">{n}</span>;
+      },
     },
-    {
-      header: "Pivô",
-      render: (r) => <span className="font-medium">{pivotMap.get(r.pivot_id) ?? "—"}</span>,
-    },
-    { header: "Camada 1", render: (r) => renderLayer(r.layer_1_note) },
-    { header: "Camada 2", render: (r) => renderLayer(r.layer_2_note) },
-    { header: "Camada 3", render: (r) => renderLayer(r.layer_3_note) },
-    { header: "Unidade", render: (r) => r.moisture_unit === "weight" ? "Peso" : "Volume" },
-    {
-      header: "Balanço",
-      render: (r) => r.use_in_balance
-        ? <span className="inline-flex rounded-lg bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700 dark:bg-green-900/30 dark:text-green-400">Ativa</span>
-        : <span className="inline-flex rounded-lg bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600 dark:bg-gray-700/30 dark:text-gray-400">Auditoria</span>,
-    },
+    { header: "Profundidade", render: (r) => r.depth_cm != null ? `${r.depth_cm} cm` : "—" },
+    { header: "Observação", render: (r) => <span className="text-xs text-graphite-500 dark:text-gray-400">{r.notes ?? "—"}</span> },
     {
       header: "Ações",
       align: "right",
@@ -262,11 +252,11 @@ export default function SensorialSoloPage() {
       <div className="space-y-8">
         <PageHeader
           titulo="Sensorial de Solo"
-          descricao="Método tátil de avaliação da umidade — escala 1-9 (USDA-NRCS · Embrapa)"
+          descricao="Nota de campo 1–10 — sem conversão automática para % da CC"
         />
         <PrerequisiteNotice
           title="Selecione uma fazenda"
-          description="Escolha uma fazenda ativa para registrar leituras sensoriais por pivô."
+          description="Escolha uma fazenda ativa para registrar avaliações sensoriais por pivô."
           actionLabel="Ir para Fazendas"
           actionHref="/fazendas"
         />
@@ -278,10 +268,9 @@ export default function SensorialSoloPage() {
     <div className="space-y-6">
       <PageHeader
         titulo="Sensorial de Solo"
-        descricao="Método tátil — avalia a umidade do solo por consistência/plasticidade e converte automaticamente para % da capacidade de campo"
+        descricao="Avaliação tátil em campo. A nota 1–10 entra no histórico; não vira % da CC nem substitui o ARM."
       />
 
-      {/* Toolbar */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="min-w-[220px]">
           <Select
@@ -295,10 +284,9 @@ export default function SensorialSoloPage() {
             ]}
           />
         </div>
-        <Button onClick={openNew}>Nova leitura</Button>
+        <Button onClick={openNew}>Nova avaliação</Button>
       </div>
 
-      {/* Table */}
       <Card>
         {loading ? (
           <div className="flex items-center justify-center gap-3 py-8">
@@ -307,44 +295,31 @@ export default function SensorialSoloPage() {
           </div>
         ) : readings.length === 0 ? (
           <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-            Nenhuma leitura registrada. Clique em <b>Nova leitura</b> para começar.
+            Nenhuma avaliação registrada. Clique em <b>Nova avaliação</b> para começar.
           </p>
         ) : (
           <Table columns={columns} data={readings} getKey={(r) => r.id} />
         )}
       </Card>
 
-      {/* Reference scale */}
       <Card>
-        <p className="mb-3 text-sm font-semibold text-graphite-900 dark:text-white">
-          Escala de referência (método USDA-NRCS · Marouelli/Embrapa · Bernardo)
-        </p>
-        <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-9">
-          {scaleReference.map((s) => {
-            const cat = sensoryNoteCategory(s.note);
-            const style = cat ? CATEGORY_STYLE[cat] : null;
-            return (
-              <div key={s.note} className={`rounded-lg p-3 text-center ${style?.bg ?? ""}`}>
-                <div className={`text-lg font-bold ${style?.text ?? "text-graphite-900"}`}>
-                  {s.note.toFixed(0)}
-                </div>
-                <div className={`text-xs ${style?.text ?? "text-graphite-500"}`}>
-                  {s.moisturePctCc}% CC
-                </div>
-              </div>
-            );
-          })}
+        <p className="mb-2 text-sm font-semibold text-graphite-900 dark:text-white">Escala operacional</p>
+        <div className="flex flex-wrap gap-1.5">
+          {SENSORY_NOTE_OPTIONS.map((o) => (
+            <span key={o.value} className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gray-50 text-sm font-bold tabular-nums text-graphite-700 dark:bg-white/[0.04] dark:text-gray-200">
+              {o.label}
+            </span>
+          ))}
         </div>
-        <p className="mt-3 text-xs text-graphite-500 dark:text-gray-400">
-          🌊 Úmido (1-3) &nbsp;·&nbsp; 🌱 Moderado (3.5-6) &nbsp;·&nbsp; ⚠ Crítico (6.5-7.5) &nbsp;·&nbsp; 🏜 Seco (8-9)
+        <p className="mt-3 text-xs leading-relaxed text-graphite-500 dark:text-gray-400">
+          Unidade: {SENSORY_NOTE_UNIT}. 1 = mais úmido ao tato · 10 = mais seco. A conversão para % da CC exige calibração por textura e pivô — ainda não aplicada.
         </p>
       </Card>
 
-      {/* Modal */}
       <Modal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); }}
-        title={editing ? "Editar leitura sensorial" : "Nova leitura sensorial"}
+        title={editing ? "Editar avaliação sensorial" : "Nova avaliação sensorial"}
         size="lg"
       >
         <form onSubmit={handleSubmit} className="space-y-5">
@@ -357,57 +332,57 @@ export default function SensorialSoloPage() {
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ pivot_id: e.target.value })}
               options={pivots.map((p) => ({ value: p.id, label: p.name }))}
             />
+            <div>
+              <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">Parcela ativa</p>
+              <p className="rounded-xl border border-gray-200 px-4 py-2.5 text-sm text-graphite-800 dark:border-white/[0.08] dark:text-gray-100">
+                {form.pivot_id
+                  ? (selectedParcel?.name || (selectedParcel ? "Parcela ativa" : "Nenhuma parcela ativa neste pivô"))
+                  : "Selecione o pivô"}
+              </p>
+            </div>
             <Input
               id="reading_date"
-              label="Data da leitura"
+              label="Data"
               type="date"
               required
               value={form.reading_date}
               onChange={(e) => patch({ reading_date: e.target.value })}
             />
-          </div>
-
-          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
-            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
-              Camadas do perfil (superficial → profunda)
-            </legend>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <LayerField label="Camada 1 (superficial 0-20 cm)" value={form.layer_1_note} onChange={(v) => patch({ layer_1_note: v })} options={noteOptions} />
-              <LayerField label="Camada 2 (média 20-40 cm)" value={form.layer_2_note} onChange={(v) => patch({ layer_2_note: v })} options={noteOptions} />
-              <LayerField label="Camada 3 (profunda 40-60 cm)" value={form.layer_3_note} onChange={(v) => patch({ layer_3_note: v })} options={noteOptions} />
-            </div>
-          </fieldset>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Select
-              id="moisture_unit"
-              label="Unidade de referência"
-              value={form.moisture_unit}
-              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ moisture_unit: e.target.value as "weight" | "volume" })}
-              options={[
-                { value: "weight", label: "Peso" },
-                { value: "volume", label: "Volume" },
-              ]}
+            <Input
+              id="reading_time"
+              label="Hora"
+              type="time"
+              required
+              value={form.reading_time}
+              onChange={(e) => patch({ reading_time: e.target.value })}
             />
-            <div className="flex items-end">
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  checked={form.use_in_balance}
-                  onChange={(e) => patch({ use_in_balance: e.target.checked })}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                <span>Usar esta leitura no balanço hídrico</span>
-              </label>
-            </div>
+            <Select
+              id="note"
+              label="Nota sensorial (1–10)"
+              required
+              value={form.note}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => patch({ note: e.target.value })}
+              options={[{ value: "", label: "Selecione a nota" }, ...SENSORY_NOTE_OPTIONS]}
+            />
+            <Input
+              id="depth_cm"
+              label="Profundidade avaliada (cm)"
+              type="number"
+              min={1}
+              max={300}
+              step={1}
+              required
+              value={form.depth_cm}
+              onChange={(e) => patch({ depth_cm: e.target.value })}
+            />
           </div>
 
           <TextArea
             id="notes"
-            label="Observações"
+            label="Observação (opcional)"
             value={form.notes}
             onChange={(e) => patch({ notes: e.target.value })}
-            placeholder="Ex.: solo com fissuras visíveis; amostra na entre-linha; ontem choveu leve"
+            placeholder="Ex.: amostra na entre-linha; fissuras visíveis"
           />
 
           {formError && <p role="alert" className="rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>}
@@ -423,61 +398,11 @@ export default function SensorialSoloPage() {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={handleDelete}
-        title="Excluir leitura"
-        message={`Excluir leitura do pivô ${deleteTarget ? pivotMap.get(deleteTarget.pivot_id) ?? "" : ""} em ${deleteTarget ? new Date(deleteTarget.reading_date + "T12:00:00").toLocaleDateString("pt-BR") : ""}?`}
+        title="Excluir avaliação"
+        message={`Excluir avaliação do pivô ${deleteTarget ? pivotMap.get(deleteTarget.pivot_id) ?? "" : ""} em ${deleteTarget ? formatObserved(deleteTarget) : ""}?`}
         confirmLabel="Excluir"
         loading={saving}
       />
-    </div>
-  );
-}
-
-// ── Helpers ──────────────────────────────────────────────────────────────
-
-function renderLayer(note: number | null) {
-  if (note == null) return <span className="text-xs text-gray-400">—</span>;
-  const pct = sensoryNoteToPercentCC(note);
-  const cat = sensoryNoteCategory(note);
-  const style = cat ? CATEGORY_STYLE[cat] : null;
-  return (
-    <div>
-      <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-bold tabular-nums ${style?.bg ?? ""} ${style?.text ?? ""}`}>
-        {note.toFixed(1)}
-      </span>
-      <span className="ml-1.5 text-xs text-graphite-500 dark:text-gray-400 tabular-nums">
-        {pct != null ? `${pct.toFixed(0)}% CC` : ""}
-      </span>
-    </div>
-  );
-}
-
-function LayerField({
-  label, value, onChange, options,
-}: {
-  label: string;
-  value: string;
-  onChange: (v: string) => void;
-  options: { value: string; label: string }[];
-}) {
-  const noteNum = value ? Number(value) : null;
-  const pct = noteNum != null ? sensoryNoteToPercentCC(noteNum) : null;
-  const cat = noteNum != null ? sensoryNoteCategory(noteNum) : null;
-  const style = cat ? CATEGORY_STYLE[cat] : null;
-
-  return (
-    <div>
-      <Select
-        id={`layer_${label}`}
-        label={label}
-        value={value}
-        onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onChange(e.target.value)}
-        options={options}
-      />
-      {value && pct != null && (
-        <div className={`mt-1.5 rounded-lg px-2 py-1 text-xs font-medium ${style?.bg ?? ""} ${style?.text ?? ""}`}>
-          {style?.label} · {pct.toFixed(0)}% CC
-        </div>
-      )}
     </div>
   );
 }

@@ -240,12 +240,13 @@ export function calculateKl(fn: KlFunctionName, inputs: KlInputs): number {
   }
 }
 
-// ── Escala sensorial nota → % CC ───────────────────────────────────────────
+// ── Escala sensorial nota → % CC (calibração FUTURA — não aplicar) ────────
+// Etapa G: a nota operacional é 1–10 e NÃO vira % da CC automaticamente.
+// Esta tabela (1.0–9.0) fica só como referência histórica/calibração.
 
 /**
  * Tabela oficial da escala tátil (mirror do seed em SQL 00031).
- * Nota (1.0 a 9.0 em passos de 0,5) → percentual de CC.
- * Fonte: USDA-NRCS · Marouelli et al. Embrapa · Bernardo, Mantovani & Soares 2019.
+ * NÃO usar no lançamento nem no motor até existir curva calibrada por pivô.
  */
 export const SOIL_SENSORY_SCALE: ReadonlyArray<{
   note: number;
@@ -272,9 +273,7 @@ export const SOIL_SENSORY_SCALE: ReadonlyArray<{
 ] as const;
 
 /**
- * Converte uma nota tátil (1.0 a 9.0) para percentual da capacidade de campo.
- * Se a nota não bater exatamente na escala, faz interpolação linear entre
- * as duas notas mais próximas.
+ * Calibração histórica nota 1–9 → % CC. Etapa G: não chamar no fluxo operacional.
  */
 export function sensoryNoteToPercentCC(note: number): number | null {
   if (!Number.isFinite(note) || note < 1.0 || note > 9.0) return null;
