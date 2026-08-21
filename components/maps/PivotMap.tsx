@@ -37,7 +37,7 @@ const SOLID_FILL_SELECTED = 0.96;
 
 function strokeFor(fill: string, selected: boolean): string {
   if (selected) return "#ffffff";
-  if (fill === "#0a0a0a" || fill === "#111111" || fill === "#171717") return "#d4d4d8";
+  if (fill === "#6b7280") return "#d4d4d8";
   return fill;
 }
 

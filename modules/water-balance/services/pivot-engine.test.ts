@@ -98,7 +98,7 @@ describe("computePivotBalanceSeries — Ks, KL e Ky (Etapa E)", () => {
     expect(series[0].kl).toBe(1);
     expect(series[0].etcPotential).toBe(5);
     expect(series[0].etc).toBe(5);
-    expect(series[0].mapStatus).toBe("otima_umidade");
+    expect(series[0].mapStatus).toBe("boa_umidade");
     expect(series[0].etcFormula).toContain("ETo × Kc × KL × Ks");
   });
 

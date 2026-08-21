@@ -4,35 +4,24 @@
  * O frontend NÃO escolhe cor. Consome `classifyWaterStatus()` a partir do
  * ARM/CAD/AFD já calculados pelo motor de balanço.
  *
- * Faixas parametrizáveis em {@link MAP_HYDRIC_THRESHOLDS}. Não espalhar
- * limites de cor em componentes.
+ * Quatro cores operacionais — azul, verde, amarelo, vermelho — como nas
+ * plataformas clássicas de manejo. Cinza (`incompleto`) não entra na legenda:
+ * é ficha sem dado, não condição hídrica.
  *
- * Relação com o gatilho de irrigação (`classifyHydricStatus`):
- *   aquele classificador de 4 níveis (verde/amarelo/vermelho/cinza) permanece
- *   para recomendação. O mapa usa estas 6 cores agronômicas.
+ * O gatilho de irrigação (`classifyHydricStatus`) permanece independente
+ * (verde/amarelo/vermelho/cinza pela AFD).
  */
 
 export type MapHydricStatus =
   | "capacidade_campo"
-  | "otima_umidade"
   | "boa_umidade"
-  | "sinal_alerta"
   | "atencao"
   | "deficit_hidrico"
   | "incompleto";
 
 export interface MapHydricThresholds {
-  /** ARM/CAD ≥ este valor → capacidade de campo. */
+  /** ARM/CAD ≥ este valor → capacidade de campo (azul). */
   fieldCapacityRatio: number;
-  /** ARM/CAD ≥ este valor (e abaixo de CC) → ótima umidade. */
-  excellentRatio: number;
-  /**
-   * Fração da umidade de segurança (CAD − AFD) abaixo da qual entra alerta.
-   * Acima da segurança = boa umidade (Ks = 1).
-   */
-  alertFloorOfSafety: number;
-  /** ARM/CAD ≤ este valor (e ARM > 0) → atenção. Abaixo ou igual a 0 → déficit. */
-  attentionMaxRatio: number;
 }
 
 /**
@@ -41,9 +30,6 @@ export interface MapHydricThresholds {
  */
 export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
   fieldCapacityRatio: 0.98,
-  excellentRatio: 0.8,
-  alertFloorOfSafety: 0.7,
-  attentionMaxRatio: 0.25,
 };
 
 export const MAP_HYDRIC_STATUS_CONFIG: Record<
@@ -52,33 +38,23 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
 > = {
   capacidade_campo: {
     label: "Capacidade de campo",
-    color: "#1d4ed8",
+    color: "#2563eb",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   },
-  otima_umidade: {
-    label: "Ótima umidade",
-    color: "#166534",
-    bgClass: "bg-emerald-950/40 text-emerald-300 dark:bg-emerald-950/50 dark:text-emerald-300",
-  },
   boa_umidade: {
-    label: "Boa umidade",
-    color: "#4ade80",
+    label: "Adequado",
+    color: "#22c55e",
     bgClass: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
-  },
-  sinal_alerta: {
-    label: "Sinal de alerta",
-    color: "#ea580c",
-    bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   },
   atencao: {
     label: "Atenção",
-    color: "#dc2626",
-    bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+    color: "#eab308",
+    bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
   },
   deficit_hidrico: {
     label: "Déficit hídrico",
-    color: "#171717",
-    bgClass: "bg-zinc-900 text-zinc-100 dark:bg-black dark:text-zinc-200",
+    color: "#dc2626",
+    bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   },
   incompleto: {
     label: "Ficha técnica incompleta",
@@ -89,9 +65,7 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
 
 export const MAP_HYDRIC_LEGEND_ORDER: MapHydricStatus[] = [
   "capacidade_campo",
-  "otima_umidade",
   "boa_umidade",
-  "sinal_alerta",
   "atencao",
   "deficit_hidrico",
 ];
@@ -107,12 +81,10 @@ export interface ClassifyWaterStatusInput {
 /**
  * Classifica a condição hídrica do solo para o mapa.
  *
- * - Capacidade de campo: ARM ≈ CAD (armazenamento máximo operacional).
- * - Ótima: abaixo da CC, ainda com grande reserva (fração da CAD).
- * - Boa: acima da umidade de segurança (CAD − AFD) — zona Ks = 1.
- * - Alerta: entre o piso de alerta e a umidade de segurança.
- * - Atenção: abaixo do alerta, ainda com água (ARM > 0).
- * - Déficit: ARM ≤ 0 — déficit agronomicamente relevante.
+ * - Azul: ARM ≈ CAD (capacidade de campo).
+ * - Verde: abaixo da CC e acima da umidade de segurança (CAD − AFD) — Ks = 1.
+ * - Amarelo: abaixo da segurança, ainda com água (ARM > 0).
+ * - Vermelho: ARM ≤ 0 — déficit.
  *
  * Sem CAD/ARM válidos → `incompleto` (não é cor operacional).
  */
@@ -134,11 +106,7 @@ export function classifyWaterStatus(input: ClassifyWaterStatusInput): MapHydricS
     : Math.max(cad - afd, 0);
 
   if (fill >= t.fieldCapacityRatio) return "capacidade_campo";
-  if (fill >= t.excellentRatio) return "otima_umidade";
   if (arm >= safety) return "boa_umidade";
-  if (safety > 0 && arm >= safety * t.alertFloorOfSafety && fill > t.attentionMaxRatio) {
-    return "sinal_alerta";
-  }
   if (arm > 0) return "atencao";
   return "deficit_hidrico";
 }

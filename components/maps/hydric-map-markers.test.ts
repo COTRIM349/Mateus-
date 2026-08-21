@@ -36,7 +36,7 @@ describe("toHydricMapMarkers", () => {
   it("pinta o círculo com a cor sólida do status do motor", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].color).toBe("#4ade80");
+    expect(markers[0].color).toBe("#22c55e");
     expect(markers[0].radiusMeters).toBe(500);
   });
 
