@@ -3,7 +3,6 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import { destinationLatLng } from "@/utils/geo";
 import { MAP_HYDRIC_COLORS } from "@/modules/water-balance/services";
 
 export interface PivotMarker {
@@ -17,8 +16,6 @@ export interface PivotMarker {
   color?: string;
   sheetIncomplete?: boolean;
   statusLabel?: string;
-  /** Azimute da haste (0 = norte). Sem cadastro, usa o norte como no Scheduling. */
-  boomBearingDeg?: number;
 }
 
 interface PivotMapProps {
@@ -33,16 +30,16 @@ const SATELLITE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
 /**
- * Preenchimento deixa a lavoura visível; o anel grosso marca o pivô
- * (trilha da última torre), como na Agrosmart Aqua.
+ * Pivô no recorte clássico de manejo (Agrosmart Aqua):
+ * círculo na cor do status, borda da mesma cor, lavoura visível, sem pino no centro.
  */
 const FIELD_FILL = 0.33;
-const FIELD_FILL_SELECTED = 0.45;
-const TRACK_WEIGHT = 5;
-const TRACK_WEIGHT_SELECTED = 7;
+const FIELD_FILL_SELECTED = 0.42;
+const RING_WEIGHT = 2.5;
+const RING_WEIGHT_SELECTED = 3.5;
 
-function strokeFor(fill: string): string {
-  if (fill === MAP_HYDRIC_COLORS.gray || fill === "#9ca3af" || fill === "#6b7280") return "#e5e7eb";
+function ringColor(fill: string): string {
+  if (fill === MAP_HYDRIC_COLORS.gray) return "#d1d5db";
   return fill;
 }
 
@@ -111,28 +108,15 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         continue;
       }
 
-      const trackColor = strokeFor(baseColor);
-      const trackWeight = isHighlighted ? TRACK_WEIGHT_SELECTED : TRACK_WEIGHT;
-
-      L.circle(latlng, {
-        radius: pivot.radiusMeters,
-        color: "#0b0d0c",
-        fillOpacity: 0,
-        weight: trackWeight + 3,
-        opacity: 0.4,
-        interactive: false,
-        className: "pivot-hydric-circle",
-      }).addTo(map);
-
       const circle = L.circle(latlng, {
         radius: pivot.radiusMeters,
-        color: trackColor,
+        color: ringColor(baseColor),
         fillColor: baseColor,
         fillOpacity: isHighlighted ? FIELD_FILL_SELECTED : FIELD_FILL,
-        weight: trackWeight,
-        opacity: 1,
+        weight: isHighlighted ? RING_WEIGHT_SELECTED : RING_WEIGHT,
+        opacity: 0.95,
         className: "pivot-hydric-circle",
-        dashArray: pivot.sheetIncomplete ? "10 7" : undefined,
+        dashArray: pivot.sheetIncomplete ? "8 6" : undefined,
       })
         .addTo(map)
         .bindTooltip(tooltip, {
@@ -143,50 +127,11 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
           className: "leaflet-pivot-hover",
         });
 
-      const boomEnd = destinationLatLng(
-        pivot.latitude,
-        pivot.longitude,
-        pivot.radiusMeters,
-        pivot.boomBearingDeg ?? 0,
-      );
-
-      L.polyline([latlng, [boomEnd.lat, boomEnd.lng]], {
-        color: "#0b0d0c",
-        weight: isHighlighted ? 6 : 5,
-        opacity: 0.45,
-        lineCap: "round",
-        interactive: false,
-        className: "pivot-hydric-boom",
-      }).addTo(map);
-
-      const boom = L.polyline([latlng, [boomEnd.lat, boomEnd.lng]], {
-        color: "#f8fafc",
-        weight: isHighlighted ? 3 : 2.5,
-        opacity: 0.98,
-        lineCap: "round",
-        interactive: true,
-        className: "pivot-hydric-boom",
-      }).addTo(map);
-
-      const lastTower = L.circleMarker([boomEnd.lat, boomEnd.lng], {
-        radius: isHighlighted ? 6 : 5,
-        color: "#f8fafc",
-        fillColor: baseColor,
-        fillOpacity: 1,
-        weight: 2,
-        interactive: true,
-        className: "pivot-hydric-tower",
-      }).addTo(map);
-
       if (onSelect) {
-        const select = () => onSelect(pivot.id);
-        circle.on("click", select);
-        boom.on("click", select);
-        lastTower.on("click", select);
+        circle.on("click", () => onSelect(pivot.id));
       }
 
       bounds.extend(latlng);
-      bounds.extend([boomEnd.lat, boomEnd.lng]);
     }
 
     if (bounds.isValid()) {
