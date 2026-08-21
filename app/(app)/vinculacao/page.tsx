@@ -29,6 +29,7 @@ import {
   validateParcelClose,
   validateParcelCycle,
 } from "@/modules/assignment/services";
+import { snapshotCycleEnergyCost } from "@/modules/costs/services";
 import { identifyPhase } from "@/modules/culture/services";
 import {
   daysAfterPlanting,
@@ -381,15 +382,18 @@ export default function VinculacaoPage() {
     try {
       const { data: evRows } = await supabase
         .from("irrigation_events")
-        .select("depth_mm, volume_m3")
+        .select("depth_mm, volume_m3, energy_kwh, cost")
         .eq("parcel_id", closeTarget.id);
       const water = snapshotCycleWater(evRows ?? []);
+      const energyCost = snapshotCycleEnergyCost(evRows ?? []);
       const payload = buildParcelClosePayload({
         closeReason: closeForm.close_reason,
         closeNote: closeForm.close_note,
         yieldKgHa,
         closedAt: closeDateToIso(closeForm.closed_at),
         totalWaterAppliedMm: water.total_water_applied_mm,
+        totalEnergyKwh: energyCost.total_energy_kwh,
+        totalCost: energyCost.total_cost,
       });
       const { error } = await supabase
         .from("pivot_crop_assignments")

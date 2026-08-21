@@ -211,6 +211,8 @@ export interface ParcelClosePayload {
   close_note: string | null;
   yield_kg_ha: number | null;
   total_water_applied_mm: number | null;
+  total_energy_kwh: number | null;
+  total_cost: number | null;
 }
 
 export function closeDateToIso(ymd: string): string {
@@ -268,6 +270,8 @@ export function buildParcelClosePayload(input: {
   yieldKgHa?: number | null;
   closedAt?: string;
   totalWaterAppliedMm?: number | null;
+  totalEnergyKwh?: number | null;
+  totalCost?: number | null;
 }): ParcelClosePayload {
   const reason = (PARCEL_CLOSE_REASONS as readonly string[]).includes(input.closeReason)
     ? (input.closeReason as ParcelCloseReason)
@@ -280,5 +284,7 @@ export function buildParcelClosePayload(input: {
     close_note: input.closeNote?.trim() ? input.closeNote.trim() : null,
     yield_kg_ha: input.yieldKgHa ?? null,
     total_water_applied_mm: input.totalWaterAppliedMm ?? null,
+    total_energy_kwh: input.totalEnergyKwh ?? null,
+    total_cost: input.totalCost ?? null,
   };
 }

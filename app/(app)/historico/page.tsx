@@ -46,6 +46,8 @@ interface EventLite {
   depth_mm: number;
   volume_m3: number;
   operating_hours: number | null;
+  energy_kwh: number | null;
+  cost: number | null;
   notes: string | null;
 }
 interface SensoryLite {
@@ -129,7 +131,7 @@ export default function HistoricoOperacionalPage() {
     const [ev, se] = await Promise.all([
       supabase
         .from("irrigation_events")
-        .select("id, parcel_id, started_at, depth_mm, volume_m3, operating_hours, notes")
+        .select("id, parcel_id, started_at, depth_mm, volume_m3, operating_hours, energy_kwh, cost, notes")
         .in("parcel_id", historicIds)
         .order("started_at", { ascending: false }),
       supabase
@@ -229,6 +231,8 @@ export default function HistoricoOperacionalPage() {
     { header: "Lâmina", render: (r) => <span className="tabular-nums">{r.depth_mm.toFixed(1)} mm</span> },
     { header: "Volume", render: (r) => <span className="tabular-nums">{r.volume_m3.toLocaleString("pt-BR")} m³</span> },
     { header: "Horas", render: (r) => r.operating_hours != null ? `${r.operating_hours.toFixed(1)} h` : "—" },
+    { header: "Energia", render: (r) => r.energy_kwh != null ? `${r.energy_kwh.toFixed(1)} kWh` : "—" },
+    { header: "Custo", render: (r) => r.cost != null ? r.cost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—" },
     { header: "Observação", render: (r) => <span className="text-xs text-graphite-500 dark:text-gray-400">{r.notes ?? "—"}</span> },
   ];
 

@@ -35,6 +35,7 @@ import { useFarmHydricState } from "@/lib/hooks";
 import { radiusFromArea } from "@/utils/geo";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
+import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
@@ -88,6 +89,10 @@ interface Pivot {
   efficiency: number;
   farm_id: string;
   specific_consumption: number | null;
+  pump_power: number | null;
+  installed_power_kw: number | null;
+  motor_efficiency: number | null;
+  energy_cost: number | null;
   latitude: number | null;
   longitude: number | null;
 }
@@ -247,7 +252,7 @@ export default function BalancoHidricoPage() {
     (async () => {
       const { data } = await supabase
         .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, farm_id, specific_consumption, latitude, longitude")
+        .select("id, name, area, flow_rate, efficiency, farm_id, specific_consumption, pump_power, installed_power_kw, motor_efficiency, energy_cost, latitude, longitude")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("name");
@@ -766,7 +771,30 @@ export default function BalancoHidricoPage() {
         hoursOverride: lancHours === "" ? null : parseFloat(lancHours),
         notes: lancNotes || null,
       });
-      const { error: err } = await supabase.from("irrigation_events").insert(payload);
+      const { data: tariffRows } = await supabase
+        .from("energy_tariffs")
+        .select("id, valid_from, valid_to, rate_peak, rate_off_peak, peak_start, peak_end")
+        .eq("farm_id", activeFarmId);
+      const priced = priceIrrigationEvent({
+        operatingHours: payload.operating_hours,
+        volumeM3: payload.volume_m3,
+        depthMm: payload.depth_mm,
+        areaHa: pivot.area,
+        pumpPowerCv: pivot.pump_power,
+        installedPowerKw: pivot.installed_power_kw,
+        motorEfficiency: pivot.motor_efficiency,
+        specificConsumptionKwhM3: pivot.specific_consumption,
+        startedAt: payload.started_at,
+        tariff: pickTariffForDate((tariffRows ?? []) as TariffRow[], lancDate),
+        pivotEnergyCostReaisPerKwh: pivot.energy_cost,
+      });
+      const { error: err } = await supabase.from("irrigation_events").insert({
+        ...payload,
+        energy_kwh: priced.energy_kwh,
+        cost: priced.cost,
+        tariff_rate: priced.tariff_rate,
+        energy_source: priced.energy_source,
+      });
 
       if (err) throw new Error(err.message);
       setLancMsg("Irrigação lançada com sucesso. Recalcule o balanço para ver o ARM.");

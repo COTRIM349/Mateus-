@@ -137,8 +137,8 @@ describe("buildParcelClosePayload", () => {
     expect(payload.yield_kg_ha).toBe(4200);
     expect(payload.closed_at).toBe("2027-03-01T12:00:00.000Z");
     expect(payload.total_water_applied_mm).toBe(187);
-    expect(payload).not.toHaveProperty("total_energy_kwh");
-    expect(payload).not.toHaveProperty("total_cost");
+    expect(payload.total_energy_kwh).toBeNull();
+    expect(payload.total_cost).toBeNull();
   });
 });
 

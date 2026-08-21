@@ -3,7 +3,7 @@
  *
  * O operador registra a lâmina bruta aplicada. Volume e tempo seguem as
  * fórmulas auditáveis. O evento alimenta o balanço (I → I_ef = I × eficiência).
- * Custo/energia nascem depois (Etapa J) — este módulo não inventa tarifa.
+ * Custo/energia nascem na Etapa J a partir deste evento (não inventar tarifa).
  */
 
 import { roundTo } from "@/utils/math";

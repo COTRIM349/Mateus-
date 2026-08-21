@@ -19,6 +19,7 @@ import {
   validateOperatingHours,
 } from "@/modules/irrigation/services";
 import { isActiveParcel, isHistoricParcel, assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
+import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 
 interface EventRow {
   id: string;
@@ -29,10 +30,22 @@ interface EventRow {
   depth_mm: number;
   volume_m3: number;
   operating_hours: number | null;
+  energy_kwh: number | null;
+  cost: number | null;
   notes: string | null;
 }
 
-interface PivotLite { id: string; name: string; area: number; flow_rate: number }
+interface PivotLite {
+  id: string;
+  name: string;
+  area: number;
+  flow_rate: number;
+  pump_power: number | null;
+  installed_power_kw: number | null;
+  motor_efficiency: number | null;
+  specific_consumption: number | null;
+  energy_cost: number | null;
+}
 interface ParcelLite { id: string; name: string | null; pivot_id: string; status: string | null; active: boolean | null }
 
 interface FormState {
@@ -65,6 +78,7 @@ export default function LancamentoIrrigacaoPage() {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [pivots, setPivots] = useState<PivotLite[]>([]);
   const [parcels, setParcels] = useState<ParcelLite[]>([]);
+  const [tariffs, setTariffs] = useState<TariffRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState<EventRow | null>(null);
@@ -78,7 +92,7 @@ export default function LancamentoIrrigacaoPage() {
     if (!activeFarmId) return;
     supabase
       .from("pivots")
-      .select("id, name, area, flow_rate")
+      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name")
@@ -94,12 +108,21 @@ export default function LancamentoIrrigacaoPage() {
       .then(({ data }) => { if (data) setParcels(data as ParcelLite[]); });
   }, [pivots, supabase]);
 
+  useEffect(() => {
+    if (!activeFarmId) return;
+    supabase
+      .from("energy_tariffs")
+      .select("id, valid_from, valid_to, rate_peak, rate_off_peak, peak_start, peak_end")
+      .eq("farm_id", activeFarmId)
+      .then(({ data }) => { if (data) setTariffs(data as TariffRow[]); });
+  }, [activeFarmId, supabase]);
+
   const fetchEvents = useCallback(async () => {
     if (pivots.length === 0) { setEvents([]); return; }
     setLoading(true);
     let q = supabase
       .from("irrigation_events")
-      .select("id, pivot_id, parcel_id, started_at, ended_at, depth_mm, volume_m3, operating_hours, notes")
+      .select("id, pivot_id, parcel_id, started_at, ended_at, depth_mm, volume_m3, operating_hours, energy_kwh, cost, notes")
       .in("pivot_id", pivots.map((p) => p.id))
       .order("started_at", { ascending: false })
       .limit(200);
@@ -125,6 +148,24 @@ export default function LancamentoIrrigacaoPage() {
     : null;
   const previewHours = selectedPivot && previewVolume != null
     ? deriveOperatingHours(depthNum, selectedPivot.area, selectedPivot.flow_rate)
+    : null;
+  const previewHoursUsed = form.hours !== "" && Number.isFinite(Number(form.hours))
+    ? Number(form.hours)
+    : previewHours;
+  const previewPrice = selectedPivot && previewVolume != null && previewHoursUsed != null && previewHoursUsed > 0
+    ? priceIrrigationEvent({
+      operatingHours: previewHoursUsed,
+      volumeM3: previewVolume,
+      depthMm: depthNum,
+      areaHa: selectedPivot.area,
+      pumpPowerCv: selectedPivot.pump_power,
+      installedPowerKw: selectedPivot.installed_power_kw,
+      motorEfficiency: selectedPivot.motor_efficiency,
+      specificConsumptionKwhM3: selectedPivot.specific_consumption,
+      startedAt: `${form.date}T${form.time || "06:00"}:00`,
+      tariff: pickTariffForDate(tariffs, form.date),
+      pivotEnergyCostReaisPerKwh: selectedPivot.energy_cost,
+    })
     : null;
 
   const patch = (changes: Partial<FormState>) => setForm((f) => ({ ...f, ...changes }));
@@ -192,13 +233,33 @@ export default function LancamentoIrrigacaoPage() {
       hoursOverride,
       notes: form.notes || null,
     });
+    const priced = priceIrrigationEvent({
+      operatingHours: payload.operating_hours,
+      volumeM3: payload.volume_m3,
+      depthMm: payload.depth_mm,
+      areaHa: pivot.area,
+      pumpPowerCv: pivot.pump_power,
+      installedPowerKw: pivot.installed_power_kw,
+      motorEfficiency: pivot.motor_efficiency,
+      specificConsumptionKwhM3: pivot.specific_consumption,
+      startedAt: payload.started_at,
+      tariff: pickTariffForDate(tariffs, form.date),
+      pivotEnergyCostReaisPerKwh: pivot.energy_cost,
+    });
+    const row = {
+      ...payload,
+      energy_kwh: priced.energy_kwh,
+      cost: priced.cost,
+      tariff_rate: priced.tariff_rate,
+      energy_source: priced.energy_source,
+    };
 
     setSaving(true);
     setFormError("");
     try {
       const { error } = editing
-        ? await supabase.from("irrigation_events").update(payload).eq("id", editing.id)
-        : await supabase.from("irrigation_events").insert(payload);
+        ? await supabase.from("irrigation_events").update(row).eq("id", editing.id)
+        : await supabase.from("irrigation_events").insert(row);
       if (error) setFormError(error.message);
       else {
         setModalOpen(false);
@@ -233,6 +294,8 @@ export default function LancamentoIrrigacaoPage() {
     { header: "Lâmina", render: (r) => <span className="tabular-nums">{r.depth_mm.toFixed(1)} mm</span> },
     { header: "Volume", render: (r) => <span className="tabular-nums">{r.volume_m3.toLocaleString("pt-BR")} m³</span> },
     { header: "Horas", render: (r) => r.operating_hours != null ? `${r.operating_hours.toFixed(1)} h` : "—" },
+    { header: "Energia", render: (r) => r.energy_kwh != null ? `${r.energy_kwh.toFixed(1)} kWh` : "—" },
+    { header: "Custo", render: (r) => r.cost != null ? r.cost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—" },
     { header: "Observação", render: (r) => <span className="text-xs text-graphite-500 dark:text-gray-400">{r.notes ?? "—"}</span> },
     {
       header: "Ações",
@@ -355,6 +418,15 @@ export default function LancamentoIrrigacaoPage() {
               Volume: <strong className="text-graphite-800 dark:text-white">{previewVolume.toLocaleString("pt-BR")} m³</strong>
               {previewHours != null && previewHours > 0 && (
                 <> · Tempo estimado: <strong className="text-graphite-800 dark:text-white">{previewHours.toFixed(1)} h</strong></>
+              )}
+              {previewPrice?.energy_kwh != null && (
+                <> · Energia: <strong className="text-graphite-800 dark:text-white">{previewPrice.energy_kwh.toFixed(1)} kWh</strong></>
+              )}
+              {previewPrice?.cost != null && (
+                <> · Custo: <strong className="text-graphite-800 dark:text-white">{previewPrice.cost.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</strong></>
+              )}
+              {previewPrice?.pendingReason && (
+                <> · {previewPrice.pendingReason}</>
               )}
             </p>
           )}

@@ -1,18 +1,19 @@
 /**
- * Histórico operacional da parcela (Etapa I).
+ * Histórico operacional da parcela (Etapas I e J).
  *
  * Encerrar move o ciclo para cá. Filtros: safra, módulo, pivô, parcela,
- * cultura, período. Água vem dos eventos reais. Energia e custo não são
- * inventados — entram na Etapa J.
+ * cultura, período. Água, energia e custo vêm dos eventos reais.
+ * Sem tarifa persistida no evento, o custo permanece nulo.
  */
 
+import { snapshotCycleEnergyCost } from "@/modules/costs/services/event-cost";
 import {
   isHistoricParcel,
   snapshotCycleWater,
 } from "@/modules/assignment/services/parcel-cycle";
 
 export const HISTORY_COST_PENDING_NOTE =
-  "Custo e energia nascem do evento real na etapa de custos — não inventar tarifa aqui.";
+  "Sem energia/custo nos eventos — cadastre tarifa ou R$/kWh na ficha do pivô.";
 
 export interface HistoricParcelRow {
   id: string;
@@ -88,18 +89,24 @@ export interface ClosedCycleSummary {
 
 /**
  * Resume o ciclo encerrado a partir dos eventos persistidos.
- * Energia/custo só aparecem se já existirem no registro — nunca calculados aqui.
+ * Energia/custo: snapshot do encerramento ou soma dos eventos — nunca tarifa inventada.
  */
 export function summarizeClosedCycle(input: {
-  events: Array<{ depth_mm?: number | null; volume_m3?: number | null }>;
+  events: Array<{
+    depth_mm?: number | null;
+    volume_m3?: number | null;
+    energy_kwh?: number | null;
+    cost?: number | null;
+  }>;
   sensoryCount: number;
   yieldKgHa?: number | null;
   storedEnergyKwh?: number | null;
   storedCost?: number | null;
 }): ClosedCycleSummary {
   const water = snapshotCycleWater(input.events);
-  const energy = input.storedEnergyKwh ?? null;
-  const cost = input.storedCost ?? null;
+  const fromEvents = snapshotCycleEnergyCost(input.events);
+  const energy = input.storedEnergyKwh ?? fromEvents.total_energy_kwh;
+  const cost = input.storedCost ?? fromEvents.total_cost;
   return {
     ...water,
     sensory_count: input.sensoryCount,

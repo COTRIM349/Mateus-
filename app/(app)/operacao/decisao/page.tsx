@@ -9,6 +9,7 @@ import { useFarmHydricState } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import { buildIrrigationEventInsert } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
+import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { cn } from "@/utils/cn";
 import {
   HYDRIC_STATUS_CONFIG,
@@ -480,8 +481,13 @@ export default function DecisaoPage() {
       setMessage("");
 
       try {
-        const area = selectedPivot.area;
         const today = new Date().toISOString().slice(0, 10);
+        const { data: pivotRow } = await supabase
+          .from("pivots")
+          .select("area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost")
+          .eq("id", selectedPivotId)
+          .single();
+        const area = pivotRow?.area ?? selectedPivot.area;
         const payload = buildIrrigationEventInsert({
           pivotId: selectedPivotId,
           parcelId: selectedPivot.parcelId,
@@ -489,10 +495,32 @@ export default function DecisaoPage() {
           timeHm: "06:00",
           depthMm: depthMm,
           areaHa: area,
-          flowRateM3h: 0,
+          flowRateM3h: pivotRow?.flow_rate ?? 0,
           notes: "lançado pela tela de decisão",
         });
-        const { error } = await supabase.from("irrigation_events").insert(payload);
+        const { data: tariffRows } = activeFarmId
+          ? await supabase.from("energy_tariffs").select("id, valid_from, valid_to, rate_peak, rate_off_peak, peak_start, peak_end").eq("farm_id", activeFarmId)
+          : { data: [] };
+        const priced = priceIrrigationEvent({
+          operatingHours: payload.operating_hours,
+          volumeM3: payload.volume_m3,
+          depthMm: payload.depth_mm,
+          areaHa: area,
+          pumpPowerCv: pivotRow?.pump_power ?? null,
+          installedPowerKw: pivotRow?.installed_power_kw ?? null,
+          motorEfficiency: pivotRow?.motor_efficiency ?? null,
+          specificConsumptionKwhM3: pivotRow?.specific_consumption ?? null,
+          startedAt: payload.started_at,
+          tariff: pickTariffForDate((tariffRows ?? []) as TariffRow[], today),
+          pivotEnergyCostReaisPerKwh: pivotRow?.energy_cost ?? null,
+        });
+        const { error } = await supabase.from("irrigation_events").insert({
+          ...payload,
+          energy_kwh: priced.energy_kwh,
+          cost: priced.cost,
+          tariff_rate: priced.tariff_rate,
+          energy_source: priced.energy_source,
+        });
 
         if (error) throw new Error(error.message);
         setMessage("Irrigação lançada com sucesso");
@@ -503,7 +531,7 @@ export default function DecisaoPage() {
         setApplying(false);
       }
     },
-    [selectedPivotId, selectedPivot, supabase, refresh],
+    [selectedPivotId, selectedPivot, supabase, refresh, activeFarmId],
   );
 
   if (loading) {

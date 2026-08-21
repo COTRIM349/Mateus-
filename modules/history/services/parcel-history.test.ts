@@ -88,7 +88,20 @@ describe("resumo do ciclo encerrado", () => {
     expect(summary.energy_kwh).toBeNull();
     expect(summary.cost).toBeNull();
     expect(summary.cost_pending).toBe(true);
-    expect(HISTORY_COST_PENDING_NOTE.toLowerCase()).toMatch(/não inventar/);
+    expect(HISTORY_COST_PENDING_NOTE.toLowerCase()).toMatch(/tarifa/);
+  });
+
+  it("soma energia e custo já gravados nos eventos", () => {
+    const summary = summarizeClosedCycle({
+      events: [
+        { depth_mm: 10, volume_m3: 8000, energy_kwh: 100, cost: 70 },
+        { depth_mm: 8, volume_m3: 6400, energy_kwh: 80, cost: 56 },
+      ],
+      sensoryCount: 0,
+    });
+    expect(summary.energy_kwh).toBe(180);
+    expect(summary.cost).toBe(126);
+    expect(summary.cost_pending).toBe(false);
   });
 
   it("exibe energia/custo só se já estiverem gravados", () => {
