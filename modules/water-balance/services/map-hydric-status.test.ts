@@ -54,9 +54,9 @@ describe("classifyWaterStatus", () => {
     expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "boa_umidade", "incompleto"]);
     expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["atencao", "deficit_hidrico"]);
     expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(4);
-    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe("#2563eb");
+    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe("#3b82f6");
     expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe("#22c55e");
     expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe("#eab308");
-    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe("#dc2626");
+    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe("#ef4444");
   });
 });

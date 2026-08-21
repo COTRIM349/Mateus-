@@ -35,8 +35,8 @@ const SATELLITE_URL =
  * Preenchimento deixa a lavoura visível; o anel grosso marca o pivô
  * (trilha da última torre), como na Agrosmart Aqua.
  */
-const FIELD_FILL = 0.38;
-const FIELD_FILL_SELECTED = 0.5;
+const FIELD_FILL = 0.33;
+const FIELD_FILL_SELECTED = 0.45;
 const TRACK_WEIGHT = 5;
 const TRACK_WEIGHT_SELECTED = 7;
 

@@ -34,7 +34,7 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
 > = {
   capacidade_campo: {
     label: "Excesso hídrico",
-    color: "#2563eb",
+    color: "#3b82f6",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   },
   boa_umidade: {
@@ -49,7 +49,7 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
   },
   deficit_hidrico: {
     label: "Déficit hídrico",
-    color: "#dc2626",
+    color: "#ef4444",
     bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   },
   incompleto: {
