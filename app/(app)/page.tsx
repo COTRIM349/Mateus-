@@ -10,7 +10,8 @@ import { ImplantationGuide } from "@/components/onboarding";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
 import { HydricStatusBadge } from "@/components/maps/HydricStatusBadge";
-import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricMapStates, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricMapStates, hydricStateId, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   HYDRIC_STATUS_CONFIG,
   type PivotHydricState,
@@ -134,7 +135,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
           {summary.ranking.length > 0 ? (
             <div className="space-y-2">
               {summary.ranking.slice(0, 8).map((s, i) => (
-                <RankRow key={s.pivotId} rank={i + 1} state={s} />
+                <RankRow key={hydricStateId(s)} rank={i + 1} state={s} />
               ))}
             </div>
           ) : (
@@ -147,7 +148,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
           {summary.priorityList.length > 0 ? (
             <div className="space-y-2">
               {summary.priorityList.map((s, i) => (
-                <div key={s.pivotId} className="flex items-center justify-between rounded-xl bg-red-50/80 p-3.5 dark:bg-red-900/10">
+                <div key={hydricStateId(s)} className="flex items-center justify-between rounded-xl bg-red-50/80 p-3.5 dark:bg-red-900/10">
                   <div className="flex items-center gap-3">
                     <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-red-100 text-xs font-bold text-red-700 dark:bg-red-900/30 dark:text-red-400">
                       {i + 1}
@@ -202,7 +203,7 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
   const [selectedDate, setSelectedDate] = useState<string | null>(dates[dates.length - 1] ?? null);
   const activeDate = selectedDate ?? dates[dates.length - 1] ?? null;
   const mapStates = hydricMapStates(states);
-  const selected = mapStates.find((s) => s.pivotId === selectedId) ?? null;
+  const selected = mapStates.find((s) => hydricStateId(s) === selectedId) ?? null;
   const mapPivots = useMemo(() => toHydricMapMarkers(states, activeDate), [states, activeDate]);
   const counts = countMapStatuses(states, activeDate);
   const demand = hydricDemandSummary(states, activeDate);
@@ -283,7 +284,9 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
   return (
     <Card className="space-y-5">
       <div className="flex items-center justify-between gap-3">
-        <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">{state.pivotName}</h3>
+        <h3 className="text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
+          {state.parcelName?.trim() || state.pivotName}
+        </h3>
         <HydricStatusBadge status={mapStatus} />
       </div>
 
@@ -291,6 +294,7 @@ function PivotDetail({ state }: { state: PivotHydricState }) {
         title="Parcela"
         rows={[
           ["Pivô", state.pivotName],
+          ["Quadrante", formatParcelAngles(state.startAngleDeg, state.endAngleDeg)],
           ["Cultura", state.cultureName + (state.varietyName ? ` (${state.varietyName})` : "")],
           ["Cultivar", state.varietyName ?? "—"],
           ["Plantio", state.plantingDate ? new Date(state.plantingDate + "T12:00:00").toLocaleDateString("pt-BR") : "—"],

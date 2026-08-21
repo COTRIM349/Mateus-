@@ -5,6 +5,7 @@ import {
   type PivotHydricState,
 } from "@/modules/water-balance/services";
 import type { PivotMarker } from "@/components/maps/PivotMap";
+import { formatParcelAngles, isFullCircleParcel } from "@/modules/assignment/services/parcel-geometry";
 
 function isoToday(): string {
   const now = new Date();
@@ -12,6 +13,19 @@ function isoToday(): string {
   const m = String(now.getMonth() + 1).padStart(2, "0");
   const d = String(now.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
+}
+
+export function hydricStateId(state: Pick<PivotHydricState, "parcelId" | "pivotId">): string {
+  return state.parcelId ?? state.pivotId;
+}
+
+function markerName(state: PivotHydricState): string {
+  const parcel = state.parcelName?.trim();
+  if (parcel && parcel !== state.pivotName) return parcel;
+  if (!isFullCircleParcel(state.startAngleDeg, state.endAngleDeg)) {
+    return `${state.pivotName} · ${formatParcelAngles(state.startAngleDeg, state.endAngleDeg)}`;
+  }
+  return state.pivotName;
 }
 
 /** Pivô sem parcela ativa não entra no mapa hídrico. */
@@ -41,11 +55,13 @@ export function toHydricMapMarkers(
       const status = mapStatusOf(state, date);
       const conf = MAP_HYDRIC_STATUS_CONFIG[status];
       return {
-        id: state.pivotId,
-        name: state.pivotName,
+        id: hydricStateId(state),
+        name: markerName(state),
         latitude: state.latitude,
         longitude: state.longitude,
         radiusMeters: state.radiusMeters,
+        startAngleDeg: state.startAngleDeg,
+        endAngleDeg: state.endAngleDeg,
         sheetIncomplete: state.sheetIncomplete || status === "incompleto",
         color: conf.color,
         statusLabel: conf.label,
@@ -93,7 +109,7 @@ export function hydricDemandSummary(
     const deficit = dayOn(state, date)?.deficit ?? 0;
     if (deficit > highestDeficit) {
       highestDeficit = deficit;
-      highestName = state.pivotName;
+      highestName = markerName(state);
     }
   }
   return { needing, total: active.length, highestName };

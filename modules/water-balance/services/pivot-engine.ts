@@ -440,6 +440,10 @@ export interface PivotHydricState {
   /** Raio irrigado da ficha técnica (m). Null = ficha incompleta. */
   radiusMeters: number | null;
   sheetIncomplete: boolean;
+  /** Ângulos do quadrante. Null = pivô inteiro. Sempre no centro/raio do equipamento. */
+  startAngleDeg: number | null;
+  endAngleDeg: number | null;
+  parcelName: string | null;
   current: BalanceDay | null;
   history: BalanceDay[];
 }
@@ -458,6 +462,9 @@ export interface PivotIdentity {
   soilName?: string | null;
   radiusMeters?: number | null;
   sheetIncomplete?: boolean;
+  startAngleDeg?: number | null;
+  endAngleDeg?: number | null;
+  parcelName?: string | null;
 }
 
 /** Estado atual = último dia da série calculada (ou null se sem série). */
@@ -472,6 +479,9 @@ export function computePivotCurrentState(
     soilName: identity.soilName ?? null,
     radiusMeters: identity.radiusMeters ?? null,
     sheetIncomplete: identity.sheetIncomplete ?? false,
+    startAngleDeg: identity.startAngleDeg ?? null,
+    endAngleDeg: identity.endAngleDeg ?? null,
+    parcelName: identity.parcelName ?? null,
     current: history.length > 0 ? history[history.length - 1] : null,
     history,
   };
@@ -528,7 +538,7 @@ export function computeFarmHydricState(states: PivotHydricState[]): FarmHydricSu
   const priorityList = [...needing].sort((a, b) => b.current!.deficit - a.current!.deficit);
 
   return {
-    totalPivots: states.length,
+    totalPivots: new Set(states.map((s) => s.pivotId)).size,
     needIrrigationToday: needing.length,
     attention: attention.length,
     adequate: adequate.length,

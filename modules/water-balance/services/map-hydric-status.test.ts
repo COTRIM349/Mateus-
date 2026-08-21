@@ -56,6 +56,7 @@ describe("classifyWaterStatus", () => {
     expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["atencao", "deficit_hidrico"]);
     expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(4);
     expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.blue);
+    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.label).toBe("CC 100%");
     expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.green);
     expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe(MAP_HYDRIC_COLORS.yellow);
     expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe(MAP_HYDRIC_COLORS.red);

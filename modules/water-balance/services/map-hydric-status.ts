@@ -46,7 +46,7 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
   { label: string; color: string; onColor: string; bgClass: string }
 > = {
   capacidade_campo: {
-    label: "Excesso hídrico",
+    label: "CC 100%",
     color: MAP_HYDRIC_COLORS.blue,
     onColor: "#ffffff",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
@@ -108,7 +108,7 @@ export interface ClassifyWaterStatusInput {
 /**
  * Classifica a condição hídrica do solo para o mapa.
  *
- * - Azul: ARM ≈ CAD (capacidade de campo / excesso operacional).
+ * - Azul: ARM ≈ CAD — 100% da capacidade de campo (não é excesso).
  * - Verde: abaixo da CC e acima da umidade de segurança (CAD − AFD) — Ks = 1.
  * - Amarelo: abaixo da segurança, ainda com água (ARM > 0).
  * - Vermelho: ARM ≤ 0 — déficit.

@@ -674,7 +674,7 @@ export default function DecisaoPage() {
                           Recomendar
                         </button>
                       ) : day && day.surplus > 0 ? (
-                        <span className="text-[12px] font-semibold text-blue-600 dark:text-blue-400">Excesso hídrico</span>
+                        <span className="text-[12px] font-semibold text-blue-600 dark:text-blue-400">CC 100%</span>
                       ) : day?.status === "amarelo" ? (
                         <span className="text-[12px] font-semibold text-amber-600 dark:text-amber-400">Monitorar</span>
                       ) : day?.status === "verde" ? (

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { destinationLatLng, radiusFromArea } from "./geo";
+import { destinationLatLng, radiusFromArea, sectorLatLngs } from "./geo";
 
 describe("destinationLatLng", () => {
   it("1 km para o norte no equador aumenta só a latitude", () => {
@@ -18,5 +18,15 @@ describe("destinationLatLng", () => {
 describe("radiusFromArea", () => {
   it("converte hectares em raio sem arredondar para constante", () => {
     expect(radiusFromArea(100 / Math.PI)).toBeCloseTo(1000 / Math.PI, 5);
+  });
+});
+
+describe("sectorLatLngs", () => {
+  it("fecha o polígono no centro do pivô e começa o arco no norte", () => {
+    const ring = sectorLatLngs(0, 0, 1000, 0, 90);
+    expect(ring[0]).toEqual({ lat: 0, lng: 0 });
+    expect(ring[ring.length - 1]).toEqual({ lat: 0, lng: 0 });
+    expect(ring[1].lat).toBeGreaterThan(0);
+    expect(ring[1].lng).toBeCloseTo(0, 6);
   });
 });

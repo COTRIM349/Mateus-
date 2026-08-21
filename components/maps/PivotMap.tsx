@@ -4,6 +4,8 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { MAP_HYDRIC_COLORS } from "@/modules/water-balance/services";
+import { isFullCircleParcel } from "@/modules/assignment/services/parcel-geometry";
+import { sectorLatLngs } from "@/utils/geo";
 
 export interface PivotMarker {
   id: string;
@@ -12,6 +14,9 @@ export interface PivotMarker {
   longitude: number;
   /** Raio da ficha técnica. Null = não desenha círculo inventado. */
   radiusMeters: number | null;
+  /** Ângulo inicial do quadrante (0° = norte, horário). Null = pivô inteiro. */
+  startAngleDeg?: number | null;
+  endAngleDeg?: number | null;
   active?: boolean;
   color?: string;
   sheetIncomplete?: boolean;
@@ -31,7 +36,8 @@ const SATELLITE_URL =
 
 /**
  * Pivô no recorte clássico de manejo (Agrosmart Aqua):
- * círculo na cor do status, borda da mesma cor, lavoura visível, sem pino no centro.
+ * círculo ou quadrante na cor do status, borda da mesma cor,
+ * lavoura visível, sem pino no centro. Sempre na coordenada do equipamento.
  */
 const FIELD_FILL = 0.33;
 const FIELD_FILL_SELECTED = 0.42;
@@ -86,7 +92,8 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         layer instanceof L.Circle ||
         layer instanceof L.CircleMarker ||
         layer instanceof L.Marker ||
-        layer instanceof L.Polyline
+        layer instanceof L.Polyline ||
+        layer instanceof L.Polygon
       ) {
         map.removeLayer(layer);
       }
@@ -108,8 +115,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         continue;
       }
 
-      const circle = L.circle(latlng, {
-        radius: pivot.radiusMeters,
+      const style = {
         color: ringColor(baseColor),
         fillColor: baseColor,
         fillOpacity: isHighlighted ? FIELD_FILL_SELECTED : FIELD_FILL,
@@ -117,7 +123,23 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         opacity: 0.95,
         className: "pivot-hydric-circle",
         dashArray: pivot.sheetIncomplete ? "8 6" : undefined,
-      })
+      };
+
+      const sector = !isFullCircleParcel(pivot.startAngleDeg ?? null, pivot.endAngleDeg ?? null);
+      const layer = sector
+        ? L.polygon(
+            sectorLatLngs(
+              pivot.latitude,
+              pivot.longitude,
+              pivot.radiusMeters,
+              pivot.startAngleDeg as number,
+              pivot.endAngleDeg as number,
+            ).map((p) => [p.lat, p.lng] as L.LatLngExpression),
+            style,
+          )
+        : L.circle(latlng, { radius: pivot.radiusMeters, ...style });
+
+      layer
         .addTo(map)
         .bindTooltip(tooltip, {
           permanent: false,
@@ -128,10 +150,14 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         });
 
       if (onSelect) {
-        circle.on("click", () => onSelect(pivot.id));
+        layer.on("click", () => onSelect(pivot.id));
       }
 
-      bounds.extend(latlng);
+      if (layer instanceof L.Circle) {
+        bounds.extend(latlng);
+      } else {
+        bounds.extend(layer.getBounds());
+      }
     }
 
     if (bounds.isValid()) {

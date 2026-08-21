@@ -24,6 +24,9 @@ function stub(partial: Partial<PivotHydricState>): PivotHydricState {
     parcelId: "parcela-1",
     soilName: "Latossolo",
     sheetIncomplete: false,
+    startAngleDeg: null,
+    endAngleDeg: null,
+    parcelName: null,
     current: {
       date: "2026-08-21",
       mapStatus: "boa_umidade",
@@ -50,6 +53,22 @@ describe("toHydricMapMarkers", () => {
     expect(markers).toHaveLength(1);
     expect(markers[0].color).toBe("#4CAF50");
     expect(markers[0].radiusMeters).toBe(500);
+    expect(markers[0].id).toBe("parcela-1");
+  });
+
+  it("usa a coordenada do pivô e os ângulos da parcela no quadrante", () => {
+    const markers = toHydricMapMarkers([
+      stub({
+        startAngleDeg: 315,
+        endAngleDeg: 360,
+        parcelName: "Pivô 29 A1",
+      }),
+    ]);
+    expect(markers[0].latitude).toBe(-14.6);
+    expect(markers[0].longitude).toBe(-45.2);
+    expect(markers[0].startAngleDeg).toBe(315);
+    expect(markers[0].endAngleDeg).toBe(360);
+    expect(markers[0].name).toBe("Pivô 29 A1");
   });
 
   it("recolore pelo dia escolhido no histórico", () => {

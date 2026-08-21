@@ -35,6 +35,8 @@ function draft(overrides: Partial<ParcelCycleDraft> = {}): ParcelCycleDraft {
     expectedHarvestDate: "2027-02-20",
     klOverride: null,
     notes: null,
+    startAngleDeg: null,
+    endAngleDeg: null,
     existingOnPivot: [],
     editingId: null,
     ...overrides,
@@ -100,6 +102,42 @@ describe("validateParcelCycle", () => {
     expect(error).toMatch(/Já existe parcela ativa/);
   });
 
+  it("permite quadrantes simultâneos no mesmo pivô se os ângulos não se sobrepõem", () => {
+    expect(
+      validateParcelCycle(
+        draft({
+          startAngleDeg: 0,
+          endAngleDeg: 90,
+          existingOnPivot: [{
+            id: "old",
+            pivot_id: "pivot-31",
+            status: "ativa",
+            start_angle_deg: 180,
+            end_angle_deg: 270,
+          }],
+        }),
+      ),
+    ).toBeNull();
+  });
+
+  it("bloqueia quadrante que sobrepõe outro setor ativo", () => {
+    const error = validateParcelCycle(
+      draft({
+        startAngleDeg: 0,
+        endAngleDeg: 120,
+        existingOnPivot: [{
+          id: "old",
+          pivot_id: "pivot-31",
+          status: "ativa",
+          name: "Trat. 1",
+          start_angle_deg: 90,
+          end_angle_deg: 180,
+        }],
+      }),
+    );
+    expect(error).toMatch(/sobrepõe/);
+  });
+
   it("permite novo ciclo depois de encerrar", () => {
     expect(
       validateParcelCycle(
@@ -118,6 +156,8 @@ describe("buildParcelInsertRow", () => {
     expect(row.active).toBe(true);
     expect(row.soil_id).toBe("soil-1");
     expect(row.culture_id).toBe("soy");
+    expect(row.start_angle_deg).toBeNull();
+    expect(row.end_angle_deg).toBeNull();
     expect(row).not.toHaveProperty("id");
   });
 });

@@ -11,6 +11,13 @@
  */
 
 import { roundTo } from "@/utils/math";
+import {
+  formatParcelAngles,
+  isFullCircleParcel,
+  parcelAnglesOverlap,
+  parseParcelAngles,
+  type ParcelAngles,
+} from "./parcel-geometry";
 
 export const PARCEL_STATUSES = ["rascunho", "ativa", "encerrada", "cancelada"] as const;
 export type ParcelStatus = (typeof PARCEL_STATUSES)[number];
@@ -42,6 +49,9 @@ export interface ParcelCycleRef {
   pivot_id: string;
   status?: string | null;
   active?: boolean | null;
+  name?: string | null;
+  start_angle_deg?: number | null;
+  end_angle_deg?: number | null;
 }
 
 export function isHistoricParcel(status: string | null | undefined, active?: boolean | null): boolean {
@@ -108,13 +118,33 @@ export function findBlockingActiveParcel(
   parcels: ParcelCycleRef[],
   pivotId: string,
   excludeId?: string | null,
+  incoming?: ParcelAngles,
 ): ParcelCycleRef | undefined {
-  return parcels.find(
-    (p) =>
-      p.pivot_id === pivotId &&
-      p.id !== excludeId &&
-      isActiveParcel(p.status, p.active),
-  );
+  const incomingAngles: ParcelAngles = incoming ?? { startDeg: null, endDeg: null };
+  return parcels.find((p) => {
+    if (p.pivot_id !== pivotId || p.id === excludeId || !isActiveParcel(p.status, p.active)) {
+      return false;
+    }
+    return parcelAnglesOverlap(incomingAngles, {
+      startDeg: p.start_angle_deg ?? null,
+      endDeg: p.end_angle_deg ?? null,
+    });
+  });
+}
+
+export function blockingParcelMessage(blocking: ParcelCycleRef, incoming: ParcelAngles): string {
+  const otherFull = isFullCircleParcel(blocking.start_angle_deg ?? null, blocking.end_angle_deg ?? null);
+  const incomingFull = isFullCircleParcel(incoming.startDeg, incoming.endDeg);
+  const otherLabel = blocking.name?.trim() || "ativa";
+  if (incomingFull) {
+    return otherFull
+      ? "Já existe parcela ativa neste pivô. Encerre o ciclo atual para abrir um novo, ou informe ângulos para um quadrante."
+      : `Já existe o quadrante ${formatParcelAngles(blocking.start_angle_deg ?? null, blocking.end_angle_deg ?? null)} (${otherLabel}) neste pivô. Encerre-o ou cadastre outro setor sem sobrepor.`;
+  }
+  if (otherFull) {
+    return "Há uma parcela no pivô inteiro. Encerre-a ou edite os ângulos dela para liberar um quadrante.";
+  }
+  return `Este quadrante sobrepõe a parcela ${otherLabel} (${formatParcelAngles(blocking.start_angle_deg ?? null, blocking.end_angle_deg ?? null)}). Ajuste os ângulos.`;
 }
 
 export interface ParcelCycleDraft {
@@ -131,6 +161,8 @@ export interface ParcelCycleDraft {
   expectedHarvestDate: string | null;
   klOverride: number | null;
   notes: string | null;
+  startAngleDeg: number | null;
+  endAngleDeg: number | null;
   existingOnPivot: ParcelCycleRef[];
   editingId?: string | null;
 }
@@ -155,9 +187,17 @@ export function validateParcelCycle(draft: ParcelCycleDraft): string | null {
   const areaError = validatePlantedArea(draft.plantedArea, draft.pivotArea);
   if (areaError) return areaError;
 
-  const blocking = findBlockingActiveParcel(draft.existingOnPivot, draft.pivotId, draft.editingId);
+  const parsed = parseParcelAngles(draft.startAngleDeg, draft.endAngleDeg);
+  if (parsed.error) return parsed.error;
+
+  const blocking = findBlockingActiveParcel(
+    draft.existingOnPivot,
+    draft.pivotId,
+    draft.editingId,
+    { startDeg: parsed.startDeg, endDeg: parsed.endDeg },
+  );
   if (blocking) {
-    return "Já existe parcela ativa neste pivô. Encerre o ciclo atual para abrir um novo (nova cultura = nova parcela).";
+    return blockingParcelMessage(blocking, { startDeg: parsed.startDeg, endDeg: parsed.endDeg });
   }
   return null;
 }
@@ -176,6 +216,8 @@ export interface ParcelInsertRow {
   expected_harvest_date: string | null;
   kl_override: number | null;
   notes: string | null;
+  start_angle_deg: number | null;
+  end_angle_deg: number | null;
   status: "ativa";
   active: true;
 }
@@ -198,6 +240,8 @@ export function buildParcelInsertRow(draft: ParcelCycleDraft): ParcelInsertRow {
     expected_harvest_date: draft.expectedHarvestDate,
     kl_override: draft.klOverride,
     notes: draft.notes,
+    start_angle_deg: parseParcelAngles(draft.startAngleDeg, draft.endAngleDeg).startDeg,
+    end_angle_deg: parseParcelAngles(draft.startAngleDeg, draft.endAngleDeg).endDeg,
     status: "ativa",
     active: true,
   };

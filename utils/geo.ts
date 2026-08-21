@@ -6,7 +6,6 @@ const EARTH_RADIUS_M = 6378137;
 
 /**
  * Destino a `distanceMeters` no azimute `bearingDeg` (0 = norte).
- * Usado para desenhar a haste do pivô no mapa — não inventa raio.
  */
 export function destinationLatLng(
   lat: number,
@@ -29,5 +28,30 @@ export function destinationLatLng(
       Math.cos(angular) - Math.sin(lat1) * Math.sin(lat2),
     );
   return { lat: (lat2 * 180) / Math.PI, lng: (lng2 * 180) / Math.PI };
+}
+
+/**
+ * Polígono do quadrante: centro do pivô + arco no azimute (0° = norte, horário).
+ * Não inventa raio nem desloca o centro.
+ */
+export function sectorLatLngs(
+  lat: number,
+  lng: number,
+  radiusMeters: number,
+  startAngleDeg: number,
+  endAngleDeg: number,
+  stepDeg = 4,
+): Array<{ lat: number; lng: number }> {
+  const start = ((startAngleDeg % 360) + 360) % 360;
+  const endNorm = endAngleDeg === 360 ? 360 : ((endAngleDeg % 360) + 360) % 360;
+  let sweep = (endNorm - start + 360) % 360;
+  if (sweep === 0) sweep = 360;
+  const steps = Math.max(8, Math.ceil(sweep / stepDeg));
+  const arc: Array<{ lat: number; lng: number }> = [];
+  for (let i = 0; i <= steps; i += 1) {
+    const bearing = start + (sweep * i) / steps;
+    arc.push(destinationLatLng(lat, lng, radiusMeters, bearing));
+  }
+  return [{ lat, lng }, ...arc, { lat, lng }];
 }
 

@@ -13,6 +13,7 @@ import {
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
 import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
+import { parcelManagedAreaHa } from "@/modules/assignment/services/parcel-geometry";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -71,8 +72,7 @@ export function useFarmHydricState(): FarmHydricState {
       return;
     }
 
-    // 2. vínculos ativos desses pivôs (mais recente por pivô)
-    //    Sprint 13 · Etapa 6 — status='ativa' ou NULL (retro-compat).
+    // 2. parcelas ativas desses pivôs (vários quadrantes no mesmo equipamento)
     const { data: assignmentRows } = await supabase
       .from("pivot_crop_assignments")
       .select("*")
@@ -81,13 +81,15 @@ export function useFarmHydricState(): FarmHydricState {
       .or("status.is.null,status.eq.ativa")
       .order("created_at", { ascending: false });
 
-    const assignmentByPivot = new Map<string, Record<string, unknown>>();
+    const assignmentsByPivot = new Map<string, Array<Record<string, unknown>>>();
     for (const a of assignmentRows ?? []) {
       const pid = a.pivot_id as string;
-      if (!assignmentByPivot.has(pid)) assignmentByPivot.set(pid, a);
+      const list = assignmentsByPivot.get(pid) ?? [];
+      list.push(a);
+      assignmentsByPivot.set(pid, list);
     }
 
-    const assignments = Array.from(assignmentByPivot.values());
+    const assignments = assignmentRows ?? [];
     const cultureIds = Array.from(new Set(assignments.map((a) => a.culture_id as string)));
     // Sprint 14 · Etapa 7 — solo prioritariamente do pivô; fallback parcela.
     const soilIds = Array.from(new Set([
@@ -218,17 +220,10 @@ export function useFarmHydricState(): FarmHydricState {
       irrigationByPivot.set(pid, sumGrossDepthByDate(list));
     }
 
-    // 4. motor: estado atual por pivô
+    // 4. motor: estado atual por parcela (quadrante usa lat/lng/raio do pivô)
     const result: PivotHydricState[] = [];
     for (const pivot of pivots) {
-      const assignment = assignmentByPivot.get(pivot.id as string);
-      const culture = assignment ? cultureMap.get(assignment.culture_id as string) : null;
-      // Sprint 14 · Etapa 7 — solo do pivô > fallback parcela
-      const effectiveSoilId =
-        pivotSoilMap.get(pivot.id as string) ??
-        (assignment ? (assignment.soil_id as string) : null);
-      const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) : null;
-
+      const pivotAssignments = assignmentsByPivot.get(pivot.id as string) ?? [];
       const geometry = resolvePivotMapGeometry({
         radiusM: (pivot.radius as number | null) ?? null,
         lastTowerRadiusM: (pivot.last_tower_radius as number | null) ?? null,
@@ -237,12 +232,11 @@ export function useFarmHydricState(): FarmHydricState {
         longitude: (pivot.longitude as number | null) ?? null,
       });
 
-      if (!assignment || !culture || !soil) {
-        // sem vínculo/cultura/solo → sem dados para cálculo (cinza)
+      const pushIncomplete = (assignment?: Record<string, unknown>, cultureName = "—", soilName: string | null = null) => {
         result.push({
           pivotId: pivot.id as string,
           pivotName: pivot.name as string,
-          cultureName: culture ? (culture.name as string) : "—",
+          cultureName,
           varietyName: null,
           seasonName: null,
           area: (pivot.area as number) ?? 0,
@@ -250,71 +244,98 @@ export function useFarmHydricState(): FarmHydricState {
           longitude: (pivot.longitude as number) ?? 0,
           parcelId: assignment ? (assignment.id as string) : null,
           plantingDate: assignment ? ((assignment.planting_date as string) ?? null) : null,
-          soilName: soil ? ((soil.name as string) ?? null) : null,
+          soilName,
           radiusMeters: geometry.radiusMeters,
           sheetIncomplete: geometry.sheetIncomplete,
+          startAngleDeg: assignment ? ((assignment.start_angle_deg as number | null) ?? null) : null,
+          endAngleDeg: assignment ? ((assignment.end_angle_deg as number | null) ?? null) : null,
+          parcelName: assignment ? ((assignment.name as string | null) ?? null) : null,
           current: null,
           history: [],
         });
+      };
+
+      if (pivotAssignments.length === 0) {
+        pushIncomplete();
         continue;
       }
 
-      const state = computePivotCurrentState(
-        {
-          pivotId: pivot.id as string,
-          pivotName: pivot.name as string,
-          cultureName: culture.name as string,
-          varietyName: assignment.culture_variety_id ? varietyMap.get(assignment.culture_variety_id as string) ?? null : null,
-          seasonName: assignment.season_id ? seasonMap.get(assignment.season_id as string) ?? null : null,
-          area: (pivot.area as number) ?? 0,
-          latitude: (pivot.latitude as number) ?? 0,
-          longitude: (pivot.longitude as number) ?? 0,
-          parcelId: assignment.id as string,
-          plantingDate: (assignment.planting_date as string) ?? null,
-          soilName: (soil.name as string) ?? null,
-          radiusMeters: geometry.radiusMeters,
-          sheetIncomplete: geometry.sheetIncomplete,
-        },
-        {
-          assignment: {
-            id: assignment.id as string,
-            planting_date: assignment.planting_date as string,
-            emergence_date: (assignment.emergence_date as string) ?? null,
-            parameter_mode: (assignment.parameter_mode as "padrao" | "personalizado") ?? "padrao",
-            initial_root_depth: (assignment.initial_root_depth as number) ?? null,
-            max_root_depth: (assignment.max_root_depth as number) ?? null,
-            irrigation_efficiency: (assignment.irrigation_efficiency as number) ?? null,
-            depletion_factor: (assignment.depletion_factor as number) ?? null,
-            kl_override: (assignment.kl_override as number) ?? null,
-            ks_function_override: (assignment.ks_function_override as string) ?? null,
+      for (const assignment of pivotAssignments) {
+        const culture = cultureMap.get(assignment.culture_id as string) ?? null;
+        const effectiveSoilId =
+          pivotSoilMap.get(pivot.id as string) ??
+          ((assignment.soil_id as string) || null);
+        const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) : null;
+
+        if (!culture || !soil) {
+          pushIncomplete(assignment, culture ? (culture.name as string) : "—", soil ? ((soil.name as string) ?? null) : null);
+          continue;
+        }
+
+        const startAngleDeg = (assignment.start_angle_deg as number | null) ?? null;
+        const endAngleDeg = (assignment.end_angle_deg as number | null) ?? null;
+        const plantedArea = (assignment.planted_area as number | null) ?? null;
+
+        const state = computePivotCurrentState(
+          {
+            pivotId: pivot.id as string,
+            pivotName: pivot.name as string,
+            cultureName: culture.name as string,
+            varietyName: assignment.culture_variety_id ? varietyMap.get(assignment.culture_variety_id as string) ?? null : null,
+            seasonName: assignment.season_id ? seasonMap.get(assignment.season_id as string) ?? null : null,
+            area: parcelManagedAreaHa((pivot.area as number) ?? 0, plantedArea, startAngleDeg, endAngleDeg),
+            latitude: (pivot.latitude as number) ?? 0,
+            longitude: (pivot.longitude as number) ?? 0,
+            parcelId: assignment.id as string,
+            plantingDate: (assignment.planting_date as string) ?? null,
+            soilName: (soil.name as string) ?? null,
+            radiusMeters: geometry.radiusMeters,
+            sheetIncomplete: geometry.sheetIncomplete,
+            startAngleDeg,
+            endAngleDeg,
+            parcelName: (assignment.name as string | null) ?? null,
           },
-          culture: {
-            root_depth: (culture.root_depth as number) ?? 0.3,
-            depletion_factor: (culture.depletion_factor as number) ?? 0.5,
-            kl: (culture.kl as number) ?? null,
-            ks_function: (culture.ks_function as string) ?? null,
-            ky: (culture.ky as number) ?? null,
+          {
+            assignment: {
+              id: assignment.id as string,
+              planting_date: assignment.planting_date as string,
+              emergence_date: (assignment.emergence_date as string) ?? null,
+              parameter_mode: (assignment.parameter_mode as "padrao" | "personalizado") ?? "padrao",
+              initial_root_depth: (assignment.initial_root_depth as number) ?? null,
+              max_root_depth: (assignment.max_root_depth as number) ?? null,
+              irrigation_efficiency: (assignment.irrigation_efficiency as number) ?? null,
+              depletion_factor: (assignment.depletion_factor as number) ?? null,
+              kl_override: (assignment.kl_override as number) ?? null,
+              ks_function_override: (assignment.ks_function_override as string) ?? null,
+            },
+            culture: {
+              root_depth: (culture.root_depth as number) ?? 0.3,
+              depletion_factor: (culture.depletion_factor as number) ?? 0.5,
+              kl: (culture.kl as number) ?? null,
+              ks_function: (culture.ks_function as string) ?? null,
+              ky: (culture.ky as number) ?? null,
+            },
+            phases: phasesByCulture.get(assignment.culture_id as string) ?? [],
+            soil: {
+              field_capacity: soil.field_capacity as number,
+              wilting_point: soil.wilting_point as number,
+              bulk_density: soil.bulk_density as number,
+              effective_depth: (soil.effective_depth as number) ?? 0.6,
+              layers: effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
+            },
+            pivot: {
+              efficiency: (pivot.efficiency as number) ?? 0.85,
+              area: parcelManagedAreaHa((pivot.area as number) ?? 0, plantedArea, startAngleDeg, endAngleDeg),
+              flow_rate: (pivot.flow_rate as number) ?? 0,
+            },
+            weatherByDate,
+            irrigationByDate: irrigationByPivot.get(pivot.id as string) ?? {},
+            dateStart,
+            dateEnd,
           },
-          phases: phasesByCulture.get(assignment.culture_id as string) ?? [],
-          soil: {
-            field_capacity: soil.field_capacity as number,
-            wilting_point: soil.wilting_point as number,
-            bulk_density: soil.bulk_density as number,
-            effective_depth: (soil.effective_depth as number) ?? 0.6,
-            layers: effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
-          },
-          pivot: {
-            efficiency: (pivot.efficiency as number) ?? 0.85,
-            area: (pivot.area as number) ?? 0,
-            flow_rate: (pivot.flow_rate as number) ?? 0,
-          },
-          weatherByDate,
-          irrigationByDate: irrigationByPivot.get(pivot.id as string) ?? {},
-          dateStart,
-          dateEnd,
-        },
-      );
-      result.push(state);
+        );
+        result.push(state);
+      }
     }
 
     setStates(result);

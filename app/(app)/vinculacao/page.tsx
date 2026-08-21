@@ -22,19 +22,24 @@ import {
   buildParcelClosePayload,
   buildParcelInsertRow,
   closeDateToIso,
+  formatParcelAngles,
   isActiveParcel,
   isHistoricParcel,
+  parcelManagedAreaHa,
+  parseParcelAngles,
   snapshotCycleWater,
   suggestParcelName,
   validateParcelClose,
   validateParcelCycle,
 } from "@/modules/assignment/services";
+import { resolvePivotMapGeometry } from "@/modules/irrigation/services";
 import { snapshotCycleEnergyCost } from "@/modules/costs/services";
 import { identifyPhase } from "@/modules/culture/services";
 import {
   daysAfterPlanting,
   validateManagementDates,
 } from "@/modules/culture/services/culture-phases";
+import { ParcelQuadrantPreview } from "@/components/maps/ParcelQuadrantPreview";
 
 // ── Types ────────────────────────────────────────────────────────────────
 
@@ -72,6 +77,8 @@ interface Assignment {
   initial_soil_moisture_pct: number | null;
   initial_moisture_is_cc: boolean | null;
   kl_override: number | null;
+  start_angle_deg: number | null;
+  end_angle_deg: number | null;
   // Lifecycle
   status: "rascunho" | "ativa" | "encerrada" | "cancelada";
   closed_at: string | null;
@@ -93,6 +100,11 @@ interface PivotLite {
   soil_id: string | null;
   area: number;
   module_id: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  radius: number | null;
+  last_tower_radius: number | null;
+  overhang_m: number | null;
 }
 interface SeasonLite { id: string; name: string }
 interface CultureLite { id: string; name: string; root_depth: number; depletion_factor: number; cycle_days: number }
@@ -150,6 +162,8 @@ interface FormState {
   current_phase_id: string;
   management_start_date: string;
   management_end_date: string;
+  start_angle: string;
+  end_angle: string;
 }
 
 const EMPTY_FORM: FormState = {
@@ -184,6 +198,8 @@ const EMPTY_FORM: FormState = {
   current_phase_id: "auto",
   management_start_date: "",
   management_end_date: "",
+  start_angle: "",
+  end_angle: "",
 };
 
 // ── Page ───────────────────────────────────────────────────────────────────
@@ -233,7 +249,7 @@ export default function VinculacaoPage() {
     setLookupsLoading(true);
     (async () => {
       const [pv, ss, cu, so, va, mo] = await Promise.all([
-        supabase.from("pivots").select("id, name, efficiency, soil_id, area, module_id").eq("farm_id", activeFarmId).eq("active", true).order("name"),
+        supabase.from("pivots").select("id, name, efficiency, soil_id, area, module_id, latitude, longitude, radius, last_tower_radius, overhang_m").eq("farm_id", activeFarmId).eq("active", true).order("name"),
         supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("start_date", { ascending: false }),
         supabase.from("cultures").select("id, name, root_depth, depletion_factor, cycle_days").eq("active", true).order("name"),
         supabase.from("soils").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
@@ -288,6 +304,19 @@ export default function VinculacaoPage() {
   const moduleMap = useMemo(() => new Map(modules.map((m) => [m.id, m.name])), [modules]);
   const selectedPivot = pivots.find((p) => p.id === form.pivot_id);
   const selectedModuleName = selectedPivot?.module_id ? moduleMap.get(selectedPivot.module_id) ?? "—" : "—";
+  const selectedPivotGeo = selectedPivot
+    ? resolvePivotMapGeometry({
+        radiusM: selectedPivot.radius,
+        lastTowerRadiusM: selectedPivot.last_tower_radius,
+        overhangM: selectedPivot.overhang_m,
+        latitude: selectedPivot.latitude,
+        longitude: selectedPivot.longitude,
+      })
+    : null;
+  const formAngles = parseParcelAngles(form.start_angle, form.end_angle);
+  const suggestedSectorHa = selectedPivot
+    ? parcelManagedAreaHa(selectedPivot.area, null, formAngles.startDeg, formAngles.endDeg)
+    : null;
 
   const maturityLabels = useMemo(
     () => Object.fromEntries(MATURITY_TYPES.map((m) => [m.value, m.label])),
@@ -341,6 +370,8 @@ export default function VinculacaoPage() {
       current_phase_id: a.current_phase_id ?? "auto",
       management_start_date: a.management_start_date ?? "",
       management_end_date: a.management_end_date ?? "",
+      start_angle: a.start_angle_deg != null ? String(a.start_angle_deg) : "",
+      end_angle: a.end_angle_deg != null ? String(a.end_angle_deg) : "",
     });
     setFormError("");
     setFormTab("caracteristicas");
@@ -450,6 +481,8 @@ export default function VinculacaoPage() {
   const validate = (): string | null => {
     const pivot = pivots.find((p) => p.id === form.pivot_id);
     const num = (v: string) => (v ? Number(v) : null);
+    const angles = parseParcelAngles(form.start_angle, form.end_angle);
+    if (angles.error) return angles.error;
     const cycleError = validateParcelCycle({
       name: form.name || null,
       plantedArea: num(form.planted_area),
@@ -464,11 +497,16 @@ export default function VinculacaoPage() {
       expectedHarvestDate: form.expected_harvest_date || null,
       klOverride: num(form.kl_override),
       notes: form.notes || null,
+      startAngleDeg: angles.startDeg,
+      endAngleDeg: angles.endDeg,
       existingOnPivot: farmAssignments.map((a) => ({
         id: a.id,
         pivot_id: a.pivot_id,
         status: a.status,
         active: a.active,
+        name: a.name,
+        start_angle_deg: a.start_angle_deg,
+        end_angle_deg: a.end_angle_deg,
       })),
       editingId: editing?.id ?? null,
     });
@@ -523,6 +561,8 @@ export default function VinculacaoPage() {
       expectedHarvestDate: form.expected_harvest_date || null,
       klOverride: num(form.kl_override),
       notes: form.notes || null,
+      startAngleDeg: parseParcelAngles(form.start_angle, form.end_angle).startDeg,
+      endAngleDeg: parseParcelAngles(form.start_angle, form.end_angle).endDeg,
       existingOnPivot: [],
       editingId: editing?.id ?? null,
     });
@@ -563,7 +603,7 @@ export default function VinculacaoPage() {
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Erro ao salvar";
       if (/duplicate|unique|23505/i.test(msg)) {
-        setFormError("Já existe parcela ativa neste pivô. Encerre o ciclo atual para abrir um novo.");
+        setFormError("Já existe parcela ativa neste recorte do pivô. Ajuste os ângulos ou encerre o ciclo que se sobrepõe.");
       } else {
         setFormError(msg);
       }
@@ -596,6 +636,10 @@ export default function VinculacaoPage() {
       ),
     },
     { header: "Solo", render: (r) => soilMap.get(r.soil_id) ?? "—" },
+    {
+      header: "Quadrante",
+      render: (r) => formatParcelAngles(r.start_angle_deg, r.end_angle_deg),
+    },
     {
       header: "Área (ha)",
       render: (r) => r.planted_area != null ? r.planted_area.toLocaleString("pt-BR") : "—",
@@ -826,13 +870,84 @@ export default function VinculacaoPage() {
                   placeholder="1.00"
                 />
               </div>
+
+              <fieldset className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.06]">
+                <legend className="px-2 text-sm font-semibold text-graphite-800 dark:text-gray-200">
+                  Quadrante no pivô
+                </legend>
+                <p className="mb-3 text-[12px] leading-relaxed text-graphite-500 dark:text-gray-400">
+                  O recorte usa o <strong>centro e o raio do equipamento</strong> — a parcela não tem coordenada própria.
+                  0° = Norte, sentido horário. Vazio nos dois ângulos = pivô inteiro. Vários quadrantes no mesmo pivô, sem sobrepor.
+                </p>
+                {selectedPivot ? (
+                  <div className="mb-4 grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-graphite-400">Latitude do pivô</p>
+                      <p className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-sm dark:border-white/[0.08]">
+                        {selectedPivot.latitude
+                          ? selectedPivot.latitude.toLocaleString("pt-BR", { maximumFractionDigits: 6 })
+                          : "Ficha sem latitude"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-graphite-400">Longitude do pivô</p>
+                      <p className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-sm dark:border-white/[0.08]">
+                        {selectedPivot.longitude
+                          ? selectedPivot.longitude.toLocaleString("pt-BR", { maximumFractionDigits: 6 })
+                          : "Ficha sem longitude"}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="mb-1 text-[10px] font-bold uppercase tracking-wide text-graphite-400">Raio da ficha</p>
+                      <p className="rounded-lg border border-dashed border-gray-200 px-3 py-2 text-sm dark:border-white/[0.08]">
+                        {selectedPivotGeo?.radiusMeters != null
+                          ? `${selectedPivotGeo.radiusMeters.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} m`
+                          : "Ficha sem raio"}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="mb-3 text-sm text-graphite-400">Selecione o pivô para ver a coordenada do equipamento.</p>
+                )}
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+                  <ParcelQuadrantPreview startDeg={formAngles.startDeg} endDeg={formAngles.endDeg} />
+                  <div className="grid flex-1 gap-4 sm:grid-cols-2">
+                    <Input
+                      id="start_angle" label="Ângulo inicial (°)" type="number" step="1" min="0" max="360"
+                      value={form.start_angle}
+                      onChange={(e) => patch({ start_angle: e.target.value })}
+                      placeholder="Ex: 315"
+                    />
+                    <Input
+                      id="end_angle" label="Ângulo final (°)" type="number" step="1" min="0" max="360"
+                      value={form.end_angle}
+                      onChange={(e) => patch({ end_angle: e.target.value })}
+                      placeholder="Ex: 360"
+                    />
+                    {suggestedSectorHa != null && selectedPivot && formAngles.error == null && (form.start_angle || form.end_angle) ? (
+                      <p className="sm:col-span-2 text-[11px] text-graphite-400 dark:text-gray-500">
+                        Setor {formatParcelAngles(formAngles.startDeg, formAngles.endDeg)} ≈ {suggestedSectorHa.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} ha do pivô
+                        {" "}({selectedPivot.area.toLocaleString("pt-BR")} ha). Informe a área plantada se for diferente.
+                      </p>
+                    ) : (
+                      <p className="sm:col-span-2 text-[11px] text-graphite-400 dark:text-gray-500">
+                        Sem ângulos, o mapa desenha o círculo completo na coordenada do pivô.
+                      </p>
+                    )}
+                    {formAngles.error ? (
+                      <p className="sm:col-span-2 text-[12px] text-amber-700 dark:text-amber-400">{formAngles.error}</p>
+                    ) : null}
+                  </div>
+                </div>
+              </fieldset>
+
               <TextArea
                 id="notes" label="Observações"
                 value={form.notes}
                 onChange={(e) => patch({ notes: e.target.value })}
               />
               <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-                Solo e ficha técnica pertencem ao pivô. KL vazio assume 1 (pivô central). Nova cultura neste equipamento exige encerrar este ciclo e abrir outra parcela.
+                Solo e ficha técnica pertencem ao pivô. O quadrante não muda a coordenada — só o arco irrigado. KL vazio assume 1. Nova cultura no mesmo recorte exige encerrar este ciclo.
               </p>
             </div>
           )}
@@ -1093,7 +1208,7 @@ export default function VinculacaoPage() {
         <div className="space-y-5">
           <div className="rounded-xl border-l-4 border-amber-400 bg-amber-50/60 p-4 dark:border-amber-500/60 dark:bg-amber-900/10">
             <p className="text-sm text-amber-800 dark:text-amber-300">
-              Encerrar move esta parcela para o <b>Histórico</b> e libera o pivô para um novo ciclo.
+              Encerrar move esta parcela para o <b>Histórico</b> e libera este recorte do pivô (quadrante ou círculo) para um novo ciclo.
               Os dados não são apagados e este registro não pode ser reutilizado para outra cultura.
             </p>
           </div>

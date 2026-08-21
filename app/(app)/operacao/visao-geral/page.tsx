@@ -11,7 +11,8 @@ import { cn } from "@/utils/cn";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
 import { HydricStatusBadge } from "@/components/maps/HydricStatusBadge";
-import { countMapStatuses, hydricDemandSummary, hydricMapDates, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricStateId, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   HYDRIC_STATUS_CONFIG,
   MAP_HYDRIC_STATUS_CONFIG,
@@ -287,9 +288,14 @@ function PivotSideDetail({ pivot }: { pivot: PivotHydricState }) {
       <div className="border-b border-gray-100 p-5 dark:border-white/[0.06]">
         <div className="flex items-start justify-between">
           <div>
-            <p className="text-sm font-semibold text-graphite-800 dark:text-white">{pivot.pivotName}</p>
+            <p className="text-sm font-semibold text-graphite-800 dark:text-white">
+              {pivot.parcelName?.trim() || pivot.pivotName}
+            </p>
             <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-              {pivot.cultureName}{pivot.varietyName ? ` · ${pivot.varietyName}` : ""}
+              {pivot.pivotName}
+              {` · ${formatParcelAngles(pivot.startAngleDeg, pivot.endAngleDeg)}`}
+              {` · ${pivot.cultureName}`}
+              {pivot.varietyName ? ` · ${pivot.varietyName}` : ""}
               {pivot.seasonName ? ` · ${pivot.seasonName}` : ""}
             </p>
           </div>
@@ -569,7 +575,7 @@ export default function VisaoGeralPage() {
   const { farms, activeFarmId, profile } = useAuth();
   const activeFarm = farms.find((f) => f.id === activeFarmId);
   const { states, summary, loading } = useFarmHydricState();
-  const [selectedPivotId, setSelectedPivotId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const latestWeather = states.find((s) => s.current)?.current ?? null;
@@ -580,7 +586,7 @@ export default function VisaoGeralPage() {
   const mapCounts = countMapStatuses(states, activeDate);
   const demand = hydricDemandSummary(states, activeDate);
 
-  const selectedPivot = states.find((s) => s.pivotId === selectedPivotId) ?? null;
+  const selectedPivot = states.find((s) => hydricStateId(s) === selectedId) ?? null;
 
   const ranking = useMemo(
     () =>
@@ -692,12 +698,12 @@ export default function VisaoGeralPage() {
         <div className="relative">
             <PivotMap
               pivots={mapPivots}
-              highlightId={selectedPivotId ?? undefined}
-              onSelect={setSelectedPivotId}
+              highlightId={selectedId ?? undefined}
+              onSelect={setSelectedId}
               className="h-[min(62vh,640px)] min-h-[480px] w-full rounded-none border-0"
             />
             {selectedPivot ? (
-              <HydricMapOverlay onClose={() => setSelectedPivotId(null)}>
+              <HydricMapOverlay onClose={() => setSelectedId(null)}>
                 <PivotSideDetail pivot={selectedPivot} />
               </HydricMapOverlay>
             ) : null}
@@ -724,7 +730,7 @@ export default function VisaoGeralPage() {
           </p>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             {irrigationNeeded.map((p) => (
-              <RecommendationCard key={p.pivotId} pivot={p} />
+              <RecommendationCard key={hydricStateId(p)} pivot={p} />
             ))}
           </div>
         </Card>
@@ -738,11 +744,11 @@ export default function VisaoGeralPage() {
         <div className="space-y-1">
           {ranking.map((pivot, i) => (
             <RankingRow
-              key={pivot.pivotId}
+              key={hydricStateId(pivot)}
               pivot={pivot}
               rank={i + 1}
-              selected={pivot.pivotId === selectedPivotId}
-              onClick={() => setSelectedPivotId(pivot.pivotId)}
+              selected={hydricStateId(pivot) === selectedId}
+              onClick={() => setSelectedId(hydricStateId(pivot))}
             />
           ))}
         </div>
