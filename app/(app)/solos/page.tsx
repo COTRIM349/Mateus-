@@ -27,6 +27,7 @@ import {
   calculateLayerCAD,
   calculateLayerAFD,
   calculateTotalCADFromLayers,
+  volumetricFromGravimetric,
   DEFAULT_CENTER_PIVOT_KL,
   type SoilValidation,
 } from "@/modules/soil/services";
@@ -67,6 +68,9 @@ interface SoilLayer {
   infiltration_rate: number | null;
   kl: number | null;
   observations: string | null;
+  sand_pct: number | null;
+  silt_pct: number | null;
+  clay_pct: number | null;
 }
 
 interface SoilHistoryEntry {
@@ -419,6 +423,7 @@ function LayersTab({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [layerWarnings, setLayerWarnings] = useState<SoilValidation[]>([]);
+  const [entryUnit, setEntryUnit] = useState<"volumetric" | "gravimetric">("volumetric");
 
   useEffect(() => {
     if (!activeFarmId) return;
@@ -461,7 +466,7 @@ function LayersTab({
   );
 
   const columns: Column<SoilLayer>[] = [
-    { header: "Camada (cm)", render: (r) => <span className="font-medium">{r.depth_start}–{r.depth_end}</span> },
+    { header: "Camada (cm)", render: (r) => <span className="font-medium">{r.depth_start}–{r.depth_end} <span className="text-graphite-400">({r.depth_end - r.depth_start} cm)</span></span> },
     { header: "Textura", render: (r) => textureLabels[r.texture] ?? r.texture },
     { header: "Da (g/cm³)", render: (r) => r.bulk_density.toFixed(2), align: "right" },
     { header: "CC (cm³/cm³)", render: (r) => r.field_capacity.toFixed(3), align: "right" },
@@ -509,8 +514,19 @@ function LayersTab({
 
     const depthStart = Number(fd.get("depth_start"));
     const depthEnd = Number(fd.get("depth_end"));
-    const fieldCapacity = Number(fd.get("field_capacity"));
-    const wiltingPoint = Number(fd.get("wilting_point"));
+    const bulkDensity = Number(fd.get("bulk_density"));
+    let fieldCapacity = Number(fd.get("field_capacity"));
+    let wiltingPoint = Number(fd.get("wilting_point"));
+    if (entryUnit === "gravimetric") {
+      if (!Number.isFinite(bulkDensity) || bulkDensity <= 0) {
+        setFormError("Densidade aparente é obrigatória para converter % em peso (θv = θg × Da).");
+        setSaving(false);
+        return;
+      }
+      const toFraction = (v: number) => (v > 1 ? v / 100 : v);
+      fieldCapacity = volumetricFromGravimetric(toFraction(fieldCapacity), bulkDensity);
+      wiltingPoint = volumetricFromGravimetric(toFraction(wiltingPoint), bulkDensity);
+    }
 
     const newLayer = { depth_start: depthStart, depth_end: depthEnd, field_capacity: fieldCapacity, wilting_point: wiltingPoint };
     const otherLayers = editing
@@ -550,6 +566,9 @@ function LayersTab({
       infiltration_rate: fd.get("infiltration_rate") ? Number(fd.get("infiltration_rate")) : null,
       kl,
       observations: (fd.get("observations") as string) || null,
+      sand_pct: fd.get("sand_pct") ? Number(fd.get("sand_pct")) : null,
+      silt_pct: fd.get("silt_pct") ? Number(fd.get("silt_pct")) : null,
+      clay_pct: fd.get("clay_pct") ? Number(fd.get("clay_pct")) : null,
     };
 
     try {
@@ -656,13 +675,26 @@ function LayersTab({
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); setLayerWarnings([]); }} title={editing ? "Editar camada" : "Nova camada"}>
         <form onSubmit={handleSubmit} className="space-y-5">
+          <Select
+            id="entry_unit"
+            label="Unidade de CC e PMP"
+            value={entryUnit}
+            onChange={(e) => setEntryUnit(e.target.value as "volumetric" | "gravimetric")}
+            options={[
+              { value: "volumetric", label: "% volumétrica (cm³/cm³) — padrão do motor" },
+              { value: "gravimetric", label: "% em peso (g/g) — converte θv = θg × Da ao salvar" },
+            ]}
+          />
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="depth_start" name="depth_start" label="Início (cm)" type="number" min="0" required defaultValue={editing?.depth_start ?? (layers.length > 0 ? layers[layers.length - 1].depth_end : 0)} />
             <Input id="depth_end" name="depth_end" label="Fim (cm)" type="number" min="1" required defaultValue={editing?.depth_end ?? (layers.length > 0 ? layers[layers.length - 1].depth_end + 20 : 20)} />
-            <Select id="texture" name="texture" label="Textura" options={[...SOIL_TEXTURES]} required defaultValue={editing?.texture ?? selectedSoil?.texture ?? "franco"} />
+            <Select id="texture" name="texture" label="Textura / classe" options={[...SOIL_TEXTURES]} required defaultValue={editing?.texture ?? selectedSoil?.texture ?? "franco"} />
             <Input id="bulk_density" name="bulk_density" label="Densidade aparente (g/cm³)" type="number" step="0.01" required defaultValue={editing?.bulk_density ?? selectedSoil?.bulk_density} />
-            <Input id="field_capacity" name="field_capacity" label="CC volumétrica (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.field_capacity ?? selectedSoil?.field_capacity} placeholder="0.380" />
-            <Input id="wilting_point" name="wilting_point" label="PMP volumétrico (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.wilting_point ?? selectedSoil?.wilting_point} placeholder="0.180" />
+            <Input id="field_capacity" name="field_capacity" label={entryUnit === "gravimetric" ? "CC (% em peso)" : "CC volumétrica (cm³/cm³)"} type="number" step="0.001" required defaultValue={editing?.field_capacity ?? selectedSoil?.field_capacity} placeholder={entryUnit === "gravimetric" ? "0.124" : "0.380"} />
+            <Input id="wilting_point" name="wilting_point" label={entryUnit === "gravimetric" ? "PMP (% em peso)" : "PMP volumétrico (cm³/cm³)"} type="number" step="0.001" required defaultValue={editing?.wilting_point ?? selectedSoil?.wilting_point} placeholder={entryUnit === "gravimetric" ? "0.063" : "0.180"} />
+            <Input id="sand_pct" name="sand_pct" label="Areia (%)" type="number" step="0.1" min="0" max="100" defaultValue={editing?.sand_pct ?? ""} />
+            <Input id="silt_pct" name="silt_pct" label="Silte (%)" type="number" step="0.1" min="0" max="100" defaultValue={editing?.silt_pct ?? ""} />
+            <Input id="clay_pct" name="clay_pct" label="Argila (%)" type="number" step="0.1" min="0" max="100" defaultValue={editing?.clay_pct ?? ""} />
             <Input id="infiltration_rate" name="infiltration_rate" label="Infiltração (mm/h)" type="number" step="0.1" defaultValue={editing?.infiltration_rate ?? ""} />
             <Input id="kl" name="kl" label="KL (0–1, vazio = 1)" type="number" step="0.01" min="0" max="1" defaultValue={editing?.kl ?? ""} placeholder="1.00" />
           </div>

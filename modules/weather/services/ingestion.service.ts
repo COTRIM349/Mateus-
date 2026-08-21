@@ -129,7 +129,7 @@ export async function ingestOpenMeteoObservations(
     const result = await fetchRecentObservations({
       latitude: station.latitude,
       longitude: station.longitude,
-      timezone: station.timezone || "America/Sao_Paulo",
+      timezone: station.timezone || "America/Bahia",
       pastDays,
     });
     const { context, daily } = result;
@@ -194,8 +194,8 @@ export async function ingestOpenMeteoObservations(
           })
         : null;
 
-      const precipitation = d.precipitation ?? 0;
-      const effectivePrecip = calculateEffectivePrecipitation(precipitation);
+      const precipitation = d.precipitation ?? null;
+      const effectivePrecip = precipitation != null ? calculateEffectivePrecipitation(precipitation) : null;
 
       // Delta ET₀ Cotrim × Open-Meteo
       let et0Delta: number | null = null;
@@ -226,14 +226,14 @@ export async function ingestOpenMeteoObservations(
       const rowPayload = {
         station_id: station.id,
         date: d.date,
-        temp_max: d.tempMax ?? 0,
-        temp_min: d.tempMin ?? 0,
+        temp_max: d.tempMax ?? null,
+        temp_min: d.tempMin ?? null,
         temp_mean:
           d.tempMean ??
-          (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : 0),
-        humidity: d.humidity ?? 0,
-        wind_speed: d.windSpeed2m ?? 0,
-        solar_radiation: d.solarRadiation ?? 0,
+          (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : null),
+        humidity: d.humidity ?? null,
+        wind_speed: d.windSpeed2m ?? null,
+        solar_radiation: d.solarRadiation ?? null,
         precipitation,
         sunshine: null,
         et0_source: d.et0Source,
@@ -371,7 +371,7 @@ export async function ingestOpenMeteoForecast(
     const { issuedAt, daily, context } = await fetchForecast({
       latitude: station.latitude,
       longitude: station.longitude,
-      timezone: station.timezone || "America/Sao_Paulo",
+      timezone: station.timezone || "America/Bahia",
       days,
     });
 

@@ -12,7 +12,7 @@ import {
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
-import { sumGrossDepthByDate } from "@/modules/irrigation/services";
+import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -54,7 +54,7 @@ export function useFarmHydricState(): FarmHydricState {
     // 1. pivôs da fazenda (Sprint 14 · Etapa 7 — inclui soil_id)
     const { data: pivotRows } = await supabase
       .from("pivots")
-      .select("id, name, area, flow_rate, efficiency, latitude, longitude, soil_id")
+      .select("id, name, area, flow_rate, efficiency, latitude, longitude, soil_id, radius, last_tower_radius, overhang_m")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name");
@@ -101,7 +101,7 @@ export function useFarmHydricState(): FarmHydricState {
     const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes] = await Promise.all([
       cultureIds.length ? supabase.from("cultures").select("id, name, root_depth, depletion_factor, kl, ks_function, ky").in("id", cultureIds) : Promise.resolve({ data: [] }),
       cultureIds.length ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order") : Promise.resolve({ data: [] }),
-      soilIds.length ? supabase.from("soils").select("id, field_capacity, wilting_point, bulk_density, effective_depth").in("id", soilIds) : Promise.resolve({ data: [] }),
+      soilIds.length ? supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").in("id", soilIds) : Promise.resolve({ data: [] }),
       soilIds.length
         ? supabase
             .from("soil_layers")
@@ -229,6 +229,14 @@ export function useFarmHydricState(): FarmHydricState {
         (assignment ? (assignment.soil_id as string) : null);
       const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) : null;
 
+      const geometry = resolvePivotMapGeometry({
+        radiusM: (pivot.radius as number | null) ?? null,
+        lastTowerRadiusM: (pivot.last_tower_radius as number | null) ?? null,
+        overhangM: (pivot.overhang_m as number | null) ?? null,
+        latitude: (pivot.latitude as number | null) ?? null,
+        longitude: (pivot.longitude as number | null) ?? null,
+      });
+
       if (!assignment || !culture || !soil) {
         // sem vínculo/cultura/solo → sem dados para cálculo (cinza)
         result.push({
@@ -241,6 +249,10 @@ export function useFarmHydricState(): FarmHydricState {
           latitude: (pivot.latitude as number) ?? 0,
           longitude: (pivot.longitude as number) ?? 0,
           parcelId: assignment ? (assignment.id as string) : null,
+          plantingDate: assignment ? ((assignment.planting_date as string) ?? null) : null,
+          soilName: soil ? ((soil.name as string) ?? null) : null,
+          radiusMeters: geometry.radiusMeters,
+          sheetIncomplete: geometry.sheetIncomplete,
           current: null,
           history: [],
         });
@@ -258,6 +270,10 @@ export function useFarmHydricState(): FarmHydricState {
           latitude: (pivot.latitude as number) ?? 0,
           longitude: (pivot.longitude as number) ?? 0,
           parcelId: assignment.id as string,
+          plantingDate: (assignment.planting_date as string) ?? null,
+          soilName: (soil.name as string) ?? null,
+          radiusMeters: geometry.radiusMeters,
+          sheetIncomplete: geometry.sheetIncomplete,
         },
         {
           assignment: {

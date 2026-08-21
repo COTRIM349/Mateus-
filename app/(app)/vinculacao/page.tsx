@@ -603,6 +603,11 @@ export default function VinculacaoPage() {
     },
     { header: "Plantio", render: (r) => r.planting_date ? new Date(r.planting_date + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
     {
+      header: "DAP",
+      render: (r) => r.planting_date ? String(daysAfterPlanting(r.planting_date)) : "—",
+      align: "right",
+    },
+    {
       header: "Ações",
       align: "right",
       render: (r) => (
@@ -703,7 +708,7 @@ export default function VinculacaoPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader titulo="Parcelas" descricao="Ciclo agronômico no pivô. Nova cultura = novo ciclo. O equipamento e o solo permanecem; o histórico não se apaga." />
+      <PageHeader titulo="Parcelas" descricao="Ciclo agronômico no pivô. Solo e geometria vêm do equipamento; a cultura e o período pertencem à parcela. Encerrar move para o histórico sem apagar." />
 
       <Tabs
         tabs={[

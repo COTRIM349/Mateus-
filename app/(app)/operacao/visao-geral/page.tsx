@@ -7,11 +7,11 @@ import { Card, EmptyState } from "@/components/ui";
 import { ProgressRing } from "@/components/ui/instruments";
 import { useAuth } from "@/components/providers";
 import { useFarmHydricState } from "@/lib/hooks";
-import { radiusFromArea } from "@/utils/geo";
 import { cn } from "@/utils/cn";
+import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
+import { countMapStatuses, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import {
   HYDRIC_STATUS_CONFIG,
-  type HydricStatus,
   type PivotHydricState,
   type FarmHydricSummary,
   type BalanceDay,
@@ -579,20 +579,8 @@ export default function VisaoGeralPage() {
 
   const latestWeather = states.find((s) => s.current)?.current ?? null;
 
-  const mapPivots = useMemo(
-    () =>
-      states
-        .filter((s) => s.latitude && s.longitude)
-        .map((s) => ({
-          id: s.pivotId,
-          name: s.pivotName,
-          latitude: s.latitude,
-          longitude: s.longitude,
-          radiusMeters: radiusFromArea(s.area),
-          color: HYDRIC_STATUS_CONFIG[s.current?.status ?? "cinza"].color,
-        })),
-    [states],
-  );
+  const mapPivots = useMemo(() => toHydricMapMarkers(states), [states]);
+  const mapCounts = countMapStatuses(states);
 
   const selectedPivot = states.find((s) => s.pivotId === selectedPivotId) ?? null;
 
@@ -698,23 +686,18 @@ export default function VisaoGeralPage() {
               <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
               </svg>
-              <p className="whitespace-nowrap text-[13px] font-bold text-graphite-800 dark:text-white">Mapa dos pivôs</p>
-            </div>
-            <div className="hidden shrink-0 items-center gap-2.5 xl:flex">
-              {(["verde", "amarelo", "vermelho"] as HydricStatus[]).map((s) => (
-                <div key={s} className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: HYDRIC_STATUS_CONFIG[s].color }} />
-                  <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{HYDRIC_STATUS_CONFIG[s].label}</span>
-                </div>
-              ))}
+              <p className="whitespace-nowrap text-[13px] font-bold text-graphite-800 dark:text-white">Mapa hídrico</p>
             </div>
           </div>
-          <PivotMap
-            pivots={mapPivots}
-            highlightId={selectedPivotId ?? undefined}
-            onSelect={setSelectedPivotId}
-            className="h-[420px] w-full"
-          />
+          <div className="relative">
+            <PivotMap
+              pivots={mapPivots}
+              highlightId={selectedPivotId ?? undefined}
+              onSelect={setSelectedPivotId}
+              className="h-[420px] w-full"
+            />
+            <HydricMapLegend counts={mapCounts} />
+          </div>
         </Card>
 
         <SituacaoManejo summary={summary} />

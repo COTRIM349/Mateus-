@@ -3,17 +3,21 @@ import { createClient } from "@/lib/supabase/server";
 import {
   buildEtoSummary,
   climateCondition,
+  coalesceNumber,
   ensureDailyForecastWindow,
   haversineDistanceKm,
   latestCandidatePerInterval,
   latestCandidatePerProvider,
   localDateInTimeZone,
+  mergeDailyForecastFields,
+  pickLatestCurrentCandidate,
   selectLatestOfficialForecastPerDay,
   type ClimateDashboardResponse,
   type ClimateForecastInput,
   type ClimateProviderCandidateInput,
   type ClimateReadingInput,
 } from "@/modules/weather/dashboard/climateDashboard";
+import { OPEN_METEO_FALLBACK_TIMEZONE } from "@/modules/weather/providers/openMeteoProvider";
 import { fetchLatestInmetObservation } from "@/modules/weather/providers/inmetPublicObservation";
 import { fetchLatestNasaPowerDaily } from "@/modules/weather/providers/nasaPowerDaily";
 import { fetchNasaPowerTemperatureNormal } from "@/modules/weather/providers/nasaPowerClimatology";
@@ -187,11 +191,11 @@ export async function GET(request: Request) {
   }
 
   const virtualStation = (virtualStationResult.data?.[0] ?? null) as VirtualStationRow | null;
-  const timezone = virtualStation?.timezone || station.timezone || "America/Sao_Paulo";
+  const timezone = virtualStation?.timezone || station.timezone || OPEN_METEO_FALLBACK_TIMEZONE;
   const now = new Date();
   const nowIso = now.toISOString();
   const next24hIso = new Date(now.getTime() + 24 * 60 * 60 * 1_000).toISOString();
-  const currentFreshnessCutoff = new Date(now.getTime() - 2 * 60 * 60 * 1_000).toISOString();
+  const currentFreshnessCutoff = new Date(now.getTime() - 24 * 60 * 60 * 1_000).toISOString();
   const today = localDateInTimeZone(now, timezone);
   const historyStart = isoDateOffset(today, -39);
   const publicStations = stations.filter(
@@ -502,6 +506,7 @@ export async function GET(request: Request) {
     (currentCandidatesResult.data ?? []) as ClimateProviderCandidateInput[],
   );
   const openMeteoCurrent = currentCandidates.get("open_meteo") ?? null;
+  const currentObservation = pickLatestCurrentCandidate(currentCandidates) ?? openMeteoCurrent;
   const hourlyOpenMeteo = latestCandidatePerInterval(
     (hourlyOpenMeteoResult.data ?? []) as ClimateProviderCandidateInput[],
     "open_meteo",
@@ -691,23 +696,36 @@ export async function GET(request: Request) {
     localDate: today,
     generatedAt: nowIso,
     current: {
-      observedAt: openMeteoCurrent?.interval_start ?? todayReading?.imported_at ?? null,
+      observedAt: currentObservation?.interval_start ?? todayReading?.imported_at ?? null,
       sourceKind: "model_estimate",
-      sourceLabel: "Estimativa Open-Meteo no ponto da fazenda · não é medição local",
+      sourceLabel: "Estimativa no ponto da fazenda · não é medição local",
       condition: climateCondition(
-        openMeteoCurrent?.precipitation_mm ?? todayReading?.precipitation ?? null,
+        coalesceNumber(todayReading?.precipitation, currentObservation?.precipitation_mm, todayForecast?.precipitation),
         todayForecast?.precipitation_probability ?? null,
       ),
-      temperatureC: openMeteoCurrent?.temperature_c ?? todayReading?.temp_mean ?? null,
-      tempMinC: todayReading?.temp_min ?? todayForecast?.temp_min ?? null,
-      tempMaxC: todayReading?.temp_max ?? todayForecast?.temp_max ?? null,
-      relativeHumidityPct: openMeteoCurrent?.relative_humidity_pct ?? todayReading?.humidity ?? null,
-      precipitationTodayMm: todayReading?.precipitation ?? null,
-      windSpeed2mMs: openMeteoCurrent?.wind_speed_2m_ms ?? todayReading?.wind_speed ?? null,
+      temperatureC: coalesceNumber(
+        currentObservation?.temperature_c,
+        todayReading?.temp_mean,
+        todayReading?.temp_max,
+        todayForecast?.temp_max,
+      ),
+      tempMinC: coalesceNumber(todayReading?.temp_min, todayForecast?.temp_min),
+      tempMaxC: coalesceNumber(todayReading?.temp_max, todayForecast?.temp_max),
+      relativeHumidityPct: coalesceNumber(
+        currentObservation?.relative_humidity_pct,
+        todayReading?.humidity,
+        todayForecast?.humidity,
+      ),
+      precipitationTodayMm: coalesceNumber(todayReading?.precipitation, todayForecast?.precipitation),
+      windSpeed2mMs: coalesceNumber(
+        currentObservation?.wind_speed_2m_ms,
+        todayReading?.wind_speed,
+        todayForecast?.wind_speed,
+      ),
       windDirection: null,
-      solarRadiationWm2: openMeteoCurrent?.solar_radiation_wm2 ?? null,
+      solarRadiationWm2: coalesceNumber(currentObservation?.solar_radiation_wm2, openMeteoCurrent?.solar_radiation_wm2),
       solarRadiationDailyMjM2: todayReading?.solar_radiation ?? null,
-      surfacePressureKpa: openMeteoCurrent?.surface_pressure_kpa ?? null,
+      surfacePressureKpa: coalesceNumber(currentObservation?.surface_pressure_kpa, openMeteoCurrent?.surface_pressure_kpa),
       etoTodayMm: eto.todayMm,
       etoHargreavesSamaniTodayMm: etoHargreavesSamani.todayMm,
     },
@@ -808,6 +826,7 @@ export async function GET(request: Request) {
     providerComparison,
     dailyForecast: forecasts.map((forecast) => {
       const meteoblueForecast = meteoblueForecastByDate.get(forecast.target_date) ?? null;
+      const merged = mergeDailyForecastFields(forecast, meteoblueForecast);
       const meteoblueDeltaMm = forecast.et0_source != null && meteoblueForecast?.et0_source != null
         ? meteoblueForecast.et0_source - forecast.et0_source
         : null;
@@ -819,14 +838,14 @@ export async function GET(request: Request) {
       date: forecast.target_date,
       issuedAt: forecast.issued_at,
       condition: climateCondition(
-        forecast.precipitation,
-        forecast.precipitation_probability,
+        merged.precipitation,
+        merged.precipitation_probability,
       ),
-      tempMaxC: forecast.temp_max,
-      tempMinC: forecast.temp_min,
-      relativeHumidityPct: forecast.humidity,
-      precipitationMm: forecast.precipitation,
-      precipitationProbabilityPct: forecast.precipitation_probability,
+      tempMaxC: merged.temp_max,
+      tempMinC: merged.temp_min,
+      relativeHumidityPct: merged.humidity,
+      precipitationMm: merged.precipitation,
+      precipitationProbabilityPct: merged.precipitation_probability,
       precipitationMeteoblueMm: meteoblueForecast?.precipitation ?? null,
       precipitationProbabilityMeteobluePct: meteoblueForecast?.precipitation_probability ?? null,
       solarRadiationMeteoblueMjM2Day: meteoblueForecast?.solar_radiation ?? null,
@@ -852,7 +871,7 @@ export async function GET(request: Request) {
       etoLinacreMm: forecastMethodValues.get(forecast.id)?.linacre ?? null,
       etoIvanovMm: forecastMethodValues.get(forecast.id)?.ivanov ?? null,
       etoCamargo1971Mm: forecastMethodValues.get(forecast.id)?.camargo1971 ?? null,
-      windSpeed2mMs: forecast.wind_speed,
+      windSpeed2mMs: merged.wind_speed,
       };
     }),
     hourlyForecast: hourlyOpenMeteo.map((row) => ({

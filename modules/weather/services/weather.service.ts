@@ -82,12 +82,12 @@ export function periodSummary(readings: WeatherReadingRow[]) {
 
 export function validateWeatherReading(reading: {
   et0_calculated: number | null;
-  precipitation: number;
-  temp_max: number;
-  temp_min: number;
-  temp_mean: number;
-  humidity: number;
-  wind_speed: number;
+  precipitation: number | null;
+  temp_max: number | null;
+  temp_min: number | null;
+  temp_mean: number | null;
+  humidity: number | null;
+  wind_speed: number | null;
   solar_radiation: number | null;
 }): WeatherValidation[] {
   const issues: WeatherValidation[] = [];
@@ -98,31 +98,36 @@ export function validateWeatherReading(reading: {
   if (reading.et0_calculated != null && reading.et0_calculated > 15) {
     issues.push({ field: "et0_calculated", level: "warning", message: "ET₀ acima de 15 mm/dia é atípica" });
   }
-  if (reading.precipitation < 0) {
+  if (reading.precipitation != null && reading.precipitation < 0) {
     issues.push({ field: "precipitation", level: "error", message: "Precipitação não pode ser negativa" });
   }
-  if (reading.precipitation > 200) {
+  if (reading.precipitation != null && reading.precipitation > 200) {
     issues.push({ field: "precipitation", level: "warning", message: "Precipitação acima de 200 mm/dia é atípica" });
   }
-  if (reading.temp_max < -10 || reading.temp_max > 55) {
+  if (reading.temp_max != null && (reading.temp_max < -10 || reading.temp_max > 55)) {
     issues.push({ field: "temp_max", level: "warning", message: "Temperatura máxima fora do intervalo esperado (-10 a 55°C)" });
   }
-  if (reading.temp_min < -15 || reading.temp_min > 45) {
+  if (reading.temp_min != null && (reading.temp_min < -15 || reading.temp_min > 45)) {
     issues.push({ field: "temp_min", level: "warning", message: "Temperatura mínima fora do intervalo esperado (-15 a 45°C)" });
   }
-  if (reading.temp_min > reading.temp_max) {
+  if (reading.temp_min != null && reading.temp_max != null && reading.temp_min > reading.temp_max) {
     issues.push({ field: "temp_min", level: "error", message: "Temperatura mínima maior que a máxima" });
   }
-  if (reading.temp_mean < reading.temp_min || reading.temp_mean > reading.temp_max) {
+  if (
+    reading.temp_mean != null &&
+    reading.temp_min != null &&
+    reading.temp_max != null &&
+    (reading.temp_mean < reading.temp_min || reading.temp_mean > reading.temp_max)
+  ) {
     issues.push({ field: "temp_mean", level: "warning", message: "Temperatura média fora do intervalo mín-máx" });
   }
-  if (reading.humidity < 0 || reading.humidity > 100) {
+  if (reading.humidity != null && (reading.humidity < 0 || reading.humidity > 100)) {
     issues.push({ field: "humidity", level: "error", message: "Umidade relativa deve estar entre 0% e 100%" });
   }
-  if (reading.wind_speed < 0) {
+  if (reading.wind_speed != null && reading.wind_speed < 0) {
     issues.push({ field: "wind_speed", level: "error", message: "Velocidade do vento não pode ser negativa" });
   }
-  if (reading.wind_speed > 30) {
+  if (reading.wind_speed != null && reading.wind_speed > 30) {
     issues.push({ field: "wind_speed", level: "warning", message: "Velocidade do vento acima de 30 m/s é atípica" });
   }
   if (reading.solar_radiation != null && reading.solar_radiation < 0) {

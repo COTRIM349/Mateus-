@@ -147,7 +147,7 @@ function FarmsTab() {
       altitude: altitudeValue ?? 0,
       total_area: Number(String(fd.get("total_area") ?? "0").replace(",", ".")),
       irrigated_area: Number(String(fd.get("irrigated_area") ?? "0").replace(",", ".")),
-      timezone: "America/Sao_Paulo",
+      timezone: "America/Bahia",
     };
     try {
       let farmId: string | null = null;

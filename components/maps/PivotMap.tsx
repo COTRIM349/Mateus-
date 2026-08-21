@@ -4,15 +4,17 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 
-interface PivotMarker {
+export interface PivotMarker {
   id: string;
   name: string;
   latitude: number;
   longitude: number;
-  radiusMeters: number;
+  /** Raio da ficha técnica. Null = não desenha círculo inventado. */
+  radiusMeters: number | null;
   active?: boolean;
-  /** cor do círculo (status hídrico); default verde */
   color?: string;
+  sheetIncomplete?: boolean;
+  statusLabel?: string;
 }
 
 interface PivotMapProps {
@@ -75,33 +77,50 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
       const latlng: L.LatLngExpression = [pivot.latitude, pivot.longitude];
       const isHighlighted = pivot.id === highlightId;
       const baseColor = pivot.color ?? "#22c55e";
+      const tooltip = pivot.statusLabel
+        ? `${pivot.name} · ${pivot.statusLabel}`
+        : pivot.name;
 
-      const circle = L.circle(latlng, {
-        radius: pivot.radiusMeters || 300,
-        color: isHighlighted ? "#2563eb" : baseColor,
-        fillColor: baseColor,
-        fillOpacity: isHighlighted ? 0.4 : 0.25,
-        weight: isHighlighted ? 4 : 2,
-      })
-        .addTo(map)
-        .bindTooltip(pivot.name, {
-          permanent: pivots.length <= 20,
-          direction: "top",
-          className: "leaflet-pivot-label",
-        });
+      if (pivot.radiusMeters != null && pivot.radiusMeters > 0) {
+        const circle = L.circle(latlng, {
+          radius: pivot.radiusMeters,
+          color: isHighlighted ? "#ffffff" : baseColor,
+          fillColor: baseColor,
+          fillOpacity: isHighlighted ? 0.45 : 0.32,
+          weight: isHighlighted ? 3 : 2,
+          dashArray: pivot.sheetIncomplete ? "6 4" : undefined,
+        })
+          .addTo(map)
+          .bindTooltip(tooltip, {
+            permanent: false,
+            sticky: true,
+            direction: "top",
+            className: "leaflet-pivot-hover",
+          });
 
-      if (onSelect) {
-        circle.on("click", () => onSelect(pivot.id));
-        circle.getElement()?.setAttribute("style", "cursor:pointer");
+        if (onSelect) {
+          circle.on("click", () => onSelect(pivot.id));
+          circle.getElement()?.setAttribute("style", "cursor:pointer");
+        }
       }
 
       const icon = L.divIcon({
         className: "pivot-center-icon",
-        html: `<div style="width:8px;height:8px;border-radius:50%;background:${isHighlighted ? "#2563eb" : baseColor};border:2px solid white;"></div>`,
+        html: `<div style="width:8px;height:8px;border-radius:50%;background:${isHighlighted ? "#ffffff" : baseColor};border:2px solid ${pivot.sheetIncomplete ? "#f97316" : "white"};box-shadow:0 0 0 1px ${baseColor};"></div>`,
         iconSize: [12, 12],
         iconAnchor: [6, 6],
       });
-      L.marker(latlng, { icon }).addTo(map);
+      const marker = L.marker(latlng, { icon })
+        .addTo(map)
+        .bindTooltip(tooltip, {
+          permanent: false,
+          sticky: true,
+          direction: "top",
+          className: "leaflet-pivot-hover",
+        });
+      if (onSelect) {
+        marker.on("click", () => onSelect(pivot.id));
+      }
 
       bounds.extend(latlng);
     }
@@ -124,4 +143,3 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
     />
   );
 }
-

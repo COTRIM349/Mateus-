@@ -43,6 +43,7 @@ export interface PivotEquipmentPayloadInput {
   area: number;
   radius: number;
   lastTowerRadius: number | null;
+  overhangM: number | null;
   flowRate: number;
   servicePressure: number | null;
   speed100Pct: number | null;
@@ -51,6 +52,12 @@ export interface PivotEquipmentPayloadInput {
   minDepthMm: number | null;
   maxDepthMm: number | null;
   maxOperatingTime: number | null;
+  minNozzleMm: number | null;
+  maxNozzleMm: number | null;
+  conductionLosses: string | null;
+  powerFactor: number | null;
+  loadingIndex: number | null;
+  aerialPartPct: number | null;
   pumpPower: number;
   installedPowerKw: number | null;
   /** Eficiência do motor (0–1). */
@@ -82,6 +89,7 @@ export type PivotEquipmentRow = {
   area: number;
   radius: number;
   last_tower_radius: number | null;
+  overhang_m: number | null;
   flow_rate: number;
   service_pressure: number | null;
   speed_100_pct: number | null;
@@ -90,6 +98,12 @@ export type PivotEquipmentRow = {
   min_depth_mm: number | null;
   max_depth_mm: number | null;
   max_operating_time: number | null;
+  min_nozzle_mm: number | null;
+  max_nozzle_mm: number | null;
+  conduction_losses: string | null;
+  power_factor: number | null;
+  loading_index: number | null;
+  aerial_part_pct: number | null;
   pump_power: number;
   installed_power_kw: number | null;
   motor_efficiency: number;
@@ -154,6 +168,7 @@ export function buildPivotEquipmentRow(
     area: input.area,
     radius: input.radius,
     last_tower_radius: input.lastTowerRadius,
+    overhang_m: input.overhangM,
     flow_rate: input.flowRate,
     service_pressure: input.servicePressure,
     speed_100_pct: input.speed100Pct,
@@ -162,6 +177,12 @@ export function buildPivotEquipmentRow(
     min_depth_mm: input.minDepthMm,
     max_depth_mm: input.maxDepthMm,
     max_operating_time: input.maxOperatingTime,
+    min_nozzle_mm: input.minNozzleMm,
+    max_nozzle_mm: input.maxNozzleMm,
+    conduction_losses: input.conductionLosses,
+    power_factor: input.powerFactor,
+    loading_index: input.loadingIndex,
+    aerial_part_pct: input.aerialPartPct,
     pump_power: input.pumpPower,
     installed_power_kw: input.installedPowerKw,
     motor_efficiency: input.motorEfficiency,

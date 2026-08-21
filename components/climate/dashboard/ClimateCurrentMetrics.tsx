@@ -1,5 +1,5 @@
 import type { ClimateDashboardResponse } from "@/modules/weather/dashboard/climateDashboard";
-import { formatNumber } from "./climateFormat";
+import { conditionLabel, formatNumber, formatRelativeUpdate } from "./climateFormat";
 
 type MetricTone = "orange" | "blue" | "green";
 
@@ -38,12 +38,22 @@ function MetricCard({ label, value, unit, detail, tone, kind }: { label: string;
 }
 
 export function ClimateCurrentMetrics({ current }: { current: ClimateDashboardResponse["current"] }) {
+  const minMax = current.tempMinC != null || current.tempMaxC != null
+    ? `Mín ${formatNumber(current.tempMinC)}° · Máx ${formatNumber(current.tempMaxC)}°`
+    : conditionLabel(current.condition);
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-      <MetricCard label="Temperatura" value={formatNumber(current.temperatureC)} unit="°C" detail="Atual" tone="orange" kind="temperature" />
-      <MetricCard label="Umidade" value={formatNumber(current.relativeHumidityPct, 0)} unit="%" detail="Atual" tone="blue" kind="humidity" />
-      <MetricCard label="Vento" value={formatNumber(current.windSpeed2mMs)} unit="m/s" detail={current.windDirection ? `Direção ${current.windDirection}` : "Velocidade a 2 m"} tone="green" kind="wind" />
-      <MetricCard label="Chuva hoje" value={formatNumber(current.precipitationTodayMm)} unit="mm" detail="Acumulado" tone="blue" kind="rain" />
+    <section className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-graphite-400 dark:text-gray-500">
+        <span>{conditionLabel(current.condition)}</span>
+        <span>{formatRelativeUpdate(current.observedAt)}</span>
+      </div>
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <MetricCard label="Temperatura" value={formatNumber(current.temperatureC)} unit="°C" detail={minMax} tone="orange" kind="temperature" />
+        <MetricCard label="Umidade" value={formatNumber(current.relativeHumidityPct, 0)} unit="%" detail="Atual" tone="blue" kind="humidity" />
+        <MetricCard label="Vento" value={formatNumber(current.windSpeed2mMs)} unit="m/s" detail={current.windDirection ? `Direção ${current.windDirection}` : "Velocidade a 2 m"} tone="green" kind="wind" />
+        <MetricCard label="Chuva hoje" value={formatNumber(current.precipitationTodayMm)} unit="mm" detail="0 mm = sem chuva · — = sem dado" tone="blue" kind="rain" />
+        <MetricCard label="ETo hoje" value={formatNumber(current.etoTodayMm)} unit="mm" detail="Penman-Monteith / fonte operacional" tone="green" kind="humidity" />
+      </div>
     </section>
   );
 }

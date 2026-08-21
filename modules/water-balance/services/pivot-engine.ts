@@ -37,6 +37,7 @@ import {
   safetyPercentOfFieldCapacity,
   scaleArmToNewCad,
 } from "./soil-water-balance";
+import { classifyWaterStatus, type MapHydricStatus } from "./map-hydric-status";
 
 // ── Status hídrico (3 níveis + sem dados) ────────────────────────────────
 
@@ -190,6 +191,8 @@ export interface BalanceDay {
   safetyPctCc: number;
   balanceFormula: string;
   status: HydricStatus;
+  /** Cor do mapa hídrico — independente do gatilho de irrigação. */
+  mapStatus: MapHydricStatus;
   shouldIrrigate: boolean;
   recommendedNetDepth: number;
   recommendedGrossDepth: number;
@@ -359,6 +362,14 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const moisturePctCc = moisturePercentOfFieldCapacity(storage, adt, fieldCapacity, wiltingPoint);
     const safetyPctCc = safetyPercentOfFieldCapacity(fieldCapacity, wiltingPoint, pFactor);
     const status: HydricStatus = dataOk ? classifyHydricStatus(deficit, afd) : "cinza";
+    const mapStatus: MapHydricStatus = dataOk
+      ? classifyWaterStatus({
+          armMm: storage,
+          cadMm: adt,
+          afdMm: afd,
+          safetyMoistureMm: safetyMm,
+        })
+      : "incompleto";
 
     const rec = buildRecommendation(deficit, afd, status, efficiency, pivot.area, pivot.flow_rate);
 
@@ -395,6 +406,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       safetyPctCc,
       balanceFormula: step.balanceFormula,
       status,
+      mapStatus,
       shouldIrrigate: rec.shouldIrrigate,
       recommendedNetDepth: rec.netDepth,
       recommendedGrossDepth: rec.grossDepth,
@@ -423,6 +435,11 @@ export interface PivotHydricState {
   longitude: number;
   /** Parcela (ciclo) ativa — origem do evento de irrigação. */
   parcelId: string | null;
+  plantingDate: string | null;
+  soilName: string | null;
+  /** Raio irrigado da ficha técnica (m). Null = ficha incompleta. */
+  radiusMeters: number | null;
+  sheetIncomplete: boolean;
   current: BalanceDay | null;
   history: BalanceDay[];
 }
@@ -437,6 +454,10 @@ export interface PivotIdentity {
   latitude: number;
   longitude: number;
   parcelId: string | null;
+  plantingDate?: string | null;
+  soilName?: string | null;
+  radiusMeters?: number | null;
+  sheetIncomplete?: boolean;
 }
 
 /** Estado atual = último dia da série calculada (ou null se sem série). */
@@ -447,6 +468,10 @@ export function computePivotCurrentState(
   const history = computePivotBalanceSeries(input);
   return {
     ...identity,
+    plantingDate: identity.plantingDate ?? null,
+    soilName: identity.soilName ?? null,
+    radiusMeters: identity.radiusMeters ?? null,
+    sheetIncomplete: identity.sheetIncomplete ?? false,
     current: history.length > 0 ? history[history.length - 1] : null,
     history,
   };

@@ -65,14 +65,14 @@ export function MapPicker({ value, onChange, radiusMeters = 0, otherPivots = [],
     for (const p of otherPivots) {
       if (!p.latitude || !p.longitude) continue;
       L.circle([p.latitude, p.longitude], {
-        radius: p.radiusMeters || 300,
+        radius: p.radiusMeters > 0 ? p.radiusMeters : 1,
         color: "#94a3b8",
         fillColor: "#cbd5e1",
-        fillOpacity: 0.1,
-        weight: 1,
+        fillOpacity: p.radiusMeters > 0 ? 0.1 : 0,
+        weight: p.radiusMeters > 0 ? 1 : 0,
       })
         .addTo(map)
-        .bindTooltip(p.name, { direction: "top" });
+        .bindTooltip(p.name, { direction: "top", permanent: false });
     }
 
     const place = (lat: number, lng: number) => {
@@ -93,10 +93,10 @@ export function MapPicker({ value, onChange, radiusMeters = 0, otherPivots = [],
         markerRef.current.setLatLng([lat, lng]);
       }
       if (circleRef.current) {
-        circleRef.current.setLatLng([lat, lng]).setRadius(radiusMeters || 300);
-      } else {
+        if (radiusMeters > 0) circleRef.current.setLatLng([lat, lng]).setRadius(radiusMeters);
+      } else if (radiusMeters > 0) {
         circleRef.current = L.circle([lat, lng], {
-          radius: radiusMeters || 300,
+          radius: radiusMeters,
           color: "#2563eb",
           fillColor: "#3b82f6",
           fillOpacity: 0.2,

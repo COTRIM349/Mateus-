@@ -21,6 +21,7 @@ function sampleInput(
     area: 86,
     radius: 523,
     lastTowerRadius: 523,
+    overhangM: 16,
     flowRate: 300,
     servicePressure: 3.2,
     speed100Pct: 150,
@@ -29,6 +30,12 @@ function sampleInput(
     minDepthMm: 5,
     maxDepthMm: 15,
     maxOperatingTime: 24,
+    minNozzleMm: 1,
+    maxNozzleMm: 16,
+    conductionLosses: "condicoes_padrao",
+    powerFactor: 0.9,
+    loadingIndex: 0.97,
+    aerialPartPct: 5,
     pumpPower: 75,
     installedPowerKw: 62.8,
     motorEfficiency: 0.88,
@@ -74,7 +81,8 @@ describe("buildPivotEquipmentRow — ficha técnica sem cultura", () => {
     expect(row.max_depth_mm).toBe(15);
     expect(row.water_source).toBe("reservatorio");
     expect(row.technical_notes).toContain("Bomba");
-    expect(row.cuc).toBe(0.85);
+    expect(row.overhang_m).toBe(16);
+    expect(row.min_nozzle_mm).toBe(1);
     expect(row.efficiency).toBe(0.85);
   });
 

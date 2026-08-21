@@ -6,6 +6,7 @@ import {
   haversineDistanceKm,
   latestCandidatePerInterval,
   latestCandidatePerProvider,
+  mergeDailyForecastFields,
   selectLatestOfficialForecastPerDay,
   windDirectionLabel,
   type ClimateForecastInput,
@@ -145,5 +146,22 @@ describe("climate dashboard data contract", () => {
     expect(latestCandidatePerProvider(rows).size).toBe(2);
     expect(latestCandidatePerProvider(rows).get("open_meteo")?.fetched_at).toBe("2026-08-08T17:30:00Z");
     expect(latestCandidatePerInterval(rows, "open_meteo")).toHaveLength(1);
+  });
+
+  it("cruza Open-Meteo e Meteoblue sem transformar ausência em zero", () => {
+    const merged = mergeDailyForecastFields(
+      forecast({ temp_max: null, temp_min: null, precipitation: 0, precipitation_probability: null }),
+      forecast({
+        id: "mb",
+        temp_max: 33.1,
+        temp_min: 19.4,
+        precipitation: 1.2,
+        precipitation_probability: 40,
+      }),
+    );
+    expect(merged.temp_max).toBe(33.1);
+    expect(merged.temp_min).toBe(19.4);
+    expect(merged.precipitation).toBe(0);
+    expect(merged.precipitation_probability).toBe(40);
   });
 });

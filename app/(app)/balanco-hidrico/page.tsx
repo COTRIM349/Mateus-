@@ -19,11 +19,12 @@ import {
   calculateSummary,
   computePivotBalanceSeries,
   WATER_STATUS_CONFIG,
-  HYDRIC_STATUS_CONFIG,
   ARM_FORMULA,
   PE_METHOD,
   moisturePctCcForDisplay,
   safetyPctCcForDisplay,
+  MAP_HYDRIC_LEGEND_ORDER,
+  MAP_HYDRIC_STATUS_CONFIG,
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
@@ -31,7 +32,8 @@ import {
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
 import { useFarmHydricState } from "@/lib/hooks";
-import { radiusFromArea } from "@/utils/geo";
+import { countMapStatuses, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
@@ -233,20 +235,8 @@ export default function BalancoHidricoPage() {
   // Estado hídrico atual de todos os pivôs — apenas para colorir o mapa
   // seletor. Não altera o cálculo detalhado (que continua sob demanda).
   const { states: hydricStates } = useFarmHydricState();
-  const mapPivots = useMemo(
-    () =>
-      hydricStates
-        .filter((s) => s.latitude && s.longitude)
-        .map((s) => ({
-          id: s.pivotId,
-          name: s.pivotName,
-          latitude: s.latitude,
-          longitude: s.longitude,
-          radiusMeters: radiusFromArea(s.area),
-          color: HYDRIC_STATUS_CONFIG[s.current?.status ?? "cinza"].color,
-        })),
-    [hydricStates],
-  );
+  const mapPivots = useMemo(() => toHydricMapMarkers(hydricStates), [hydricStates]);
+  const mapCounts = countMapStatuses(hydricStates);
 
   // Load pivots
   useEffect(() => {
@@ -866,20 +856,23 @@ export default function BalancoHidricoPage() {
               <span className="text-[11px] text-graphite-400 dark:text-gray-500">· toque em um pivô para selecionar</span>
             </div>
             <div className="flex items-center gap-3.5">
-              {(["verde", "amarelo", "vermelho", "cinza"] as HydricStatus[]).map((s) => (
-                <div key={s} className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: HYDRIC_STATUS_CONFIG[s].color }} />
-                  <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{HYDRIC_STATUS_CONFIG[s].label}</span>
+              {MAP_HYDRIC_LEGEND_ORDER.map((s) => (
+                <div key={s} className="hidden items-center gap-1.5 sm:flex">
+                  <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: MAP_HYDRIC_STATUS_CONFIG[s].color }} />
+                  <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{MAP_HYDRIC_STATUS_CONFIG[s].label}</span>
                 </div>
               ))}
             </div>
           </div>
-          <PivotMap
-            pivots={mapPivots}
-            highlightId={selectedPivotId || undefined}
-            onSelect={setSelectedPivotId}
-            className="h-[420px] w-full"
-          />
+          <div className="relative">
+            <PivotMap
+              pivots={mapPivots}
+              highlightId={selectedPivotId || undefined}
+              onSelect={setSelectedPivotId}
+              className="h-[420px] w-full"
+            />
+            <HydricMapLegend counts={mapCounts} />
+          </div>
         </Card>
       )}
 

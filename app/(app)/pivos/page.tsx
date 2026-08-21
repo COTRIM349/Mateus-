@@ -62,6 +62,7 @@ interface Pivot {
   model: string | null;
   pivot_type: string;
   last_tower_radius: number | null;
+  overhang_m: number | null;
   service_pressure: number | null;
   speed_100_pct: number | null;
   full_turn_time: number | null;
@@ -80,6 +81,12 @@ interface Pivot {
   length_m: number | null;
   technical_notes: string | null;
   water_source: string | null;
+  min_nozzle_mm: number | null;
+  max_nozzle_mm: number | null;
+  conduction_losses: string | null;
+  power_factor: number | null;
+  loading_index: number | null;
+  aerial_part_pct: number | null;
 }
 
 interface ProdModule {
@@ -284,6 +291,7 @@ export default function PivosPage() {
       area,
       radius,
       lastTowerRadius: tech.radius,
+      overhangM: numOrNull("overhang_m"),
       flowRate: tech.flow ?? 0,
       servicePressure: numOrNull("service_pressure"),
       speed100Pct: tech.velocity,
@@ -292,6 +300,12 @@ export default function PivosPage() {
       minDepthMm,
       maxDepthMm,
       maxOperatingTime: numOrNull("max_operating_time"),
+      minNozzleMm: numOrNull("min_nozzle_mm"),
+      maxNozzleMm: numOrNull("max_nozzle_mm"),
+      conductionLosses: (fd.get("conduction_losses") as string) || null,
+      powerFactor: numOrNull("power_factor") != null ? (numOrNull("power_factor") as number) / 100 : null,
+      loadingIndex: numOrNull("loading_index") != null ? (numOrNull("loading_index") as number) / 100 : null,
+      aerialPartPct: numOrNull("aerial_part_pct"),
       pumpPower: tech.pumpCv ?? 0,
       installedPowerKw: numOrNull("installed_power_kw"),
       motorEfficiency: (tech.motorEff ?? 88) / 100,
@@ -484,7 +498,7 @@ export default function PivosPage() {
               />
             </div>
             <div className={activeTab === "localizacao" ? "" : "hidden"}>
-              <TabLocalizacao editing={editing} allPivots={activePivots} areaValue={tech.area ?? 0} />
+              <TabLocalizacao editing={editing} allPivots={activePivots} radiusMeters={tech.radius ?? editing?.radius ?? 0} />
             </div>
             <div className={activeTab === "custos" ? "" : "hidden"}>
               <TabCustos tech={tech} energyCost={energyCost} onEnergyCostChange={setEnergyCost} />
@@ -871,6 +885,42 @@ function TabCaracteristicas({
             step="any"
             defaultValue={editing?.service_pressure ?? ""}
           />
+          <Input
+            id="overhang_m"
+            name="overhang_m"
+            label="Vão em balanço (m)"
+            type="number"
+            step="any"
+            defaultValue={editing?.overhang_m ?? ""}
+          />
+          <Input
+            id="min_nozzle_mm"
+            name="min_nozzle_mm"
+            label="Menor bocal (mm)"
+            type="number"
+            step="any"
+            defaultValue={editing?.min_nozzle_mm ?? ""}
+          />
+          <Input
+            id="max_nozzle_mm"
+            name="max_nozzle_mm"
+            label="Maior bocal (mm)"
+            type="number"
+            step="any"
+            defaultValue={editing?.max_nozzle_mm ?? ""}
+          />
+          <Select
+            id="conduction_losses"
+            name="conduction_losses"
+            label="Perdas na condução"
+            defaultValue={editing?.conduction_losses ?? ""}
+            options={[
+              { value: "condicoes_padrao", label: "Condições padrão" },
+              { value: "baixa", label: "Baixa" },
+              { value: "media", label: "Média" },
+              { value: "alta", label: "Alta" },
+            ]}
+          />
         </div>
         {tech.radius == null && (
           <p className="mt-2 text-[11px] text-graphite-400 dark:text-gray-500">
@@ -1012,6 +1062,30 @@ function TabCaracteristicas({
             value={numInput(tech.applicationEff)}
             onChange={(e) => onChange("applicationEff", e.target.value ? Number(e.target.value) : null)}
           />
+          <Input
+            id="power_factor"
+            name="power_factor"
+            label="Fator de potência (%)"
+            type="number"
+            step="any"
+            defaultValue={editing?.power_factor != null ? editing.power_factor * 100 : ""}
+          />
+          <Input
+            id="loading_index"
+            name="loading_index"
+            label="Índice de carregamento (%)"
+            type="number"
+            step="any"
+            defaultValue={editing?.loading_index != null ? editing.loading_index * 100 : ""}
+          />
+          <Input
+            id="aerial_part_pct"
+            name="aerial_part_pct"
+            label="Parte aérea (%)"
+            type="number"
+            step="any"
+            defaultValue={editing?.aerial_part_pct ?? ""}
+          />
           <AutoField
             label="Consumo específico"
             value={auto.specificConsumptionKwhM3}
@@ -1043,21 +1117,18 @@ function TabCaracteristicas({
 function TabLocalizacao({
   editing,
   allPivots,
-  areaValue,
+  radiusMeters,
 }: {
   editing: Pivot | null;
   allPivots: Pivot[];
-  areaValue: number;
+  radiusMeters: number;
 }) {
   const [lat, setLat] = useState(editing?.latitude ?? 0);
   const [lng, setLng] = useState(editing?.longitude ?? 0);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [draft, setDraft] = useState<{ lat: number; lng: number } | null>(null);
 
-  const computedRadius = useMemo(() => {
-    if (areaValue <= 0) return 0;
-    return Math.round(radiusFromArea(areaValue));
-  }, [areaValue]);
+  const previewRadius = radiusMeters > 0 ? radiusMeters : 0;
 
   const otherPivots = useMemo(
     () =>
@@ -1113,10 +1184,10 @@ function TabLocalizacao({
         />
         <div className="space-y-1.5">
           <label className="block text-sm font-medium text-graphite-900 dark:text-gray-200">
-            Raio calculado
+            Raio da ficha técnica
           </label>
           <p className="flex h-[38px] items-center rounded-xl border border-gray-100 bg-gray-50/80 px-3 text-sm text-graphite-900 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-gray-100">
-            {computedRadius > 0 ? `${computedRadius} m` : "Informe a área"}
+            {previewRadius > 0 ? `${previewRadius} m` : "Cadastre o raio na aba Características"}
           </p>
         </div>
       </div>
@@ -1142,7 +1213,7 @@ function TabLocalizacao({
             <MapPicker
               value={draft}
               onChange={(la, lo) => setDraft({ lat: la, lng: lo })}
-              radiusMeters={computedRadius}
+              radiusMeters={previewRadius}
               otherPivots={otherPivots}
               className="h-[60vh] w-full rounded-2xl border border-gray-100 dark:border-white/[0.06]"
             />

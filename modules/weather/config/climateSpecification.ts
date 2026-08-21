@@ -25,8 +25,7 @@ import type {
 export const CLIMATE_SPEC_VERSION = "1.0.0" as const;
 
 // ── Fuso oficial (spec) ─────────────────────────────────────────────────────
-// A camada nova adota America/Bahia. O fluxo antigo mantém America/Sao_Paulo
-// e será migrado em etapa própria — divergência conhecida C1.
+// A camada climática adota America/Bahia (fazendas da BA e fallbacks).
 export const DEFAULT_TIMEZONE = OPEN_METEO_FALLBACK_TIMEZONE;
 
 // ── Unidades oficiais ──────────────────────────────────────────────────────
@@ -265,9 +264,9 @@ export const KNOWN_DIVERGENCES: readonly KnownDivergence[] = [
     id: "C1",
     location:
       "ingestion.service.ts:132,374; meteoblue-ingest.ts:34,182; virtual-station.service.ts:171,234",
-    legacyBehavior: "Fallback de timezone = America/Sao_Paulo",
-    specDecision: "Fuso canônico = America/Bahia (DEFAULT_TIMEZONE)",
-    toFixIn: "Etapa futura de migração do timezone do fluxo antigo",
+    legacyBehavior: "Fallback de timezone era America/Sao_Paulo no fluxo legado",
+    specDecision: "Fuso canônico = America/Bahia (DEFAULT_TIMEZONE); fazendas BA migradas",
+    toFixIn: "Resolvido: fallbacks e fazendas BA usam America/Bahia",
   },
   {
     id: "C2",

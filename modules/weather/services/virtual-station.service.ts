@@ -168,7 +168,7 @@ export async function ensureVirtualStation(
     longitude: farm.longitude,
     altitude: hasManualAltitude ? farm.altitude : 0,
     altitude_origin: hasManualAltitude ? "manual" : "unknown",
-    timezone: farm.timezone ?? "America/Sao_Paulo",
+    timezone: farm.timezone ?? "America/Bahia",
     station_type: "virtual",
     data_source: dataSource,
     provider: dataSource,
@@ -231,7 +231,7 @@ export async function syncVirtualStationWithFarm(
   const updatePayload: Record<string, unknown> = {
     latitude: farm.latitude,
     longitude: farm.longitude,
-    timezone: farm.timezone ?? station.timezone ?? "America/Sao_Paulo",
+    timezone: farm.timezone ?? station.timezone ?? "America/Bahia",
   };
 
   if (hasManualAltitude) {

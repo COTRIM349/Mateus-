@@ -401,6 +401,44 @@ export function ensureDailyForecastWindow(
   });
 }
 
+export function coalesceNumber(...values: Array<number | null | undefined>): number | null {
+  for (const value of values) {
+    if (value != null && Number.isFinite(value)) return value;
+  }
+  return null;
+}
+
+/** Cruza Open-Meteo e Meteoblue sem transformar ausência em zero. */
+export function mergeDailyForecastFields(
+  official: ClimateForecastInput,
+  meteoblue: ClimateForecastInput | null,
+): Pick<ClimateForecastInput, "temp_max" | "temp_min" | "humidity" | "wind_speed" | "precipitation" | "precipitation_probability"> {
+  return {
+    temp_max: coalesceNumber(official.temp_max, meteoblue?.temp_max),
+    temp_min: coalesceNumber(official.temp_min, meteoblue?.temp_min),
+    humidity: coalesceNumber(official.humidity, meteoblue?.humidity),
+    wind_speed: coalesceNumber(official.wind_speed, meteoblue?.wind_speed),
+    precipitation: coalesceNumber(official.precipitation, meteoblue?.precipitation),
+    precipitation_probability: coalesceNumber(
+      official.precipitation_probability,
+      meteoblue?.precipitation_probability,
+    ),
+  };
+}
+
+export function pickLatestCurrentCandidate(
+  byProvider: Map<DashboardClimateProvider, ClimateProviderCandidateInput>,
+): ClimateProviderCandidateInput | null {
+  const order: DashboardClimateProvider[] = ["open_meteo", "meteoblue", "weatherapi", "met_norway"];
+  for (const provider of order) {
+    const row = byProvider.get(provider);
+    if (row && (row.temperature_c != null || row.relative_humidity_pct != null || row.wind_speed_2m_ms != null)) {
+      return row;
+    }
+  }
+  return null;
+}
+
 export function latestCandidatePerProvider(
   rows: ClimateProviderCandidateInput[],
 ): Map<DashboardClimateProvider, ClimateProviderCandidateInput> {

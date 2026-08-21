@@ -76,9 +76,12 @@ function DailyForecast({
             <div className="mt-5 rounded-xl bg-blue-50/70 px-3 py-3 text-center dark:bg-blue-500/[0.06]">
               <p className="text-[11px] font-extrabold text-blue-700 dark:text-blue-400">Chuva</p>
               <p className="mt-1.5 text-[13px] font-bold tabular-nums text-graphite-700 dark:text-gray-200">
-                {formatNumber(day.precipitationProbabilityMeteobluePct, 0)}% · {formatNumber(day.precipitationMeteoblueMm)} mm
+                {formatNumber(day.precipitationProbabilityPct, 0)}% · {formatNumber(day.precipitationMm)} mm
               </p>
             </div>
+            <p className="mt-3 text-center text-[11px] font-medium text-graphite-500 dark:text-gray-400">
+              Vento {formatNumber(day.windSpeed2mMs)} m/s
+            </p>
             <div className="mt-auto rounded-xl border border-brand-100 bg-brand-50/70 px-3 py-3 text-center dark:border-brand-700/20 dark:bg-brand-500/[0.07]">
               <p className="text-[10px] font-extrabold uppercase tracking-[0.14em] text-brand-700 dark:text-brand-400">ETo operacional</p>
               <p className="mt-1 text-[18px] font-black tabular-nums text-brand-800 dark:text-brand-300">
