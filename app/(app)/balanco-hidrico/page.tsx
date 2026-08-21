@@ -19,6 +19,11 @@ import {
   computePivotBalanceSeries,
   WATER_STATUS_CONFIG,
   HYDRIC_STATUS_CONFIG,
+  ARM_FORMULA,
+  PE_METHOD,
+  moisturePctCcForDisplay,
+  safetyPctCcForDisplay,
+  pmpPctCcForDisplay,
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
@@ -148,6 +153,7 @@ interface StoredBalance {
   precipitation: number;
   effective_precipitation: number;
   applied_depth: number;
+  effective_irrigation: number | null;
   root_depth: number;
   cad: number;
   afd: number;
@@ -168,6 +174,13 @@ interface StoredBalance {
   ky: number | null;
   yield_risk: number | null;
   etc_formula: string | null;
+  field_capacity: number | null;
+  wilting_point: number | null;
+  safety_moisture_mm: number | null;
+  moisture_pct_cc: number | null;
+  safety_pct_cc: number | null;
+  pe_formula: string | null;
+  balance_formula: string | null;
 }
 
 // ── Constants ─────────────────────────────────────────────────────────────
@@ -470,6 +483,14 @@ export default function BalancoHidricoPage() {
         ky: d.ky,
         yieldRisk: d.yieldRisk,
         etcFormula: d.etcFormula,
+        effectiveIrrigation: d.effectiveIrrigation,
+        fieldCapacity: d.fieldCapacity,
+        wiltingPoint: d.wiltingPoint,
+        safetyMoistureMm: d.safetyMoistureMm,
+        moisturePctCc: d.moisturePctCc,
+        safetyPctCc: d.safetyPctCc,
+        peFormula: d.peFormula,
+        balanceFormula: d.balanceFormula,
       }));
 
       // fator p real usado pelo motor (afd / adt)
@@ -516,6 +537,13 @@ export default function BalancoHidricoPage() {
           ky: d.ky,
           yield_risk: d.yieldRisk,
           etc_formula: d.etcFormula,
+          field_capacity: d.fieldCapacity,
+          wilting_point: d.wiltingPoint,
+          safety_moisture_mm: d.safetyMoistureMm,
+          moisture_pct_cc: d.moisturePctCc,
+          safety_pct_cc: d.safetyPctCc,
+          pe_formula: d.peFormula,
+          balance_formula: d.balanceFormula,
         }));
 
         await supabase
@@ -550,6 +578,7 @@ export default function BalancoHidricoPage() {
         precipitation: r.precipitation,
         effectivePrecipitation: r.effective_precipitation,
         irrigationApplied: r.applied_depth,
+        effectiveIrrigation: r.effective_irrigation ?? undefined,
         rootDepth: r.root_depth,
         cad: r.cad,
         afd: r.afd,
@@ -570,6 +599,13 @@ export default function BalancoHidricoPage() {
         ky: r.ky,
         yieldRisk: r.yield_risk,
         etcFormula: r.etc_formula ?? undefined,
+        fieldCapacity: r.field_capacity ?? undefined,
+        wiltingPoint: r.wilting_point ?? undefined,
+        safetyMoistureMm: r.safety_moisture_mm ?? undefined,
+        moisturePctCc: r.moisture_pct_cc ?? undefined,
+        safetyPctCc: r.safety_pct_cc ?? undefined,
+        peFormula: r.pe_formula ?? undefined,
+        balanceFormula: r.balance_formula ?? undefined,
       }));
       setBalanceRows(rows);
     }
@@ -947,10 +983,10 @@ const MANEJO_DEF = (k: SKey) => MANEJO_ALL.find((s) => s.k === k)!;
 
 function sVal(k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): number {
   switch (k) {
-    case "umidade": return r.cad > 0 ? (r.storedWater / r.cad) * 100 : 0;
+    case "umidade": return moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
     case "cc": return 100;
-    case "seg": return r.cad > 0 ? ((r.cad - r.afd) / r.cad) * 100 : 0;
-    case "pm": return 0;
+    case "seg": return safetyPctCcForDisplay(r.safetyPctCc, r.cad, r.afd);
+    case "pm": return pmpPctCcForDisplay(r.fieldCapacity, r.wiltingPoint);
     case "deficit": return r.deficit;
     case "excesso": return r.surplus;
     case "chuva": return r.precipitation;
@@ -979,6 +1015,11 @@ const sFmt = (k: SKey, r: DailyBalanceRow, wx?: WeatherExtra): string => {
   if (def.axis === "mm") return `${v.toFixed(1)} mm`;
   return `${v.toFixed(k === "wind" || k === "rootdepth" || k === "fator" ? 2 : 1)}${def.unit ? ` ${def.unit}` : ""}`;
 };
+
+/** Entradas do solo no dia: Pe + I_ef (lâmina bruta × eficiência). */
+function soilInflowMm(r: DailyBalanceRow): number {
+  return r.effectivePrecipitation + (r.effectiveIrrigation ?? r.irrigationApplied);
+}
 
 function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]; visible: Record<SKey, boolean>; weatherByDate: Record<string, WeatherExtra> }) {
   const [hover, setHover] = useState<number | null>(null);
@@ -1011,7 +1052,9 @@ function ManejoChart({ rows, visible, weatherByDate }: { rows: DailyBalanceRow[]
   const hasNorm = activeVisible.some((s) => s.axis === "norm");
 
   // faixas suaves (adequada / atenção / crítica) usando a segurança do último dia
-  const segPct = rows.length && rows[n - 1].cad > 0 ? ((rows[n - 1].cad - rows[n - 1].afd) / rows[n - 1].cad) * 100 : 50;
+  const segPct = rows.length
+    ? safetyPctCcForDisplay(rows[n - 1].safetyPctCc, rows[n - 1].cad, rows[n - 1].afd)
+    : 50;
 
   return (
     <div className="relative" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
@@ -1166,17 +1209,21 @@ function BalanceTab({
     : rows;
 
   const exportCsv = () => {
-    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Entradas", "Saidas", "Saldo", "AguaDisp", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "CAD", "AFD", "ARM", "SegMm", "PctCC", "Deplecao%", "Deficit", "LaminaRec", "Status"];
     const lines = filteredRows.map((r) => {
-      const entr = r.effectivePrecipitation + r.irrigationApplied;
+      const entr = soilInflowMm(r);
       const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
       const lam = r.deficit >= r.afd && r.afd > 0 ? r.grossDepth : 0;
+      const pctCc = moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
       return [
         r.date, r.phase, r.kc.toFixed(2), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
         r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1),
         r.ky != null ? r.ky.toFixed(2) : "", r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "",
         r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1),
-        entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1), r.storedWater.toFixed(1),
+        (r.effectiveIrrigation ?? r.irrigationApplied).toFixed(1),
+        entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1),
+        r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
+        (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1), pctCc.toFixed(1),
         depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label,
       ].join(";");
     });
@@ -1201,12 +1248,13 @@ function BalanceTab({
   const last = rows[rows.length - 1];
   const first = rows[0];
   const cad = last?.cad ?? 0;
+  const afd = last?.afd ?? 0;
   const arm = last?.storedWater ?? 0;
-  const armPct = cad > 0 ? Math.round((arm / cad) * 100) : 0;
-  const raw = last ? Math.max(last.cad - last.afd, 0) : 0;
-  const depletPct = cad > 0 ? Math.round(((cad - arm) / cad) * 100) : 0;
-  const untilSafety = arm - raw; // >0 acima do limite; <0 abaixo
-  const classificacao = arm >= raw ? { label: "Adequado", color: "#1ea85b" } : arm >= raw * 0.5 ? { label: "Atenção", color: "#f97316" } : { label: "Crítico", color: "#e5484d" };
+  const pctCc = last ? moisturePctCcForDisplay(last.moisturePctCc, last.storedWater, last.cad) : 0;
+  const safetyMm = last?.safetyMoistureMm ?? Math.max(cad - afd, 0);
+  const safetyPct = last ? safetyPctCcForDisplay(last.safetyPctCc, last.cad, last.afd) : 0;
+  const untilSafety = arm - safetyMm;
+  const classificacao = arm >= safetyMm ? { label: "Adequado", color: "#1ea85b" } : arm >= safetyMm * 0.5 ? { label: "Atenção", color: "#f97316" } : { label: "Crítico", color: "#e5484d" };
   const variacao = (last?.storedWater ?? 0) - (first?.storedWater ?? 0);
   const tendencia = variacao < -0.5 ? { label: "queda", down: true } : variacao > 0.5 ? { label: "alta", down: false } : { label: "estável", down: false };
   const efPct = head.efficiency ?? (last ? (last.grossDepth > 0 ? (last.netDepth / last.grossDepth) * 100 : 85) : 85);
@@ -1227,13 +1275,17 @@ function BalanceTab({
     { header: "Ky", render: (r) => r.ky != null ? r.ky.toFixed(2) : "—" },
     { header: "Risco", render: (r) => r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "—" },
     { header: "Chuva", render: (r) => r.precipitation.toFixed(1) },
-    { header: "Ch. ef.", render: (r) => r.effectivePrecipitation.toFixed(1) },
+    { header: "Ch. ef.", render: (r) => <span title={r.peFormula}>{r.effectivePrecipitation.toFixed(1)}</span> },
     { header: "Irrig.", render: (r) => r.irrigationApplied > 0 ? <span className="text-cyan-600 dark:text-cyan-400">{r.irrigationApplied.toFixed(1)}</span> : "0.0" },
-    { header: "Entradas", render: (r) => <span className="text-blue-600 dark:text-blue-400">{(r.effectivePrecipitation + r.irrigationApplied).toFixed(1)}</span> },
+    { header: "I ef.", render: (r) => (r.effectiveIrrigation ?? r.irrigationApplied).toFixed(1) },
+    { header: "Entradas", render: (r) => <span className="text-blue-600 dark:text-blue-400">{soilInflowMm(r).toFixed(1)}</span> },
     { header: "Saídas", render: (r) => <span className="text-amber-600 dark:text-amber-400">{r.etc.toFixed(1)}</span> },
-    { header: "Saldo", render: (r) => { const s = r.effectivePrecipitation + r.irrigationApplied - r.etc; return <span className={s >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{s >= 0 ? "+" : ""}{s.toFixed(1)}</span>; } },
-    { header: "Á. disp.", render: (r) => r.storedWater.toFixed(1) },
-    { header: "Depleção", render: (r) => `${r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0}%` },
+    { header: "Saldo", render: (r) => { const s = soilInflowMm(r) - r.etc; return <span className={s >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{s >= 0 ? "+" : ""}{s.toFixed(1)}</span>; } },
+    { header: "CAD", render: (r) => r.cad.toFixed(1) },
+    { header: "AFD", render: (r) => r.afd.toFixed(1) },
+    { header: "ARM", render: (r) => <span title={r.balanceFormula}>{r.storedWater.toFixed(1)}</span> },
+    { header: "Seg.", render: (r) => (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1) },
+    { header: "% CC", render: (r) => `${moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad).toFixed(0)}` },
     { header: "Déficit", render: (r) => r.deficit > 0 ? <span className="text-red-600 dark:text-red-400">{r.deficit.toFixed(1)}</span> : "0.0" },
     { header: "Lâm. rec.", render: (r) => r.deficit >= r.afd && r.afd > 0 ? r.grossDepth.toFixed(1) : "0.0" },
     {
@@ -1280,28 +1332,29 @@ function BalanceTab({
         </div>
       </div>
 
-      {/* 2 · Situação atual (estado — cada dado uma vez) */}
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-        {/* Água disponível */}
+      {/* 2 · Situação atual (CAD / AFD / ARM / segurança — unidades explícitas) */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-4">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Água disponível</p>
-          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{armPct}<span className="text-[14px] text-graphite-400">%</span> <span className="text-[14px] font-bold text-graphite-400">· {arm.toFixed(1)} mm</span></p>
-          <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded" style={{ width: `${clampN(armPct, 0, 100)}%`, background: classificacao.color }} /></div>
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">ARM</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{arm.toFixed(1)}<span className="text-[14px] text-graphite-400"> mm</span> <span className="text-[14px] font-bold text-graphite-400">· {pctCc.toFixed(0)}% da CC</span></p>
+          <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded" style={{ width: `${clampN(pctCc, 0, 100)}%`, background: classificacao.color }} /></div>
           <span className={`mt-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${tendencia.down ? "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400" : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"}`}>{tendencia.down ? "▼" : "▲"} {tendencia.label}</span>
         </Card>
-        {/* Depleção */}
         <Card className="p-4">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Depleção atual</p>
-          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{depletPct}<span className="text-[14px] text-graphite-400">%</span> <span className="text-[14px] font-bold text-graphite-400">· {(last?.deficit ?? 0).toFixed(1)} mm</span></p>
-          <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded bg-orange-500" style={{ width: `${clampN(depletPct, 0, 100)}%` }} /></div>
-          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{untilSafety >= 0 ? `a ${untilSafety.toFixed(1)} mm do limite de segurança` : "abaixo do limite de segurança"}</p>
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">CAD / AFD</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{cad.toFixed(1)}<span className="text-[14px] text-graphite-400"> mm</span></p>
+          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">AFD {afd.toFixed(1)} mm · p {cad > 0 ? (afd / cad).toFixed(2) : "—"}</p>
         </Card>
-        {/* Situação do solo */}
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Umidade de segurança</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{safetyMm.toFixed(1)}<span className="text-[14px] text-graphite-400"> mm</span> <span className="text-[14px] font-bold text-graphite-400">· {safetyPct.toFixed(0)}% da CC</span></p>
+          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{untilSafety >= 0 ? `a ${untilSafety.toFixed(1)} mm do limite` : "abaixo do limite de segurança"}</p>
+        </Card>
         <Card className="p-4">
           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Situação do solo</p>
           <p className="mt-2 text-[22px] font-extrabold leading-none" style={{ color: classificacao.color }}>{classificacao.label}</p>
           <p className="mt-2 text-[11.5px] leading-relaxed text-graphite-400 dark:text-gray-500">
-            {classificacao.label === "Adequado" ? "Umidade dentro da faixa ideal." : classificacao.label === "Atenção" ? "Próximo do limite de segurança." : "Déficit relevante — repor a água do solo."}
+            {classificacao.label === "Adequado" ? "ARM acima da umidade de segurança." : classificacao.label === "Atenção" ? "Próximo do limite CAD − AFD." : "Déficit relevante — repor a água do solo."}
           </p>
         </Card>
       </div>
@@ -1400,14 +1453,16 @@ function BalanceTab({
         <Card className="p-4">
           <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
           <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
-            {arm < raw
-              ? "A água disponível está abaixo do limite de segurança e a demanda (ETc) supera as entradas recentes."
-              : "A água disponível está dentro da faixa segura; as entradas cobrem a demanda atual."}
+            {arm < safetyMm
+              ? "O ARM está abaixo da umidade de segurança (CAD − AFD) e a demanda (ETc) supera as entradas recentes."
+              : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {[
-              { l: "Água disp. atual", v: `${arm.toFixed(1)} mm` },
-              { l: "Limite segurança", v: `${raw.toFixed(1)} mm` },
+              { l: "ARM atual", v: `${arm.toFixed(1)} mm` },
+              { l: "CAD / AFD", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
+              { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` },
+              { l: "% da CC", v: `${pctCc.toFixed(0)}%` },
               { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
               { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
             ].map((f) => (
@@ -1428,7 +1483,7 @@ function BalanceTab({
           </p>
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
-            if (arm < raw) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `Água disponível em ${armPct}% da CC — repor para evitar estresse.` });
+            if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
             if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
             if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
             if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: "Nenhum alerta ativo para o pivô no período." });
@@ -1509,7 +1564,9 @@ function BalanceTab({
         <span>ETc <strong className="font-semibold text-graphite-800 dark:text-white">ETo × Kc × KL × Ks</strong></span>
         <span>Ks <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56 (Dr vs AFD)</strong></span>
         <span>Ky <strong className="font-semibold text-graphite-800 dark:text-white">risco produtivo, não lâmina</strong></span>
-        <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">USDA-SCS</strong></span>
+        <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">{PE_METHOD}</strong></span>
+        <span>Balanço <strong className="font-semibold text-graphite-800 dark:text-white">{ARM_FORMULA}</strong></span>
+        <span>Unidades <strong className="font-semibold text-graphite-800 dark:text-white">CAD/AFD/ARM mm · % da CC volumétrico</strong></span>
         <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
         <span>Motor <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56</strong></span>
         <span>Fonte climática {head.stationName ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.stationName}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>

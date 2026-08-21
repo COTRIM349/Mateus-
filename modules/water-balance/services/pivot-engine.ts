@@ -29,6 +29,14 @@ import {
   resolvePhaseKy,
   yieldRiskFraction,
 } from "./crop-coefficients";
+import {
+  applyDailySoilBalance,
+  moisturePercentOfFieldCapacity,
+  profileCcPmp,
+  safetyMoistureMm,
+  safetyPercentOfFieldCapacity,
+  scaleArmToNewCad,
+} from "./soil-water-balance";
 
 // ── Status hídrico (3 níveis + sem dados) ────────────────────────────────
 
@@ -160,15 +168,27 @@ export interface BalanceDay {
   yieldRisk: number | null;
   precipitation: number;
   effectivePrecipitation: number;
+  peFormula: string;
   irrigation: number;
   effectiveIrrigation: number;
   rootDepth: number;
+  /** CAD/ADT (mm). */
   adt: number;
   afd: number;
+  /** ARM (mm) — água armazenada na zona radicular. */
   storage: number;
   surplus: number;
   deficit: number;
   depletion: number;
+  fieldCapacity: number;
+  wiltingPoint: number;
+  /** ARM no limite da AFD (mm). */
+  safetyMoistureMm: number;
+  /** Umidade atual em % da CC (volumétrico). */
+  moisturePctCc: number;
+  /** Umidade de segurança em % da CC (volumétrico). */
+  safetyPctCc: number;
+  balanceFormula: string;
   status: HydricStatus;
   shouldIrrigate: boolean;
   recommendedNetDepth: number;
@@ -262,6 +282,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
   // armazenamento inicial: começa na capacidade (ADT cheia) com a raiz do dia inicial
   const rows: BalanceDay[] = [];
   let previousStorage: number | null = null;
+  let previousCad: number | null = null;
 
   for (let ms = startMs; ms <= endMs; ms += 86400000) {
     const date = new Date(ms).toISOString().slice(0, 10);
@@ -285,19 +306,25 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
         : calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth)
       : 0;
     const afd = calculateAFD(adt, pFactor);
+    const { fieldCapacity, wiltingPoint } = profileCcPmp(
+      soil,
+      soil.layers,
+      rootDepth,
+    );
 
     const weather = weatherByDate[date] ?? { et0: 0, precipitation: 0 };
 
-    // KL explícito (pivô central / molhamento pleno = 1). Não aplica sem valor.
     const kl = resolveManejoKl({
       parcelOverride: assignment.kl_override,
       phaseKl: phaseId?.phase.kl,
       cultureKl: culture.kl,
     });
 
-    // Ks no início do dia (Dr = ADT − ARM anterior). fao33/Ky não entra no ETc.
-    const prev: number = previousStorage ?? adt;
-    const startDeficit = adt > 0 ? Math.max(adt - prev, 0) : 0;
+    const armStart =
+      previousStorage == null
+        ? adt
+        : scaleArmToNewCad(previousStorage, previousCad ?? adt, adt);
+    const startDeficit = adt > 0 ? Math.max(adt - armStart, 0) : 0;
     const startDepletion = adt > 0 ? startDeficit / adt : 0;
     const ksConfigured = resolveKsFunctionName(
       assignment.ks_function_override,
@@ -314,25 +341,23 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
 
     const irrigation = irrigationByDate[date] ?? 0;
     const effectiveIrrigation = roundTo(irrigation * efficiency, 2);
-
     const registeredRain = Math.max(weather.precipitation, 0);
 
-    // balanço: armazenamento anterior (1º dia parte da capacidade) + entradas − ETc ajustada
-    const preCap = prev + registeredRain + effectiveIrrigation - etc;
-    let storage = preCap;
-    let surplus = 0;
-    if (adt > 0 && preCap > adt) {
-      surplus = roundTo(preCap - adt, 2); // excedente acima da capacidade do solo
-      storage = adt;                       // não ultrapassa ADT
-    }
-    if (storage < 0) storage = 0;          // não fica negativo
-    storage = roundTo(storage, 2);
-
-    // chuva efetiva = parte retida (excedente atribuído primeiro à chuva)
-    const effectivePrecipitation = roundTo(Math.max(registeredRain - surplus, 0), 2);
-
-    const deficit = adt > 0 ? roundTo(Math.max(adt - storage, 0), 2) : 0;
+    const step = applyDailySoilBalance({
+      armStart,
+      cad: adt,
+      precipitation: registeredRain,
+      effectiveIrrigation,
+      etc,
+    });
+    const storage = step.arm;
+    const surplus = step.surplus;
+    const effectivePrecipitation = step.pe;
+    const deficit = step.deficit;
     const depletion = adt > 0 ? roundTo(deficit / adt, 3) : 0;
+    const safetyMm = safetyMoistureMm(adt, afd);
+    const moisturePctCc = moisturePercentOfFieldCapacity(storage, adt, fieldCapacity, wiltingPoint);
+    const safetyPctCc = safetyPercentOfFieldCapacity(fieldCapacity, wiltingPoint, pFactor);
     const status: HydricStatus = dataOk ? classifyHydricStatus(deficit, afd) : "cinza";
 
     const rec = buildRecommendation(deficit, afd, status, efficiency, pivot.area, pivot.flow_rate);
@@ -353,6 +378,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       yieldRisk,
       precipitation: roundTo(weather.precipitation, 2),
       effectivePrecipitation,
+      peFormula: step.peFormula,
       irrigation: roundTo(irrigation, 2),
       effectiveIrrigation,
       rootDepth: roundTo(rootDepth, 3),
@@ -362,6 +388,12 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       surplus,
       deficit,
       depletion,
+      fieldCapacity,
+      wiltingPoint,
+      safetyMoistureMm: safetyMm,
+      moisturePctCc,
+      safetyPctCc,
+      balanceFormula: step.balanceFormula,
       status,
       shouldIrrigate: rec.shouldIrrigate,
       recommendedNetDepth: rec.netDepth,
@@ -372,6 +404,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     });
 
     previousStorage = storage;
+    previousCad = adt;
   }
 
   return rows;

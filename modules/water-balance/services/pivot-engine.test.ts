@@ -1,5 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { calculateADT, computePivotBalanceSeries, type PivotEngineInput } from "./pivot-engine";
+import { moisturePercentOfFieldCapacity, safetyMoistureMm } from "./soil-water-balance";
+import { calculateEffectivePrecipitation } from "@/modules/weather/services";
 
 function sampleInput(overrides: Partial<PivotEngineInput> = {}): PivotEngineInput {
   return {
@@ -161,6 +163,73 @@ describe("computePivotBalanceSeries — Ks, KL e Ky (Etapa E)", () => {
     expect(full[0].kl).toBe(1);
     expect(localized[0].kl).toBe(0.6);
     expect(localized[0].etcPotential).toBeCloseTo(full[0].etcPotential * 0.6, 2);
+  });
+});
+
+describe("computePivotBalanceSeries — núcleo do solo (Etapa F)", () => {
+  it("dia 1: ARM começa na CAD, perde ETc e umidade de segurança = CAD − AFD", () => {
+    const day = computePivotBalanceSeries(sampleInput())[0];
+    expect(day.adt).toBe(54);
+    expect(day.storage).toBe(49);
+    expect(day.safetyMoistureMm).toBe(safetyMoistureMm(54, 27));
+    expect(day.safetyMoistureMm).toBe(27);
+    expect(day.moisturePctCc).toBe(moisturePercentOfFieldCapacity(49, 54, 0.3, 0.12));
+    expect(day.moisturePctCc).not.toBeCloseTo((49 / 54) * 100, 0);
+    expect(day.balanceFormula).toContain("ARM");
+  });
+
+  it("Pe USDA-SCS é limitada pelo espaço até a CAD", () => {
+    const day = computePivotBalanceSeries(
+      sampleInput({
+        weatherByDate: { "2026-01-01": { et0: 2, precipitation: 20 } },
+      }),
+    )[0];
+    expect(day.storage).toBe(54);
+    expect(day.surplus).toBeGreaterThan(0);
+    expect(day.effectivePrecipitation).toBeLessThan(20);
+    expect(day.effectivePrecipitation).toBeLessThanOrEqual(calculateEffectivePrecipitation(20));
+    expect(day.peFormula).toContain("USDA-SCS");
+  });
+
+  it("irrigação efetiva (bruta × eficiência) entra no ARM", () => {
+    const dry = computePivotBalanceSeries(sampleInput())[0];
+    const wet = computePivotBalanceSeries(
+      sampleInput({ irrigationByDate: { "2026-01-01": 20 } }),
+    )[0];
+    expect(wet.effectiveIrrigation).toBe(17);
+    expect(wet.storage).toBeGreaterThan(dry.storage);
+    expect(wet.storage).toBe(54);
+    expect(wet.surplus).toBeGreaterThan(0);
+  });
+
+  it("preserva a fração ARM/CAD quando a raiz (e a CAD) cresce", () => {
+    const phases = [
+      {
+        phase_order: 1,
+        name: "Desenvolvimento",
+        days_after_plant: 0,
+        duration_days: 10,
+        kc_start: 0.4,
+        kc_end: 0.4,
+        root_depth_start: 0.15,
+        root_depth_end: 0.45,
+        depletion_factor: 0.5,
+      },
+    ];
+    const series = computePivotBalanceSeries(
+      sampleInput({
+        culture: { root_depth: 0.45, depletion_factor: 0.5 },
+        phases,
+        weatherByDate: weatherDays("2026-01-01", 2, 5),
+        dateEnd: "2026-01-02",
+      }),
+    );
+    expect(series[1].adt).toBeGreaterThan(series[0].adt);
+    // dia 0: CAD 27, ETc 2 → ARM 25; dia 1 CAD 32,4 → ARM inicial 30; ETc 2 → 28
+    expect(series[0].adt).toBe(27);
+    expect(series[0].storage).toBe(25);
+    expect(series[1].adt).toBe(32.4);
+    expect(series[1].storage).toBe(28);
   });
 });
 
