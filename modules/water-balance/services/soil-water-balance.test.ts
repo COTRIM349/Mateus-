@@ -70,8 +70,11 @@ describe("scaleArmToNewCad", () => {
     expect(scaleArmToNewCad(27, 54, 108)).toBe(54);
   });
 
-  it("não inventa água acima da CAD nova", () => {
-    expect(scaleArmToNewCad(50, 54, 40)).toBe(40);
+  it("não inventa água acima da CAD nova nem enche até a CC no recuo", () => {
+    // 50/54 da CAD antiga → mesma fração em 40 mm = 37,04 (não 40 = CC)
+    expect(scaleArmToNewCad(50, 54, 40)).toBe(37.04);
+    expect(scaleArmToNewCad(50, 54, 40)).toBeLessThanOrEqual(40);
+    expect(scaleArmToNewCad(60, 54, 40)).toBe(40);
   });
 });
 
