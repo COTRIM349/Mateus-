@@ -34,7 +34,7 @@ export function HydricMapLegend({
               return (
                 <li key={status} className="flex items-center gap-2 text-[11px] text-gray-200">
                   <span
-                    className="h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-white/20"
+                    className="h-3 w-3 shrink-0 rounded-[3px] ring-1 ring-white/15"
                     style={{ backgroundColor: conf.color }}
                   />
                   <span className="flex-1">{conf.label}</span>

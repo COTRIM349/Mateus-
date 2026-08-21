@@ -52,7 +52,7 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
 > = {
   capacidade_campo: {
     label: "Capacidade de campo",
-    color: "#2563eb",
+    color: "#1d4ed8",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   },
   otima_umidade: {
@@ -67,17 +67,17 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
   },
   sinal_alerta: {
     label: "Sinal de alerta",
-    color: "#f97316",
+    color: "#ea580c",
     bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
   },
   atencao: {
     label: "Atenção",
-    color: "#ef4444",
+    color: "#dc2626",
     bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   },
   deficit_hidrico: {
     label: "Déficit hídrico",
-    color: "#0a0a0a",
+    color: "#171717",
     bgClass: "bg-zinc-900 text-zinc-100 dark:bg-black dark:text-zinc-200",
   },
   incompleto: {

@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
+import { destinationLatLng } from "@/utils/geo";
 
 export interface PivotMarker {
   id: string;
@@ -15,6 +16,8 @@ export interface PivotMarker {
   color?: string;
   sheetIncomplete?: boolean;
   statusLabel?: string;
+  /** Azimute da haste (0 = norte). Sem cadastro, usa o norte como no Scheduling. */
+  boomBearingDeg?: number;
 }
 
 interface PivotMapProps {
@@ -27,8 +30,16 @@ interface PivotMapProps {
 
 const SATELLITE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
-const LABELS_URL =
-  "https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}";
+
+/** Preenchimento sólido no estilo das plataformas de manejo (Scheduling / FieldNET). */
+const SOLID_FILL = 0.9;
+const SOLID_FILL_SELECTED = 0.96;
+
+function strokeFor(fill: string, selected: boolean): string {
+  if (selected) return "#ffffff";
+  if (fill === "#0a0a0a" || fill === "#111111" || fill === "#171717") return "#d4d4d8";
+  return fill;
+}
 
 export function PivotMap({ pivots, highlightId, center, className, onSelect }: PivotMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -49,11 +60,15 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
     });
 
     L.tileLayer(SATELLITE_URL, { maxZoom: 18 }).addTo(map);
-    L.tileLayer(LABELS_URL, { maxZoom: 18 }).addTo(map);
-
     mapRef.current = map;
 
+    const ro = new ResizeObserver(() => {
+      map.invalidateSize();
+    });
+    ro.observe(containerRef.current);
+
     return () => {
+      ro.disconnect();
       map.remove();
       mapRef.current = null;
     };
@@ -65,7 +80,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
     if (!map) return;
 
     map.eachLayer((layer) => {
-      if (layer instanceof L.Circle || layer instanceof L.Marker) {
+      if (layer instanceof L.Circle || layer instanceof L.Marker || layer instanceof L.Polyline) {
         map.removeLayer(layer);
       }
     });
@@ -81,52 +96,55 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         ? `${pivot.name} · ${pivot.statusLabel}`
         : pivot.name;
 
-      if (pivot.radiusMeters != null && pivot.radiusMeters > 0) {
-        const circle = L.circle(latlng, {
-          radius: pivot.radiusMeters,
-          color: isHighlighted ? "#ffffff" : baseColor,
-          fillColor: baseColor,
-          fillOpacity: isHighlighted ? 0.45 : 0.32,
-          weight: isHighlighted ? 3 : 2,
-          dashArray: pivot.sheetIncomplete ? "6 4" : undefined,
-        })
-          .addTo(map)
-          .bindTooltip(tooltip, {
-            permanent: false,
-            sticky: true,
-            direction: "top",
-            className: "leaflet-pivot-hover",
-          });
-
-        if (onSelect) {
-          circle.on("click", () => onSelect(pivot.id));
-          circle.getElement()?.setAttribute("style", "cursor:pointer");
-        }
+      if (pivot.radiusMeters == null || pivot.radiusMeters <= 0) {
+        bounds.extend(latlng);
+        continue;
       }
 
-      const icon = L.divIcon({
-        className: "pivot-center-icon",
-        html: `<div style="width:8px;height:8px;border-radius:50%;background:${isHighlighted ? "#ffffff" : baseColor};border:2px solid ${pivot.sheetIncomplete ? "#f97316" : "white"};box-shadow:0 0 0 1px ${baseColor};"></div>`,
-        iconSize: [12, 12],
-        iconAnchor: [6, 6],
-      });
-      const marker = L.marker(latlng, { icon })
+      const circle = L.circle(latlng, {
+        radius: pivot.radiusMeters,
+        color: strokeFor(baseColor, isHighlighted),
+        fillColor: baseColor,
+        fillOpacity: isHighlighted ? SOLID_FILL_SELECTED : SOLID_FILL,
+        weight: isHighlighted ? 3 : 1.5,
+        opacity: 1,
+        className: "pivot-hydric-circle",
+        dashArray: pivot.sheetIncomplete ? "7 5" : undefined,
+      })
         .addTo(map)
         .bindTooltip(tooltip, {
           permanent: false,
           sticky: true,
           direction: "top",
+          opacity: 0.95,
           className: "leaflet-pivot-hover",
         });
+
+      const boomEnd = destinationLatLng(
+        pivot.latitude,
+        pivot.longitude,
+        pivot.radiusMeters,
+        pivot.boomBearingDeg ?? 0,
+      );
+      L.polyline([latlng, [boomEnd.lat, boomEnd.lng]], {
+        color: "#f8fafc",
+        weight: isHighlighted ? 2.5 : 1.75,
+        opacity: 0.95,
+        lineCap: "round",
+        interactive: false,
+        className: "pivot-hydric-boom",
+      }).addTo(map);
+
       if (onSelect) {
-        marker.on("click", () => onSelect(pivot.id));
+        circle.on("click", () => onSelect(pivot.id));
       }
 
       bounds.extend(latlng);
+      bounds.extend([boomEnd.lat, boomEnd.lng]);
     }
 
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [40, 40], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [48, 48], maxZoom: 16 });
     }
   }, [pivots, highlightId, onSelect]);
 

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   classifyWaterStatus,
+  MAP_HYDRIC_STATUS_CONFIG,
   MAP_HYDRIC_THRESHOLDS,
 } from "./map-hydric-status";
 
@@ -58,5 +59,11 @@ describe("classifyWaterStatus", () => {
         thresholds: { ...MAP_HYDRIC_THRESHOLDS, fieldCapacityRatio: 0.9 },
       }),
     ).toBe("capacidade_campo");
+  });
+
+  it("expõe cores hex sólidas para o mapa (sem transparência na paleta)", () => {
+    for (const conf of Object.values(MAP_HYDRIC_STATUS_CONFIG)) {
+      expect(conf.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
   });
 });

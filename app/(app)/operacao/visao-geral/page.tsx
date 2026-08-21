@@ -9,6 +9,7 @@ import { useAuth } from "@/components/providers";
 import { useFarmHydricState } from "@/lib/hooks";
 import { cn } from "@/utils/cn";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
+import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
 import { countMapStatuses, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import {
   HYDRIC_STATUS_CONFIG,
@@ -678,38 +679,39 @@ export default function VisaoGeralPage() {
         />
       </div>
 
-      {/* ── Mapa · Manejo · Consumo ─────────────────────────────────── */}
-      <div className="grid gap-5 xl:grid-cols-[1.35fr_1fr_1fr]">
-        <Card className="overflow-hidden p-0">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
-            <div className="flex items-center gap-2">
-              <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
-              </svg>
-              <p className="whitespace-nowrap text-[13px] font-bold text-graphite-800 dark:text-white">Mapa hídrico</p>
-            </div>
+      {/* ── Mapa (protagonista) · Manejo · Consumo ──────────────────── */}
+      <Card className="overflow-hidden p-0">
+        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
+          <div className="flex items-center gap-2">
+            <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
+            </svg>
+            <p className="whitespace-nowrap text-[13px] font-bold text-graphite-800 dark:text-white">Mapa hídrico</p>
+            <span className="hidden text-[11px] text-graphite-400 sm:inline dark:text-gray-500">
+              · toque no pivô para abrir o manejo
+            </span>
           </div>
-          <div className="relative">
-            <PivotMap
-              pivots={mapPivots}
-              highlightId={selectedPivotId ?? undefined}
-              onSelect={setSelectedPivotId}
-              className="h-[420px] w-full"
-            />
-            <HydricMapLegend counts={mapCounts} />
-          </div>
-        </Card>
+        </div>
+        <div className="relative">
+          <PivotMap
+            pivots={mapPivots}
+            highlightId={selectedPivotId ?? undefined}
+            onSelect={setSelectedPivotId}
+            className="h-[min(62vh,640px)] min-h-[480px] w-full rounded-none border-0"
+          />
+          <HydricMapLegend counts={mapCounts} />
+          {selectedPivot ? (
+            <HydricMapOverlay onClose={() => setSelectedPivotId(null)}>
+              <PivotSideDetail pivot={selectedPivot} />
+            </HydricMapOverlay>
+          ) : null}
+        </div>
+      </Card>
 
+      <div className="grid gap-5 lg:grid-cols-2">
         <SituacaoManejo summary={summary} />
         <ConsumoAgua summary={summary} states={states} />
       </div>
-
-      {/* Selected pivot detail (ao clicar no mapa) */}
-      {selectedPivot && (
-        <div className="grid gap-5 lg:grid-cols-2">
-          <PivotSideDetail pivot={selectedPivot} />
-        </div>
-      )}
 
       {/* ── Recommendations ──────────────────────────────────────────── */}
       {irrigationNeeded.length > 0 && (

@@ -8,6 +8,7 @@ import { useAuth } from "@/components/providers";
 import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
+import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
 import { countMapStatuses, hydricMapStates, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import {
   HYDRIC_STATUS_CONFIG,
@@ -18,7 +19,7 @@ import {
 
 const PivotMap = dynamic(
   () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
-  { ssr: false, loading: () => <div className="flex h-[400px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800"><p className="text-sm text-graphite-400">Carregando mapa...</p></div> }
+  { ssr: false, loading: () => <div className="flex h-[min(78vh,760px)] min-h-[560px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800"><p className="text-sm text-graphite-400">Carregando mapa...</p></div> }
 );
 
 const TABS = [
@@ -204,37 +205,28 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
   const hasCoords = mapPivots.length > 0;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-3">
-      <div className="relative lg:col-span-2">
-        {hasCoords ? (
-          <>
-            <PivotMap
-              pivots={mapPivots}
-              highlightId={selectedId ?? undefined}
-              onSelect={setSelectedId}
-              className="h-[min(72vh,720px)] min-h-[520px] w-full overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-white/[0.06]"
-            />
-            <HydricMapLegend counts={counts} />
-          </>
-        ) : (
-          <EmptyState
-            title="Nenhum pivô com parcela ativa"
-            description="O mapa hídrico mostra somente equipamentos com parcela em manejo. Cadastre ou reative uma parcela para o pivô voltar ao mapa."
+    <div className="relative overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-white/[0.06]">
+      {hasCoords ? (
+        <>
+          <PivotMap
+            pivots={mapPivots}
+            highlightId={selectedId ?? undefined}
+            onSelect={setSelectedId}
+            className="h-[min(78vh,760px)] min-h-[560px] w-full rounded-none border-0"
           />
-        )}
-      </div>
-
-      <div>
-        {selected ? (
-          <PivotDetail state={selected} />
-        ) : (
-          <Card className="flex h-full min-h-[280px] items-center justify-center py-16 text-center">
-            <p className="text-sm leading-relaxed text-graphite-400 dark:text-gray-500">
-              Clique em um pivô no mapa para ver parcela, solo, água e recomendação.
-            </p>
-          </Card>
-        )}
-      </div>
+          <HydricMapLegend counts={counts} />
+          {selected ? (
+            <HydricMapOverlay onClose={() => setSelectedId(null)}>
+              <PivotDetail state={selected} />
+            </HydricMapOverlay>
+          ) : null}
+        </>
+      ) : (
+        <EmptyState
+          title="Nenhum pivô com parcela ativa"
+          description="O mapa hídrico mostra somente equipamentos com parcela em manejo. Cadastre ou reative uma parcela para o pivô voltar ao mapa."
+        />
+      )}
     </div>
   );
 }

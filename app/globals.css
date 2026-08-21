@@ -93,3 +93,21 @@ body {
     transform: none;
   }
 }
+
+/* Mapa hídrico: círculos sólidos clicáveis, tooltip discreto (sem caixa branca permanente). */
+.leaflet-container .pivot-hydric-circle {
+  cursor: pointer;
+}
+.leaflet-tooltip.leaflet-pivot-hover {
+  background: rgb(9 9 11 / 0.92);
+  color: #f4f4f5;
+  border: 1px solid rgb(255 255 255 / 0.12);
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.35);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.leaflet-tooltip-top.leaflet-pivot-hover::before {
+  border-top-color: rgb(9 9 11 / 0.92);
+}

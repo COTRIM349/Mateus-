@@ -23,8 +23,6 @@ import {
   PE_METHOD,
   moisturePctCcForDisplay,
   safetyPctCcForDisplay,
-  MAP_HYDRIC_LEGEND_ORDER,
-  MAP_HYDRIC_STATUS_CONFIG,
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
@@ -855,21 +853,16 @@ export default function BalancoHidricoPage() {
               <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Mapa Operacional</p>
               <span className="text-[11px] text-graphite-400 dark:text-gray-500">· toque em um pivô para selecionar</span>
             </div>
-            <div className="flex items-center gap-3.5">
-              {MAP_HYDRIC_LEGEND_ORDER.map((s) => (
-                <div key={s} className="hidden items-center gap-1.5 sm:flex">
-                  <span className="h-2 w-2 rounded-full ring-2 ring-white dark:ring-graphite-800" style={{ background: MAP_HYDRIC_STATUS_CONFIG[s].color }} />
-                  <span className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">{MAP_HYDRIC_STATUS_CONFIG[s].label}</span>
-                </div>
-              ))}
-            </div>
+            <span className="hidden text-[11px] text-graphite-400 sm:inline dark:text-gray-500">
+              cores sólidas do motor hídrico
+            </span>
           </div>
           <div className="relative">
             <PivotMap
               pivots={mapPivots}
               highlightId={selectedPivotId || undefined}
               onSelect={setSelectedPivotId}
-              className="h-[420px] w-full"
+              className="h-[min(52vh,560px)] min-h-[420px] w-full rounded-none border-0"
             />
             <HydricMapLegend counts={mapCounts} />
           </div>
