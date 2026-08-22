@@ -1299,7 +1299,7 @@ function BalanceTab({
             </div>
           ))}
         </div>
-        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0 dark:divide-white/[0.06]">
+        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 dark:divide-white/[0.06]">
           {[
             { l: "Chuva efetiva", v: `${summary.totalEffPrecipitation.toFixed(0)} mm` },
             { l: "Variação armaz.", v: `${variacao >= 0 ? "+" : ""}${variacao.toFixed(1)} mm`, cls: variacao >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400" },
