@@ -1,18 +1,5 @@
 import { roundTo, clamp } from "@/utils/math";
-import {
-  calculateDynamicCAD,
-  calculateDynamicAFD,
-  adjustDepletionFactor,
-  calculateETc,
-  calculateNetDepth,
-  calculateGrossDepth,
-  calculateVolume,
-  calculateIrrigationTime,
-  determineWaterStatus,
-  type WaterStatus,
-} from "@/modules/water-balance/services";
-
-// ── Types ─────────────────────────────────────────────────────────────────
+import type { WaterStatus } from "@/modules/water-balance/services";
 
 export type OperationalStatus =
   | "irrigar_imediatamente"
@@ -33,13 +20,12 @@ export interface PivotContext {
   pivotName: string;
   area: number;
   flowRate: number;
+  /** Eficiência de aplicação (Ea), nunca CUC. */
   efficiency: number;
   pivotStatus: string;
-  // Soil
   fieldCapacity: number;
   wiltingPoint: number;
   effectiveSoilDepth: number;
-  // Current balance state
   storedWater: number;
   cad: number;
   afd: number;
@@ -50,11 +36,9 @@ export interface PivotContext {
   rootDepth: number;
   depletionFactor: number;
   waterStatus: WaterStatus;
-  // Culture
   cropPhase: string;
   daysAfterPlant: number;
   cycleDays: number;
-  // Operational
   forecastPrecip: number;
   peakHourStart: number;
   peakHourEnd: number;
@@ -102,102 +86,83 @@ export interface SimulationScenario {
   daysUntilStress: number;
 }
 
-// ── Phase Sensitivity ───────────────────────────────────────────────────
-
-const PHASE_SENSITIVITY: Record<string, number> = {
-  "Germinação": 0.7,
-  "Vegetativo": 0.5,
-  "Floração": 1.0,
-  "Enchimento": 0.9,
-  "Maturação": 0.3,
-  "Colheita": 0.1,
-};
+/**
+ * Sensibilidade hídrica operacional por fase. Mantém chaves genéricas e inclui
+ * nomenclaturas usuais de soja e algodão para não reduzir toda fase a 0,5.
+ * O valor apenas ORDENA prioridade; não altera ETc, CAD, AFD ou lâmina.
+ */
+const PHASE_SENSITIVITY: Array<[RegExp, number]> = [
+  [/\bR[1-2]\b|flora[cç][aã]o|florescimento/i, 1.0],
+  [/\bR[3-4]\b|forma[cç][aã]o de vagens|forma[cç][aã]o de ma[cç][aã]s|ma[cç][aã]s/i, 1.0],
+  [/\bR[5-6]\b|enchimento de gr[aã]os|enchimento/i, 0.95],
+  [/bot[aã]o|abotoamento/i, 0.85],
+  [/emerg[eê]ncia|germina[cç][aã]o|\bVE\b/i, 0.75],
+  [/vegetativo|\bV\d+\b/i, 0.6],
+  [/\bR7\b|abertura de capulhos|matura[cç][aã]o/i, 0.35],
+  [/\bR8\b|colheita/i, 0.1],
+];
 
 function getPhaseSensitivity(phase: string): number {
-  for (const [key, value] of Object.entries(PHASE_SENSITIVITY)) {
-    if (phase.toLowerCase().includes(key.toLowerCase())) return value;
+  for (const [pattern, value] of PHASE_SENSITIVITY) {
+    if (pattern.test(phase ?? "")) return value;
   }
   return 0.5;
 }
 
-// ── Priority Score Algorithm ────────────────────────────────────────────
-
-// Weighted scoring: higher = more urgent
-//   Water deficit severity  (40%)
-//   Crop phase sensitivity  (20%)
-//   Productive risk         (20%)
-//   Time urgency            (20%)
-export function calculatePriorityScore(ctx: PivotContext): number {
-  const { storedWater, cad, afd, deficit, etc, cropPhase, waterStatus } = ctx;
-
-  if (cad <= 0) return 0;
-
-  // 1. Deficit severity (0-100)
-  const armRatio = storedWater / cad;
-  const stressThreshold = (cad - afd) / cad;
-  let deficitScore: number;
-  if (armRatio <= 0.1) deficitScore = 100;
-  else if (armRatio <= stressThreshold * 0.5) deficitScore = 85;
-  else if (armRatio <= stressThreshold) deficitScore = 60;
-  else if (armRatio <= stressThreshold + 0.1) deficitScore = 30;
-  else deficitScore = 0;
-
-  // 2. Phase sensitivity (0-100)
-  const sensitivity = getPhaseSensitivity(cropPhase);
-  const phaseScore = sensitivity * 100;
-
-  // 3. Productive risk (0-100)
-  const riskScore = calculateProductiveRisk(ctx);
-
-  // 4. Time urgency: how many days of ETc until stress?
-  const waterAboveStress = storedWater - (cad - afd);
-  const daysToStress = etc > 0 ? Math.max(0, waterAboveStress / etc) : 999;
-  let urgencyScore: number;
-  if (daysToStress <= 0) urgencyScore = 100;
-  else if (daysToStress <= 1) urgencyScore = 80;
-  else if (daysToStress <= 2) urgencyScore = 50;
-  else if (daysToStress <= 3) urgencyScore = 25;
-  else urgencyScore = 0;
-
-  const score =
-    deficitScore * 0.40 +
-    phaseScore * 0.20 +
-    riskScore * 0.20 +
-    urgencyScore * 0.20;
-
-  return roundTo(clamp(score, 0, 100), 1);
+function contextIsOperational(ctx: PivotContext): boolean {
+  return [
+    ctx.area,
+    ctx.flowRate,
+    ctx.efficiency,
+    ctx.storedWater,
+    ctx.cad,
+    ctx.afd,
+    ctx.deficit,
+    ctx.etc,
+    ctx.et0,
+    ctx.kc,
+    ctx.rootDepth,
+  ].every(Number.isFinite)
+    && ctx.area > 0
+    && ctx.flowRate > 0
+    && ctx.efficiency > 0
+    && ctx.efficiency <= 1
+    && ctx.cad > 0
+    && ctx.afd > 0
+    && ctx.storedWater >= 0
+    && ctx.storedWater <= ctx.cad + 0.05
+    // Programação deve vir de um balanço realmente calculado. O caminho legado
+    // preenchia ausência com ETc/ETo=0; isso agora bloqueia a recomendação.
+    && ctx.et0 > 0
+    && ctx.etc > 0;
 }
-
-// ── Productive Risk ─────────────────────────────────────────────────────
 
 export function calculateProductiveRisk(ctx: PivotContext): number {
-  const { storedWater, cad, afd, cropPhase, daysAfterPlant, cycleDays } = ctx;
-
-  if (cad <= 0) return 0;
-
-  const armRatio = storedWater / cad;
-  const sensitivity = getPhaseSensitivity(cropPhase);
-
-  // Base risk from water status
-  let baseRisk: number;
-  if (armRatio <= 0.05) baseRisk = 100;
-  else if (armRatio <= 0.1) baseRisk = 80;
-  else if (armRatio <= 0.2) baseRisk = 60;
-  else if (armRatio <= 0.3) baseRisk = 40;
-  else if (armRatio < (cad - afd) / cad) baseRisk = 20;
-  else baseRisk = 0;
-
-  // Amplify by phase sensitivity
-  const risk = baseRisk * (0.5 + 0.5 * sensitivity);
-
-  // Reduce risk if near end of cycle (maturação/colheita)
-  const cycleProgress = cycleDays > 0 ? daysAfterPlant / cycleDays : 0;
-  const lateSeasonFactor = cycleProgress > 0.85 ? 0.5 : 1.0;
-
-  return roundTo(clamp(risk * lateSeasonFactor, 0, 100), 1);
+  if (ctx.cad <= 0 || ctx.afd <= 0) return 0;
+  const afdRatio = Math.max(ctx.deficit, 0) / ctx.afd;
+  const sensitivity = getPhaseSensitivity(ctx.cropPhase);
+  const stress = clamp(afdRatio, 0, 2) / 2;
+  return roundTo(clamp(stress * sensitivity * 100, 0, 100), 1);
 }
 
-// ── Priority Classification ─────────────────────────────────────────────
+export function estimateDaysToStress(storedWater: number, cad: number, afd: number, dailyEtc: number): number {
+  if (dailyEtc <= 0 || cad <= 0 || afd <= 0) return 999;
+  const safetyArm = Math.max(cad - afd, 0);
+  const reserve = storedWater - safetyArm;
+  if (reserve <= 0) return 0;
+  return roundTo(reserve / dailyEtc, 1);
+}
+
+export function calculatePriorityScore(ctx: PivotContext): number {
+  if (!contextIsOperational(ctx)) return 0;
+  const afdRatio = Math.max(ctx.deficit, 0) / ctx.afd;
+  const deficitScore = clamp(afdRatio * 70, 0, 100);
+  const phaseScore = getPhaseSensitivity(ctx.cropPhase) * 100;
+  const riskScore = calculateProductiveRisk(ctx);
+  const days = estimateDaysToStress(ctx.storedWater, ctx.cad, ctx.afd, ctx.etc);
+  const urgencyScore = days <= 0 ? 100 : days <= 1 ? 80 : days <= 2 ? 55 : days <= 3 ? 30 : 0;
+  return roundTo(clamp(deficitScore * 0.45 + phaseScore * 0.2 + riskScore * 0.2 + urgencyScore * 0.15, 0, 100), 1);
+}
 
 export function classifyPriority(score: number): RecommendationPriority {
   if (score >= 80) return "critica";
@@ -207,119 +172,99 @@ export function classifyPriority(score: number): RecommendationPriority {
   return "sem_necessidade";
 }
 
-// ── Operational Status ──────────────────────────────────────────────────
-
 export function determineOperationalStatus(
   score: number,
-  waterStatus: WaterStatus,
+  _waterStatus: WaterStatus,
   daysToStress: number,
   maintenanceBlocked: boolean,
   forecastPrecip: number,
-  etc: number
+  etc: number,
 ): OperationalStatus {
   if (maintenanceBlocked) return "nao_irrigar";
-
-  // Significant rain expected covers ETc
-  if (forecastPrecip > etc * 0.8) return "monitorar";
-
-  if (score >= 80 || waterStatus === "deficit_critico") return "irrigar_imediatamente";
-  if (score >= 60 || (waterStatus === "deficit" && daysToStress <= 1)) return "irrigar_hoje";
-  if (score >= 40 || (waterStatus === "atencao" && daysToStress <= 2)) return "irrigar_amanha";
+  if (forecastPrecip > 0 && etc > 0 && forecastPrecip >= etc * 0.8) return "monitorar";
+  if (score >= 80 || daysToStress <= 0) return "irrigar_imediatamente";
+  if (score >= 60 || daysToStress <= 1) return "irrigar_hoje";
+  if (score >= 40 || daysToStress <= 2) return "irrigar_amanha";
   if (score >= 20) return "monitorar";
   return "nao_irrigar";
 }
-
-// ── Recommended Start Time ──────────────────────────────────────────────
 
 export function calculateRecommendedStart(
   currentHour: number,
   peakStart: number,
   peakEnd: number,
   irrigationTimeH: number,
-  isUrgent: boolean
+  isUrgent: boolean,
 ): { start: string; peakRestricted: boolean } {
-  // If urgent and not in peak, start now
-  if (isUrgent && (currentHour < peakStart || currentHour >= peakEnd)) {
-    return { start: "Imediatamente", peakRestricted: false };
-  }
-
-  // If currently in peak hours
+  if (isUrgent && (currentHour < peakStart || currentHour >= peakEnd)) return { start: "Imediatamente", peakRestricted: false };
   if (currentHour >= peakStart && currentHour < peakEnd) {
-    if (isUrgent) {
-      return { start: "Imediatamente (atenção: horário de ponta)", peakRestricted: true };
-    }
+    if (isUrgent) return { start: "Imediatamente (atenção: horário de ponta)", peakRestricted: true };
     return { start: `Após ${peakEnd}:00`, peakRestricted: true };
   }
-
-  // Can we finish before peak?
   const hoursUntilPeak = peakStart - currentHour;
-  if (hoursUntilPeak > 0 && irrigationTimeH > hoursUntilPeak) {
-    // Won't finish before peak - start after peak instead
-    if (!isUrgent) {
-      return { start: `Após ${peakEnd}:00`, peakRestricted: true };
-    }
-  }
-
-  // Normal start
-  if (currentHour < 6) return { start: "06:00", peakRestricted: false };
+  if (hoursUntilPeak > 0 && irrigationTimeH > hoursUntilPeak && !isUrgent) return { start: `Após ${peakEnd}:00`, peakRestricted: true };
   return { start: "Agora", peakRestricted: false };
 }
 
-// ── Days Until Stress ───────────────────────────────────────────────────
-
-export function estimateDaysToStress(
-  storedWater: number,
-  cad: number,
-  afd: number,
-  dailyEtc: number
-): number {
-  if (dailyEtc <= 0) return 999;
-  const stressThreshold = cad - afd;
-  const waterAboveStress = storedWater - stressThreshold;
-  if (waterAboveStress <= 0) return 0;
-  return roundTo(waterAboveStress / dailyEtc, 1);
+function baseRecommendation(ctx: PivotContext, reason: string): Recommendation {
+  return {
+    pivotId: ctx.pivotId,
+    pivotName: ctx.pivotName,
+    shouldIrrigate: false,
+    operationalStatus: "monitorar",
+    priority: "sem_necessidade",
+    priorityScore: 0,
+    productiveRisk: 0,
+    netDepth: 0,
+    grossDepth: 0,
+    volumeM3: 0,
+    irrigationTimeH: 0,
+    currentArm: Number.isFinite(ctx.storedWater) ? roundTo(ctx.storedWater, 1) : 0,
+    currentCad: Number.isFinite(ctx.cad) ? roundTo(ctx.cad, 1) : 0,
+    currentAfd: Number.isFinite(ctx.afd) ? roundTo(ctx.afd, 1) : 0,
+    currentDeficit: Number.isFinite(ctx.deficit) ? roundTo(ctx.deficit, 1) : 0,
+    currentEtc: Number.isFinite(ctx.etc) ? roundTo(ctx.etc, 1) : 0,
+    currentKc: Number.isFinite(ctx.kc) ? roundTo(ctx.kc, 2) : 0,
+    rootDepth: Number.isFinite(ctx.rootDepth) ? roundTo(ctx.rootDepth, 2) : 0,
+    cropPhase: ctx.cropPhase,
+    depletionFactor: Number.isFinite(ctx.depletionFactor) ? ctx.depletionFactor : 0,
+    peakRestricted: false,
+    recommendedStart: "Aguardar dados",
+    reason,
+    observations: "Recomendação operacional bloqueada até existir balanço hídrico válido.",
+  };
 }
 
-// ── Main Recommendation Engine ──────────────────────────────────────────
-
 export function generateRecommendation(ctx: PivotContext): Recommendation {
+  if (!contextIsOperational(ctx)) {
+    return baseRecommendation(ctx, "Dados insuficientes para recomendação: é necessário balanço hídrico válido, ETo/ETc calculadas e eficiência de aplicação cadastrada.");
+  }
+
   const score = calculatePriorityScore(ctx);
   const priority = classifyPriority(score);
   const risk = calculateProductiveRisk(ctx);
   const daysToStress = estimateDaysToStress(ctx.storedWater, ctx.cad, ctx.afd, ctx.etc);
+  const opStatus = determineOperationalStatus(score, ctx.waterStatus, daysToStress, ctx.maintenanceBlocked, ctx.forecastPrecip, ctx.etc);
+  const shouldIrrigate = opStatus === "irrigar_imediatamente" || opStatus === "irrigar_hoje" || opStatus === "irrigar_amanha";
 
-  const opStatus = determineOperationalStatus(
-    score,
-    ctx.waterStatus,
-    daysToStress,
-    ctx.maintenanceBlocked,
-    ctx.forecastPrecip,
-    ctx.etc
-  );
-
-  const shouldIrrigate =
-    opStatus === "irrigar_imediatamente" ||
-    opStatus === "irrigar_hoje" ||
-    opStatus === "irrigar_amanha";
-
-  // Calculate irrigation amounts
-  const netDepth = shouldIrrigate ? calculateNetDepth(ctx.cad, ctx.storedWater) : 0;
-  const grossDepth = shouldIrrigate ? calculateGrossDepth(netDepth, ctx.efficiency) : 0;
-  const volume = shouldIrrigate ? calculateVolume(grossDepth, ctx.area) : 0;
-  const time = shouldIrrigate ? calculateIrrigationTime(volume, ctx.flowRate) : 0;
-
+  const netDepth = shouldIrrigate ? roundTo(Math.max(ctx.cad - ctx.storedWater, 0), 2) : 0;
+  const grossDepth = shouldIrrigate ? roundTo(netDepth / ctx.efficiency, 2) : 0;
+  const volume = shouldIrrigate ? roundTo(grossDepth * ctx.area * 10, 0) : 0;
+  const time = shouldIrrigate && ctx.flowRate > 0 ? roundTo(volume / ctx.flowRate, 1) : 0;
   const isUrgent = opStatus === "irrigar_imediatamente";
-  const { start, peakRestricted } = calculateRecommendedStart(
-    ctx.currentHour,
-    ctx.peakHourStart,
-    ctx.peakHourEnd,
-    time,
-    isUrgent
-  );
+  const { start, peakRestricted } = calculateRecommendedStart(ctx.currentHour, ctx.peakHourStart, ctx.peakHourEnd, time, isUrgent);
 
-  // Build reason
-  const reason = buildReason(ctx, score, daysToStress, opStatus);
-  const observations = buildObservations(ctx, peakRestricted, daysToStress);
+  const afdPct = ctx.afd > 0 ? Math.round((ctx.deficit / ctx.afd) * 100) : 0;
+  let reason = `Déficit em ${afdPct}% da AFD na fase ${ctx.cropPhase}.`;
+  if (opStatus === "irrigar_imediatamente" || opStatus === "irrigar_hoje") reason += ` Recomenda-se ${grossDepth.toFixed(1)} mm brutos.`;
+  else if (opStatus === "irrigar_amanha") reason += " Programar irrigação e acompanhar a evolução do ARM.";
+  else if (ctx.forecastPrecip > 0) reason += ` Chuva prevista: ${ctx.forecastPrecip.toFixed(1)} mm; monitorar antes de aplicar.`;
+  else reason += " Sem necessidade imediata; manter monitoramento.";
+
+  const notes: string[] = [];
+  if (peakRestricted) notes.push(`Horário de ponta: ${ctx.peakHourStart}h–${ctx.peakHourEnd}h`);
+  if (getPhaseSensitivity(ctx.cropPhase) >= 0.9) notes.push(`Fase ${ctx.cropPhase} com alta sensibilidade hídrica`);
+  if (daysToStress <= 3 && daysToStress > 0) notes.push(`Limite de estresse em ~${daysToStress.toFixed(1)} dia(s)`);
 
   return {
     pivotId: ctx.pivotId,
@@ -331,8 +276,8 @@ export function generateRecommendation(ctx: PivotContext): Recommendation {
     productiveRisk: risk,
     netDepth: roundTo(netDepth, 1),
     grossDepth: roundTo(grossDepth, 1),
-    volumeM3: roundTo(volume, 0),
-    irrigationTimeH: roundTo(time, 1),
+    volumeM3: volume,
+    irrigationTimeH: time,
     currentArm: roundTo(ctx.storedWater, 1),
     currentCad: roundTo(ctx.cad, 1),
     currentAfd: roundTo(ctx.afd, 1),
@@ -345,140 +290,40 @@ export function generateRecommendation(ctx: PivotContext): Recommendation {
     peakRestricted,
     recommendedStart: start,
     reason,
-    observations,
+    observations: notes.join(". "),
   };
 }
 
-// ── Reason Builder ──────────────────────────────────────────────────────
-
-function buildReason(
-  ctx: PivotContext,
-  score: number,
-  daysToStress: number,
-  status: OperationalStatus
-): string {
-  const armPct = ctx.cad > 0 ? ((ctx.storedWater / ctx.cad) * 100).toFixed(0) : "0";
-
-  switch (status) {
-    case "irrigar_imediatamente":
-      return `ARM em ${armPct}% do CAD. ${ctx.waterStatus === "deficit_critico" ? "Déficit crítico" : "Déficit severo"} na fase ${ctx.cropPhase}. Risco produtivo elevado.`;
-    case "irrigar_hoje":
-      return `ARM em ${armPct}% do CAD. Estresse hídrico em ~${daysToStress.toFixed(0)} dia(s). Fase ${ctx.cropPhase} requer atenção.`;
-    case "irrigar_amanha":
-      return `ARM em ${armPct}% do CAD. Estresse previsto em ${daysToStress.toFixed(0)} dias. Irrigação preventiva recomendada.`;
-    case "monitorar":
-      if (ctx.forecastPrecip > 0) {
-        return `ARM em ${armPct}% do CAD. Chuva prevista de ${ctx.forecastPrecip.toFixed(0)} mm pode suprir a demanda.`;
-      }
-      return `ARM em ${armPct}% do CAD. Situação confortável, monitorar evolução.`;
-    case "nao_irrigar":
-      if (ctx.maintenanceBlocked) return "Pivô em manutenção. Irrigação bloqueada.";
-      return `ARM em ${armPct}% do CAD. Sem necessidade de irrigação.`;
-  }
+function waterStatusFromProjection(arm: number, cad: number, afd: number): WaterStatus {
+  if (cad <= 0 || afd <= 0) return "ideal";
+  const deficit = cad - arm;
+  const ratio = deficit / afd;
+  if (ratio >= 1.4) return "deficit_critico";
+  if (ratio >= 1) return "deficit";
+  if (ratio >= 0.7) return "atencao";
+  if (ratio >= 0.3) return "adequado";
+  return "ideal";
 }
-
-function buildObservations(
-  ctx: PivotContext,
-  peakRestricted: boolean,
-  daysToStress: number
-): string {
-  const notes: string[] = [];
-
-  if (peakRestricted) {
-    notes.push(`Horário de ponta: ${ctx.peakHourStart}h–${ctx.peakHourEnd}h`);
-  }
-  if (ctx.maintenanceBlocked) {
-    notes.push("Equipamento em manutenção");
-  }
-  if (ctx.forecastPrecip > 0) {
-    notes.push(`Chuva prevista: ${ctx.forecastPrecip.toFixed(0)} mm`);
-  }
-  if (daysToStress <= 3 && daysToStress > 0) {
-    notes.push(`Estresse hídrico em ~${daysToStress.toFixed(0)} dia(s)`);
-  }
-
-  const sensitivity = getPhaseSensitivity(ctx.cropPhase);
-  if (sensitivity >= 0.9) {
-    notes.push(`Fase ${ctx.cropPhase}: alta sensibilidade ao déficit`);
-  }
-
-  return notes.join(". ");
-}
-
-// ── Simulation Engine ───────────────────────────────────────────────────
 
 export function simulateScenarios(ctx: PivotContext): SimulationScenario[] {
-  const scenarios: SimulationScenario[] = [];
-
-  const baseDepth = calculateNetDepth(ctx.cad, ctx.storedWater);
-
-  // Scenario 1: Irrigate today with full depth
-  scenarios.push(buildScenario(ctx, "Irrigar hoje (lâmina completa)", "Reposição total até capacidade de campo", baseDepth));
-
-  // Scenario 2: Irrigate today with 75%
-  scenarios.push(buildScenario(ctx, "Irrigar hoje (75%)", "Lâmina reduzida para economia", baseDepth * 0.75));
-
-  // Scenario 3: Irrigate today with 50% (déficit controlado)
-  scenarios.push(buildScenario(ctx, "Déficit controlado (50%)", "Lâmina mínima, déficit parcial aceito", baseDepth * 0.5));
-
-  // Scenario 4: Irrigate tomorrow (simulate 1 day without)
-  const armAfter1Day = Math.max(0, ctx.storedWater - ctx.etc);
-  const cadTomorrow = ctx.cad;
-  const depthTomorrow = Math.max(0, cadTomorrow - armAfter1Day);
-  scenarios.push(buildScenario(
-    { ...ctx, storedWater: armAfter1Day },
-    "Irrigar amanhã",
-    "Adiar 1 dia, irrigar amanhã com reposição total",
-    depthTomorrow
-  ));
-
-  // Scenario 5: Don't irrigate (project 3 days)
-  let projectedArm = ctx.storedWater;
-  for (let d = 0; d < 3; d++) {
-    projectedArm = Math.max(0, projectedArm - ctx.etc);
-  }
-  scenarios.push(buildScenario(
-    { ...ctx, storedWater: projectedArm },
-    "Não irrigar (3 dias)",
-    "Projeção de 3 dias sem irrigação",
-    0
-  ));
-
-  // Scenario 6: Increase depth (120%)
-  scenarios.push(buildScenario(ctx, "Lâmina extra (120%)", "Lâmina aumentada para reserva", baseDepth * 1.2));
-
-  return scenarios;
+  if (!contextIsOperational(ctx)) return [];
+  const baseDepth = Math.max(ctx.cad - ctx.storedWater, 0);
+  return [
+    buildScenario(ctx, "Irrigar hoje (lâmina completa)", "Reposição até a CAD", baseDepth),
+    buildScenario(ctx, "Irrigar hoje (75%)", "Reposição parcial de 75%", baseDepth * 0.75),
+    buildScenario(ctx, "Déficit controlado (50%)", "Cenário exploratório; não é recomendação automática", baseDepth * 0.5),
+    buildScenario({ ...ctx, storedWater: Math.max(0, ctx.storedWater - ctx.etc) }, "Irrigar amanhã", "Projeção de um dia adicional de consumo", Math.max(0, ctx.cad - Math.max(0, ctx.storedWater - ctx.etc))),
+    buildScenario({ ...ctx, storedWater: Math.max(0, ctx.storedWater - 3 * ctx.etc) }, "Não irrigar (3 dias)", "Projeção de três dias sem reposição", 0),
+  ];
 }
 
-function buildScenario(
-  ctx: PivotContext,
-  name: string,
-  description: string,
-  irrigationDepth: number
-): SimulationScenario {
-  const projectedArm = Math.min(
-    ctx.cad,
-    Math.max(0, ctx.storedWater + irrigationDepth - ctx.etc)
-  );
-
-  const pAdj = adjustDepletionFactor(ctx.depletionFactor, ctx.etc);
-  const afd = calculateDynamicAFD(ctx.cad, pAdj);
-  const projectedStatus = determineWaterStatus(projectedArm, ctx.cad, afd);
-  const stressThreshold = ctx.cad - afd;
-  const projectedDeficit = projectedArm < stressThreshold
-    ? roundTo(stressThreshold - projectedArm, 1)
-    : 0;
-
-  const daysUntilStress = ctx.etc > 0
-    ? Math.max(0, roundTo((projectedArm - stressThreshold) / ctx.etc, 1))
-    : 999;
-
-  const projectedRisk = calculateProductiveRisk({
-    ...ctx,
-    storedWater: projectedArm,
-    deficit: projectedDeficit,
-  });
-
+function buildScenario(ctx: PivotContext, name: string, description: string, irrigationDepth: number): SimulationScenario {
+  const effectiveIrrigation = Math.max(irrigationDepth, 0) * ctx.efficiency;
+  const projectedArm = clamp(ctx.storedWater + effectiveIrrigation - ctx.etc, 0, ctx.cad);
+  const projectedDeficit = roundTo(Math.max(ctx.cad - projectedArm, 0), 1);
+  const projectedStatus = waterStatusFromProjection(projectedArm, ctx.cad, ctx.afd);
+  const daysUntilStress = estimateDaysToStress(projectedArm, ctx.cad, ctx.afd, ctx.etc);
+  const projectedRisk = calculateProductiveRisk({ ...ctx, storedWater: projectedArm, deficit: projectedDeficit });
   return {
     name,
     description,
@@ -487,57 +332,31 @@ function buildScenario(
     projectedCad: roundTo(ctx.cad, 1),
     projectedStatus,
     projectedDeficit,
-    projectedRisk: roundTo(projectedRisk, 1),
-    daysUntilStress: Math.max(0, roundTo(daysUntilStress, 0)),
+    projectedRisk,
+    daysUntilStress: daysUntilStress === 999 ? 999 : Math.max(0, roundTo(daysUntilStress, 1)),
   };
 }
-
-// ── Ranking ─────────────────────────────────────────────────────────────
 
 export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
   return [...recs].sort((a, b) => b.priorityScore - a.priorityScore);
 }
 
-// ── Status Config ───────────────────────────────────────────────────────
-
-export const OPERATIONAL_STATUS_CONFIG: Record<
-  OperationalStatus,
-  { label: string; bgClass: string; icon: string }
-> = {
-  irrigar_imediatamente: {
-    label: "Irrigar Imediatamente",
-    bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
-    icon: "!!",
-  },
-  irrigar_hoje: {
-    label: "Irrigar Hoje",
-    bgClass: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
-    icon: "!",
-  },
-  irrigar_amanha: {
-    label: "Irrigar Amanhã",
-    bgClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400",
-    icon: "~",
-  },
-  monitorar: {
-    label: "Monitorar",
-    bgClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
-    icon: "?",
-  },
-  nao_irrigar: {
-    label: "Não Irrigar",
-    bgClass: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    icon: "✓",
-  },
+/**
+ * Mantém os valores internos legados para compatibilidade com o banco/UI,
+ * mas apresenta os quatro estados operacionais definidos para o produto.
+ */
+export const OPERATIONAL_STATUS_CONFIG: Record<OperationalStatus, { label: string; bgClass: string; icon: string }> = {
+  irrigar_imediatamente: { label: "IRRIGAR AGORA", bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: "!!" },
+  irrigar_hoje: { label: "IRRIGAR AGORA", bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: "!" },
+  irrigar_amanha: { label: "PROGRAMAR", bgClass: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400", icon: "~" },
+  monitorar: { label: "MONITORAR", bgClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400", icon: "?" },
+  nao_irrigar: { label: "SEM NECESSIDADE", bgClass: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400", icon: "✓" },
 };
 
-export const PRIORITY_CONFIG: Record<
-  RecommendationPriority,
-  { label: string; bgClass: string }
-> = {
+export const PRIORITY_CONFIG: Record<RecommendationPriority, { label: string; bgClass: string }> = {
   critica: { label: "Crítica", bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
-  alta:    { label: "Alta",    bgClass: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
-  media:   { label: "Média",   bgClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" },
-  baixa:   { label: "Baixa",   bgClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  alta: { label: "Alta", bgClass: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
+  media: { label: "Média", bgClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" },
+  baixa: { label: "Baixa", bgClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
   sem_necessidade: { label: "Sem Necessidade", bgClass: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
 };
