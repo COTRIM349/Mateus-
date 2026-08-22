@@ -37,7 +37,7 @@ const ICON = {
 } as const;
 
 // Menu só com telas que já operam. Rotas vazias (água, alertas, sensores,
-// reservatórios, Cotrim AI, OS, chuva manual) ficam fora até existirem.
+// Cotrim AI, OS, chuva manual) ficam fora até existirem.
 
 export const topLevelItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: ICON.home },
@@ -54,6 +54,7 @@ export const navGroups: NavGroup[] = [
       { label: "Pivôs (Equipamentos)", href: "/pivos", icon: ICON.pivot },
       { label: "Solos", href: "/solos", icon: ICON.soil },
       { label: "Culturas", href: "/culturas", icon: ICON.crop },
+      { label: "Reservatórios", href: "/reservatorios", icon: ICON.reservoir },
       { label: "Parcelas", href: "/vinculacao", icon: ICON.parcel },
     ],
   },
