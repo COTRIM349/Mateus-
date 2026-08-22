@@ -10,10 +10,14 @@ ALTER TABLE public.pivots
   ADD CONSTRAINT pivots_application_efficiency_check
   CHECK (application_efficiency IS NULL OR (application_efficiency > 0 AND application_efficiency <= 1));
 
+-- Migra apenas valores fisicamente válidos. Legado 0/nulo permanece NULL para
+-- que o motor bloqueie a recomendação até a ficha técnica ser corrigida.
 UPDATE public.pivots
    SET application_efficiency = efficiency
  WHERE application_efficiency IS NULL
-   AND efficiency IS NOT NULL;
+   AND efficiency IS NOT NULL
+   AND efficiency > 0
+   AND efficiency <= 1;
 
 COMMENT ON COLUMN public.pivots.application_efficiency IS
   'Eficiência de aplicação Ea (0-1). Usada para converter lâmina bruta em irrigação efetiva. Não confundir com CUC.';
