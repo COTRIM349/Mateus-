@@ -23,10 +23,11 @@ Esta versao trabalha **exclusivamente com dados reais** (Supabase); sem dados fi
 - Fonte unica de calculo: Dashboard Operacional, Mapa Hidrico e Tela de Balanco
 - **Auditoria tecnica aprovada** (bloqueantes corrigidos: densidade na ADT; clima ausente → cinza)
 
-### ⏳ Fase 4 — Modelo Operacional (escopo definido — nao implementada nesta versao)
-- Conceito de safra ativa por fazenda
-- Area plantada por vinculo (pode diferir da area total do pivo; alimenta o volume no motor)
-- Tela consolidada do modelo operacional da safra ativa, com indicador de "modelo completo"
+### 🚧 Fase 4 — Modelo Operacional (em andamento)
+- [x] Conceito de safra operacional: safra ativa mais recente da fazenda, com alerta para ambiguidades
+- [x] Area plantada por vinculo (pode diferir da area total do pivo)
+- [x] Tela consolidada da safra ativa, com cobertura, pendencias e indicador de "modelo completo"
+- [ ] Propagar o escopo da safra e a area manejada para todos os motores operacionais
 
 ### ⏳ Fase 5 — Programacao da Irrigacao (planejada)
 - Recomendacao diaria
@@ -45,8 +46,8 @@ Esta versao trabalha **exclusivamente com dados reais** (Supabase); sem dados fi
 - Custo por m³
 - Rateio mensal e por safra
 
-> **Encerramento desta versao:** a plataforma fecha na **Fase 3 validada**. Proximo passo antes de
-> avancar para a Fase 4: **testar a plataforma com dados reais**.
+> **Status desta versao:** a Fase 3 esta validada e a Fase 4 foi iniciada pela consolidacao
+> do modelo operacional. A validacao com dados reais continua obrigatoria antes da Fase 5.
 
 ---
 

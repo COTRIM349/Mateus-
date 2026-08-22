@@ -18,6 +18,7 @@ describe("sidebar compacta", () => {
     expect(nav).toContain('href: "/historico"');
     expect(nav).toContain('href: "/relatorios"');
     expect(nav).toContain('href: "/balanco-hidrico"');
+    expect(nav).toContain('href: "/operacao/modelo"');
     expect(nav).not.toContain("Gestão de Ativos");
     expect(nav).not.toContain("Operação e Manejo");
     expect(nav).not.toContain('label: "Home"');

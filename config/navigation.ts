@@ -55,6 +55,7 @@ export const navGroups: NavGroup[] = [
       { label: "Solos", href: "/solos", icon: ICON.soil },
       { label: "Culturas", href: "/culturas", icon: ICON.crop },
       { label: "Parcelas", href: "/vinculacao", icon: ICON.parcel },
+      { label: "Modelo Operacional", href: "/operacao/modelo", icon: ICON.decision },
     ],
   },
   {
