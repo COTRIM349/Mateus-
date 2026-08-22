@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -29,26 +28,11 @@ import {
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
-import { useFarmHydricState } from "@/lib/hooks";
-import { countMapStatuses, hydricDemandSummary, hydricMapDates, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
-import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
-
-const PivotMap = dynamic(
-  () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full min-h-[360px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800">
-        <p className="text-sm text-graphite-400">Carregando mapa...</p>
-      </div>
-    ),
-  },
-);
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -196,8 +180,10 @@ interface StoredBalance {
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const TABS = [
-  { id: "balanco", label: "Balanço Diário" },
-  { id: "lancamento", label: "Lançamento Irrigação" },
+  { id: "grafico", label: "Gráfico" },
+  { id: "dados", label: "Dados" },
+  { id: "decisao", label: "Decisão" },
+  { id: "lancamento", label: "Lançamento" },
 ];
 
 // ── Main Page ─────────────────────────────────────────────────────────────
@@ -206,7 +192,7 @@ export default function BalancoHidricoPage() {
   const { activeFarmId, farms } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState("balanco");
+  const [activeTab, setActiveTab] = useState<"grafico" | "dados" | "decisao" | "lancamento">("grafico");
   const [pivots, setPivots] = useState<Pivot[]>([]);
   const [selectedPivotId, setSelectedPivotId] = useState("");
   const [assignment, setAssignment] = useState<CropAssignment | null>(null);
@@ -229,16 +215,6 @@ export default function BalancoHidricoPage() {
   const [lancNotes, setLancNotes] = useState("");
   const [lancSaving, setLancSaving] = useState(false);
   const [lancMsg, setLancMsg] = useState("");
-
-  // Estado hídrico atual de todos os pivôs — apenas para colorir o mapa
-  // seletor. Não altera o cálculo detalhado (que continua sob demanda).
-  const { states: hydricStates } = useFarmHydricState();
-  const mapDates = useMemo(() => hydricMapDates(hydricStates), [hydricStates]);
-  const [mapDate, setMapDate] = useState<string | null>(null);
-  const activeMapDate = mapDate ?? mapDates[mapDates.length - 1] ?? null;
-  const mapPivots = useMemo(() => toHydricMapMarkers(hydricStates, activeMapDate), [hydricStates, activeMapDate]);
-  const mapCounts = countMapStatuses(hydricStates, activeMapDate);
-  const mapDemand = hydricDemandSummary(hydricStates, activeMapDate);
 
   // Load pivots
   useEffect(() => {
@@ -836,52 +812,12 @@ export default function BalancoHidricoPage() {
   return (
     <div>
       <PageHeader
-        titulo="Centro de Decisão Hídrica"
-        descricao="Motor hídrico — exige dados climáticos aprovados antes de recalcular"
+        titulo="Balanço Hídrico"
+        descricao="Gráfico, dados e decisão em abas — o mapa da fazenda fica na Visão Geral"
       />
 
-      <Card className="mb-4 border-amber-200 bg-amber-50 p-3.5 dark:border-amber-800 dark:bg-amber-900/20">
-        <p className="text-sm font-semibold text-amber-800 dark:text-amber-300">
-          Segurança ativa: estimativas climáticas não validadas não entram automaticamente no balanço hídrico.
-        </p>
-      </Card>
-
-      {/* Mapa seletor de pivô (por status hídrico) */}
-      {mapPivots.length > 0 && (
-        <Card className="mb-4 overflow-hidden p-0">
-          <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
-            <div className="flex items-center gap-2">
-              <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
-              </svg>
-              <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Mapa Operacional</p>
-              <span className="text-[11px] text-graphite-400 dark:text-gray-500">· toque em um pivô para selecionar</span>
-            </div>
-            <span className="hidden text-[11px] text-graphite-400 sm:inline dark:text-gray-500">
-              anel do pivô · 4 cores do motor
-            </span>
-          </div>
-          <div className="relative">
-            <PivotMap
-              pivots={mapPivots}
-              highlightId={selectedPivotId || undefined}
-              onSelect={setSelectedPivotId}
-              className="h-[min(52vh,560px)] min-h-[420px] w-full rounded-none border-0"
-            />
-          </div>
-          <HydricMapLegend
-            counts={mapCounts}
-            dates={mapDates}
-            selectedDate={activeMapDate}
-            onSelectDate={setMapDate}
-            demand={mapDemand}
-          />
-        </Card>
-      )}
-
-      {/* Pivot / Date selectors */}
-      <Card className="mb-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+      <Card className="mb-4 p-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Select
             label="Pivô"
             value={selectedPivotId}
@@ -889,13 +825,13 @@ export default function BalancoHidricoPage() {
             options={pivots.map((p) => ({ value: p.id, label: p.name }))}
           />
           <Input
-            label="Data Início"
+            label="Data início"
             type="date"
             value={dateStart}
             onChange={(e) => setDateStart(e.target.value)}
           />
           <Input
-            label="Data Fim"
+            label="Data fim"
             type="date"
             value={dateEnd}
             onChange={(e) => setDateEnd(e.target.value)}
@@ -905,12 +841,11 @@ export default function BalancoHidricoPage() {
               onClick={runCalculation}
               disabled={!selectedPivotId || !assignment || calculating}
             >
-              {calculating ? "Calculando..." : "Calcular Balanço"}
+              {calculating ? "Calculando..." : "Calcular"}
             </Button>
           </div>
         </div>
-        {/* presets de período */}
-        <div className="mt-3 flex flex-wrap items-center gap-1.5">
+        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
           <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
           {([7, 15, 30, 60, "safra"] as const).map((p) => (
             <button
@@ -923,29 +858,35 @@ export default function BalancoHidricoPage() {
               {p === "safra" ? "Safra" : `${p}d`}
             </button>
           ))}
+          {assignment && culture && soil && (
+            <span className="ml-2 text-[11px] text-graphite-400 dark:text-gray-500">
+              {culture.name} · {soil.name} · plantio {assignment.planting_date}
+            </span>
+          )}
         </div>
-        {assignment && culture && soil && (
-          <div className="mt-3 flex flex-wrap gap-4 text-xs text-graphite-400 dark:text-gray-500">
-            <span>Cultura: <strong className="text-graphite-900 dark:text-white">{culture.name}</strong></span>
-            <span>Solo: <strong className="text-graphite-900 dark:text-white">{soil.name}</strong></span>
-            <span>Plantio: <strong className="text-graphite-900 dark:text-white">{assignment.planting_date}</strong></span>
-            <span>Ciclo: <strong className="text-graphite-900 dark:text-white">{culture.cycle_days} dias</strong></span>
-            <span>Eficiência: <strong className="text-graphite-900 dark:text-white">{(pivots.find((p) => p.id === selectedPivotId)?.efficiency ?? 0) * 100}%</strong></span>
-          </div>
-        )}
         {!assignment && selectedPivotId && (
-          <p className="mt-3 rounded-xl bg-amber-50 p-3.5 text-xs text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-            Nenhuma associação ativa (pivô↔safra↔cultura↔solo) encontrada para este pivô.
+          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
+            Nenhuma parcela ativa encontrada para este pivô.
           </p>
         )}
-        {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3.5 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
+        {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
       </Card>
 
-      <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
+      <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
 
-      <div className="mt-5">
-        {activeTab === "balanco" && (
-          <div className="animate-in"><BalanceTab rows={balanceRows} summary={summary} loading={loading || calculating} head={centroHead} weatherByDate={weatherByDate} sensoryByDate={sensoryByDate} /></div>
+      <div className="mt-4">
+        {(activeTab === "grafico" || activeTab === "dados" || activeTab === "decisao") && (
+          <div className="animate-in">
+            <BalanceTab
+              panel={activeTab}
+              rows={balanceRows}
+              summary={summary}
+              loading={loading || calculating}
+              head={centroHead}
+              weatherByDate={weatherByDate}
+              sensoryByDate={sensoryByDate}
+            />
+          </div>
         )}
         {activeTab === "lancamento" && (
           <div className="animate-in">          <LancamentoTab
@@ -1028,6 +969,7 @@ const VERDICT: Record<WaterStatus, { label: string; color: string; irrigar: bool
 };
 
 function BalanceTab({
+  panel,
   rows,
   summary,
   loading,
@@ -1035,6 +977,7 @@ function BalanceTab({
   weatherByDate,
   sensoryByDate,
 }: {
+  panel: "grafico" | "dados" | "decisao";
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
@@ -1097,7 +1040,7 @@ function BalanceTab({
         <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-50 text-brand-600 dark:bg-brand-900/20 dark:text-brand-400">
           <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z" /></svg>
         </div>
-        <p className="text-graphite-500 dark:text-gray-400">Selecione um pivô e clique em <strong className="text-graphite-800 dark:text-white">Calcular Balanço</strong> para abrir o Centro de Decisão Hídrica.</p>
+        <p className="text-graphite-500 dark:text-gray-400">Selecione um pivô e clique em <strong className="text-graphite-800 dark:text-white">Calcular</strong> para abrir o gráfico, os dados do balanço e a decisão.</p>
       </Card>
     );
   }
@@ -1169,13 +1112,124 @@ function BalanceTab({
     );
   }
 
+  if (panel === "grafico") {
+    return (
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 dark:border-white/[0.06]">
+          <div>
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">
+              {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
+            </p>
+            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
+              {pctCc.toFixed(0)}% da CC · ARM {arm.toFixed(1)} mm · {classificacao.label}
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-bold" style={{ color: verdict.color, background: `${verdict.color}18` }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: verdict.color }} />
+            {verdict.label}
+          </span>
+        </div>
+        <div className="flex min-h-[min(72vh,calc(100vh-14rem))] flex-col lg:flex-row">
+          <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />
+          <div className="min-w-0 flex-1 p-3 sm:p-4">
+            <ManejoChart rows={manejoRows} visible={visible} />
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  if (panel === "decisao") {
+    return (
+      <div className="grid items-start gap-5 lg:grid-cols-3">
+        {/* Recomendação de hoje */}
+        <Card className="overflow-hidden p-0">
+          <div className="bg-gradient-to-br from-forest-800 to-forest-900 p-4 text-white">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-brand-300">Recomendação de hoje</p>
+            <p className="mt-1.5 flex items-center gap-2 text-[20px] font-extrabold" style={{ color: "#eafaf1" }}>
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: verdict.color }} />{verdict.label}
+            </p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-brand-100/90">{verdict.texto(`${laminaBruta.toFixed(1)} mm`)}</p>
+          </div>
+          <div className="p-4">
+            {verdict.irrigar ? (
+              <div className="space-y-0">
+                {[
+                  { l: "Lâmina líquida", v: `${(last?.netDepth ?? 0).toFixed(1)} mm` },
+                  { l: "Lâmina bruta", v: `${laminaBruta.toFixed(1)} mm` },
+                  { l: "Eficiência", v: `${efPct.toFixed(0)}%` },
+                  { l: "Volume necessário", v: `${(last?.volumeNeeded ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³` },
+                  { l: "Tempo estimado", v: fmtTempoH(last?.irrigationTime ?? 0) },
+                ].map((r) => (
+                  <div key={r.l} className="flex items-center justify-between border-b border-dashed border-gray-100 py-1.5 text-[12.5px] last:border-0 dark:border-white/[0.06]">
+                    <span className="text-graphite-500 dark:text-gray-400">{r.l}</span>
+                    <span className="font-bold text-graphite-800 dark:text-white">{r.v}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[12.5px] text-graphite-500 dark:text-gray-400">Sem necessidade de irrigação para hoje. Acompanhar a evolução da umidade.</p>
+            )}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
+            {arm < safetyMm
+              ? "O ARM está abaixo da umidade de segurança (CAD − AFD) e a demanda (ETc) supera as entradas recentes."
+              : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {[
+              { l: "ARM atual", v: `${arm.toFixed(1)} mm` },
+              { l: "CAD / AFD", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
+              { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` },
+              { l: "% da CC", v: `${pctCc.toFixed(0)}%` },
+              { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
+              { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
+            ].map((f) => (
+              <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]">
+                <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{f.l}</p>
+                <p className="mt-1 text-[14px] font-extrabold tabular-nums" style={{ color: f.c ?? undefined }}>{f.v}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+
+        <Card className="p-4">
+          <p className="mb-2.5 flex items-center gap-2 text-[13px] font-bold text-graphite-900 dark:text-white">
+            <svg className="h-4 w-4 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
+            Alertas e observações
+          </p>
+          {(() => {
+            const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
+            if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
+            if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
+            if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
+            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: "Nenhum alerta ativo para o pivô no período." });
+            const sevCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
+            return items.map((a, i) => (
+              <div key={i} className="flex gap-3 border-t border-gray-100 py-2.5 first:border-0 dark:border-white/[0.06]">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sevCls[a.sev]}`} />
+                <div>
+                  <p className="text-[12.5px] font-bold text-graphite-800 dark:text-white">{a.title}</p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-400 dark:text-gray-500">{a.desc}</p>
+                </div>
+              </div>
+            ));
+          })()}
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-5">
-      {/* 1 · Cabeçalho do pivô */}
       <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-forest-900 to-forest-800 p-5 text-white shadow-elevated sm:p-6">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
-            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brand-300">Centro de Decisão Hídrica</p>
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brand-300">Dados do balanço</p>
             <h2 className="mt-1 text-[22px] font-extrabold tracking-tight sm:text-[26px]">
               {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
             </h2>
@@ -1183,10 +1237,13 @@ function BalanceTab({
               {head.farmName && <span>Fazenda <strong className="font-semibold text-white">{head.farmName}</strong></span>}
               {head.area != null && <span>Área <strong className="font-semibold text-white">{head.area} ha</strong></span>}
               {head.efficiency != null && <span>Eficiência <strong className="font-semibold text-white">{head.efficiency.toFixed(0)}%</strong></span>}
-              {head.statusLabel && <span className="inline-flex items-center gap-1.5">Status <span className="inline-flex items-center gap-1.5 font-semibold text-white"><span className="h-1.5 w-1.5 rounded-full bg-brand-300 ring-2 ring-brand-300/30" />{head.statusLabel}</span></span>}
               <span>Atualizado <strong className="font-semibold text-white">{fmtDia(last?.date ?? "")}</strong></span>
             </div>
           </div>
+          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-bold" style={{ color: classificacao.color, background: `${classificacao.color}22` }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: classificacao.color }} />
+            {classificacao.label} · {pctCc.toFixed(0)}% da CC
+          </span>
         </div>
       </div>
 
@@ -1217,8 +1274,14 @@ function BalanceTab({
         </Card>
       </div>
 
-      {/* 3 · Gráfico de manejo em recorte amplo (protagonista) */}
+      {/* 3 · Totais do período */}
       <Card className="overflow-hidden p-0">
+        <div className="border-b border-white/10 bg-forest-900 px-6 py-4">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brand-300">Totais do período</p>
+          <p className="mt-0.5 text-[14px] font-semibold text-white">
+            {first ? fmtDia(first.date) : ""} – {last ? fmtDia(last.date) : ""} · {summary.days} dias
+          </p>
+        </div>
         <div className="grid grid-cols-2 divide-x divide-y divide-white/10 bg-forest-900 sm:grid-cols-4 xl:grid-cols-8 xl:divide-y-0">
           {[
             { l: "Dias manejados", v: String(summary.days) },
@@ -1230,125 +1293,15 @@ function BalanceTab({
             { l: "ETc", v: `${summary.totalETc.toFixed(0)} mm` },
             { l: "Índice de estresse", v: `${stressPct.toFixed(0)}%` },
           ].map((k) => (
-            <div key={k.l} className="px-4 py-3">
+            <div key={k.l} className="px-4 py-3.5">
               <p className="text-[9.5px] font-semibold uppercase tracking-wide text-brand-200/80">{k.l}</p>
               <p className="mt-1 text-[16px] font-extrabold tabular-nums text-white">{k.v}</p>
             </div>
           ))}
         </div>
-        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-          <div>
-            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Gráfico de manejo</p>
-            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
-              umidade (% da CC) × lâmina (mm) · CC 100% · segurança · faixas adequada · atenção · crítica
-            </p>
-          </div>
-        </div>
-        <div className="flex min-h-[min(68vh,720px)] flex-col lg:flex-row">
-          <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />
-          <div className="min-w-0 flex-1 p-3 sm:p-5">
-            <ManejoChart rows={manejoRows} visible={visible} />
-          </div>
-        </div>
-      </Card>
-
-      {/* 5 · Recomendação / justificativa / alertas — abaixo do gráfico */}
-      <div className="grid items-start gap-5 lg:grid-cols-3">
-        {/* Recomendação de hoje */}
-        <Card className="overflow-hidden p-0">
-          <div className="bg-gradient-to-br from-forest-800 to-forest-900 p-4 text-white">
-            <p className="text-[10.5px] font-bold uppercase tracking-wide text-brand-300">Recomendação de hoje</p>
-            <p className="mt-1.5 flex items-center gap-2 text-[20px] font-extrabold" style={{ color: "#eafaf1" }}>
-              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: verdict.color }} />{verdict.label}
-            </p>
-            <p className="mt-1.5 text-[12.5px] leading-relaxed text-brand-100/90">{verdict.texto(`${laminaBruta.toFixed(1)} mm`)}</p>
-          </div>
-          <div className="p-4">
-            {verdict.irrigar ? (
-              <div className="space-y-0">
-                {[
-                  { l: "Lâmina líquida", v: `${(last?.netDepth ?? 0).toFixed(1)} mm` },
-                  { l: "Lâmina bruta", v: `${laminaBruta.toFixed(1)} mm` },
-                  { l: "Eficiência", v: `${efPct.toFixed(0)}%` },
-                  { l: "Volume necessário", v: `${(last?.volumeNeeded ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³` },
-                  { l: "Tempo estimado", v: fmtTempoH(last?.irrigationTime ?? 0) },
-                  { l: "Velocidade recomendada", v: "pendente", pend: true },
-                ].map((r) => (
-                  <div key={r.l} className="flex items-center justify-between border-b border-dashed border-gray-100 py-1.5 text-[12.5px] last:border-0 dark:border-white/[0.06]">
-                    <span className="text-graphite-500 dark:text-gray-400">{r.l}</span>
-                    <span className={r.pend ? "font-semibold text-graphite-300 dark:text-gray-600" : "font-bold text-graphite-800 dark:text-white"}>{r.v}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-[12.5px] text-graphite-500 dark:text-gray-400">Sem necessidade de irrigação para hoje. Acompanhar a evolução da umidade.</p>
-            )}
-          </div>
-        </Card>
-
-        {/* Por que esta recomendação? */}
-        <Card className="p-4">
-          <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
-          <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
-            {arm < safetyMm
-              ? "O ARM está abaixo da umidade de segurança (CAD − AFD) e a demanda (ETc) supera as entradas recentes."
-              : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-2">
-            {[
-              { l: "ARM atual", v: `${arm.toFixed(1)} mm` },
-              { l: "CAD / AFD", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
-              { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` },
-              { l: "% da CC", v: `${pctCc.toFixed(0)}%` },
-              { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
-              { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
-            ].map((f) => (
-              <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]">
-                <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{f.l}</p>
-                <p className="mt-1 text-[14px] font-extrabold tabular-nums" style={{ color: f.c ?? undefined }}>{f.v}</p>
-              </div>
-            ))}
-          </div>
-          <p className="mt-2.5 text-[10px] text-graphite-300 dark:text-gray-600">ETc/chuva previstas dependem de dados de previsão (pendente).</p>
-        </Card>
-
-        {/* Alertas e observações */}
-        <Card className="p-4">
-          <p className="mb-2.5 flex items-center gap-2 text-[13px] font-bold text-graphite-900 dark:text-white">
-            <svg className="h-4 w-4 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
-            Alertas e observações
-          </p>
-          {(() => {
-            const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
-            if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
-            if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
-            if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
-            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: "Nenhum alerta ativo para o pivô no período." });
-            const sevCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
-            return items.map((a, i) => (
-              <div key={i} className="flex gap-3 border-t border-gray-100 py-2.5 first:border-0 dark:border-white/[0.06]">
-                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sevCls[a.sev]}`} />
-                <div>
-                  <p className="text-[12.5px] font-bold text-graphite-800 dark:text-white">{a.title}</p>
-                  <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-400 dark:text-gray-500">{a.desc}</p>
-                </div>
-              </div>
-            ));
-          })()}
-        </Card>
-      </div>
-
-      {/* 6 · Resumo do período (fonte única dos acumulados/operação) */}
-      <Card className="p-0">
-        <div className="border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Resumo do período <span className="font-normal text-graphite-400 dark:text-gray-500">({first ? fmtDia(first.date) : ""} – {last ? fmtDia(last.date) : ""} · {summary.days} dias)</span></p>
-        </div>
         <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 lg:grid-cols-6 lg:divide-y-0 dark:divide-white/[0.06]">
           {[
-            { l: "Chuva", v: `${summary.totalPrecipitation.toFixed(0)} mm`, sub: `efetiva ${summary.totalEffPrecipitation.toFixed(0)}` },
-            { l: "Irrigação", v: `${summary.totalIrrigation.toFixed(0)} mm`, sub: `efetiva ${(summary.totalIrrigation * efPct / 100).toFixed(0)}` },
-            { l: "ETo", v: `${etoTotal.toFixed(0)} mm` },
-            { l: "ETc", v: `${summary.totalETc.toFixed(0)} mm` },
+            { l: "Chuva efetiva", v: `${summary.totalEffPrecipitation.toFixed(0)} mm` },
             { l: "Variação armaz.", v: `${variacao >= 0 ? "+" : ""}${variacao.toFixed(1)} mm`, cls: variacao >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400" },
             { l: "Dias em estresse", v: `${summary.daysInDeficit}`, sub: `${stressPct.toFixed(0)}% do período` },
             { l: "Eficiência média", v: `${efPct.toFixed(0)}%` },

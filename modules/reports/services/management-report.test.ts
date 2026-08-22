@@ -257,13 +257,20 @@ describe("telas de relatórios e gráfico", () => {
     expect(src).not.toContain("energy_consumption");
   });
 
-  it("balanço reusa o gráfico central em recorte amplo, padrão reduzido", () => {
+  it("balanço abre gráfico, dados e decisão em abas, sem mapa na página", () => {
     const src = readFileSync(join(process.cwd(), "app/(app)/balanco-hidrico/page.tsx"), "utf8");
+    expect(src).toContain('id: "grafico"');
+    expect(src).toContain('id: "dados"');
+    expect(src).toContain('id: "decisao"');
+    expect(src).toContain('panel: "grafico" | "dados" | "decisao"');
     expect(src).toContain("ManejoSeriesPicker");
     expect(src).toContain("initialManejoVisibility");
     expect(src).toContain("managementRowFromBalance");
-    expect(src).toContain("min-h-[min(68vh,720px)]");
-    expect(src).toContain("Gráfico de manejo");
+    expect(src).toContain("min-h-[min(72vh,calc(100vh-14rem))]");
+    expect(src).toContain("Dados do balanço");
+    expect(src).toContain("Totais do período");
+    expect(src).not.toContain("Mapa Operacional");
+    expect(src).not.toContain("min-h-[min(68vh,720px)]");
     expect(src).not.toContain("xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]");
     expect(src).not.toContain("justexc");
   });
