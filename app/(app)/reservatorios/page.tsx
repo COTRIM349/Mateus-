@@ -192,6 +192,7 @@ export default function ReservatoriosPage() {
       recharge_rate: rechargeRate,
       latitude,
       longitude,
+      active: true,
     };
 
     setSaving(true);
