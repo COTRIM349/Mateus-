@@ -45,6 +45,7 @@ function maxIso(a: string, b: string): string {
  * Orquestra dados para o motor V2. O hook não calcula regra agronômica.
  * Pontos de segurança:
  * - só usa clima explicitamente aprovado para operação;
+ * - ETo operacional = et0_calculated (FAO-56 interna), nunca a ETo pronta da API;
  * - ausência não vira ETo/chuva zero;
  * - parcelas futuras não entram;
  * - janela de 30 dias é apenas de exibição: o ARM parte do balanço persistido
@@ -149,8 +150,6 @@ export function useFarmHydricState(): FarmHydricState {
       phasesByCulture.get(p.culture_id)!.push(p);
     }
 
-    // Último balanço persistido por parcela antes da janela. Só é aceito como
-    // seed quando for exatamente o dia anterior ao início efetivo da série.
     const latestSeedByAssignment = new Map<string, { date: string; storage: number; cad: number }>();
     for (const row of seedRes.data ?? []) {
       const id = row.pivot_crop_assignment_id as string;
@@ -162,7 +161,6 @@ export function useFarmHydricState(): FarmHydricState {
       });
     }
 
-    // Clima: SOMENTE leitura escolhida e operacionalmente aprovada.
     const stationIds = (stationsRes.data ?? []).map((s: { id: string }) => s.id);
     const weatherByDate: Record<string, EngineWeatherDay> = {};
     if (stationIds.length > 0) {
@@ -176,7 +174,7 @@ export function useFarmHydricState(): FarmHydricState {
           .lte("date", dateEnd),
         supabase
           .from("weather_readings")
-          .select("id, date, et0_source, precipitation, station_id")
+          .select("id, date, et0_calculated, precipitation, station_id")
           .in("station_id", stationIds)
           .gte("date", globalDateStart)
           .lte("date", dateEnd),
@@ -187,7 +185,7 @@ export function useFarmHydricState(): FarmHydricState {
         if (!selection.selected_reading_id || selection.operational_approved !== true) continue;
         const r = readingsById.get(selection.selected_reading_id as string);
         if (!r) continue;
-        const et0 = r.et0_source as number | null;
+        const et0 = r.et0_calculated as number | null;
         const precipitation = r.precipitation as number | null;
         if (et0 == null || precipitation == null || !Number.isFinite(et0) || !Number.isFinite(precipitation)) continue;
         weatherByDate[selection.date as string] = { et0, precipitation };
@@ -207,7 +205,9 @@ export function useFarmHydricState(): FarmHydricState {
       eventsByPivot.get(pid)!.push({ started_at: ev.started_at as string, depth_mm: (ev.depth_mm as number) ?? 0 });
     }
     const irrigationByPivot = new Map<string, Record<string, number>>();
-    for (const [pid, list] of eventsByPivot.entries()) irrigationByPivot.set(pid, sumGrossDepthByDate(list));
+    Array.from(eventsByPivot.entries()).forEach(([pid, list]) => {
+      irrigationByPivot.set(pid, sumGrossDepthByDate(list));
+    });
 
     const result: PivotHydricState[] = [];
     for (const pivot of pivots) {
