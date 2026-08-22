@@ -3,35 +3,22 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { topLevelItems, navGroups, bottomItems, type NavItem } from "@/config/navigation";
+import { topLevelItems, navGroups, bottomItems } from "@/config/navigation";
 import { cn } from "@/utils/cn";
 import { useAuth } from "@/components/providers";
 import { APP_VERSION } from "@/constants/app";
-
-function pathMatches(pathname: string, href: string) {
-  return href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
-}
-
-function itemInSection(pathname: string, item: NavItem): boolean {
-  if (pathMatches(pathname, item.href)) return true;
-  return item.children?.some((child) => itemInSection(pathname, child)) ?? false;
-}
 
 function NavLink({
   href,
   icon,
   label,
   active,
-  inSection,
-  nested,
   onClick,
 }: {
   href: string;
   icon: string;
   label: string;
   active: boolean;
-  inSection?: boolean;
-  nested?: boolean;
   onClick?: () => void;
 }) {
   return (
@@ -39,21 +26,14 @@ function NavLink({
       href={href}
       onClick={onClick}
       className={cn(
-        "group flex items-center gap-2.5 rounded-md text-[13px] font-medium leading-tight transition-colors duration-150",
-        nested ? "px-2.5 py-[5px] pl-8" : "px-2.5 py-[7px]",
+        "group flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium leading-tight transition-all duration-150",
         active
-          ? "bg-brand-500/20 text-white shadow-[inset_2px_0_0_0_currentColor]"
-          : inSection
-            ? "text-white"
-            : "text-brand-100/70 hover:bg-white/[0.05] hover:text-white",
+          ? "bg-white/[0.12] text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06)]"
+          : "text-white/60 hover:bg-white/[0.06] hover:text-white/90",
       )}
     >
       <svg
-        className={cn(
-          "shrink-0 transition-colors",
-          nested ? "h-3.5 w-3.5" : "h-4 w-4",
-          active ? "text-brand-300" : "text-brand-200/55 group-hover:text-brand-200",
-        )}
+        className={cn("h-4 w-4 shrink-0 transition-colors", active ? "text-brand-300" : "text-white/50 group-hover:text-white/80")}
         fill="none"
         stroke="currentColor"
         strokeWidth={1.7}
@@ -66,46 +46,10 @@ function NavLink({
   );
 }
 
-function NavBranch({
-  item,
-  pathname,
-  nested,
-  onNavigate,
-}: {
-  item: NavItem;
-  pathname: string;
-  nested?: boolean;
-  onNavigate: () => void;
-}) {
-  const active = pathMatches(pathname, item.href);
-  const inSection = itemInSection(pathname, item);
-  const showChildren = Boolean(item.children?.length) && inSection;
-
-  return (
-    <div>
-      <NavLink
-        href={item.href}
-        icon={item.icon}
-        label={item.label}
-        active={active}
-        inSection={inSection && !active && !nested}
-        nested={nested}
-        onClick={onNavigate}
-      />
-      {showChildren && (
-        <div className="mt-0.5">
-          {item.children!.map((child) => (
-            <NavBranch key={child.href} item={child} pathname={pathname} nested onNavigate={onNavigate} />
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 export function Sidebar() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
+  const [groupOpen, setGroupOpen] = useState<Record<string, boolean>>({});
   const { farms, activeFarmId, setActiveFarm, profile } = useAuth();
 
   const activeFarm = farms.find((f) => f.id === activeFarmId);
@@ -115,6 +59,18 @@ export function Sidebar() {
     manager: "Gestor",
     operator: "Operador",
     viewer: "Visualizador",
+  };
+
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
+
+  const isGroupExpanded = (label: string, hrefs: string[]) => {
+    if (groupOpen[label] !== undefined) return groupOpen[label];
+    return hrefs.some((href) => isActive(href));
+  };
+
+  const toggleGroup = (label: string, hrefs: string[]) => {
+    setGroupOpen((prev) => ({ ...prev, [label]: !isGroupExpanded(label, hrefs) }));
   };
 
   return (
@@ -140,54 +96,29 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[220px] flex-col bg-forest-950 text-white transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col bg-forest-900 text-white transition-transform duration-200",
           open ? "translate-x-0" : "-translate-x-full",
           "lg:translate-x-0",
         )}
       >
-        <div className="flex shrink-0 items-center gap-2.5 px-4 py-4">
-          <div className="flex h-8 w-8 items-center justify-center rounded-full bg-brand-500/90 text-white">
+        <div className="flex shrink-0 items-center gap-2.5 px-4 py-3">
+          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/90 text-white">
             <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
             </svg>
           </div>
           <div>
-            <p className="text-[13px] font-extrabold leading-none tracking-[0.14em] text-brand-200">COTRIM</p>
-            <p className="mt-1 text-[8px] font-bold uppercase tracking-[0.18em] text-brand-400/80">Irrigação Pro</p>
+            <p className="text-[14px] font-extrabold leading-none tracking-tight text-white">Cotrim</p>
+            <p className="mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.18em] text-brand-300">Irrigação Pro</p>
           </div>
         </div>
 
-        <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 pb-2">
-          {topLevelItems.map((item) => (
-            <NavBranch key={item.href} item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
-          ))}
-
-          {navGroups.map((group) => (
-            <div key={group.label} className="mt-4">
-              <p className="px-2.5 pb-1.5 text-[9px] font-bold uppercase tracking-[0.16em] text-white/30">
-                {group.label}
-              </p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <NavBranch key={item.href} item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
-                ))}
-              </div>
-            </div>
-          ))}
-
-          <div className="mt-4 space-y-0.5">
-            {bottomItems.map((item) => (
-              <NavBranch key={item.href} item={item} pathname={pathname} onNavigate={() => setOpen(false)} />
-            ))}
-          </div>
-        </nav>
-
-        <div className="shrink-0 space-y-2 border-t border-white/[0.06] px-3 py-3">
-          {farms.length > 0 && (
+        {farms.length > 1 && (
+          <div className="mx-3 mb-1.5 shrink-0">
             <select
               value={activeFarmId ?? ""}
               onChange={(e) => setActiveFarm(e.target.value)}
-              className="w-full rounded-md border border-white/10 bg-white/[0.06] px-2 py-1.5 text-[11px] font-medium text-white/90 outline-none transition-colors focus:border-white/20"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-[11.5px] font-medium text-white/90 outline-none transition-colors focus:border-white/20 focus:bg-white/[0.1]"
             >
               {farms.map((farm) => (
                 <option key={farm.id} value={farm.id} className="text-graphite-900">
@@ -195,8 +126,56 @@ export function Sidebar() {
                 </option>
               ))}
             </select>
-          )}
-          <div className="flex items-center gap-2">
+          </div>
+        )}
+
+        <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 py-1">
+          {topLevelItems.map((item) => (
+            <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} onClick={() => setOpen(false)} />
+          ))}
+
+          {navGroups.map((group) => {
+            const expanded = isGroupExpanded(group.label, group.items.map((i) => i.href));
+            return (
+              <div key={group.label} className="mt-1">
+                <button
+                  type="button"
+                  aria-expanded={expanded}
+                  onClick={() => toggleGroup(group.label, group.items.map((i) => i.href))}
+                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/70"
+                >
+                  {group.label}
+                  <svg
+                    className={cn("h-3 w-3 shrink-0 transition-transform", expanded ? "rotate-90" : "")}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {expanded && (
+                  <div className="mt-0.5">
+                    {group.items.map((item) => (
+                      <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} onClick={() => setOpen(false)} />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+
+          <div className="mt-2 border-t border-white/[0.08] pt-1.5">
+            {bottomItems.map((item) => (
+              <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} onClick={() => setOpen(false)} />
+            ))}
+          </div>
+        </nav>
+
+        <div className="shrink-0 border-t border-white/[0.08] px-3 py-2.5">
+          <div className="flex items-center gap-2 px-1">
             <div className="flex h-7 w-7 items-center justify-center rounded-full bg-brand-500/20 text-[10px] font-bold text-brand-200">
               {profile?.name
                 ? profile.name.split(" ").map((n) => n[0]).slice(0, 2).join("").toUpperCase()
@@ -207,7 +186,7 @@ export function Sidebar() {
               <p className="truncate text-[10.5px] text-white/45">{activeFarm?.name ?? roleLabels[profile?.role ?? "viewer"]}</p>
             </div>
           </div>
-          <p className="text-[10px] text-white/25">v{APP_VERSION}</p>
+          <p className="mt-1 px-1 text-[10px] text-white/25">v{APP_VERSION}</p>
         </div>
       </aside>
     </>

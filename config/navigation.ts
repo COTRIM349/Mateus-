@@ -2,7 +2,6 @@ export interface NavItem {
   label: string;
   href: string;
   icon: string;
-  children?: NavItem[];
 }
 
 export interface NavGroup {
@@ -37,97 +36,78 @@ const ICON = {
   settings: "M12 9a3 3 0 100 6 3 3 0 000-6zm7.4 3a7.4 7.4 0 00-.1-1l2-1.6-2-3.5-2.4 1a7.3 7.3 0 00-1.7-1l-.4-2.6H9.2l-.4 2.6a7.3 7.3 0 00-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 000 2l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.7.1-1z",
 } as const;
 
-function flattenItems(items: NavItem[]): NavItem[] {
-  return items.flatMap((item) => [item, ...(item.children ? flattenItems(item.children) : [])]);
-}
-
-// Menu enxuto no espírito de plataformas de manejo (Home + blocos curtos).
-// Subitens só aparecem quando o módulo está aberto — as rotas continuam as mesmas.
-
 export const topLevelItems: NavItem[] = [
-  { label: "Home", href: "/", icon: ICON.home },
-  { label: "Alertas", href: "/alertas", icon: ICON.alert },
+  { label: "Dashboard", href: "/", icon: ICON.home },
+  { label: "Histórico", href: "/historico", icon: ICON.boletim },
 ];
 
 export const navGroups: NavGroup[] = [
   {
-    label: "Gestão de Ativos",
+    label: "Cadastros",
     icon: ICON.farm,
     items: [
-      {
-        label: "Fazendas",
-        href: "/fazendas",
-        icon: ICON.farm,
-        children: [
-          { label: "Pivôs", href: "/pivos", icon: ICON.pivot },
-          { label: "Solos", href: "/solos", icon: ICON.soil },
-          { label: "Água", href: "/agua", icon: ICON.water },
-          { label: "Culturas", href: "/culturas", icon: ICON.crop },
-          { label: "Parcelas", href: "/vinculacao", icon: ICON.parcel },
-          { label: "Sensores", href: "/sensores", icon: ICON.sensor },
-          { label: "Reservatórios", href: "/reservatorios", icon: ICON.reservoir },
-        ],
-      },
+      { label: "Fazendas", href: "/fazendas", icon: ICON.farm },
+      { label: "Pivôs (Equipamentos)", href: "/pivos", icon: ICON.pivot },
+      { label: "Solos", href: "/solos", icon: ICON.soil },
+      { label: "Água", href: "/agua", icon: ICON.water },
+      { label: "Culturas", href: "/culturas", icon: ICON.crop },
+      { label: "Parcelas", href: "/vinculacao", icon: ICON.parcel },
     ],
   },
   {
-    label: "Operação e Manejo",
+    label: "Manejo Diário",
     icon: ICON.decision,
     items: [
-      {
-        label: "Irrigação",
-        href: "/balanco-hidrico",
-        icon: ICON.water,
-        children: [
-          { label: "Clima", href: "/clima", icon: ICON.cloud },
-          { label: "Decisão", href: "/operacao/decisao", icon: ICON.decision },
-          { label: "Programação", href: "/programacao", icon: ICON.schedule },
-        ],
-      },
-      {
-        label: "Energia",
-        href: "/energia",
-        icon: ICON.energy,
-        children: [
-          { label: "Rateio", href: "/rateio", icon: ICON.cashflow },
-        ],
-      },
-      {
-        label: "Lançamentos",
-        href: "/lancamentos/irrigacao",
-        icon: ICON.boletim,
-        children: [
-          { label: "Chuvas", href: "/lancamentos/chuvas", icon: ICON.water },
-          { label: "Sensorial de Solo", href: "/lancamentos/sensorial-solo", icon: ICON.soil },
-          { label: "Ordem de Serviço", href: "/ordem-servico", icon: ICON.os },
-        ],
-      },
+      { label: "Clima", href: "/clima", icon: ICON.cloud },
+      { label: "Balanço Hídrico", href: "/balanco-hidrico", icon: ICON.balance },
+      { label: "Decisão de Irrigação", href: "/operacao/decisao", icon: ICON.decision },
+      { label: "Programação de Irrigação", href: "/programacao", icon: ICON.schedule },
     ],
   },
   {
-    label: "Financeiro",
-    icon: ICON.cost,
+    label: "Lançamentos",
+    icon: ICON.boletim,
     items: [
+      { label: "Irrigação Aplicada", href: "/lancamentos/irrigacao", icon: ICON.boletim },
+      { label: "Chuvas", href: "/lancamentos/chuvas", icon: ICON.water },
+      { label: "Sensorial de Solo", href: "/lancamentos/sensorial-solo", icon: ICON.soil },
+      { label: "Ordem de Serviço", href: "/ordem-servico", icon: ICON.os },
+    ],
+  },
+  {
+    label: "Infraestrutura",
+    icon: ICON.reservoir,
+    items: [
+      { label: "Sensores", href: "/sensores", icon: ICON.sensor },
+      { label: "Reservatórios", href: "/reservatorios", icon: ICON.reservoir },
+    ],
+  },
+  {
+    label: "Energia & Custos",
+    icon: ICON.energy,
+    items: [
+      { label: "Energia", href: "/energia", icon: ICON.energy },
+      { label: "Rateio", href: "/rateio", icon: ICON.cashflow },
       { label: "Custos", href: "/custos", icon: ICON.cost },
-      { label: "Relatórios", href: "/relatorios", icon: ICON.report },
-      { label: "Histórico", href: "/historico", icon: ICON.boletim },
     ],
   },
   {
-    label: "Inteligência",
-    icon: ICON.ai,
+    label: "Relatórios & Inteligência",
+    icon: ICON.report,
     items: [
+      { label: "Relatórios", href: "/relatorios", icon: ICON.report },
       { label: "Cotrim AI", href: "/cotrim-ai", icon: ICON.ai },
     ],
   },
 ];
 
 export const bottomItems: NavItem[] = [
+  { label: "Alertas", href: "/alertas", icon: ICON.alert },
   { label: "Configurações", href: "/configuracoes", icon: ICON.settings },
 ];
 
 export const navItems: NavItem[] = [
-  ...flattenItems(topLevelItems),
-  ...navGroups.flatMap((g) => flattenItems(g.items)),
-  ...flattenItems(bottomItems),
+  ...topLevelItems,
+  ...navGroups.flatMap((g) => g.items),
+  ...bottomItems,
 ];
