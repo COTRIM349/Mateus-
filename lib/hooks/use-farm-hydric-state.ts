@@ -13,6 +13,7 @@ import {
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
 import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
+import { applyManualRainfallOverride, sumManualRainByDate } from "@/modules/weather/services";
 import { parcelManagedAreaHa } from "@/modules/assignment/services/parcel-geometry";
 
 interface FarmHydricState {
@@ -147,7 +148,7 @@ export function useFarmHydricState(): FarmHydricState {
     // registro para a data). Fallback: qualquer leitura de estação ativa
     // com et0 > 0 (compatibilidade com dados antigos).
     const stationIds = (stationsRes.data ?? []).map((s: { id: string }) => s.id);
-    const weatherByDate: Record<string, EngineWeatherDay> = {};
+    let weatherByDate: Record<string, EngineWeatherDay> = {};
 
     if (stationIds.length > 0) {
       const [selectionRes, readingsRes] = await Promise.all([
@@ -198,6 +199,25 @@ export function useFarmHydricState(): FarmHydricState {
         }
       }
     }
+
+    // chuva manual (pluviômetro) sobrescreve precipitação; ETo permanece
+    const { data: manualRainRows } = await supabase
+      .from("manual_rainfall")
+      .select("reading_date, precipitation_mm, use_in_balance")
+      .eq("farm_id", activeFarmId)
+      .eq("use_in_balance", true)
+      .gte("reading_date", dateStart)
+      .lte("reading_date", dateEnd);
+    weatherByDate = applyManualRainfallOverride(
+      weatherByDate,
+      sumManualRainByDate(
+        (manualRainRows ?? []) as Array<{
+          reading_date: string;
+          precipitation_mm: number;
+          use_in_balance?: boolean | null;
+        }>,
+      ),
+    );
 
     // irrigação aplicada por pivô/data
     const { data: irrEvents } = await supabase

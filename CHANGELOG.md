@@ -2,6 +2,29 @@
 
 Todas as alteracoes notaveis do projeto estao documentadas neste arquivo.
 
+## [1.1.0] - 2026-08-22
+
+### Lançamento de Chuva Manual
+**Arquivos criados:**
+- `supabase/migrations/00046_manual_rainfall.sql`
+- `modules/weather/services/manual-rainfall.ts`
+- `modules/weather/services/manual-rainfall.test.ts`
+- `app/(app)/lancamentos/chuvas/page.tsx` (CRUD funcional)
+
+**Arquivos modificados:**
+- `lib/hooks/use-farm-hydric-state.ts` — overlay de chuva manual no clima do mapa/dashboard
+- `app/(app)/balanco-hidrico/page.tsx` — mesma regra no cálculo do balanço
+- `config/navigation.ts` — item Chuva Manual no bloco Lançamentos
+- `ROADMAP.md`
+
+**Funcionalidades:**
+- Registro de chuva bruta (mm) por fazenda/data (pluviômetro ou observação)
+- Flag `use_in_balance`: sobrescreve precipitação da estação sem inventar ETo
+- Pe USDA-SCS exibida na tela; motor recalcula com CAD do dia
+- RLS por `auth_farm_ids()`
+
+---
+
 ## [1.0.0] - 2026-06-27
 
 ### Sprint 11 - Relatorios Inteligentes

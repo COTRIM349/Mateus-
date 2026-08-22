@@ -28,6 +28,12 @@ Esta versao trabalha **exclusivamente com dados reais** (Supabase); sem dados fi
 - Area plantada por vinculo (pode diferir da area total do pivo; alimenta o volume no motor)
 - Tela consolidada do modelo operacional da safra ativa, com indicador de "modelo completo"
 
+### Em andamento — Desbloqueio operacional pos Etapas A–K
+- [x] Lançamento de chuva manual (pluviômetro) com override no balanço hídrico
+- [ ] Alertas operacionais
+- [ ] Fontes de água / outorga
+- [ ] Convite de operadores e papéis
+
 ### ⏳ Fase 5 — Programacao da Irrigacao (planejada)
 - Recomendacao diaria
 - Lamina

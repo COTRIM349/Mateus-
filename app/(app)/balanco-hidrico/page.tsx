@@ -31,6 +31,7 @@ import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from 
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
+import { applyManualRainfallOverride, sumManualRainByDate } from "@/modules/weather/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 
@@ -395,11 +396,28 @@ export default function BalancoHidricoPage() {
         );
       }
 
-      // 5. Motor central do balanço hídrico (fonte única de cálculo)
+      // 5. Chuva manual (pluviômetro) sobrescreve precipitação; ETo permanece
+      const { data: manualRainRows } = await supabase
+        .from("manual_rainfall")
+        .select("reading_date, precipitation_mm, use_in_balance")
+        .eq("farm_id", activeFarmId!)
+        .eq("use_in_balance", true)
+        .gte("reading_date", dateStart)
+        .lte("reading_date", dateEnd);
+      const manualByDate = sumManualRainByDate(
+        (manualRainRows ?? []) as Array<{
+          reading_date: string;
+          precipitation_mm: number;
+          use_in_balance?: boolean | null;
+        }>,
+      );
+
+      // 6. Motor central do balanço hídrico (fonte única de cálculo)
       const engineWeatherByDate: Record<string, { et0: number; precipitation: number }> = {};
       for (const [d, w] of Object.entries(weatherByDate)) {
         engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precip };
       }
+      const engineWeatherWithManual = applyManualRainfallOverride(engineWeatherByDate, manualByDate);
 
       const series = computePivotBalanceSeries({
         assignment: {
@@ -430,7 +448,7 @@ export default function BalancoHidricoPage() {
           layers: soilLayers,
         },
         pivot: { efficiency: pivot.efficiency, area: pivot.area, flow_rate: pivot.flow_rate },
-        weatherByDate: engineWeatherByDate,
+        weatherByDate: engineWeatherWithManual,
         irrigationByDate,
         dateStart,
         dateEnd,
