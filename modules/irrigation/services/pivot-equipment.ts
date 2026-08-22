@@ -3,9 +3,6 @@
  *
  * O pivô é infraestrutura física permanente. Cultura, cultivar, estádio,
  * safra, Kc e manejo pertencem à PARCELA — nunca ao equipamento.
- *
- * Este módulo monta o payload persistido em `pivots` e recusa campos
- * agronômicos no cadastro mestre.
  */
 
 export const PIVOT_WATER_SOURCES = [
@@ -20,7 +17,6 @@ export const PIVOT_WATER_SOURCES = [
 
 export type PivotWaterSource = (typeof PIVOT_WATER_SOURCES)[number]["value"];
 
-/** Campos agronômicos / operacionais que NÃO podem ir no cadastro do pivô. */
 export const PIVOT_FORBIDDEN_CROP_FIELDS = [
   "culture_id",
   "cultivar",
@@ -60,11 +56,10 @@ export interface PivotEquipmentPayloadInput {
   aerialPartPct: number | null;
   pumpPower: number;
   installedPowerKw: number | null;
-  /** Eficiência do motor (0–1). */
   motorEfficiency: number;
-  /** CUC — Coeficiente de Uniformidade de Christiansen (0–1). */
+  /** CUC mede uniformidade espacial; não é eficiência de aplicação. */
   cuc: number;
-  /** Eficiência de aplicação (0–1). Distinta do CUC. */
+  /** Ea transforma lâmina bruta em água efetivamente aplicada no balanço. */
   applicationEfficiency: number;
   specificConsumption: number | null;
   latitude: number;
@@ -108,6 +103,8 @@ export type PivotEquipmentRow = {
   installed_power_kw: number | null;
   motor_efficiency: number;
   cuc: number;
+  application_efficiency: number;
+  /** Compatibilidade temporária: espelha Ea até todos os leitores serem migrados. */
   efficiency: number;
   specific_consumption: number | null;
   latitude: number;
@@ -125,38 +122,18 @@ export function isForbiddenPivotCropField(field: string): boolean {
   return (PIVOT_FORBIDDEN_CROP_FIELDS as readonly string[]).includes(field);
 }
 
-export function validatePivotEquipmentInput(
-  input: PivotEquipmentPayloadInput,
-): string | null {
+export function validatePivotEquipmentInput(input: PivotEquipmentPayloadInput): string | null {
   if (!input.name.trim()) return "Informe o nome do pivô (aba Geral).";
   if (input.area <= 0) return "Informe a área irrigada (aba Características).";
-  if (input.motorEfficiency < 0.5 || input.motorEfficiency > 1) {
-    return "Eficiência do motor deve estar entre 50 e 100%.";
-  }
+  if (input.motorEfficiency < 0.5 || input.motorEfficiency > 1) return "Eficiência do motor deve estar entre 50 e 100%.";
   if (input.cuc < 0 || input.cuc > 1) return "CUC deve estar entre 0 e 100%.";
-  if (input.applicationEfficiency <= 0 || input.applicationEfficiency > 1) {
-    return "Eficiência de aplicação deve estar entre 1 e 100%.";
-  }
-  if (
-    input.minDepthMm != null &&
-    input.maxDepthMm != null &&
-    input.minDepthMm > input.maxDepthMm
-  ) {
-    return "Lâmina mínima não pode ser maior que a lâmina máxima.";
-  }
-  if (input.waterSource && !PIVOT_WATER_SOURCES.some((s) => s.value === input.waterSource)) {
-    return "Fonte de água inválida.";
-  }
+  if (input.applicationEfficiency <= 0 || input.applicationEfficiency > 1) return "Eficiência de aplicação deve estar entre 1 e 100%.";
+  if (input.minDepthMm != null && input.maxDepthMm != null && input.minDepthMm > input.maxDepthMm) return "Lâmina mínima não pode ser maior que a lâmina máxima.";
+  if (input.waterSource && !PIVOT_WATER_SOURCES.some((s) => s.value === input.waterSource)) return "Fonte de água inválida.";
   return null;
 }
 
-/**
- * Monta a linha persistida em `pivots`.
- * Nunca inclui culture_id, status, cultivar, estádio ou safra.
- */
-export function buildPivotEquipmentRow(
-  input: PivotEquipmentPayloadInput,
-): PivotEquipmentRow {
+export function buildPivotEquipmentRow(input: PivotEquipmentPayloadInput): PivotEquipmentRow {
   return {
     farm_id: input.farmId,
     name: input.name.trim(),
@@ -187,6 +164,7 @@ export function buildPivotEquipmentRow(
     installed_power_kw: input.installedPowerKw,
     motor_efficiency: input.motorEfficiency,
     cuc: input.cuc,
+    application_efficiency: input.applicationEfficiency,
     efficiency: input.applicationEfficiency,
     specific_consumption: input.specificConsumption,
     latitude: input.latitude,
