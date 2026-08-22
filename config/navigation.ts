@@ -36,9 +36,13 @@ const ICON = {
   settings: "M12 9a3 3 0 100 6 3 3 0 000-6zm7.4 3a7.4 7.4 0 00-.1-1l2-1.6-2-3.5-2.4 1a7.3 7.3 0 00-1.7-1l-.4-2.6H9.2l-.4 2.6a7.3 7.3 0 00-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 000 2l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.7.1-1z",
 } as const;
 
+// Menu só com telas que já operam. Rotas vazias (água, alertas, sensores,
+// reservatórios, Cotrim AI, OS, chuva manual) ficam fora até existirem.
+
 export const topLevelItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: ICON.home },
   { label: "Histórico", href: "/historico", icon: ICON.boletim },
+  { label: "Relatórios", href: "/relatorios", icon: ICON.report },
 ];
 
 export const navGroups: NavGroup[] = [
@@ -49,7 +53,6 @@ export const navGroups: NavGroup[] = [
       { label: "Fazendas", href: "/fazendas", icon: ICON.farm },
       { label: "Pivôs (Equipamentos)", href: "/pivos", icon: ICON.pivot },
       { label: "Solos", href: "/solos", icon: ICON.soil },
-      { label: "Água", href: "/agua", icon: ICON.water },
       { label: "Culturas", href: "/culturas", icon: ICON.crop },
       { label: "Parcelas", href: "/vinculacao", icon: ICON.parcel },
     ],
@@ -69,17 +72,7 @@ export const navGroups: NavGroup[] = [
     icon: ICON.boletim,
     items: [
       { label: "Irrigação Aplicada", href: "/lancamentos/irrigacao", icon: ICON.boletim },
-      { label: "Chuvas", href: "/lancamentos/chuvas", icon: ICON.water },
       { label: "Sensorial de Solo", href: "/lancamentos/sensorial-solo", icon: ICON.soil },
-      { label: "Ordem de Serviço", href: "/ordem-servico", icon: ICON.os },
-    ],
-  },
-  {
-    label: "Infraestrutura",
-    icon: ICON.reservoir,
-    items: [
-      { label: "Sensores", href: "/sensores", icon: ICON.sensor },
-      { label: "Reservatórios", href: "/reservatorios", icon: ICON.reservoir },
     ],
   },
   {
@@ -91,18 +84,9 @@ export const navGroups: NavGroup[] = [
       { label: "Custos", href: "/custos", icon: ICON.cost },
     ],
   },
-  {
-    label: "Relatórios & Inteligência",
-    icon: ICON.report,
-    items: [
-      { label: "Relatórios", href: "/relatorios", icon: ICON.report },
-      { label: "Cotrim AI", href: "/cotrim-ai", icon: ICON.ai },
-    ],
-  },
 ];
 
 export const bottomItems: NavItem[] = [
-  { label: "Alertas", href: "/alertas", icon: ICON.alert },
   { label: "Configurações", href: "/configuracoes", icon: ICON.settings },
 ];
 
