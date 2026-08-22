@@ -27,10 +27,8 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
 
-  // ── 1. Pipeline diário operacional ───────────────────────────────────────
-  // Alimenta weather_readings/weather_forecasts e refaz a seleção auditável.
-  // Esta era a peça ausente: a rota antiga de ingestão aceita POST + outro
-  // header, incompatível com o formato nativo do Vercel Cron.
+  // Pipeline diário operacional. Reprocessa os últimos 30 dias porque o mapa
+  // hídrico mantém uma janela histórica de 30 dias e exige série contínua.
   const { data: farms, error: farmsError } = await supabase
     .from("farms")
     .select("id")
@@ -51,13 +49,13 @@ export async function GET(request: Request) {
       const farmId = farm.id as string;
       try {
         const runs = await ingestFarmClimate(supabase, farmId, {
-          pastDays: 7,
+          pastDays: 30,
           forecastDays: 7,
         });
         const selections = await resolveDailyRange(
           supabase,
           farmId,
-          isoDate(-6),
+          isoDate(-29),
           isoDate(0),
         );
         dailyResults.push({
@@ -76,8 +74,7 @@ export async function GET(request: Request) {
     }
   }
 
-  // ── 2. Pipeline CLIMA V2 / shadow de 30 min ──────────────────────────────
-  // Mantém consenso multi-provider + ETo FAO-56 30 min em validação paralela.
+  // Pipeline CLIMA V2 / shadow de 30 min: consenso multi-provider e ETo interna.
   const { data: stations, error } = await supabase
     .from("virtual_weather_stations")
     .select("id")
