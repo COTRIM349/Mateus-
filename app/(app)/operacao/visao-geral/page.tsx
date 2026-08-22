@@ -1,17 +1,15 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, EmptyState } from "@/components/ui";
 import { ProgressRing } from "@/components/ui/instruments";
 import { useAuth } from "@/components/providers";
 import { useFarmHydricState } from "@/lib/hooks";
 import { cn } from "@/utils/cn";
-import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
-import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
 import { HydricStatusBadge } from "@/components/maps/HydricStatusBadge";
-import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricStateId, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { VisionMapPanel } from "@/components/maps/VisionMapPanel";
+import { hydricStateId, mapStatusOf } from "@/components/maps/hydric-map-markers";
 import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   HYDRIC_STATUS_CONFIG,
@@ -20,18 +18,6 @@ import {
   type FarmHydricSummary,
   type BalanceDay,
 } from "@/modules/water-balance/services";
-
-const PivotMap = dynamic(
-  () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
-  {
-    ssr: false,
-    loading: () => (
-      <div className="flex h-full min-h-[400px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800">
-        <p className="text-sm text-graphite-400">Carregando mapa...</p>
-      </div>
-    ),
-  },
-);
 
 // ── KPI Card ────────────────────────────────────────────────────────────
 
@@ -580,12 +566,6 @@ export default function VisaoGeralPage() {
 
   const latestWeather = states.find((s) => s.current)?.current ?? null;
 
-  const dates = useMemo(() => hydricMapDates(states), [states]);
-  const activeDate = selectedDate ?? dates[dates.length - 1] ?? null;
-  const mapPivots = useMemo(() => toHydricMapMarkers(states, activeDate), [states, activeDate]);
-  const mapCounts = countMapStatuses(states, activeDate);
-  const demand = hydricDemandSummary(states, activeDate);
-
   const selectedPivot = states.find((s) => hydricStateId(s) === selectedId) ?? null;
 
   const ranking = useMemo(
@@ -682,40 +662,16 @@ export default function VisaoGeralPage() {
         />
       </div>
 
-      {/* ── Mapa (protagonista) · Manejo · Consumo ──────────────────── */}
-      <Card className="overflow-hidden p-0">
-        <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3.5 dark:border-white/[0.06]">
-          <div className="flex items-center gap-2">
-            <svg className="h-[18px] w-[18px] text-graphite-400 dark:text-gray-500" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 20l-5.5 2V6L9 4m0 16l6-2m-6 2V4m6 14l5.5 2V4l-5.5-2m0 16V2" />
-            </svg>
-            <p className="whitespace-nowrap text-[13px] font-bold text-graphite-800 dark:text-white">Mapa hídrico</p>
-            <span className="hidden text-[11px] text-graphite-400 sm:inline dark:text-gray-500">
-              · toque no pivô para abrir o manejo
-            </span>
-          </div>
-        </div>
-        <div className="relative">
-            <PivotMap
-              pivots={mapPivots}
-              highlightId={selectedId ?? undefined}
-              onSelect={setSelectedId}
-              className="h-[min(62vh,640px)] min-h-[480px] w-full rounded-none border-0"
-            />
-            {selectedPivot ? (
-              <HydricMapOverlay onClose={() => setSelectedId(null)}>
-                <PivotSideDetail pivot={selectedPivot} />
-              </HydricMapOverlay>
-            ) : null}
-          </div>
-          <HydricMapLegend
-            counts={mapCounts}
-            dates={dates}
-            selectedDate={activeDate}
-            onSelectDate={setSelectedDate}
-            demand={demand}
-          />
-      </Card>
+      {/* ── Mapa Vision · manejo, chuva, orbital, custo + desenho ───── */}
+      <VisionMapPanel
+        states={states}
+        selectedId={selectedId}
+        onSelect={setSelectedId}
+        selectedDate={selectedDate}
+        onSelectDate={setSelectedDate}
+        overlay={selectedPivot ? <PivotSideDetail pivot={selectedPivot} /> : null}
+        mapClassName="h-[min(62vh,640px)] min-h-[480px] w-full rounded-none border-0"
+      />
 
       <div className="grid gap-5 lg:grid-cols-2">
         <SituacaoManejo summary={summary} />

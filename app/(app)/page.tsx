@@ -1,16 +1,14 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
 import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
-import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
-import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
 import { HydricStatusBadge } from "@/components/maps/HydricStatusBadge";
-import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricMapStates, hydricStateId, mapStatusOf, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { VisionMapPanel } from "@/components/maps/VisionMapPanel";
+import { hydricMapDates, hydricMapStates, hydricStateId, mapStatusOf } from "@/components/maps/hydric-map-markers";
 import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   HYDRIC_STATUS_CONFIG,
@@ -18,14 +16,9 @@ import {
   type FarmHydricSummary,
 } from "@/modules/water-balance/services";
 
-const PivotMap = dynamic(
-  () => import("@/components/maps/PivotMap").then((m) => ({ default: m.PivotMap })),
-  { ssr: false, loading: () => <div className="flex h-[min(78vh,760px)] min-h-[560px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800"><p className="text-sm text-graphite-400">Carregando mapa...</p></div> }
-);
-
 const TABS = [
   { id: "painel", label: "Dashboard Operacional" },
-  { id: "mapa", label: "Mapa Hídrico" },
+  { id: "mapa", label: "Mapa Vision" },
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────
@@ -201,46 +194,18 @@ function MapaHidricoTab({ states }: { states: PivotHydricState[] }) {
   const dates = useMemo(() => hydricMapDates(states), [states]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState<string | null>(dates[dates.length - 1] ?? null);
-  const activeDate = selectedDate ?? dates[dates.length - 1] ?? null;
   const mapStates = hydricMapStates(states);
   const selected = mapStates.find((s) => hydricStateId(s) === selectedId) ?? null;
-  const mapPivots = useMemo(() => toHydricMapMarkers(states, activeDate), [states, activeDate]);
-  const counts = countMapStatuses(states, activeDate);
-  const demand = hydricDemandSummary(states, activeDate);
-  const hasCoords = mapPivots.length > 0;
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-gray-100 shadow-card dark:border-white/[0.06]">
-      {hasCoords ? (
-        <>
-          <div className="relative">
-            <PivotMap
-              pivots={mapPivots}
-              highlightId={selectedId ?? undefined}
-              onSelect={setSelectedId}
-              className="h-[min(72vh,700px)] min-h-[520px] w-full rounded-none border-0"
-            />
-            {selected ? (
-              <HydricMapOverlay onClose={() => setSelectedId(null)}>
-                <PivotDetail state={selected} />
-              </HydricMapOverlay>
-            ) : null}
-          </div>
-          <HydricMapLegend
-            counts={counts}
-            dates={dates}
-            selectedDate={activeDate}
-            onSelectDate={setSelectedDate}
-            demand={demand}
-          />
-        </>
-      ) : (
-        <EmptyState
-          title="Nenhum pivô com parcela ativa"
-          description="O mapa hídrico mostra somente equipamentos com parcela em manejo. Cadastre ou reative uma parcela para o pivô voltar ao mapa."
-        />
-      )}
-    </div>
+    <VisionMapPanel
+      states={states}
+      selectedId={selectedId}
+      onSelect={setSelectedId}
+      selectedDate={selectedDate}
+      onSelectDate={setSelectedDate}
+      overlay={selected ? <PivotDetail state={selected} /> : null}
+    />
   );
 }
 
