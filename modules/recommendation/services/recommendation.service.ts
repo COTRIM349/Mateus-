@@ -131,8 +131,6 @@ function contextIsOperational(ctx: PivotContext): boolean {
     && ctx.afd > 0
     && ctx.storedWater >= 0
     && ctx.storedWater <= ctx.cad + 0.05
-    // Programação deve vir de um balanço realmente calculado. O caminho legado
-    // preenchia ausência com ETc/ETo=0; isso agora bloqueia a recomendação.
     && ctx.et0 > 0
     && ctx.etc > 0;
 }
@@ -301,7 +299,7 @@ function waterStatusFromProjection(arm: number, cad: number, afd: number): Water
   if (ratio >= 1.4) return "deficit_critico";
   if (ratio >= 1) return "deficit";
   if (ratio >= 0.7) return "atencao";
-  if (ratio >= 0.3) return "adequado";
+  if (ratio >= 0.3) return "ideal";
   return "ideal";
 }
 
@@ -341,10 +339,6 @@ export function rankRecommendations(recs: Recommendation[]): Recommendation[] {
   return [...recs].sort((a, b) => b.priorityScore - a.priorityScore);
 }
 
-/**
- * Mantém os valores internos legados para compatibilidade com o banco/UI,
- * mas apresenta os quatro estados operacionais definidos para o produto.
- */
 export const OPERATIONAL_STATUS_CONFIG: Record<OperationalStatus, { label: string; bgClass: string; icon: string }> = {
   irrigar_imediatamente: { label: "IRRIGAR AGORA", bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: "!!" },
   irrigar_hoje: { label: "IRRIGAR AGORA", bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400", icon: "!" },
