@@ -1217,24 +1217,43 @@ function BalanceTab({
         </Card>
       </div>
 
-      {/* 3 + 5 · Gráfico + Recomendação/Alertas */}
-      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]">
-      {/* Gráfico principal com painel de camadas */}
-      <Card className="p-0">
+      {/* 3 · Gráfico de manejo em recorte amplo (protagonista) */}
+      <Card className="overflow-hidden p-0">
+        <div className="grid grid-cols-2 divide-x divide-y divide-white/10 bg-forest-900 sm:grid-cols-4 xl:grid-cols-8 xl:divide-y-0">
+          {[
+            { l: "Dias manejados", v: String(summary.days) },
+            { l: "DAP", v: last?.dae != null ? String(last.dae) : "—" },
+            { l: "Irrigação", v: `${summary.totalIrrigation.toFixed(0)} mm` },
+            { l: "Chuva", v: `${summary.totalPrecipitation.toFixed(0)} mm` },
+            { l: "Irrigação efetiva", v: `${(summary.totalIrrigation * efPct / 100).toFixed(0)} mm` },
+            { l: "ETo", v: `${etoTotal.toFixed(0)} mm` },
+            { l: "ETc", v: `${summary.totalETc.toFixed(0)} mm` },
+            { l: "Índice de estresse", v: `${stressPct.toFixed(0)}%` },
+          ].map((k) => (
+            <div key={k.l} className="px-4 py-3">
+              <p className="text-[9.5px] font-semibold uppercase tracking-wide text-brand-200/80">{k.l}</p>
+              <p className="mt-1 text-[16px] font-extrabold tabular-nums text-white">{k.v}</p>
+            </div>
+          ))}
+        </div>
         <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
           <div>
-            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Evolução do Balanço Hídrico</p>
-            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">água disponível (% CC) × água aplicada (mm) · faixas adequada · atenção · crítica</p>
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Gráfico de manejo</p>
+            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
+              umidade (% da CC) × lâmina (mm) · CC 100% · segurança · faixas adequada · atenção · crítica
+            </p>
           </div>
         </div>
-        <div className="flex flex-col lg:flex-row">
+        <div className="flex min-h-[min(68vh,720px)] flex-col lg:flex-row">
           <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />
-          <div className="min-w-0 flex-1 p-4"><ManejoChart rows={manejoRows} visible={visible} /></div>
+          <div className="min-w-0 flex-1 p-3 sm:p-5">
+            <ManejoChart rows={manejoRows} visible={visible} />
+          </div>
         </div>
       </Card>
 
-      {/* Trilha: recomendação + justificativa + alertas */}
-      <div className="space-y-5">
+      {/* 5 · Recomendação / justificativa / alertas — abaixo do gráfico */}
+      <div className="grid items-start gap-5 lg:grid-cols-3">
         {/* Recomendação de hoje */}
         <Card className="overflow-hidden p-0">
           <div className="bg-gradient-to-br from-forest-800 to-forest-900 p-4 text-white">
@@ -1317,7 +1336,6 @@ function BalanceTab({
             ));
           })()}
         </Card>
-      </div>
       </div>
 
       {/* 6 · Resumo do período (fonte única dos acumulados/operação) */}

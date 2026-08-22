@@ -12,10 +12,12 @@ import {
   type StoredBalanceForReport,
 } from "./management-report";
 import {
+  MANEJO_CHART_LAYOUT,
   MANEJO_DEFAULT_ON,
   MANEJO_GROUPS,
   initialManejoVisibility,
   isDefaultManejoSubset,
+  phaseRanges,
   seriesValue,
 } from "./manejo-chart";
 import { groupByParcel, groupByPeriod, summarizeOperational } from "./operational-reports";
@@ -145,13 +147,34 @@ describe("gráfico central de manejo", () => {
   it("tem os quatro grupos e não liga todas as séries por padrão", () => {
     expect(MANEJO_GROUPS.map((g) => g.cat)).toEqual(["Irrigação", "Solo", "Cultura", "Clima"]);
     expect(isDefaultManejoSubset()).toBe(true);
-    expect(MANEJO_DEFAULT_ON).toEqual(["umidade", "arm", "irrig", "chuva", "etc", "sensorial"]);
+    expect(MANEJO_DEFAULT_ON).toEqual(["umidade", "cc", "seg", "arm", "irrig", "chuva", "etc", "sensorial"]);
     const vis = initialManejoVisibility();
     const on = Object.values(vis).filter(Boolean).length;
     expect(on).toBe(MANEJO_DEFAULT_ON.length);
     expect(on).toBeLessThan(Object.keys(vis).length);
     expect(vis.tmax).toBe(false);
     expect(vis.kc).toBe(false);
+    expect(vis.cc).toBe(true);
+    expect(vis.seg).toBe(true);
+  });
+
+  it("recorte do gráfico é alto o bastante para ser o protagonista da tela", () => {
+    expect(MANEJO_CHART_LAYOUT.height).toBeGreaterThanOrEqual(520);
+    expect(MANEJO_CHART_LAYOUT.width).toBeGreaterThanOrEqual(1200);
+  });
+
+  it("phaseRanges agrupa fases consecutivas sem inventar estádio", () => {
+    expect(phaseRanges([
+      { phase: "Inicial" },
+      { phase: "Inicial" },
+      { phase: "Desenvolvimento" },
+      { phase: "Desenvolvimento" },
+      { phase: "Adulto" },
+    ])).toEqual([
+      { phase: "Inicial", start: 0, end: 1 },
+      { phase: "Desenvolvimento", start: 2, end: 3 },
+      { phase: "Adulto", start: 4, end: 4 },
+    ]);
   });
 });
 
@@ -234,11 +257,14 @@ describe("telas de relatórios e gráfico", () => {
     expect(src).not.toContain("energy_consumption");
   });
 
-  it("balanço reusa o gráfico central com o padrão reduzido", () => {
+  it("balanço reusa o gráfico central em recorte amplo, padrão reduzido", () => {
     const src = readFileSync(join(process.cwd(), "app/(app)/balanco-hidrico/page.tsx"), "utf8");
     expect(src).toContain("ManejoSeriesPicker");
     expect(src).toContain("initialManejoVisibility");
     expect(src).toContain("managementRowFromBalance");
+    expect(src).toContain("min-h-[min(68vh,720px)]");
+    expect(src).toContain("Gráfico de manejo");
+    expect(src).not.toContain("xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]");
     expect(src).not.toContain("justexc");
   });
 });

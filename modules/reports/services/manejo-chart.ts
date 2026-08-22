@@ -108,14 +108,32 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
 
 export const MANEJO_ALL: ManejoSeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
 
+/** Recorte do gráfico-herói (centro de decisão). Não é dado agronômico. */
+export const MANEJO_CHART_LAYOUT = {
+  width: 1280,
+  height: 560,
+} as const;
+
 export const MANEJO_DEFAULT_ON: ManejoSeriesKey[] = [
   "umidade",
+  "cc",
+  "seg",
   "arm",
   "irrig",
   "chuva",
   "etc",
   "sensorial",
 ];
+
+export function phaseRanges(rows: Array<{ phase: string }>): Array<{ phase: string; start: number; end: number }> {
+  const out: Array<{ phase: string; start: number; end: number }> = [];
+  for (let i = 0; i < rows.length; i += 1) {
+    const last = out[out.length - 1];
+    if (!last || last.phase !== rows[i].phase) out.push({ phase: rows[i].phase, start: i, end: i });
+    else last.end = i;
+  }
+  return out;
+}
 
 export function initialManejoVisibility(): Record<ManejoSeriesKey, boolean> {
   const on = new Set<ManejoSeriesKey>(MANEJO_DEFAULT_ON);

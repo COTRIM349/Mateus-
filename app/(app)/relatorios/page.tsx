@@ -421,16 +421,16 @@ function ManejoPreview({
           <div>
             <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Gráfico de manejo</p>
             <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
-              Séries em Irrigação, Solo, Cultura e Clima. Padrão: umidade, ARM, irrigação, chuva, ETc e nota sensorial.
+              Séries em Irrigação, Solo, Cultura e Clima. Padrão: umidade, CC, segurança, ARM, irrigação, chuva, ETc e nota sensorial.
             </p>
           </div>
         </div>
         {chartRows.length === 0 ? (
           <p className="px-6 py-10 text-center text-sm text-gray-400">Selecione um pivô ou parcela para o gráfico temporal.</p>
         ) : (
-          <div className="flex flex-col lg:flex-row">
+          <div className="flex min-h-[min(68vh,720px)] flex-col lg:flex-row">
             <ManejoSeriesPicker rows={chartRows} visible={visible} onToggle={onToggle} />
-            <div className="min-w-0 flex-1 p-4">
+            <div className="min-w-0 flex-1 p-3 sm:p-5">
               <ManejoChart rows={chartRows} visible={visible} />
             </div>
           </div>
