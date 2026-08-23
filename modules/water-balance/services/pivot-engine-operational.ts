@@ -1,13 +1,12 @@
 // ============================================================================
-// GUARDA OPERACIONAL DO MOTOR HÍDRICO V2
+// GUARDA OPERACIONAL DO MOTOR HÍDRICO V3 — Kc DUAL FAO-56
 // ============================================================================
-// Este módulo é a porta de entrada pública do motor V2. Ele impede que o núcleo
-// calcule balanço com fases ausentes/incompletas. O núcleo antigo mantinha
-// fallback Kc=1 e extrapolava a última fase; isso não é aceitável para decisão
-// operacional de irrigação.
+// Porta pública do motor operacional. Bloqueia cálculo quando faltam fases,
+// Kcb explícito ou cobertura temporal completa. Não há fallback silencioso
+// para Kc simples.
 // ============================================================================
 
-export * from "./pivot-engine-v2";
+export * from "./pivot-engine-v3-dual";
 
 import { resolveDaeReferenceDate } from "@/modules/assignment/services";
 import type { CulturePhase } from "@/modules/culture/services";
@@ -17,48 +16,41 @@ import {
   type PivotEngineInput,
   type PivotHydricState,
   type PivotIdentity,
-} from "./pivot-engine-v2";
+  type DualCulturePhase,
+} from "./pivot-engine-v3-dual";
 
 function dateRange(start: string, end: string): string[] {
   const out: string[] = [];
   const startMs = new Date(`${start}T00:00:00Z`).getTime();
   const endMs = new Date(`${end}T00:00:00Z`).getTime();
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs < startMs) return out;
-  for (let ms = startMs; ms <= endMs; ms += 86_400_000) {
-    out.push(new Date(ms).toISOString().slice(0, 10));
-  }
+  for (let ms = startMs; ms <= endMs; ms += 86_400_000) out.push(new Date(ms).toISOString().slice(0, 10));
   return out;
 }
 
 /**
  * Valida cobertura agronômica exata para cada DAE da série.
- *
- * Regras:
- * - zero fases => inválido;
- * - duração <= 0, Kc inválido ou datas de fase inválidas => inválido;
- * - lacuna entre fases => inválido no dia da lacuna;
- * - após o fim da última fase => inválido (não extrapola Kc automaticamente).
+ * No V3, Kcb explícito é obrigatório; kc_start/kc_end legados não habilitam
+ * operação por si só.
  */
 export function hasCompletePhaseCoverage(
-  phases: CulturePhase[],
+  phases: Array<CulturePhase & Partial<DualCulturePhase>>,
   input: Pick<PivotEngineInput, "assignment" | "dateStart" | "dateEnd">,
 ): boolean {
   if (!Array.isArray(phases) || phases.length === 0) return false;
-
   const sorted = [...phases].sort((a, b) => a.phase_order - b.phase_order);
   if (sorted.some((phase) => (
     !Number.isFinite(phase.days_after_plant) ||
     !Number.isFinite(phase.duration_days) ||
     phase.duration_days <= 0 ||
-    !Number.isFinite(phase.kc_start) ||
-    !Number.isFinite(phase.kc_end) ||
-    phase.kc_start < 0 || phase.kc_start > 2.5 ||
-    phase.kc_end < 0 || phase.kc_end > 2.5
+    phase.kcb_start == null || phase.kcb_end == null ||
+    !Number.isFinite(phase.kcb_start) || !Number.isFinite(phase.kcb_end) ||
+    phase.kcb_start < 0 || phase.kcb_start > 2.5 ||
+    phase.kcb_end < 0 || phase.kcb_end > 2.5
   ))) return false;
 
   const dates = dateRange(input.dateStart, input.dateEnd);
   if (dates.length === 0) return false;
-
   const reference = resolveDaeReferenceDate(input.assignment);
   const referenceMs = new Date(`${reference}T00:00:00Z`).getTime();
   if (!Number.isFinite(referenceMs)) return false;
@@ -74,17 +66,12 @@ export function hasCompletePhaseCoverage(
   });
 }
 
-/** Porta operacional: sem cobertura completa de fases, retorna série vazia. */
 export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
   if (!hasCompletePhaseCoverage(input.phases, input)) return [];
   return computePivotBalanceSeriesCore(input);
 }
 
-/** Estado atual também passa obrigatoriamente pela guarda de fases. */
-export function computePivotCurrentState(
-  identity: PivotIdentity,
-  input: PivotEngineInput,
-): PivotHydricState {
+export function computePivotCurrentState(identity: PivotIdentity, input: PivotEngineInput): PivotHydricState {
   const history = computePivotBalanceSeries(input);
   return {
     ...identity,
