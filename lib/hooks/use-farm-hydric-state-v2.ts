@@ -225,6 +225,23 @@ export function useFarmHydricState(): FarmHydricState {
         }
       }
 
+      // Chuva medida em campo tem precedência somente sobre a precipitação.
+      // Ela nunca cria um dia climático sozinha: sem ETo aprovada, o dia segue
+      // incompleto e o motor permanece bloqueado.
+      const { data: manualRainRows, error: manualRainError } = await supabase
+        .from("manual_rainfall_entries")
+        .select("date, precipitation_mm")
+        .eq("farm_id", activeFarmId)
+        .gte("date", dataStart)
+        .lte("date", dateEnd);
+      if (manualRainError) throw manualRainError;
+      for (const row of manualRainRows ?? []) {
+        const existing = weatherByDate[row.date as string];
+        const precipitation = Number(row.precipitation_mm);
+        if (!existing || !Number.isFinite(precipitation) || precipitation < 0) continue;
+        weatherByDate[row.date as string] = { ...existing, precipitation };
+      }
+
       const { data: irrRows, error: irrError } = await supabase
         .from("irrigation_events")
         .select("pivot_id, started_at, depth_mm")
