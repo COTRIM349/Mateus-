@@ -45,6 +45,12 @@ function minIso(values: string[]): string {
   return [...values].sort()[0];
 }
 
+function legacyWaterStatus(status: "verde" | "amarelo" | "vermelho" | "cinza"): "ideal" | "atencao" | "deficit_critico" {
+  if (status === "amarelo") return "atencao";
+  if (status === "vermelho") return "deficit_critico";
+  return "ideal";
+}
+
 /**
  * Estado hídrico da fazenda com recuperação dinâmica de continuidade.
  *
@@ -444,6 +450,65 @@ export function useFarmHydricState(): FarmHydricState {
               initialCadMm: oldParcelNeedsSeed ? seed!.cad : null,
             },
           );
+
+          if (state.history.length > 0) {
+            const explicitSource = assignment.initial_condition_source as string | null;
+            const initialConditionSource = oldParcelNeedsSeed
+              ? "prior_v2"
+              : explicitSource === "measured" || explicitSource === "field_capacity_confirmed"
+                ? explicitSource
+                : null;
+            const persisted = state.history.map((d) => ({
+              pivot_crop_assignment_id: assignment.id as string,
+              date: d.date,
+              et0: d.et0,
+              kc: d.kc,
+              etc: d.etc,
+              effective_precipitation: d.effectivePrecipitation,
+              applied_depth: d.irrigation,
+              deficit: d.deficit,
+              cad: d.adt,
+              afd: d.afd,
+              soil_storage: d.storage,
+              precipitation: d.precipitation,
+              root_depth: d.rootDepth,
+              depletion_factor: d.adt > 0 ? d.afd / d.adt : 0,
+              surplus: d.surplus,
+              net_depth: d.recommendedNetDepth,
+              gross_depth: d.recommendedGrossDepth,
+              volume_needed: d.recommendedVolume,
+              irrigation_time: d.estimatedIrrigationTime,
+              water_status: legacyWaterStatus(d.status),
+              dae: d.dae,
+              phase: d.phase,
+              effective_irrigation: d.effectiveIrrigation,
+              depletion: d.depletion,
+              should_irrigate: d.shouldIrrigate,
+              recommendation_reason: d.recommendationReason,
+              hydric_status: d.status,
+              ks: d.ks,
+              kl: d.kl,
+              kc_adjusted: d.kcAdjusted,
+              etc_potential: d.etcPotential,
+              ky: d.ky,
+              yield_risk: d.yieldRisk,
+              etc_formula: d.etcFormula,
+              safety_moisture_mm: d.safetyMoistureMm,
+              moisture_pct_cc: d.moisturePctCc,
+              safety_pct_cc: d.safetyPctCc,
+              field_capacity: d.fieldCapacity,
+              wilting_point: d.wiltingPoint,
+              pe_formula: d.peFormula,
+              balance_formula: d.balanceFormula,
+              engine_version: "hydric-v2",
+              initial_condition_source: initialConditionSource,
+            }));
+            const { error: persistError } = await supabase
+              .from("water_balances")
+              .upsert(persisted, { onConflict: "pivot_crop_assignment_id,date" });
+            if (persistError) throw persistError;
+          }
+
           result.push(state);
         }
       }
