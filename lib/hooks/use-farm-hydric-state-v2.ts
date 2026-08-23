@@ -49,10 +49,9 @@ function minIso(values: string[]): string {
  * Estado hídrico da fazenda com recuperação dinâmica de continuidade.
  *
  * A janela de 30 dias é apenas de visualização. Para uma parcela antiga, o
- * motor procura o último ARM/CAD persistido antes dessa janela e recalcula a
- * partir do dia seguinte. Se o seed estiver mais distante, a consulta climática
- * é ampliada até 60 dias. Sem seed real ou sem clima contínuo, o pivô fica como
- * dado incompleto — nunca reinicia silenciosamente em capacidade de campo.
+ * motor procura o último ARM/CAD V2 persistido antes dessa janela e recalcula a
+ * partir do dia seguinte. Balanços legados nunca são usados como seed.
+ * Sem seed V2 real ou sem clima contínuo, o pivô fica como dado incompleto.
  */
 export function useFarmHydricState(): FarmHydricState {
   const { activeFarmId, loading: authLoading } = useAuth();
@@ -149,8 +148,9 @@ export function useFarmHydricState(): FarmHydricState {
         assignmentIds.length
           ? supabase
               .from("water_balances")
-              .select("pivot_crop_assignment_id, date, soil_storage, cad")
+              .select("pivot_crop_assignment_id, date, soil_storage, cad, engine_version")
               .in("pivot_crop_assignment_id", assignmentIds)
+              .eq("engine_version", "hydric-v2")
               .lt("date", displayStart)
               .gte("date", addDays(oldestRecoveryDate, -1))
               .order("date", { ascending: false })
@@ -159,12 +159,16 @@ export function useFarmHydricState(): FarmHydricState {
 
       const latestSeedByAssignment = new Map<string, { date: string; storage: number; cad: number }>();
       for (const row of seedRes.data ?? []) {
+        if (row.engine_version !== "hydric-v2") continue;
         const id = row.pivot_crop_assignment_id as string;
         if (latestSeedByAssignment.has(id)) continue;
+        const storage = Number(row.soil_storage);
+        const cad = Number(row.cad);
+        if (!Number.isFinite(storage) || !Number.isFinite(cad) || cad <= 0 || storage < 0 || storage > cad) continue;
         latestSeedByAssignment.set(id, {
           date: row.date as string,
-          storage: row.soil_storage as number,
-          cad: row.cad as number,
+          storage,
+          cad,
         });
       }
 
