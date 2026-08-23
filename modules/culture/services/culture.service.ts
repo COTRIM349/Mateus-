@@ -7,8 +7,18 @@ export interface CulturePhase {
   name: string;
   days_after_plant: number;
   duration_days: number;
+  /** Kc simples legado/referência. Não é usado pelo motor dual V3. */
   kc_start: number;
   kc_end: number;
+  /** FAO-56 dual: coeficiente basal de cultura. */
+  kcb_start?: number | null;
+  kcb_end?: number | null;
+  kcb_reference_source?: string | null;
+  /** Cobertura e altura podem ser observadas/calibradas; null permite derivação auditável. */
+  canopy_cover_start?: number | null;
+  canopy_cover_end?: number | null;
+  plant_height_start_m?: number | null;
+  plant_height_end_m?: number | null;
   root_depth_start: number;
   root_depth_end: number;
   depletion_factor: number;
@@ -83,6 +93,17 @@ export function interpolateKc(
   return roundTo(clamp(kc, lo, hi), 3);
 }
 
+/** Interpolação diária do Kcb basal para o motor FAO-56 dual. */
+export function interpolateKcb(
+  phases: CulturePhase[],
+  daysAfterPlant: number
+): number | null {
+  const id = identifyPhase(phases, daysAfterPlant);
+  if (!id || id.phase.kcb_start == null || id.phase.kcb_end == null) return null;
+  const progress = clamp(id.progress, 0, 1);
+  return roundTo(id.phase.kcb_start + (id.phase.kcb_end - id.phase.kcb_start) * progress, 3);
+}
+
 export function generateDailyKcCurve(
   phases: CulturePhase[],
   cycleDays: number
@@ -95,6 +116,18 @@ export function generateDailyKcCurve(
       kc: interpolateKc(phases, day),
       phase: id?.phase.name ?? "—",
     });
+  }
+  return curve;
+}
+
+export function generateDailyKcbCurve(
+  phases: CulturePhase[],
+  cycleDays: number
+): { day: number; kcb: number | null; phase: string }[] {
+  const curve: { day: number; kcb: number | null; phase: string }[] = [];
+  for (let day = 0; day <= cycleDays; day++) {
+    const id = identifyPhase(phases, day);
+    curve.push({ day, kcb: interpolateKcb(phases, day), phase: id?.phase.name ?? "—" });
   }
   return curve;
 }
@@ -178,63 +211,8 @@ export function validateCulture(culture: {
   if (culture.root_depth <= 0) {
     issues.push({ field: "root_depth", level: "error", message: "Profundidade da raiz deve ser positiva" });
   }
-  if (culture.root_depth > 3) {
-    issues.push({ field: "root_depth", level: "warning", message: "Profundidade acima de 3 m é atípica" });
-  }
-  if (culture.depletion_factor < 0 || culture.depletion_factor > 1) {
+  if (culture.depletion_factor <= 0 || culture.depletion_factor >= 1) {
     issues.push({ field: "depletion_factor", level: "error", message: "Fator de depleção deve estar entre 0 e 1" });
   }
-
-  return issues;
-}
-
-export function validatePhases(
-  phases: { phase_order: number; days_after_plant: number; duration_days: number; kc_start: number; kc_end: number }[],
-  cycleDays: number
-): CultureValidation[] {
-  const issues: CultureValidation[] = [];
-  if (phases.length === 0) return issues;
-
-  const sorted = [...phases].sort((a, b) => a.phase_order - b.phase_order);
-
-  const orders = sorted.map((p) => p.phase_order);
-  if (new Set(orders).size !== orders.length) {
-    issues.push({ field: "phase_order", level: "error", message: "Ordem das fases deve ser única" });
-  }
-
-  let totalDays = 0;
-  for (let i = 0; i < sorted.length; i++) {
-    const phase = sorted[i];
-
-    if (phase.duration_days <= 0) {
-      issues.push({ field: `phase_${i}_duration`, level: "error", message: `Fase ${phase.phase_order}: duração deve ser positiva` });
-    }
-
-    if (phase.kc_start < 0 || phase.kc_start > 2.5 || phase.kc_end < 0 || phase.kc_end > 2.5) {
-      issues.push({ field: `phase_${i}_kc`, level: "error", message: `Fase ${phase.phase_order}: Kc deve estar entre 0 e 2.5` });
-    }
-
-    if (i > 0) {
-      const prev = sorted[i - 1];
-      const expectedStart = prev.days_after_plant + prev.duration_days;
-      if (phase.days_after_plant < expectedStart) {
-        issues.push({ field: `phase_${i}_overlap`, level: "error", message: `Fase ${phase.phase_order}: sobreposição com a fase anterior` });
-      }
-      if (phase.days_after_plant > expectedStart) {
-        issues.push({ field: `phase_${i}_gap`, level: "warning", message: `Intervalo de ${phase.days_after_plant - expectedStart} dias entre fases ${prev.phase_order} e ${phase.phase_order}` });
-      }
-    }
-
-    totalDays += phase.duration_days;
-  }
-
-  if (totalDays > 0 && Math.abs(totalDays - cycleDays) > 5) {
-    issues.push({
-      field: "total_days",
-      level: "warning",
-      message: `Soma das fases (${totalDays} dias) difere do ciclo da cultura (${cycleDays} dias)`,
-    });
-  }
-
   return issues;
 }
