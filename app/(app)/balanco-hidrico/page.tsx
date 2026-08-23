@@ -20,6 +20,7 @@ const STATUS_LABELS: Record<string, string> = {
   alerta: "Alerta",
   atencao: "Atenção",
   deficit_hidrico: "Déficit hídrico",
+  incompleto: "Dados indisponíveis",
 };
 
 export default function BalancoHidricoPage() {
@@ -78,16 +79,10 @@ export default function BalancoHidricoPage() {
             >
               {loading ? "Atualizando…" : "Atualizar balanço"}
             </button>
-            <Link
-              href="/lancamentos/irrigacao"
-              className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800"
-            >
+            <Link href="/lancamentos/irrigacao" className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-800">
               Lançar irrigação
             </Link>
-            <Link
-              href="/lancamentos/chuvas"
-              className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-            >
+            <Link href="/lancamentos/chuvas" className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800">
               Lançar chuva
             </Link>
           </div>
@@ -201,7 +196,7 @@ export default function BalancoHidricoPage() {
 
       {summary ? (
         <p className="text-xs text-gray-400 dark:text-gray-500">
-          Fazenda: {summary.totalPivots} pivô(s) avaliados · {summary.pivotsWithData} com balanço válido · {summary.pivotsWithoutData} bloqueados por dados incompletos.
+          Fazenda: {summary.totalPivots} pivô(s) avaliados · {summary.totalPivots - summary.noData} com balanço válido · {summary.noData} bloqueados por dados incompletos.
         </p>
       ) : null}
     </div>
