@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computePivotBalanceSeries, hasCompleteWeatherSeries, type PivotEngineInput } from "./pivot-engine-v2";
+import {
+  computePivotBalanceSeries,
+  hasCompletePhaseCoverage,
+  hasCompleteWeatherSeries,
+  type PivotEngineInput,
+} from "./pivot-engine-operational";
 
 function baseInput(overrides: Partial<PivotEngineInput> = {}): PivotEngineInput {
   return {
@@ -19,7 +24,19 @@ function baseInput(overrides: Partial<PivotEngineInput> = {}): PivotEngineInput 
       stress_point_irrigation: false,
     },
     culture: { root_depth: 0.3, depletion_factor: 0.5 },
-    phases: [],
+    phases: [
+      {
+        phase_order: 1,
+        name: "Inicial",
+        days_after_plant: 0,
+        duration_days: 10,
+        kc_start: 1,
+        kc_end: 1,
+        root_depth_start: 0.3,
+        root_depth_end: 0.3,
+        depletion_factor: 0.5,
+      },
+    ],
     soil: { field_capacity: 0.3, wilting_point: 0.12, bulk_density: 1.3, effective_depth: 0.6 },
     pivot: { application_efficiency: 0.85, efficiency: 0.9, area: 80, flow_rate: 300 },
     weatherByDate: {
@@ -79,5 +96,42 @@ describe("motor hídrico V2", () => {
     expect(rows[0].storage).toBe(54);
     expect(rows[0].surplus).toBeGreaterThan(0);
     expect(rows[0].effectivePrecipitation).toBeLessThan(20);
+  });
+
+  it("bloqueia cultura sem fases em vez de assumir Kc = 1", () => {
+    const input = baseInput({ phases: [] });
+    expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
+    expect(computePivotBalanceSeries(input)).toHaveLength(0);
+  });
+
+  it("bloqueia lacuna ou DAE fora da cobertura das fases", () => {
+    const input = baseInput({
+      phases: [
+        {
+          phase_order: 1,
+          name: "Inicial",
+          days_after_plant: 0,
+          duration_days: 1,
+          kc_start: 0.5,
+          kc_end: 0.5,
+          root_depth_start: 0.2,
+          root_depth_end: 0.2,
+          depletion_factor: 0.5,
+        },
+        {
+          phase_order: 2,
+          name: "Vegetativo",
+          days_after_plant: 3,
+          duration_days: 10,
+          kc_start: 0.8,
+          kc_end: 1,
+          root_depth_start: 0.3,
+          root_depth_end: 0.5,
+          depletion_factor: 0.5,
+        },
+      ],
+    });
+    expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
+    expect(computePivotBalanceSeries(input)).toHaveLength(0);
   });
 });
