@@ -105,7 +105,19 @@ describe("evento alimenta o balanço como I bruta", () => {
         initial_moisture_is_cc: true,
       },
       culture: { root_depth: 0.3, depletion_factor: 0.5 },
-      phases: [],
+      phases: [
+        {
+          phase_order: 1,
+          name: "Inicial",
+          days_after_plant: 0,
+          duration_days: 10,
+          kc_start: 1,
+          kc_end: 1,
+          root_depth_start: 0.3,
+          root_depth_end: 0.3,
+          depletion_factor: 0.5,
+        },
+      ],
       soil: {
         field_capacity: 0.3,
         wilting_point: 0.12,
