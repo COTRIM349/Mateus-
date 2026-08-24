@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { ingestMeteoblueForecast } from "@/modules/weather/services/meteoblue-ingest";
+import {
+  ingestMeteoblueForecast,
+  ingestMeteoblueObservations,
+} from "@/modules/weather/services/meteoblue-ingest";
+import { resolveDailyRange } from "@/modules/weather/services/source-resolver";
 import { ensureVirtualStation } from "@/modules/weather/services/virtual-station.service";
 import { isMeteoblueAgroCronAuthorized } from "./auth";
 
@@ -15,6 +19,12 @@ interface VirtualStation {
   longitude: number;
   elevation_m: number | null;
   timezone: string;
+}
+
+function isoDate(offsetDays: number): string {
+  const d = new Date();
+  d.setUTCDate(d.getUTCDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
 }
 
 export async function GET(request: Request) {
@@ -58,7 +68,7 @@ export async function GET(request: Request) {
     return NextResponse.json({
       error: error.message,
       diagnostic: {
-        version: "2026-08-11.2",
+        version: "2026-08-23.1",
         supabaseHost,
         serviceKeyType,
         serviceKeyLength: serviceRoleKey.length,
@@ -70,13 +80,13 @@ export async function GET(request: Request) {
     virtualStationId: string;
     farmId: string;
     status: "success" | "failed";
-    etoDaysReceived?: number;
-    rowsWritten?: number;
+    operationalRows?: number;
+    forecastRows?: number;
+    selections?: number;
     error?: string;
   }> = [];
 
   for (const virtual of (data ?? []) as VirtualStation[]) {
-    const startedAt = Date.now();
     try {
       const ensured = await ensureVirtualStation(supabase, virtual.farm_id, {
         dataSource: "meteoblue",
@@ -86,6 +96,17 @@ export async function GET(request: Request) {
 
       const altitude = virtual.elevation_m ?? ensured.station.altitude;
       const timezone = virtual.timezone || "America/Bahia";
+      const station = {
+        id: ensured.station.id,
+        farm_id: virtual.farm_id,
+        name: ensured.station.name,
+        latitude: virtual.latitude,
+        longitude: virtual.longitude,
+        altitude,
+        altitude_origin: ensured.station.altitude_origin,
+        timezone,
+        data_source: "meteoblue",
+      };
 
       const { error: stationUpdateError } = await supabase
         .from("weather_stations")
@@ -99,56 +120,34 @@ export async function GET(request: Request) {
         .eq("id", ensured.station.id);
       if (stationUpdateError) throw new Error(stationUpdateError.message);
 
-      const result = await ingestMeteoblueForecast(supabase, {
-        id: ensured.station.id,
-        farm_id: virtual.farm_id,
-        name: ensured.station.name,
-        latitude: virtual.latitude,
-        longitude: virtual.longitude,
-        altitude,
-        altitude_origin: ensured.station.altitude_origin,
-        timezone,
-        data_source: "meteoblue",
-      }, 7);
-
-      if (result.errorMessage) throw new Error(result.errorMessage);
-      if (result.etoDaysReceived === 0) {
-        throw new Error("O pacote respondeu, mas não retornou ETo FAO em nenhum dia.");
+      // Primeiro grava weather_readings operacionais com ETo interna FAO-56.
+      // O cron antigo atualizava somente forecast, deixando last_sync_at recente
+      // sem criar dados que o balanço hídrico pudesse realmente consumir.
+      const observations = await ingestMeteoblueObservations(supabase, station, 7);
+      if (observations.status === "failed") {
+        throw new Error(observations.errorMessage ?? "Falha na ingestão operacional Meteoblue.");
       }
 
-      await Promise.all([
-        supabase
-          .from("weather_stations")
-          .update({
-            last_sync_at: new Date().toISOString(),
-            sync_status: "ok",
-            sync_error: null,
-          })
-          .eq("id", ensured.station.id),
-        supabase.from("climate_ingestion_runs").insert({
-          farm_id: virtual.farm_id,
-          station_id: ensured.station.id,
-          provider: "meteoblue",
-          status: "success",
-          rows_inserted: result.rowsInserted,
-          rows_updated: result.rowsUpdated,
-          rows_skipped: 0,
-          duration_ms: Date.now() - startedAt,
-          request_latitude: virtual.latitude,
-          request_longitude: virtual.longitude,
-          request_timezone: timezone,
-          request_url: result.requestUrl,
-          altitude_used: altitude,
-          altitude_origin: ensured.station.altitude_origin ?? "unknown",
-        }),
-      ]);
+      // Depois mantém a previsão de 7 dias para a tela de clima.
+      const forecast = await ingestMeteoblueForecast(supabase, station, 7);
+      if (forecast.errorMessage) throw new Error(forecast.errorMessage);
+
+      // Reexecuta a seleção diária apenas na janela recente. `ok` é aprovado;
+      // `degraded` permanece somente diagnóstico e não alimenta o motor hídrico.
+      const selections = await resolveDailyRange(
+        supabase,
+        virtual.farm_id,
+        isoDate(-6),
+        isoDate(0),
+      );
 
       results.push({
         virtualStationId: virtual.id,
         farmId: virtual.farm_id,
         status: "success",
-        etoDaysReceived: result.etoDaysReceived,
-        rowsWritten: result.rowsInserted + result.rowsUpdated,
+        operationalRows: observations.rowsInserted + observations.rowsUpdated,
+        forecastRows: forecast.rowsInserted + forecast.rowsUpdated,
+        selections: selections.length,
       });
     } catch (err) {
       results.push({
