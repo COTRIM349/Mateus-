@@ -1,19 +1,16 @@
 // ============================================================================
 // GUARDA OPERACIONAL DO MOTOR HÍDRICO V2 — FAO-56 Kc simples
 // ============================================================================
-// Mantém o motor V2 como fonte operacional e bloqueia séries quando as fases
-// agronômicas não cobrem todo o período ou possuem parâmetros inválidos.
-//
-// Regra de segurança: a flag deficit_irrigation NÃO reduz lâmina por percentual
-// fixo. Irrigação deficitária só poderá alterar a recomendação quando existir
-// alvo agronômico explícito/configurável. Até lá, a recomendação repõe o déficit
-// calculado pelo balanço, corrigido somente pela eficiência de aplicação.
+// Fonte operacional do manejo: valida fases, ajusta diariamente o fator p pela
+// demanda potencial, bloqueia entradas incompletas e impede regras arbitrárias
+// de redução da lâmina.
 // ============================================================================
 
 export * from "./pivot-engine-v2";
 
-import { resolveDaeReferenceDate } from "@/modules/assignment/services";
-import type { CulturePhase } from "@/modules/culture/services";
+import { resolveDaeReferenceDate, resolveDepletionFactor } from "@/modules/assignment/services";
+import { identifyPhase, interpolateKc, type CulturePhase } from "@/modules/culture/services";
+import { resolveManejoKl } from "./crop-coefficients";
 import {
   computePivotBalanceSeries as computePivotBalanceSeriesCore,
   type BalanceDay,
@@ -60,8 +57,6 @@ export function hasCompletePhaseCoverage(
   const sorted = [...phases].sort((a, b) => a.phase_order - b.phase_order);
   if (sorted.some((phase) => !phaseParametersAreOperational(phase))) return false;
 
-  // A linha do tempo precisa ser contínua. Buracos ou sobreposição indicam
-  // cadastro inconsistente e não devem ser escondidos pelo interpolador.
   for (let i = 1; i < sorted.length; i++) {
     const previousEnd = sorted[i - 1].days_after_plant + sorted[i - 1].duration_days;
     if (sorted[i].days_after_plant !== previousEnd) return false;
@@ -82,6 +77,17 @@ export function hasCompletePhaseCoverage(
       return dae >= start && dae < endExclusive;
     });
   });
+}
+
+/**
+ * FAO-56: p_adj = p_table + 0,04 × (5 − ETc), com p_tab tabelado para ETc≈5.
+ * Usa ETc potencial (antes de Ks), evitando circularidade quando já há estresse.
+ */
+export function adjustDepletionFactorForDemand(baseP: number, etcPotentialMmDay: number): number {
+  const safeBase = Number.isFinite(baseP) ? baseP : 0.5;
+  const safeEtc = Number.isFinite(etcPotentialMmDay) ? Math.max(etcPotentialMmDay, 0) : 5;
+  const adjusted = safeBase + 0.04 * (5 - safeEtc);
+  return Math.round(Math.min(Math.max(adjusted, 0.1), 0.8) * 1000) / 1000;
 }
 
 /**
@@ -111,9 +117,8 @@ export interface ManagementUrgency {
 
 /**
  * Traduz o estado do balanço em informação operacional de Scheduling.
- * Usa ETc potencial para não alongar artificialmente o prazo quando o Ks já
- * começou a reduzir a transpiração. Não é previsão meteorológica; é uma
- * estimativa estática com a demanda atual, sem chuva e sem nova irrigação.
+ * Não é previsão meteorológica: mantém a demanda potencial atual constante e
+ * assume ausência de nova chuva/irrigação apenas para estimar urgência.
  */
 export function calculateManagementUrgency(
   day: Pick<BalanceDay, "afd" | "deficit" | "etcPotential">,
@@ -138,9 +143,76 @@ export function calculateManagementUrgency(
   };
 }
 
+/**
+ * Executa o núcleo V2 dia a dia para permitir que p seja recalculado com a
+ * demanda daquele dia, preservando ARM e CAD do dia anterior. O núcleo continua
+ * responsável por Ks, ETc, balanço, chuva, irrigação e recomendação.
+ */
 export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
   if (!hasCompletePhaseCoverage(input.phases, input)) return [];
-  return computePivotBalanceSeriesCore(normalizeOperationalInput(input));
+
+  const normalized = normalizeOperationalInput(input);
+  const dates = dateRange(normalized.dateStart, normalized.dateEnd);
+  const referenceMs = new Date(`${resolveDaeReferenceDate(normalized.assignment)}T00:00:00Z`).getTime();
+  if (!Number.isFinite(referenceMs)) return [];
+
+  const result: BalanceDay[] = [];
+  let previousStorage: number | null = normalized.initialStorageMm ?? null;
+  let previousCad: number | null = normalized.initialCadMm ?? null;
+
+  for (const date of dates) {
+    const weather = normalized.weatherByDate[date];
+    if (!weather || !Number.isFinite(weather.et0) || weather.et0 < 0 || !Number.isFinite(weather.precipitation) || weather.precipitation < 0) {
+      return [];
+    }
+
+    const dateMs = new Date(`${date}T00:00:00Z`).getTime();
+    const dae = Math.max(0, Math.floor((dateMs - referenceMs) / 86_400_000));
+    const phase = identifyPhase(normalized.phases, dae)?.phase ?? null;
+    if (!phase) return [];
+
+    const kc = interpolateKc(normalized.phases, dae);
+    const kl = resolveManejoKl({
+      parcelOverride: normalized.assignment.kl_override,
+      phaseKl: phase.kl,
+      cultureKl: normalized.culture.kl,
+    });
+    const etcPotential = Math.max(weather.et0 * kc * kl, 0);
+    const baseP = resolveDepletionFactor(
+      normalized.assignment,
+      phase.depletion_factor,
+      normalized.culture.depletion_factor,
+    );
+    const adjustedP = adjustDepletionFactorForDemand(baseP, etcPotential);
+
+    const dailyPhases = normalized.phases.map((item) =>
+      item.phase_order === phase.phase_order
+        ? { ...item, depletion_factor: adjustedP }
+        : item,
+    );
+
+    const dailyAssignment = normalized.assignment.parameter_mode === "personalizado" && normalized.assignment.depletion_factor != null
+      ? { ...normalized.assignment, depletion_factor: adjustedP }
+      : normalized.assignment;
+
+    const daily = computePivotBalanceSeriesCore({
+      ...normalized,
+      assignment: dailyAssignment,
+      phases: dailyPhases,
+      dateStart: date,
+      dateEnd: date,
+      initialStorageMm: previousStorage,
+      initialCadMm: previousCad,
+    });
+    if (daily.length !== 1) return [];
+
+    const row = daily[0];
+    result.push(row);
+    previousStorage = row.storage;
+    previousCad = row.adt;
+  }
+
+  return result;
 }
 
 export function computePivotCurrentState(identity: PivotIdentity, input: PivotEngineInput): PivotHydricState {
