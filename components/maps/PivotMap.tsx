@@ -34,6 +34,11 @@ interface PivotMapProps {
 const SATELLITE_URL =
   "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}";
 
+/**
+ * Pivô no recorte clássico de manejo (Agrosmart Aqua):
+ * círculo ou quadrante na cor do status, borda da mesma cor,
+ * lavoura visível, sem pino no centro. Sempre na coordenada do equipamento.
+ */
 const FIELD_FILL = 0.33;
 const FIELD_FILL_SELECTED = 0.42;
 const RING_WEIGHT = 2.5;
@@ -75,6 +80,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
       map.remove();
       mapRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
@@ -99,7 +105,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
       if (!pivot.latitude || !pivot.longitude) continue;
       const latlng: L.LatLngExpression = [pivot.latitude, pivot.longitude];
       const isHighlighted = pivot.id === highlightId;
-      const baseColor = pivot.color ?? MAP_HYDRIC_COLORS.darkGreen;
+      const baseColor = pivot.color ?? MAP_HYDRIC_COLORS.green;
       const tooltip = pivot.statusLabel
         ? `${pivot.name} · ${pivot.statusLabel}`
         : pivot.name;
@@ -147,8 +153,11 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
         layer.on("click", () => onSelect(pivot.id));
       }
 
-      if (layer instanceof L.Circle) bounds.extend(latlng);
-      else bounds.extend(layer.getBounds());
+      if (layer instanceof L.Circle) {
+        bounds.extend(latlng);
+      } else {
+        bounds.extend(layer.getBounds());
+      }
     }
 
     if (bounds.isValid()) {

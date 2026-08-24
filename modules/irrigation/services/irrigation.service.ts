@@ -8,62 +8,80 @@
  * Referências: FAO-56, Embrapa, Allen et al. (1998).
  */
 
-import { roundTo, clamp } from "@/utils/math";
+import {
+  STEFAN_BOLTZMANN,
+  LATENT_HEAT,
+  REFERENCE_ALBEDO,
+  SOLAR_CONSTANT,
+} from "@/constants/agronomic";
+import { degToRad, roundTo, clamp } from "@/utils/math";
 import type { ET0Input } from "@/types/domain/weather";
-import { calculateReferenceEtoFao56 } from "@/modules/weather/calculations/referenceEtoFao56";
 
 /* ========================================================================== */
 /*  ET0 — Evapotranspiração de referência (Penman-Monteith FAO-56)            */
 /* ========================================================================== */
 
-/**
- * Converte o dia do ano da interface legada em uma data apenas para alimentar
- * a geometria solar do motor canônico. O ano escolhido é bissexto para aceitar
- * explicitamente o dia 366; o cálculo FAO-56 depende do número ordinal do dia,
- * não do ano civil usado como contêiner.
- */
-function dateFromDayOfYear(dayOfYear: number): string {
-  const ordinal = Math.min(Math.max(Math.trunc(dayOfYear), 1), 366);
-  const d = new Date(Date.UTC(2024, 0, 1));
-  d.setUTCDate(d.getUTCDate() + ordinal - 1);
-  return d.toISOString().slice(0, 10);
+function saturationVaporPressure(temp: number): number {
+  return 0.6108 * Math.exp((17.27 * temp) / (temp + 237.3));
+}
+
+function slopeVaporPressureCurve(temp: number): number {
+  const es = saturationVaporPressure(temp);
+  return (4098 * es) / Math.pow(temp + 237.3, 2);
+}
+
+function psychrometricConstant(altitude: number): number {
+  const P = 101.3 * Math.pow((293 - 0.0065 * altitude) / 293, 5.26);
+  return 0.000665 * P;
 }
 
 /**
- * Adaptador legado para o cálculo diário canônico FAO-56 Penman-Monteith.
- *
- * A assinatura ET0Input é mantida para compatibilidade com módulos antigos,
- * mas não existe mais uma segunda implementação matemática. Humidade recebida
- * por esta interface é RH média; vento é considerado já normalizado a 2 m.
+ * Calcula a ET0 diária pelo método de Penman-Monteith (FAO-56).
  * Resultado em mm/dia.
  */
 export function calculateET0(input: ET0Input): number {
-  const result = calculateReferenceEtoFao56({
-    date: dateFromDayOfYear(input.dayOfYear),
-    latitude: input.latitude,
-    elevationM: Number.isFinite(input.altitude) ? input.altitude : null,
-    temperatureMinC: Number.isFinite(input.tempMin) ? input.tempMin : null,
-    temperatureMaxC: Number.isFinite(input.tempMax) ? input.tempMax : null,
-    temperatureMeanC:
-      Number.isFinite(input.tempMin) && Number.isFinite(input.tempMax)
-        ? (input.tempMin + input.tempMax) / 2
-        : null,
-    relativeHumidityMinPct: null,
-    relativeHumidityMaxPct: null,
-    relativeHumidityMeanPct: Number.isFinite(input.humidity) ? input.humidity : null,
-    actualVapourPressureKpa: null,
-    windSpeedMs: Number.isFinite(input.windSpeed) ? input.windSpeed : null,
-    windMeasurementHeightM: 2,
-    solarRadiationMjM2Day: Number.isFinite(input.solarRadiation) ? input.solarRadiation : null,
-    surfacePressureKpa: null,
-  });
+  const { tempMax, tempMin, humidity, windSpeed, solarRadiation, altitude, latitude, dayOfYear } = input;
 
-  if (result.etoMmDay == null) {
-    throw new Error(
-      `ETo FAO-56 não calculável pela entrada legada: ${result.missingFields.join(", ") || "dados inválidos"}`,
-    );
-  }
-  return roundTo(result.etoMmDay, 2);
+  const tempMean = (tempMax + tempMin) / 2;
+  const delta = slopeVaporPressureCurve(tempMean);
+  const gamma = psychrometricConstant(altitude);
+
+  const esMax = saturationVaporPressure(tempMax);
+  const esMin = saturationVaporPressure(tempMin);
+  const es = (esMax + esMin) / 2;
+  const ea = es * (humidity / 100);
+
+  const latRad = degToRad(latitude);
+  const dr = 1 + 0.033 * Math.cos(((2 * Math.PI) / 365) * dayOfYear);
+  const solarDeclination = 0.409 * Math.sin(((2 * Math.PI) / 365) * dayOfYear - 1.39);
+  const ws = Math.acos(-Math.tan(latRad) * Math.tan(solarDeclination));
+
+  const Ra =
+    ((24 * 60) / Math.PI) *
+    SOLAR_CONSTANT *
+    dr *
+    (ws * Math.sin(latRad) * Math.sin(solarDeclination) +
+      Math.cos(latRad) * Math.cos(solarDeclination) * Math.sin(ws));
+
+  const Rso = (0.75 + 2e-5 * altitude) * Ra;
+  const Rns = (1 - REFERENCE_ALBEDO) * solarRadiation;
+
+  const tempMaxK = tempMax + 273.16;
+  const tempMinK = tempMin + 273.16;
+  const Rnl =
+    STEFAN_BOLTZMANN *
+    ((Math.pow(tempMaxK, 4) + Math.pow(tempMinK, 4)) / 2) *
+    (0.34 - 0.14 * Math.sqrt(ea)) *
+    (1.35 * (solarRadiation / Math.max(Rso, 0.01)) - 0.35);
+
+  const Rn = Rns - Rnl;
+  const G = 0;
+
+  const numerator =
+    0.408 * delta * (Rn - G) + gamma * (900 / (tempMean + 273)) * windSpeed * (es - ea);
+  const denominator = delta + gamma * (1 + 0.34 * windSpeed);
+
+  return roundTo(Math.max(numerator / denominator, 0), 2);
 }
 
 /* ========================================================================== */
@@ -98,7 +116,7 @@ export function calculateCAD(
 }
 
 /* ========================================================================== */
-/*  AFD — Água Facilmente Disponível                                           */
+/*  AFD — Água Facilmente Disponível                                          */
 /* ========================================================================== */
 
 /**

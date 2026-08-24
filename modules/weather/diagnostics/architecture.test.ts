@@ -1,11 +1,10 @@
 // ============================================================================
 // modules/weather/diagnostics/architecture.test.ts
 // ----------------------------------------------------------------------------
-// Teste de arquitetura climática.
+// Teste de arquitetura (Etapa 5, §13 e §16).
 //
-// Regra crítica: módulos operacionais não podem depender de diagnóstico,
-// providers, normalizadores ou UI climática. O cálculo puro FAO-56 canônico é
-// uma exceção intencional: ele foi promovido a núcleo matemático operacional.
+// Regra crítica: nenhum módulo operacional pode importar o módulo diagnóstico.
+// Testes aqui rodam grep textual sobre os fontes — não bootam runtime.
 // ============================================================================
 
 import { describe, it, expect } from "vitest";
@@ -24,12 +23,6 @@ const OPERATIONAL_DIRS = [
   "modules/energy",
 ];
 
-/**
- * Dependências que continuam proibidas no domínio operacional. Note que
- * referenceEtoFao56/referenceEtoTypes NÃO estão aqui: são módulos matemáticos
- * puros, determinísticos e agora constituem a única implementação oficial de
- * ETo FAO-56 da plataforma.
- */
 const FORBIDDEN_IMPORTS = [
   "@/modules/weather/diagnostics/",
   "modules/weather/diagnostics/",
@@ -38,6 +31,8 @@ const FORBIDDEN_IMPORTS = [
   "@/components/climate/ShadowModeBanner",
   "@/modules/weather/providers/openMeteoProvider",
   "@/modules/weather/normalizers/normalizeOpenMeteo",
+  "@/modules/weather/calculations/referenceEtoFao56",
+  "@/modules/weather/calculations/referenceEtoTypes",
   "@/modules/weather/config/climateSpecification",
 ];
 
@@ -71,15 +66,17 @@ function walk(dir: string): string[] {
   return out;
 }
 
-describe("Arquitetura climática — módulos operacionais não importam diagnóstico/provider", () => {
+describe("Arquitetura Shadow Mode — módulos operacionais NÃO importam diagnóstico", () => {
   for (const dir of OPERATIONAL_DIRS) {
-    it(`nenhum arquivo em ${dir}/ importa camada climática acoplada`, () => {
+    it(`nenhum arquivo em ${dir}/ importa a nova camada climática`, () => {
       const files = walk(join(REPO_ROOT, dir));
       const offenders: string[] = [];
       for (const file of files) {
         const content = readFileSync(file, "utf8");
         for (const forbidden of FORBIDDEN_IMPORTS) {
-          if (content.includes(forbidden)) offenders.push(`${file} → ${forbidden}`);
+          if (content.includes(forbidden)) {
+            offenders.push(`${file} → ${forbidden}`);
+          }
         }
       }
       expect(offenders, offenders.join("\n")).toEqual([]);
@@ -87,21 +84,28 @@ describe("Arquitetura climática — módulos operacionais não importam diagnó
   }
 });
 
-describe("Arquitetura climática — hook do balanço não usa diagnóstico", () => {
-  it("lib/hooks/use-farm-hydric-state.ts não importa dependências proibidas", () => {
+describe("Arquitetura Shadow Mode — hook do balanço não usa diagnóstico", () => {
+  it("lib/hooks/use-farm-hydric-state.ts não importa nada da nova camada", () => {
     const file = join(REPO_ROOT, "lib/hooks/use-farm-hydric-state.ts");
     const content = readFileSync(file, "utf8");
     for (const forbidden of FORBIDDEN_IMPORTS) {
-      expect(content.includes(forbidden), `${forbidden} não pode aparecer aqui`).toBe(false);
+      expect(
+        content.includes(forbidden),
+        `${forbidden} não pode aparecer aqui`,
+      ).toBe(false);
     }
   });
 });
 
-describe("ETo operacional — implementação única", () => {
-  it("irrigation.service usa o FAO-56 canônico sem importar provider/diagnóstico", () => {
-    const file = join(REPO_ROOT, "modules/irrigation/services/irrigation.service.ts");
+describe("Arquitetura Shadow Mode — irrigation.service permanece intocado", () => {
+  it("modules/irrigation/services/irrigation.service.ts não importa referenceEtoFao56 novo", () => {
+    const file = join(
+      REPO_ROOT,
+      "modules/irrigation/services/irrigation.service.ts",
+    );
     const content = readFileSync(file, "utf8");
-    expect(content).toContain("@/modules/weather/calculations/referenceEtoFao56");
+    // Não deve importar nada da nova cadeia
+    expect(content).not.toContain("referenceEtoFao56");
     expect(content).not.toContain("openMeteoProvider");
     expect(content).not.toContain("normalizeOpenMeteo");
     expect(content).not.toContain("climateDiagnosticService");

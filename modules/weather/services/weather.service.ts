@@ -21,10 +21,6 @@ export interface WeatherValidation {
   message: string;
 }
 
-/**
- * Equação histórica mantida apenas para relatórios agregados que já a usam.
- * O balanço hídrico diário V2 NÃO chama esta função.
- */
 export function calculateEffectivePrecipitation(precipitation: number): number {
   if (precipitation <= 0) return 0;
   if (precipitation <= 250) {
@@ -49,7 +45,10 @@ export function averageET0(readings: WeatherReadingRow[]): number {
 }
 
 export function totalET0(readings: WeatherReadingRow[]): number {
-  return roundTo(readings.reduce((s, r) => s + (r.et0_calculated ?? 0), 0), 2);
+  return roundTo(
+    readings.reduce((s, r) => s + (r.et0_calculated ?? 0), 0),
+    2
+  );
 }
 
 export function averageHumidity(readings: WeatherReadingRow[]): number {
@@ -67,7 +66,13 @@ export function periodSummary(readings: WeatherReadingRow[]) {
     days: readings.length,
     avgTemp: averageTemperature(readings),
     totalPrecip: totalPrecipitation(readings),
-    totalEffPrecip: roundTo(readings.reduce((s, r) => s + calculateEffectivePrecipitation(r.precipitation), 0), 1),
+    totalEffPrecip: roundTo(
+      readings.reduce(
+        (s, r) => s + calculateEffectivePrecipitation(r.precipitation),
+        0
+      ),
+      1
+    ),
     avgET0: averageET0(readings),
     totalET0: totalET0(readings),
     avgHumidity: averageHumidity(readings),
@@ -87,19 +92,50 @@ export function validateWeatherReading(reading: {
 }): WeatherValidation[] {
   const issues: WeatherValidation[] = [];
 
-  if (reading.et0_calculated != null && reading.et0_calculated < 0) issues.push({ field: "et0_calculated", level: "error", message: "ET₀ não pode ser negativa" });
-  if (reading.et0_calculated != null && reading.et0_calculated > 15) issues.push({ field: "et0_calculated", level: "warning", message: "ET₀ acima de 15 mm/dia é atípica" });
-  if (reading.precipitation != null && reading.precipitation < 0) issues.push({ field: "precipitation", level: "error", message: "Precipitação não pode ser negativa" });
-  if (reading.precipitation != null && reading.precipitation > 200) issues.push({ field: "precipitation", level: "warning", message: "Precipitação acima de 200 mm/dia é atípica" });
-  if (reading.temp_max != null && (reading.temp_max < -10 || reading.temp_max > 55)) issues.push({ field: "temp_max", level: "warning", message: "Temperatura máxima fora do intervalo esperado (-10 a 55°C)" });
-  if (reading.temp_min != null && (reading.temp_min < -15 || reading.temp_min > 45)) issues.push({ field: "temp_min", level: "warning", message: "Temperatura mínima fora do intervalo esperado (-15 a 45°C)" });
-  if (reading.temp_min != null && reading.temp_max != null && reading.temp_min > reading.temp_max) issues.push({ field: "temp_min", level: "error", message: "Temperatura mínima maior que a máxima" });
-  if (reading.temp_mean != null && reading.temp_min != null && reading.temp_max != null && (reading.temp_mean < reading.temp_min || reading.temp_mean > reading.temp_max)) issues.push({ field: "temp_mean", level: "warning", message: "Temperatura média fora do intervalo mín-máx" });
-  if (reading.humidity != null && (reading.humidity < 0 || reading.humidity > 100)) issues.push({ field: "humidity", level: "error", message: "Umidade relativa deve estar entre 0% e 100%" });
-  if (reading.wind_speed != null && reading.wind_speed < 0) issues.push({ field: "wind_speed", level: "error", message: "Velocidade do vento não pode ser negativa" });
-  if (reading.wind_speed != null && reading.wind_speed > 30) issues.push({ field: "wind_speed", level: "warning", message: "Velocidade do vento acima de 30 m/s é atípica" });
-  if (reading.solar_radiation != null && reading.solar_radiation < 0) issues.push({ field: "solar_radiation", level: "error", message: "Radiação solar não pode ser negativa" });
-  if (reading.solar_radiation != null && reading.solar_radiation > 40) issues.push({ field: "solar_radiation", level: "warning", message: "Radiação solar acima de 40 MJ/m²/dia é atípica" });
+  if (reading.et0_calculated != null && reading.et0_calculated < 0) {
+    issues.push({ field: "et0_calculated", level: "error", message: "ET₀ não pode ser negativa" });
+  }
+  if (reading.et0_calculated != null && reading.et0_calculated > 15) {
+    issues.push({ field: "et0_calculated", level: "warning", message: "ET₀ acima de 15 mm/dia é atípica" });
+  }
+  if (reading.precipitation != null && reading.precipitation < 0) {
+    issues.push({ field: "precipitation", level: "error", message: "Precipitação não pode ser negativa" });
+  }
+  if (reading.precipitation != null && reading.precipitation > 200) {
+    issues.push({ field: "precipitation", level: "warning", message: "Precipitação acima de 200 mm/dia é atípica" });
+  }
+  if (reading.temp_max != null && (reading.temp_max < -10 || reading.temp_max > 55)) {
+    issues.push({ field: "temp_max", level: "warning", message: "Temperatura máxima fora do intervalo esperado (-10 a 55°C)" });
+  }
+  if (reading.temp_min != null && (reading.temp_min < -15 || reading.temp_min > 45)) {
+    issues.push({ field: "temp_min", level: "warning", message: "Temperatura mínima fora do intervalo esperado (-15 a 45°C)" });
+  }
+  if (reading.temp_min != null && reading.temp_max != null && reading.temp_min > reading.temp_max) {
+    issues.push({ field: "temp_min", level: "error", message: "Temperatura mínima maior que a máxima" });
+  }
+  if (
+    reading.temp_mean != null &&
+    reading.temp_min != null &&
+    reading.temp_max != null &&
+    (reading.temp_mean < reading.temp_min || reading.temp_mean > reading.temp_max)
+  ) {
+    issues.push({ field: "temp_mean", level: "warning", message: "Temperatura média fora do intervalo mín-máx" });
+  }
+  if (reading.humidity != null && (reading.humidity < 0 || reading.humidity > 100)) {
+    issues.push({ field: "humidity", level: "error", message: "Umidade relativa deve estar entre 0% e 100%" });
+  }
+  if (reading.wind_speed != null && reading.wind_speed < 0) {
+    issues.push({ field: "wind_speed", level: "error", message: "Velocidade do vento não pode ser negativa" });
+  }
+  if (reading.wind_speed != null && reading.wind_speed > 30) {
+    issues.push({ field: "wind_speed", level: "warning", message: "Velocidade do vento acima de 30 m/s é atípica" });
+  }
+  if (reading.solar_radiation != null && reading.solar_radiation < 0) {
+    issues.push({ field: "solar_radiation", level: "error", message: "Radiação solar não pode ser negativa" });
+  }
+  if (reading.solar_radiation != null && reading.solar_radiation > 40) {
+    issues.push({ field: "solar_radiation", level: "warning", message: "Radiação solar acima de 40 MJ/m²/dia é atípica" });
+  }
 
   return issues;
 }
@@ -117,16 +153,10 @@ export function selectPriorityStation(stations: StationWithPriority[]): StationW
   return active.sort((a, b) => a.source_priority - b.source_priority)[0];
 }
 
-/**
- * Adapta uma leitura para consumidores operacionais antigos.
- * Retorna null se a ETo não existe; ausência nunca é transformada em 0.
- */
 export function prepareForWaterBalance(reading: WeatherReadingRow) {
-  if (reading.et0_calculated == null || !Number.isFinite(reading.et0_calculated)) return null;
-  if (!Number.isFinite(reading.precipitation) || reading.precipitation < 0) return null;
   return {
     date: reading.date,
-    et0: reading.et0_calculated,
+    et0: reading.et0_calculated ?? 0,
     precipitation: reading.precipitation,
     effectivePrecipitation: calculateEffectivePrecipitation(reading.precipitation),
   };
