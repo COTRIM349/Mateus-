@@ -25,6 +25,7 @@ import {
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
+  type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
@@ -61,6 +62,12 @@ function datesInRange(startIso: string, endIso: string): string[] {
   return dates;
 }
 
+function addDaysIso(iso: string, days: number): string {
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
 // séries climáticas extras (da estação) por data — para o gráfico
 type WeatherExtra = { tmax: number | null; tmin: number | null; tmean: number | null; rh: number | null; wind: number | null; rad: number | null };
 
@@ -72,6 +79,7 @@ interface Pivot {
   area: number;
   flow_rate: number;
   efficiency: number;
+  application_efficiency: number | null;
   farm_id: string;
   specific_consumption: number | null;
   pump_power: number | null;
@@ -89,6 +97,7 @@ interface CropAssignment {
   culture_id: string;
   soil_id: string;
   planting_date: string;
+  management_start_date: string | null;
   emergence_date: string | null;
   crop_stage: string;
   parameter_mode: "padrao" | "personalizado";
@@ -98,6 +107,11 @@ interface CropAssignment {
   depletion_factor: number | null;
   kl_override: number | null;
   ks_function_override: string | null;
+  initial_soil_moisture_pct: number | null;
+  initial_moisture_unit: InitialMoistureUnit | null;
+  initial_moisture_is_cc: boolean | null;
+  deficit_irrigation: boolean | null;
+  stress_point_irrigation: boolean | null;
   active: boolean;
 }
 
@@ -124,7 +138,7 @@ interface Soil {
 interface WeatherReading {
   id: string;
   date: string;
-  et0_source: number | null;
+  et0_calculated: number | null;
   precipitation: number;
   station_id: string;
 }
@@ -132,8 +146,17 @@ interface WeatherReading {
 interface IrrigationEvent {
   id: string;
   pivot_id: string;
+  parcel_id: string | null;
   started_at: string;
   depth_mm: number;
+}
+
+interface HydricAnchor {
+  effectiveDate: string;
+  source: "measured" | "field_capacity_confirmed";
+  moistureValue: number | null;
+  moistureUnit: InitialMoistureUnit;
+  isFieldCapacity: boolean;
 }
 
 interface StoredBalance {
@@ -200,6 +223,7 @@ export default function BalancoHidricoPage() {
   const [soil, setSoil] = useState<Soil | null>(null);
   const [soilLayers, setSoilLayers] = useState<SoilProfileLayer[]>([]);
   const [phases, setPhases] = useState<CulturePhase[]>([]);
+  const [hydricAnchor, setHydricAnchor] = useState<HydricAnchor | null>(null);
   const [balanceRows, setBalanceRows] = useState<DailyBalanceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [dateStart, setDateStart] = useState("");
@@ -222,7 +246,7 @@ export default function BalancoHidricoPage() {
     (async () => {
       const { data } = await supabase
         .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, farm_id, specific_consumption, pump_power, installed_power_kw, motor_efficiency, energy_cost, latitude, longitude")
+        .select("id, name, area, flow_rate, efficiency, application_efficiency, farm_id, specific_consumption, pump_power, installed_power_kw, motor_efficiency, energy_cost, latitude, longitude")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("name");
@@ -238,6 +262,7 @@ export default function BalancoHidricoPage() {
       setSoil(null);
       setSoilLayers([]);
       setPhases([]);
+      setHydricAnchor(null);
       return;
     }
     (async () => {
@@ -258,6 +283,7 @@ export default function BalancoHidricoPage() {
         setSoil(null);
         setSoilLayers([]);
         setPhases([]);
+        setHydricAnchor(null);
         return;
       }
       const a = pca as CropAssignment;
@@ -286,13 +312,33 @@ export default function BalancoHidricoPage() {
           : Promise.resolve({ data: [] }),
       ]);
 
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const { data: anchorData } = await supabase
+        .from("hydric_initial_conditions")
+        .select("effective_date,source,moisture_value,moisture_unit,is_field_capacity")
+        .eq("pivot_crop_assignment_id", a.id)
+        .lte("effective_date", todayIso)
+        .order("effective_date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const anchor = anchorData && (anchorData.source === "measured" || anchorData.source === "field_capacity_confirmed")
+        ? {
+            effectiveDate: anchorData.effective_date as string,
+            source: anchorData.source as HydricAnchor["source"],
+            moistureValue: anchorData.moisture_value == null ? null : Number(anchorData.moisture_value),
+            moistureUnit: anchorData.moisture_unit as InitialMoistureUnit,
+            isFieldCapacity: anchorData.is_field_capacity === true,
+          }
+        : null;
+      setHydricAnchor(anchor);
       setCulture(cultureData as Culture | null);
       setSoil(soilData as Soil | null);
       setSoilLayers(mapDbLayersToProfile(layerData ?? []));
       setPhases((phaseData ?? []) as CulturePhase[]);
 
       if (a.planting_date) {
-        const start = a.planting_date;
+        const start = anchor ? addDaysIso(anchor.effectiveDate, 1) : (a.management_start_date ?? a.planting_date);
         const cDays = (cultureData as Culture | null)?.cycle_days ?? 120;
         const end = new Date(new Date(start).getTime() + cDays * 86400000).toISOString().slice(0, 10);
         const today = new Date().toISOString().slice(0, 10);
@@ -312,6 +358,19 @@ export default function BalancoHidricoPage() {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
       if (!pivot) throw new Error("Pivô não encontrado");
 
+      const legacyInitialValue = assignment.initial_soil_moisture_pct;
+      const hasLegacyInitial = assignment.initial_moisture_is_cc === true
+        || (legacyInitialValue != null && Number.isFinite(Number(legacyInitialValue)));
+      if (!hydricAnchor && !hasLegacyInitial) {
+        throw new Error("Balanço bloqueado: defina uma condição inicial confiável do solo (medição ou capacidade de campo confirmada).");
+      }
+      const calculationStart = hydricAnchor
+        ? addDaysIso(hydricAnchor.effectiveDate, 1)
+        : (assignment.management_start_date ?? assignment.planting_date);
+      if (calculationStart > dateEnd) {
+        throw new Error("Balanço bloqueado: a condição inicial é posterior ao período selecionado.");
+      }
+
       // 1. Get weather readings for the farm stations
       const { data: stations } = await supabase
         .from("weather_stations")
@@ -327,16 +386,16 @@ export default function BalancoHidricoPage() {
         const [wrRes, dsRes] = await Promise.all([
           supabase
             .from("weather_readings")
-            .select("id, date, et0_source, precipitation, station_id")
+            .select("id, date, et0_calculated, precipitation, station_id")
             .in("station_id", stationIds)
-            .gte("date", dateStart)
+            .gte("date", calculationStart)
             .lte("date", dateEnd)
             .order("date"),
           supabase
             .from("weather_daily_selection")
             .select("date, selected_reading_id, operational_approved")
             .eq("farm_id", activeFarmId!)
-            .gte("date", dateStart)
+            .gte("date", calculationStart)
             .lte("date", dateEnd),
         ]);
         weatherReadings = (wrRes.data ?? []) as WeatherReading[];
@@ -347,46 +406,70 @@ export default function BalancoHidricoPage() {
         }
       }
 
-      // 2. Get irrigation events for the pivot
-      const { data: irrEvents } = await supabase
-        .from("irrigation_events")
-        .select("id, pivot_id, started_at, depth_mm")
-        .eq("pivot_id", selectedPivotId)
-        .gte("started_at", dateStart + "T00:00:00")
-        .lte("started_at", dateEnd + "T23:59:59");
-
-      const irrigationByDate = sumGrossDepthByDate(
-        ((irrEvents ?? []) as IrrigationEvent[]).map((ev) => ({
-          started_at: ev.started_at,
-          depth_mm: ev.depth_mm,
-        })),
-      );
-
-      // 3. Get any manually stored balance entries (applied_depth)
-      const { data: storedBalances } = await supabase
-        .from("water_balances")
-        .select("date, applied_depth")
-        .eq("pivot_crop_assignment_id", assignment.id)
-        .gte("date", dateStart)
-        .lte("date", dateEnd);
-
-      for (const sb of (storedBalances ?? []) as { date: string; applied_depth: number }[]) {
-        if (sb.applied_depth > 0 && !irrigationByDate[sb.date]) {
-          irrigationByDate[sb.date] = sb.applied_depth;
-        }
+      // 2. Get irrigation events for the selected parcel. Eventos antigos sem
+      // parcel_id só são aceitos quando existe uma única parcela ativa no pivô.
+      const [{ data: irrEvents }, { count: activeAssignmentCount }] = await Promise.all([
+        supabase
+          .from("irrigation_events")
+          .select("id,pivot_id,parcel_id,started_at,depth_mm")
+          .eq("pivot_id", selectedPivotId)
+          .gte("started_at", calculationStart + "T00:00:00")
+          .lte("started_at", dateEnd + "T23:59:59"),
+        supabase
+          .from("pivot_crop_assignments")
+          .select("id", { count: "exact", head: true })
+          .eq("pivot_id", selectedPivotId)
+          .eq("active", true)
+          .or("status.is.null,status.eq.ativa"),
+      ]);
+      const allEvents = (irrEvents ?? []) as IrrigationEvent[];
+      const sectorized = (activeAssignmentCount ?? 0) > 1;
+      if (sectorized && allEvents.some((ev) => ev.parcel_id == null)) {
+        throw new Error("Balanço bloqueado: há irrigação antiga sem parcela identificada em pivô setorizado.");
       }
+      const relevantEvents = allEvents.filter((ev) =>
+        ev.parcel_id === assignment.id || (!sectorized && ev.parcel_id == null),
+      );
+      const eventKeys = new Set<string>();
+      for (const ev of relevantEvents) {
+        const key = `${ev.started_at}|${Number(ev.depth_mm)}`;
+        if (eventKeys.has(key)) {
+          throw new Error(`Balanço bloqueado: irrigação duplicada detectada em ${ev.started_at.slice(0, 10)}.`);
+        }
+        eventKeys.add(key);
+      }
+      const irrigationByDate = sumGrossDepthByDate(relevantEvents.map((ev) => ({
+        started_at: ev.started_at,
+        depth_mm: ev.depth_mm,
+      })));
 
-      // 4. Build weather lookup by date
+      // 3. Build weather lookup by date
       //    Somente leituras explicitamente aprovadas para uso operacional.
       //    Não existe fallback automático para dados de modelo.
       const weatherByDate: Record<string, { et0: number; precip: number }> = {};
       const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
       selectedIdByDate.forEach((readingId, date) => {
         const r = readingsById.get(readingId);
-        if (r?.et0_source != null) weatherByDate[date] = { et0: r.et0_source, precip: r.precipitation };
+        if (r?.et0_calculated != null) weatherByDate[date] = { et0: r.et0_calculated, precip: r.precipitation };
       });
 
-      const missingApprovedDates = datesInRange(dateStart, dateEnd)
+      // Chuva manual é a observação local preferida, mas só substitui P em um
+      // dia que já possui ETo operacional aprovada.
+      const { data: manualRainRows } = await supabase
+        .from("manual_rainfall_entries")
+        .select("date,precipitation_mm")
+        .eq("farm_id", activeFarmId!)
+        .gte("date", calculationStart)
+        .lte("date", dateEnd);
+      for (const row of manualRainRows ?? []) {
+        const current = weatherByDate[row.date as string];
+        const rain = Number(row.precipitation_mm);
+        if (current && Number.isFinite(rain) && rain >= 0) {
+          weatherByDate[row.date as string] = { ...current, precip: rain };
+        }
+      }
+
+      const missingApprovedDates = datesInRange(calculationStart, dateEnd)
         .filter((date) => !weatherByDate[date]);
       if (missingApprovedDates.length > 0) {
         const sample = missingApprovedDates.slice(0, 3).join(", ");
@@ -413,6 +496,11 @@ export default function BalancoHidricoPage() {
           depletion_factor: assignment.depletion_factor,
           kl_override: assignment.kl_override,
           ks_function_override: assignment.ks_function_override,
+          initial_soil_moisture_pct: hydricAnchor ? hydricAnchor.moistureValue : assignment.initial_soil_moisture_pct,
+          initial_moisture_unit: hydricAnchor ? hydricAnchor.moistureUnit : assignment.initial_moisture_unit,
+          initial_moisture_is_cc: hydricAnchor ? hydricAnchor.isFieldCapacity : assignment.initial_moisture_is_cc,
+          deficit_irrigation: assignment.deficit_irrigation,
+          stress_point_irrigation: assignment.stress_point_irrigation,
         },
         culture: {
           root_depth: culture.root_depth,
@@ -429,15 +517,19 @@ export default function BalancoHidricoPage() {
           effective_depth: soil.effective_depth,
           layers: soilLayers,
         },
-        pivot: { efficiency: pivot.efficiency, area: pivot.area, flow_rate: pivot.flow_rate },
+        pivot: { application_efficiency: pivot.application_efficiency, efficiency: pivot.efficiency, area: pivot.area, flow_rate: pivot.flow_rate },
         weatherByDate: engineWeatherByDate,
         irrigationByDate,
-        dateStart,
+        dateStart: calculationStart,
         dateEnd,
       });
+      if (series.length === 0) {
+        throw new Error("Balanço bloqueado: valide condição inicial, solo, fases/Kc e eficiência de aplicação.");
+      }
+      const visibleSeries = series.filter((d) => d.date >= dateStart);
 
       // adapta a saída do motor ao formato de exibição da tela
-      const rows: DailyBalanceRow[] = series.map((d) => ({
+      const rows: DailyBalanceRow[] = visibleSeries.map((d) => ({
         date: d.date,
         phase: d.phase,
         et0: d.et0,
@@ -476,131 +568,19 @@ export default function BalancoHidricoPage() {
         balanceFormula: d.balanceFormula,
       }));
 
-      // fator p real usado pelo motor (afd / adt)
-      const resolvedPFactors = series.map((d) =>
-        d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
-      );
-
       setBalanceRows(rows);
-
-      // 6. Persiste o resultado do motor em water_balances (item 14)
-      if (series.length > 0) {
-        const upsertData = series.map((d, i) => ({
-          pivot_crop_assignment_id: assignment.id,
-          date: d.date,
-          dae: d.dae,
-          phase: d.phase,
-          et0: d.et0,
-          kc: d.kc,
-          etc: d.etc,
-          precipitation: d.precipitation,
-          effective_precipitation: d.effectivePrecipitation,
-          applied_depth: d.irrigation,
-          effective_irrigation: d.effectiveIrrigation,
-          root_depth: d.rootDepth,
-          cad: d.adt,
-          afd: d.afd,
-          soil_storage: d.storage,
-          surplus: d.surplus,
-          depletion_factor: resolvedPFactors[i],
-          deficit: d.deficit,
-          depletion: d.depletion,
-          net_depth: d.recommendedNetDepth,
-          gross_depth: d.recommendedGrossDepth,
-          volume_needed: d.recommendedVolume,
-          irrigation_time: d.estimatedIrrigationTime,
-          should_irrigate: d.shouldIrrigate,
-          recommendation_reason: d.recommendationReason,
-          hydric_status: d.status,
-          water_status: HYDRIC_TO_WATER_STATUS[d.status],
-          ks: d.ks,
-          kl: d.kl,
-          kc_adjusted: d.kcAdjusted,
-          etc_potential: d.etcPotential,
-          ky: d.ky,
-          yield_risk: d.yieldRisk,
-          etc_formula: d.etcFormula,
-          field_capacity: d.fieldCapacity,
-          wilting_point: d.wiltingPoint,
-          safety_moisture_mm: d.safetyMoistureMm,
-          moisture_pct_cc: d.moisturePctCc,
-          safety_pct_cc: d.safetyPctCc,
-          pe_formula: d.peFormula,
-          balance_formula: d.balanceFormula,
-        }));
-
-        await supabase
-          .from("water_balances")
-          .upsert(upsertData, { onConflict: "pivot_crop_assignment_id,date" });
-      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
       setCalculating(false);
     }
-  }, [assignment, culture, soil, soilLayers, phases, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
+  }, [assignment, culture, soil, soilLayers, phases, hydricAnchor, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
 
-  // Load existing balance from DB when pivot/dates change
-  const loadExistingBalance = useCallback(async () => {
-    if (!assignment || !dateStart || !dateEnd) return;
-    setLoading(true);
-    const { data } = await supabase
-      .from("water_balances")
-      .select("*")
-      .eq("pivot_crop_assignment_id", assignment.id)
-      .gte("date", dateStart)
-      .lte("date", dateEnd)
-      .order("date");
-
-    if (data && data.length > 0) {
-      const rows: DailyBalanceRow[] = (data as StoredBalance[]).map((r) => ({
-        date: r.date,
-        et0: r.et0,
-        kc: r.kc,
-        etc: r.etc,
-        precipitation: r.precipitation,
-        effectivePrecipitation: r.effective_precipitation,
-        irrigationApplied: r.applied_depth,
-        effectiveIrrigation: r.effective_irrigation ?? undefined,
-        rootDepth: r.root_depth,
-        cad: r.cad,
-        afd: r.afd,
-        storedWater: r.soil_storage,
-        depletionFactor: r.depletion_factor,
-        deficit: r.deficit,
-        surplus: r.surplus,
-        netDepth: r.net_depth,
-        grossDepth: r.gross_depth,
-        volumeNeeded: r.volume_needed,
-        irrigationTime: r.irrigation_time,
-        waterStatus: r.water_status,
-        phase: r.phase ?? "—",
-        dae: r.dae ?? undefined,
-        ks: r.ks ?? undefined,
-        kl: r.kl ?? undefined,
-        kcAdjusted: r.kc_adjusted ?? undefined,
-        etcPotential: r.etc_potential ?? undefined,
-        ky: r.ky,
-        yieldRisk: r.yield_risk,
-        etcFormula: r.etc_formula ?? undefined,
-        fieldCapacity: r.field_capacity ?? undefined,
-        wiltingPoint: r.wilting_point ?? undefined,
-        safetyMoistureMm: r.safety_moisture_mm ?? undefined,
-        moisturePctCc: r.moisture_pct_cc ?? undefined,
-        safetyPctCc: r.safety_pct_cc ?? undefined,
-        peFormula: r.pe_formula ?? undefined,
-        balanceFormula: r.balance_formula ?? undefined,
-      }));
-      setBalanceRows(rows);
-    }
-    setLoading(false);
-  }, [assignment, dateStart, dateEnd, supabase]);
-
+  // O balanço corrente é sempre recalculado de entradas confiáveis; histórico
+  // persistido não é usado como estado atual nem como seed do ARM.
   useEffect(() => {
-    if (assignment && dateStart && dateEnd) {
-      loadExistingBalance();
-    }
-  }, [assignment, dateStart, dateEnd, loadExistingBalance]);
+    setBalanceRows([]);
+  }, [assignment?.id, dateStart, dateEnd]);
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
@@ -621,15 +601,24 @@ export default function BalancoHidricoPage() {
     let cancelled = false;
     (async () => {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
-      // estação ativa da fazenda
-      const { data: st } = await supabase
-        .from("weather_stations")
-        .select("id, name, latitude, longitude")
+      // mesma estação que venceu a seleção operacional no último dia.
+      const { data: latestSelection } = await supabase
+        .from("weather_daily_selection")
+        .select("selected_station_id")
         .eq("farm_id", activeFarmId)
-        .eq("active", true)
-        .order("name")
+        .eq("operational_approved", true)
+        .lte("date", dateEnd)
+        .order("date", { ascending: false })
         .limit(1)
         .maybeSingle();
+      const selectedStationId = latestSelection?.selected_station_id as string | undefined;
+      const { data: st } = selectedStationId
+        ? await supabase
+            .from("weather_stations")
+            .select("id,name,latitude,longitude")
+            .eq("id", selectedStationId)
+            .maybeSingle()
+        : { data: null };
 
       let lastSync: string | null = null;
       let qualityPct: number | null = null;
@@ -797,7 +786,7 @@ export default function BalancoHidricoPage() {
     seasonName: null as string | null,
     farmName: farms.find((f) => f.id === activeFarmId)?.name ?? null,
     area: selPivot?.area ?? null,
-    efficiency: selPivot ? selPivot.efficiency * 100 : null,
+    efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
     plantingDate: assignment?.planting_date ?? null,
     statusLabel: selPivot ? "Operando" : null,
     energiaEspecifica: selPivot?.specific_consumption ?? null,
