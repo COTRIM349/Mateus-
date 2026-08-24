@@ -16,6 +16,7 @@ interface UserProfile {
 interface FarmAccess {
   id: string;
   name: string;
+  timezone: string;
   isDefault: boolean;
 }
 
@@ -24,16 +25,20 @@ interface AuthContextType {
   profile: UserProfile | null;
   farms: FarmAccess[];
   activeFarmId: string | null;
+  activeFarmTimezone: string;
   loading: boolean;
   setActiveFarm: (farmId: string) => void;
   signOut: () => Promise<void>;
 }
+
+const DEFAULT_FARM_TIMEZONE = "America/Sao_Paulo";
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   profile: null,
   farms: [],
   activeFarmId: null,
+  activeFarmTimezone: DEFAULT_FARM_TIMEZONE,
   loading: true,
   setActiveFarm: () => {},
   signOut: async () => {},
@@ -68,8 +73,6 @@ function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise
 
 function stepTiming(label: string, startedAt: number) {
   const dur = Math.round(performance.now() - startedAt);
-  // Log temporário para diagnóstico do boot — pode ser removido quando
-  // estabilizar. Não é caro: só uma linha por etapa.
   // eslint-disable-next-line no-console
   console.debug(`[boot] ${label}: ${dur} ms`);
   return dur;
@@ -82,15 +85,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [activeFarmId, setActiveFarmId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Cliente criado uma única vez. Antes era `const supabase = createClient()`
-  // no corpo do componente, que produzia uma nova instância a cada render e
-  // reexecutava o useEffect abaixo em loop.
   const [supabase] = useState(() => createClient());
 
   const loadProfile = useCallback(
     async (userId: string): Promise<void> => {
       const started = performance.now();
-      // Paraleliza as duas leituras — antes eram sequenciais.
       const [profileRes, farmRes] = await Promise.all([
         supabase
           .from("users")
@@ -99,7 +98,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single(),
         supabase
           .from("user_farm_access")
-          .select("farm_id, is_default, farms(id, name)")
+          .select("farm_id, is_default, farms(id, name, timezone)")
           .eq("user_id", userId),
       ]);
 
@@ -119,8 +118,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const farmData = farmRes.data;
       if (farmData) {
         const accessList: FarmAccess[] = farmData.map((f) => {
-          const farm = f.farms as unknown as { id: string; name: string };
-          return { id: farm.id, name: farm.name, isDefault: f.is_default };
+          const farm = f.farms as unknown as { id: string; name: string; timezone: string | null };
+          return {
+            id: farm.id,
+            name: farm.name,
+            timezone: farm.timezone || DEFAULT_FARM_TIMEZONE,
+            isDefault: f.is_default,
+          };
         });
         setFarms(accessList);
 
@@ -146,9 +150,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const init = async () => {
       const bootStart = performance.now();
       try {
-        // getSession() lê apenas storage local (cookie) — não faz round-trip
-        // de rede. Se o usuário estiver deslogado, retorna null rapidamente.
-        // A validação de JWT já é feita pelo middleware do Next.
         const t0 = performance.now();
         const {
           data: { session },
@@ -167,13 +168,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               "getProfile+getFarm",
             );
           } catch (profileErr) {
-            // Requisito 6: se dados secundários falharem, o app renderiza.
             // eslint-disable-next-line no-console
             console.warn("[boot] loadProfile falhou — app renderiza sem perfil:", profileErr);
           }
         }
       } catch (err) {
-        // Requisito 5: qualquer falha aqui não pode travar o loading.
         // eslint-disable-next-line no-console
         console.error("[boot] init falhou — liberando UI:", err);
       } finally {
@@ -186,9 +185,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     init();
 
-    // Escuta trocas de sessão (login/logout/refresh). Já vem com timeout
-    // implícito porque o próprio evento só dispara quando o Supabase
-    // atualiza a sessão localmente.
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (event, session) => {
@@ -234,9 +230,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const activeFarmTimezone =
+    farms.find((farm) => farm.id === activeFarmId)?.timezone ?? DEFAULT_FARM_TIMEZONE;
+
   return (
     <AuthContext.Provider
-      value={{ user, profile, farms, activeFarmId, loading, setActiveFarm, signOut }}
+      value={{
+        user,
+        profile,
+        farms,
+        activeFarmId,
+        activeFarmTimezone,
+        loading,
+        setActiveFarm,
+        signOut,
+      }}
     >
       {children}
     </AuthContext.Provider>
