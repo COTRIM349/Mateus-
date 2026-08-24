@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  adjustDepletionFactorForDemand,
   calculateManagementUrgency,
   computePivotBalanceSeries,
   hasCompletePhaseCoverage,
@@ -80,6 +81,26 @@ describe("pivot-engine-operational", () => {
     expect(rows[0].deficit).toBe(60);
     expect(rows[0].recommendedNetDepth).toBe(60);
     expect(rows[0].recommendedGrossDepth).toBe(75);
+  });
+
+  it("ajusta p diariamente pela ETc potencial conforme FAO-56", () => {
+    expect(adjustDepletionFactorForDemand(0.5, 5)).toBe(0.5);
+    expect(adjustDepletionFactorForDemand(0.5, 7)).toBe(0.42);
+    expect(adjustDepletionFactorForDemand(0.5, 2)).toBe(0.62);
+    expect(adjustDepletionFactorForDemand(0.1, 20)).toBe(0.1);
+    expect(adjustDepletionFactorForDemand(0.8, 0)).toBe(0.8);
+  });
+
+  it("usa p ajustado na AFD do dia", () => {
+    const input = baseInput();
+    input.initialStorageMm = 60;
+    input.weatherByDate["2026-01-01"] = { et0: 7, precipitation: 0 };
+    const rows = computePivotBalanceSeries(input);
+    expect(rows).toHaveLength(1);
+    // CAD=60; p=0,50+0,04*(5-7)=0,42 -> AFD=25,2 mm
+    expect(rows[0].adt).toBe(60);
+    expect(rows[0].afd).toBe(25.2);
+    expect(rows[0].etcPotential).toBe(7);
   });
 
   it("bloqueia linha do tempo com buraco entre fases", () => {
