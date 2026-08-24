@@ -1,25 +1,16 @@
 // ============================================================================
-// Serviço de seleção diária de fonte climática (Sprint 5.1)
-// ----------------------------------------------------------------------------
-// Para uma fazenda e uma data, escolhe qual leitura observada será utilizada
-// pelo Motor do Balanço Hídrico. Persiste a escolha em weather_daily_selection
-// para auditoria (fonte escolhida, prioridade, qualidade, motivo, fontes
-// rejeitadas, fallback).
-//
-// Regras:
-//  1. Considera apenas leituras de estações active=true da fazenda.
-//  2. Descarta leituras com data_quality='missing'.
-//  3. Ordena por source_priority ASC (1 = maior prioridade) e, em empate,
-//     data_quality (ok > degraded) e imported_at mais recente.
-//  4. Se a estação de prioridade máxima da fazenda não tiver leitura para a
-//     data, marca fallback_used=true.
-//  5. Se nenhuma leitura sobra, grava selection sem selected_reading_id e
-//     motivo "sem leituras disponíveis".
+// Seleção diária auditável da fonte climática operacional
+// ============================================================================
+// Ordem de decisão: qualidade -> prioridade -> natureza do dado -> recência.
+// Só uma leitura com ETo e precipitação numéricas pode ser candidata.
+// Apenas vencedora com data_quality='ok' é aprovada para o motor hídrico.
+// Leituras degradadas continuam registradas para diagnóstico, nunca viram
+// automaticamente dado operacional.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-interface CandidateReading {
+export interface CandidateReading {
   reading_id: string;
   station_id: string;
   station_name: string;
@@ -28,11 +19,11 @@ interface CandidateReading {
   data_kind: string;
   imported_at: string;
   origin: string;
+  et0_calculated: number;
+  precipitation: number;
 }
 
 const QUALITY_ORDER: Record<string, number> = { ok: 0, degraded: 1, missing: 2 };
-// Preferimos leituras de estação real (observed) sobre grade histórica
-// (BR-DWGD) ou entrada manual, mantidos os outros critérios iguais.
 const KIND_ORDER: Record<string, number> = {
   observed: 0,
   manual: 1,
@@ -40,16 +31,23 @@ const KIND_ORDER: Record<string, number> = {
   historical_grid: 3,
 };
 
-function rankCandidate(a: CandidateReading, b: CandidateReading): number {
-  if (a.source_priority !== b.source_priority) return a.source_priority - b.source_priority;
+/** Qualidade válida sempre vence prioridade de fonte. */
+export function rankClimateCandidate(a: CandidateReading, b: CandidateReading): number {
   const qa = QUALITY_ORDER[a.data_quality] ?? 3;
   const qb = QUALITY_ORDER[b.data_quality] ?? 3;
   if (qa !== qb) return qa - qb;
+  if (a.source_priority !== b.source_priority) return a.source_priority - b.source_priority;
   const ka = KIND_ORDER[a.data_kind] ?? 9;
   const kb = KIND_ORDER[b.data_kind] ?? 9;
   if (ka !== kb) return ka - kb;
-  // mais recente vence
   return b.imported_at.localeCompare(a.imported_at);
+}
+
+export function candidateHasOperationalValues(candidate: Pick<CandidateReading, "et0_calculated" | "precipitation">): boolean {
+  return Number.isFinite(candidate.et0_calculated)
+    && candidate.et0_calculated >= 0
+    && Number.isFinite(candidate.precipitation)
+    && candidate.precipitation >= 0;
 }
 
 export interface DailySelectionResult {
@@ -66,6 +64,7 @@ export interface DailySelectionResult {
     reason: string;
   }>;
   fallback_used: boolean;
+  operational_approved: boolean;
 }
 
 export async function resolveDailyClimateSource(
@@ -73,170 +72,155 @@ export async function resolveDailyClimateSource(
   farmId: string,
   date: string,
 ): Promise<DailySelectionResult> {
-  // 1. Todas as estações ativas da fazenda, ordenadas por prioridade.
   const { data: stationsRaw, error: stErr } = await supabase
     .from("weather_stations")
-    .select("id, name, source_priority")
+    .select("id,name,source_priority")
     .eq("farm_id", farmId)
     .eq("active", true)
     .order("source_priority", { ascending: true });
   if (stErr) throw new Error(stErr.message);
 
-  const stations = (stationsRaw ?? []) as Array<{
-    id: string;
-    name: string;
-    source_priority: number;
-  }>;
-
+  const stations = (stationsRaw ?? []) as Array<{ id: string; name: string; source_priority: number }>;
   if (stations.length === 0) {
     const result: DailySelectionResult = {
-      farm_id: farmId,
-      date,
-      selected_station_id: null,
-      selected_reading_id: null,
-      priority_used: null,
-      quality_used: null,
-      reason: "nenhuma estação ativa cadastrada para a fazenda",
-      rejected_sources: [],
-      fallback_used: false,
+      farm_id:farmId, date, selected_station_id:null, selected_reading_id:null,
+      priority_used:null, quality_used:null,
+      reason:"nenhuma estação ativa cadastrada para a fazenda",
+      rejected_sources:[], fallback_used:false, operational_approved:false,
     };
     await persistSelection(supabase, result);
     return result;
   }
 
-  // 2. Leituras dessas estações para a data.
   const stationIds = stations.map((s) => s.id);
   const { data: readingsRaw, error: rErr } = await supabase
     .from("weather_readings")
-    .select("id, station_id, data_quality, data_kind, imported_at, origin")
+    .select("id,station_id,data_quality,data_kind,imported_at,origin,et0_calculated,precipitation")
     .in("station_id", stationIds)
     .eq("date", date);
   if (rErr) throw new Error(rErr.message);
 
   const stationById = new Map(stations.map((s) => [s.id, s]));
-  const candidates: CandidateReading[] = ((readingsRaw ?? []) as Array<{
-    id: string;
-    station_id: string;
-    data_quality: string;
-    data_kind: string;
-    imported_at: string;
-    origin: string;
-  }>)
-    .filter((r) => r.data_quality !== "missing")
-    .map((r) => {
-      const st = stationById.get(r.station_id)!;
-      return {
-        reading_id: r.id,
-        station_id: r.station_id,
-        station_name: st.name,
-        source_priority: st.source_priority,
-        data_quality: r.data_quality,
-        data_kind: r.data_kind,
-        imported_at: r.imported_at,
-        origin: r.origin,
-      };
-    });
-
   const rejected: DailySelectionResult["rejected_sources"] = [];
+  const candidates: CandidateReading[] = [];
+  const stationsWithAnyReading = new Set<string>();
 
-  // Estações sem leitura para o dia.
-  const stationsWithReading = new Set(candidates.map((c) => c.station_id));
-  for (const s of stations) {
-    if (!stationsWithReading.has(s.id)) {
+  for (const raw of (readingsRaw ?? []) as Array<Record<string, unknown>>) {
+    const stationId = raw.station_id as string;
+    stationsWithAnyReading.add(stationId);
+    const station = stationById.get(stationId);
+    if (!station) continue;
+
+    const et0Raw = raw.et0_calculated;
+    const rainRaw = raw.precipitation;
+    const et0 = et0Raw == null ? Number.NaN : Number(et0Raw);
+    const rain = rainRaw == null ? Number.NaN : Number(rainRaw);
+    const quality = String(raw.data_quality ?? "missing");
+
+    if (quality === "missing" || !Number.isFinite(et0) || et0 < 0 || !Number.isFinite(rain) || rain < 0) {
       rejected.push({
-        station_id: s.id,
-        station_name: s.name,
-        reason: "sem leitura para a data",
+        station_id: stationId,
+        station_name: station.name,
+        reason: quality === "missing" ? "leitura marcada como ausente" : "ETo ou precipitação ausente/inválida",
       });
+      continue;
+    }
+
+    candidates.push({
+      reading_id: raw.id as string,
+      station_id: stationId,
+      station_name: station.name,
+      source_priority: Number(station.source_priority) || 999,
+      data_quality: quality,
+      data_kind: String(raw.data_kind ?? "model_estimate"),
+      imported_at: String(raw.imported_at ?? ""),
+      origin: String(raw.origin ?? ""),
+      et0_calculated: et0,
+      precipitation: rain,
+    });
+  }
+
+  for (const station of stations) {
+    if (!stationsWithAnyReading.has(station.id)) {
+      rejected.push({ station_id:station.id, station_name:station.name, reason:"sem leitura para a data" });
     }
   }
 
   if (candidates.length === 0) {
     const result: DailySelectionResult = {
-      farm_id: farmId,
-      date,
-      selected_station_id: null,
-      selected_reading_id: null,
-      priority_used: null,
-      quality_used: null,
-      reason: "nenhuma leitura disponível para a data",
-      rejected_sources: rejected,
-      fallback_used: false,
+      farm_id:farmId, date, selected_station_id:null, selected_reading_id:null,
+      priority_used:null, quality_used:null,
+      reason:"nenhuma leitura com ETo e precipitação válidas para a data",
+      rejected_sources:rejected, fallback_used:false, operational_approved:false,
     };
     await persistSelection(supabase, result);
     return result;
   }
 
-  candidates.sort(rankCandidate);
+  candidates.sort(rankClimateCandidate);
   const winner = candidates[0];
-
-  // Rejeições internas (outros candidatos não escolhidos).
-  for (const c of candidates.slice(1)) {
+  for (const candidate of candidates.slice(1)) {
     rejected.push({
-      station_id: c.station_id,
-      station_name: c.station_name,
-      reason: `prioridade inferior (P${c.source_priority}, ${c.data_quality})`,
+      station_id:candidate.station_id,
+      station_name:candidate.station_name,
+      reason:`não selecionada (${candidate.data_quality}, P${candidate.source_priority}, ${candidate.data_kind})`,
     });
   }
 
-  const topPriority = stations[0].source_priority;
+  const topPriority = Math.min(...stations.map((s) => Number(s.source_priority) || 999));
   const fallbackUsed = winner.source_priority > topPriority;
+  const operationalApproved = winner.data_quality === "ok" && candidateHasOperationalValues(winner);
 
   const result: DailySelectionResult = {
-    farm_id: farmId,
+    farm_id:farmId,
     date,
-    selected_station_id: winner.station_id,
-    selected_reading_id: winner.reading_id,
-    priority_used: winner.source_priority,
-    quality_used: winner.data_quality,
-    reason: fallbackUsed
-      ? `estação prioritária sem dado; usada ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality})`
-      : `prioridade máxima com qualidade ${winner.data_quality} (${winner.station_name})`,
-    rejected_sources: rejected,
-    fallback_used: fallbackUsed,
+    selected_station_id:winner.station_id,
+    selected_reading_id:winner.reading_id,
+    priority_used:winner.source_priority,
+    quality_used:winner.data_quality,
+    reason: operationalApproved
+      ? `leitura operacional aprovada: ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality})`
+      : `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_quality})`,
+    rejected_sources:rejected,
+    fallback_used:fallbackUsed,
+    operational_approved:operationalApproved,
   };
 
   await persistSelection(supabase, result);
   return result;
 }
 
-async function persistSelection(
-  supabase: SupabaseClient,
-  r: DailySelectionResult,
-): Promise<void> {
+async function persistSelection(supabase: SupabaseClient, result: DailySelectionResult): Promise<void> {
   const payload = {
-    farm_id: r.farm_id,
-    date: r.date,
-    selected_station_id: r.selected_station_id,
-    selected_reading_id: r.selected_reading_id,
-    priority_used: r.priority_used,
-    quality_used: r.quality_used,
-    reason: r.reason,
-    rejected_sources: r.rejected_sources,
-    fallback_used: r.fallback_used,
-    selected_at: new Date().toISOString(),
+    farm_id:result.farm_id,
+    date:result.date,
+    selected_station_id:result.selected_station_id,
+    selected_reading_id:result.selected_reading_id,
+    priority_used:result.priority_used,
+    quality_used:result.quality_used,
+    reason:result.reason,
+    rejected_sources:result.rejected_sources,
+    fallback_used:result.fallback_used,
+    operational_approved:result.operational_approved,
+    selected_at:new Date().toISOString(),
   };
-  await supabase
+  const { error } = await supabase
     .from("weather_daily_selection")
-    .upsert(payload, { onConflict: "farm_id,date" });
+    .upsert(payload, { onConflict:"farm_id,date" });
+  if (error) throw new Error(error.message);
 }
 
-/**
- * Roda o resolver para um intervalo de datas. Útil após ingestão em lote e
- * para backfill controlado.
- */
 export async function resolveDailyRange(
   supabase: SupabaseClient,
   farmId: string,
   startDate: string,
   endDate: string,
 ): Promise<DailySelectionResult[]> {
-  const start = new Date(startDate + "T12:00:00Z");
-  const end = new Date(endDate + "T12:00:00Z");
+  const start = new Date(`${startDate}T12:00:00Z`);
+  const end = new Date(`${endDate}T12:00:00Z`);
   const results: DailySelectionResult[] = [];
   for (let d = new Date(start); d.getTime() <= end.getTime(); d.setUTCDate(d.getUTCDate() + 1)) {
-    const iso = d.toISOString().slice(0, 10);
-    results.push(await resolveDailyClimateSource(supabase, farmId, iso));
+    results.push(await resolveDailyClimateSource(supabase, farmId, d.toISOString().slice(0, 10)));
   }
   return results;
 }
