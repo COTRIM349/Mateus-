@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { candidateHasOperationalValues, rankClimateCandidate, type CandidateReading } from "./source-resolver";
+import {
+  candidateHasOperationalValues,
+  OPERATIONAL_CLIMATE_LIMITS,
+  rankClimateCandidate,
+  type CandidateReading,
+} from "./source-resolver";
 
 function candidate(overrides: Partial<CandidateReading> = {}): CandidateReading {
   return {
@@ -30,9 +35,24 @@ describe("source resolver operacional", () => {
     expect([p5, p2].sort(rankClimateCandidate)[0].reading_id).toBe("b");
   });
 
-  it("rejeita ETo ou chuva inválida como dado operacional", () => {
+  it("rejeita ETo ou chuva ausente/negativa como dado operacional", () => {
     expect(candidateHasOperationalValues(candidate())).toBe(true);
     expect(candidateHasOperationalValues(candidate({ et0_calculated:Number.NaN }))).toBe(false);
     expect(candidateHasOperationalValues(candidate({ precipitation:-1 }))).toBe(false);
+  });
+
+  it("não aprova automaticamente valores fisicamente atípicos", () => {
+    expect(candidateHasOperationalValues(candidate({
+      et0_calculated: OPERATIONAL_CLIMATE_LIMITS.et0Max,
+      precipitation: OPERATIONAL_CLIMATE_LIMITS.precipitationMax,
+    }))).toBe(true);
+
+    expect(candidateHasOperationalValues(candidate({
+      et0_calculated: OPERATIONAL_CLIMATE_LIMITS.et0Max + 0.01,
+    }))).toBe(false);
+
+    expect(candidateHasOperationalValues(candidate({
+      precipitation: OPERATIONAL_CLIMATE_LIMITS.precipitationMax + 0.01,
+    }))).toBe(false);
   });
 });
