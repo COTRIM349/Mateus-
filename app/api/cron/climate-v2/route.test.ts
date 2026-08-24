@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validFarmCoordinate } from "./route";
+import { validFarmCoordinate } from "./guards";
 
 describe("climate-v2 coordinate guard", () => {
   it("aceita coordenadas decimais válidas da Fazenda Karitel", () => {
