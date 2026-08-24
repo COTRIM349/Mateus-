@@ -2,10 +2,9 @@
 // Seleção diária auditável da fonte climática operacional
 // ============================================================================
 // Ordem de decisão: qualidade -> prioridade -> natureza do dado -> recência.
-// Só uma leitura com ETo e precipitação numéricas pode ser candidata.
-// Apenas vencedora com data_quality='ok' é aprovada para o motor hídrico.
-// Leituras degradadas continuam registradas para diagnóstico, nunca viram
-// automaticamente dado operacional.
+// Só uma leitura com ETo e precipitação numéricas e fisicamente plausíveis pode
+// ser candidata operacional. Leituras fora da faixa continuam disponíveis para
+// auditoria, mas não alimentam automaticamente o balanço hídrico.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -22,6 +21,13 @@ export interface CandidateReading {
   et0_calculated: number;
   precipitation: number;
 }
+
+export const OPERATIONAL_CLIMATE_LIMITS = {
+  et0Min: 0,
+  et0Max: 15,
+  precipitationMin: 0,
+  precipitationMax: 200,
+} as const;
 
 const QUALITY_ORDER: Record<string, number> = { ok: 0, degraded: 1, missing: 2 };
 const KIND_ORDER: Record<string, number> = {
@@ -45,9 +51,20 @@ export function rankClimateCandidate(a: CandidateReading, b: CandidateReading): 
 
 export function candidateHasOperationalValues(candidate: Pick<CandidateReading, "et0_calculated" | "precipitation">): boolean {
   return Number.isFinite(candidate.et0_calculated)
-    && candidate.et0_calculated >= 0
+    && candidate.et0_calculated >= OPERATIONAL_CLIMATE_LIMITS.et0Min
+    && candidate.et0_calculated <= OPERATIONAL_CLIMATE_LIMITS.et0Max
     && Number.isFinite(candidate.precipitation)
-    && candidate.precipitation >= 0;
+    && candidate.precipitation >= OPERATIONAL_CLIMATE_LIMITS.precipitationMin
+    && candidate.precipitation <= OPERATIONAL_CLIMATE_LIMITS.precipitationMax;
+}
+
+function invalidOperationalValueReason(et0: number, rain: number): string {
+  if (!Number.isFinite(et0) || !Number.isFinite(rain)) return "ETo ou precipitação ausente/inválida";
+  if (et0 < OPERATIONAL_CLIMATE_LIMITS.et0Min) return "ETo negativa";
+  if (et0 > OPERATIONAL_CLIMATE_LIMITS.et0Max) return `ETo acima do limite operacional (${OPERATIONAL_CLIMATE_LIMITS.et0Max} mm/dia)`;
+  if (rain < OPERATIONAL_CLIMATE_LIMITS.precipitationMin) return "precipitação negativa";
+  if (rain > OPERATIONAL_CLIMATE_LIMITS.precipitationMax) return `precipitação acima do limite operacional (${OPERATIONAL_CLIMATE_LIMITS.precipitationMax} mm/dia)`;
+  return "leitura fora da faixa operacional";
 }
 
 export interface DailySelectionResult {
@@ -117,11 +134,11 @@ export async function resolveDailyClimateSource(
     const rain = rainRaw == null ? Number.NaN : Number(rainRaw);
     const quality = String(raw.data_quality ?? "missing");
 
-    if (quality === "missing" || !Number.isFinite(et0) || et0 < 0 || !Number.isFinite(rain) || rain < 0) {
+    if (quality === "missing" || !candidateHasOperationalValues({ et0_calculated: et0, precipitation: rain })) {
       rejected.push({
         station_id: stationId,
         station_name: station.name,
-        reason: quality === "missing" ? "leitura marcada como ausente" : "ETo ou precipitação ausente/inválida",
+        reason: quality === "missing" ? "leitura marcada como ausente" : invalidOperationalValueReason(et0, rain),
       });
       continue;
     }
