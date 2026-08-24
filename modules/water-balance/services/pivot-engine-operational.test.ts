@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  calculateManagementUrgency,
   computePivotBalanceSeries,
   hasCompletePhaseCoverage,
   normalizeOperationalInput,
@@ -114,5 +115,21 @@ describe("pivot-engine-operational", () => {
       kl: 1.2,
     }];
     expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
+  });
+
+  it("calcula margem e dias até a AFD com a demanda potencial atual", () => {
+    expect(calculateManagementUrgency({ afd: 30, deficit: 18, etcPotential: 6 })).toEqual({
+      remainingToAfdMm: 12,
+      afdUsedPct: 60,
+      daysToAfd: 2,
+      atOrBeyondAfd: false,
+    });
+
+    expect(calculateManagementUrgency({ afd: 30, deficit: 31, etcPotential: 6 })).toEqual({
+      remainingToAfdMm: 0,
+      afdUsedPct: 103.3,
+      daysToAfd: 0,
+      atOrBeyondAfd: true,
+    });
   });
 });
