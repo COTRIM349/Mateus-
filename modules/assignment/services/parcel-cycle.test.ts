@@ -12,7 +12,6 @@ import {
   findBlockingActiveParcel,
   isActiveParcel,
   isHistoricParcel,
-  parcelInitialOperationalState,
   snapshotCycleWater,
   suggestParcelName,
   validateParcelClose,
@@ -151,8 +150,8 @@ describe("validateParcelCycle", () => {
 });
 
 describe("buildParcelInsertRow", () => {
-  it("cria plantio atual/passado como ciclo ativo com solo do pivô", () => {
-    const row = buildParcelInsertRow(draft({ plantingDate: "2026-08-01", emergenceDate: "2026-08-08" }));
+  it("cria ciclo ativo com solo do pivô e sem reutilizar id", () => {
+    const row = buildParcelInsertRow(draft());
     expect(row.status).toBe("ativa");
     expect(row.active).toBe(true);
     expect(row.soil_id).toBe("soil-1");
@@ -160,17 +159,6 @@ describe("buildParcelInsertRow", () => {
     expect(row.start_angle_deg).toBeNull();
     expect(row.end_angle_deg).toBeNull();
     expect(row).not.toHaveProperty("id");
-  });
-
-  it("cria plantio futuro como rascunho, nunca como manejo ativo", () => {
-    expect(parcelInitialOperationalState("2026-10-15", "2026-08-22")).toEqual({
-      status: "rascunho",
-      active: false,
-    });
-    expect(parcelInitialOperationalState("2026-08-22", "2026-08-22")).toEqual({
-      status: "ativa",
-      active: true,
-    });
   });
 });
 

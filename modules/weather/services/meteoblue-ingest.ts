@@ -1,86 +1,23 @@
 // ============================================================================
 // Serviço de ingestão meteoblue
 // ----------------------------------------------------------------------------
-// Grava dias atuais/passados elegíveis em weather_readings e futuro apenas em
-// weather_forecasts. A ETo do provedor fica em et0_source para auditoria; a ETo
-// operacional é sempre calculada internamente pelo núcleo FAO-56.
+// Grava observações/forecast da meteoblue em weather_readings com
+// origin='meteoblue'. A ETo FAO é recebida diretamente do pacote agro-day;
+// não é recalculada por este serviço. Nunca altera weather_daily_selection.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import {
   METEOBLUE_PROVIDER,
   fetchMeteoblueDaily,
-  type MeteoblueDaily,
+  redactKey,
 } from "@/modules/weather/providers/meteoblue";
-import { calculateReferenceEtoFao56 } from "@/modules/weather/calculations/referenceEtoFao56";
 import type { IngestionStation, ObservationIngestionResult } from "./ingestion.service";
-
-function round(value: number, digits = 2): number {
-  const factor = 10 ** digits;
-  return Math.round(value * factor) / factor;
-}
-
-function addUtcDays(dateIso: string, days: number): string {
-  const d = new Date(`${dateIso}T12:00:00Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return d.toISOString().slice(0, 10);
-}
-
-/**
- * Garante que forecast nunca seja persistido como observação operacional.
- * A API daily pode devolver uma janela que mistura hoje e futuro.
- */
-export function isOperationalMeteoblueDate(
-  date: string,
-  today: string,
-  pastDays: number,
-): boolean {
-  const window = Math.max(Math.trunc(pastDays), 1);
-  const earliest = addUtcDays(today, -(window - 1));
-  return date >= earliest && date <= today;
-}
-
-/**
- * Calcula ETo interna usando exclusivamente variáveis meteorológicas da fonte.
- * A velocidade do vento da meteoblue é válida a 10 m; o motor FAO-56 faz o
- * ajuste para 2 m.
- */
-function calculateInternalEto(
-  station: IngestionStation,
-  day: MeteoblueDaily,
-): { eto: number | null; delta: number | null; deltaPct: number | null } {
-  const result = calculateReferenceEtoFao56({
-    date: day.date,
-    latitude: station.latitude,
-    elevationM: Number.isFinite(station.altitude) ? station.altitude : null,
-    temperatureMinC: day.tempMin,
-    temperatureMaxC: day.tempMax,
-    temperatureMeanC: day.tempMean,
-    relativeHumidityMinPct: null,
-    relativeHumidityMaxPct: null,
-    relativeHumidityMeanPct: day.humidity,
-    actualVapourPressureKpa: null,
-    windSpeedMs: day.windSpeed,
-    windMeasurementHeightM: 10,
-    solarRadiationMjM2Day: day.solarRadiationMjM2Day,
-    // O pacote expõe pressão ao nível do mar; o motor deriva P pela altitude.
-    surfacePressureKpa: null,
-  });
-
-  const eto = result.etoMmDay == null ? null : round(result.etoMmDay, 2);
-  const source = day.referenceEtoFaoMm;
-  if (eto == null || source == null || !Number.isFinite(source)) {
-    return { eto, delta: null, deltaPct: null };
-  }
-  const delta = round(eto - source, 2);
-  const deltaPct = source > 0 ? round((delta / source) * 100, 1) : null;
-  return { eto, delta, deltaPct };
-}
 
 export async function ingestMeteoblueObservations(
   supabase: SupabaseClient,
   station: IngestionStation,
-  pastDays = 7,
+  _pastDays = 7,
 ): Promise<ObservationIngestionResult> {
   const startedAt = Date.now();
   let rowsInserted = 0;
@@ -89,9 +26,6 @@ export async function ingestMeteoblueObservations(
   let errorMessage: string | null = null;
   let status: ObservationIngestionResult["status"] = "success";
   let requestUrl: string | null = null;
-  const etoSourceValues: number[] = [];
-  const etoCalculatedValues: number[] = [];
-  const etoDeltaPctValues: number[] = [];
 
   try {
     const result = await fetchMeteoblueDaily({
@@ -101,27 +35,20 @@ export async function ingestMeteoblueObservations(
       elevationM: station.altitude,
     });
     requestUrl = result.requestUrl;
-
-    const today = new Date().toISOString().slice(0, 10);
-    const daily = result.daily.filter((d) => isOperationalMeteoblueDate(d.date, today, pastDays));
-    if (daily.length === 0) {
-      status = "partial";
-    }
+    const { daily } = result;
 
     const dates = daily.map((d) => d.date);
-    const { data: existing } = dates.length > 0
-      ? await supabase
-          .from("weather_readings")
-          .select("id, date, is_locked")
-          .eq("station_id", station.id)
-          .in("date", dates)
-      : { data: [] };
+    const { data: existing } = await supabase
+      .from("weather_readings")
+      .select("id, date, is_locked")
+      .eq("station_id", station.id)
+      .in("date", dates);
 
     const byDate = new Map(
       (existing ?? []).map((r) => [r.date as string, r as { id: string; is_locked: boolean }]),
     );
 
-    let partial = status === "partial";
+    let partial = false;
 
     for (const d of daily) {
       const existingRow = byDate.get(d.date);
@@ -129,19 +56,6 @@ export async function ingestMeteoblueObservations(
         rowsSkipped += 1;
         continue;
       }
-
-      const internal = calculateInternalEto(station, d);
-      if (d.referenceEtoFaoMm != null && Number.isFinite(d.referenceEtoFaoMm)) {
-        etoSourceValues.push(d.referenceEtoFaoMm);
-      }
-      if (internal.eto != null) etoCalculatedValues.push(internal.eto);
-      if (internal.deltaPct != null) etoDeltaPctValues.push(internal.deltaPct);
-
-      const divergenceTooHigh = internal.deltaPct != null && Math.abs(internal.deltaPct) > 15;
-      const quality = internal.eto == null || d.precipitation == null || divergenceTooHigh
-        ? "degraded"
-        : "ok";
-      if (quality !== "ok") partial = true;
 
       const rowPayload = {
         station_id: station.id,
@@ -151,17 +65,18 @@ export async function ingestMeteoblueObservations(
         temp_mean: d.tempMean ?? (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : null),
         humidity: d.humidity ?? null,
         wind_speed: d.windSpeed ?? null,
+        // GHI diário recebido do solar-day e normalizado para MJ/m²/dia.
         solar_radiation: d.solarRadiationMjM2Day,
         precipitation: d.precipitation ?? null,
         sunshine: null,
         et0_source: d.referenceEtoFaoMm,
-        et0_calculated: internal.eto,
-        et0_delta: internal.delta,
-        et0_delta_pct: internal.deltaPct,
+        et0_calculated: null,
+        et0_delta: null,
+        et0_delta_pct: null,
         effective_precip: null,
         data_kind: "model_estimate",
         origin: METEOBLUE_PROVIDER,
-        data_quality: quality,
+        data_quality: d.referenceEtoFaoMm == null ? "degraded" : "ok",
         imported_at: new Date().toISOString(),
         is_locked: false,
       };
@@ -218,9 +133,6 @@ export async function ingestMeteoblueObservations(
   }
 
   const durationMs = Date.now() - startedAt;
-  const avg = (values: number[]) => values.length > 0
-    ? round(values.reduce((sum, value) => sum + value, 0) / values.length, 2)
-    : null;
 
   await supabase.from("climate_ingestion_runs").insert({
     farm_id: station.farm_id,
@@ -239,9 +151,9 @@ export async function ingestMeteoblueObservations(
     altitude_used: station.altitude,
     altitude_origin: station.altitude_origin ?? "unknown",
     response_elevation: null,
-    et0_source_avg: avg(etoSourceValues),
-    et0_calculated_avg: avg(etoCalculatedValues),
-    et0_delta_pct_avg: avg(etoDeltaPctValues),
+    et0_source_avg: null,
+    et0_calculated_avg: null,
+    et0_delta_pct_avg: null,
   });
 
   return {
@@ -295,7 +207,6 @@ export async function ingestMeteoblueForecast(
       );
       if (horizonDays < 0) continue;
 
-      const internal = calculateInternalEto(station, d);
       const rowPayload = {
         farm_id: station.farm_id,
         station_id: station.id,
@@ -312,8 +223,9 @@ export async function ingestMeteoblueForecast(
         solar_radiation: d.solarRadiationMjM2Day,
         precipitation: d.precipitation,
         precipitation_probability: d.precipitationProbabilityPct,
+        // Valor fornecido pela própria Meteoblue no pacote agro-day.
         et0_source: d.referenceEtoFaoMm,
-        et0_calculated: internal.eto,
+        et0_calculated: null,
         imported_at: new Date().toISOString(),
       };
 

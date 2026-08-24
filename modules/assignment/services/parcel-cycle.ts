@@ -218,30 +218,14 @@ export interface ParcelInsertRow {
   notes: string | null;
   start_angle_deg: number | null;
   end_angle_deg: number | null;
-  status: "rascunho" | "ativa";
-  active: boolean;
-}
-
-/**
- * Plantio futuro nunca entra no manejo operacional como parcela ativa.
- * O banco possui a mesma proteção por trigger; esta regra evita divergência
- * entre o estado otimista da interface e o registro persistido.
- */
-export function parcelInitialOperationalState(
-  plantingDate: string,
-  todayYmd: string = new Date().toISOString().slice(0, 10),
-): Pick<ParcelInsertRow, "status" | "active"> {
-  const future = Boolean(plantingDate && plantingDate > todayYmd);
-  return future
-    ? { status: "rascunho", active: false }
-    : { status: "ativa", active: true };
+  status: "ativa";
+  active: true;
 }
 
 export function buildParcelInsertRow(draft: ParcelCycleDraft): ParcelInsertRow {
   if (!draft.pivotSoilId) {
     throw new Error("Parcela exige solo do pivô.");
   }
-  const operationalState = parcelInitialOperationalState(draft.plantingDate);
   return {
     name: draft.name,
     planted_area: draft.plantedArea,
@@ -258,7 +242,8 @@ export function buildParcelInsertRow(draft: ParcelCycleDraft): ParcelInsertRow {
     notes: draft.notes,
     start_angle_deg: parseParcelAngles(draft.startAngleDeg, draft.endAngleDeg).startDeg,
     end_angle_deg: parseParcelAngles(draft.startAngleDeg, draft.endAngleDeg).endDeg,
-    ...operationalState,
+    status: "ativa",
+    active: true,
   };
 }
 

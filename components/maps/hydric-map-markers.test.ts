@@ -7,10 +7,7 @@ import {
   mapStatusOf,
   toHydricMapMarkers,
 } from "./hydric-map-markers";
-import {
-  MAP_HYDRIC_COLORS,
-  type PivotHydricState,
-} from "@/modules/water-balance/services";
+import type { PivotHydricState } from "@/modules/water-balance/services";
 
 function stub(partial: Partial<PivotHydricState>): PivotHydricState {
   return {
@@ -54,7 +51,7 @@ describe("toHydricMapMarkers", () => {
   it("pinta o círculo com a cor do status do motor", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].color).toBe(MAP_HYDRIC_COLORS.lightGreen);
+    expect(markers[0].color).toBe("#4CAF50");
     expect(markers[0].radiusMeters).toBe(500);
     expect(markers[0].id).toBe("parcela-1");
   });
@@ -76,7 +73,7 @@ describe("toHydricMapMarkers", () => {
 
   it("recolore pelo dia escolhido no histórico", () => {
     const markers = toHydricMapMarkers([stub({})], "2026-08-20");
-    expect(markers[0].color).toBe(MAP_HYDRIC_COLORS.red);
+    expect(markers[0].color).toBe("#FFC107");
     expect(mapStatusOf(stub({}), "2026-08-20")).toBe("atencao");
   });
 
@@ -104,7 +101,7 @@ describe("hydricMapDates", () => {
 });
 
 describe("hydricDemandSummary", () => {
-  it("conta condições críticas como demanda", () => {
+  it("conta amarelo e vermelho como demanda", () => {
     const summary = hydricDemandSummary([
       stub({}),
       stub({

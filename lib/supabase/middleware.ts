@@ -2,13 +2,12 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export function bypassesUserSession(pathname: string): boolean {
-  return pathname === "/api/cron/meteoblue-agro"
-    || pathname === "/api/cron/climate-v2";
+  return pathname === "/api/cron/meteoblue-agro";
 }
 
 export async function updateSession(request: NextRequest) {
-  // Rotas de cron são chamadas pelo Supabase sem sessão de usuário. A
-  // autenticação delas é feita no próprio handler com Bearer token do Vault.
+  // Esta rota é chamada pelo Supabase Cron sem sessão de usuário. A autenticação
+  // dela é feita no próprio handler com o Bearer token guardado no Vault.
   if (bypassesUserSession(request.nextUrl.pathname)) {
     return NextResponse.next({ request });
   }
