@@ -4,18 +4,11 @@ import { runClimateOrchestration } from "@/modules/weather/orchestration/climate
 import { ingestFarmClimate } from "@/modules/weather/services/ingestion.service";
 import { resolveDailyRange } from "@/modules/weather/services/source-resolver";
 import { isMeteoblueAgroCronAuthorized } from "../meteoblue-agro/auth";
+import { validFarmCoordinate } from "./guards";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
-
-/** Guarda explícita para impedir ingestão com coordenadas ausentes/inválidas. */
-export function validFarmCoordinate(latitude: number | null, longitude: number | null): boolean {
-  return latitude != null && longitude != null
-    && Number.isFinite(latitude) && Number.isFinite(longitude)
-    && latitude >= -90 && latitude <= 90
-    && longitude >= -180 && longitude <= 180;
-}
 
 function isoDate(offsetDays: number): string {
   const d = new Date();
