@@ -37,12 +37,7 @@ function daysBetween(start: string, end: string): number {
 }
 function minIso(values: string[]): string { return [...values].sort()[0]; }
 
-/**
- * Estado hídrico operacional V3 (FAO-56 Kc dual).
- * - seed e histórico V3 ficam em water_balances_dual;
- * - V2/legado não são usados como seed;
- * - sem ETo aprovada, Kcb explícito, solo válido ou continuidade, retorna cinza.
- */
+/** Estado hídrico operacional V3 (FAO-56 Kc dual). */
 export function useFarmHydricState(): FarmHydricState {
   const { activeFarmId, loading: authLoading } = useAuth();
   const [states, setStates] = useState<PivotHydricState[]>([]);
@@ -170,7 +165,7 @@ export function useFarmHydricState(): FarmHydricState {
         eventsByPivot.set(e.pivot_id as string, list);
       }
       const irrigationByPivot = new Map<string, Record<string, number>>();
-      for (const [pid, list] of eventsByPivot) irrigationByPivot.set(pid, sumGrossDepthByDate(list));
+      for (const [pid, list] of Array.from(eventsByPivot.entries())) irrigationByPivot.set(pid, sumGrossDepthByDate(list));
 
       const cultureMap = new Map((culturesRes.data ?? []).map((c: Record<string, unknown>) => [c.id as string, c]));
       const soilMap = new Map((soilsRes.data ?? []).map((s: Record<string, unknown>) => [s.id as string, s]));
@@ -203,7 +198,7 @@ export function useFarmHydricState(): FarmHydricState {
 
         for (const assignment of pivotAssignments) {
           const culture = cultureMap.get(assignment.culture_id as string) ?? null;
-          const effectiveSoilId = pivotSoilMap.get(pivot.id as string) ?? (assignment.soil_id as string || null);
+          const effectiveSoilId = pivotSoilMap.get(pivot.id as string) ?? ((assignment.soil_id as string) || null);
           const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) : null;
           if (!culture || !soil || culture.coefficient_method !== "dual_fao56") {
             pushIncomplete(pivot, geometry, assignment, culture ? culture.name as string : "—", soil ? soil.name as string : null); continue;
@@ -217,26 +212,26 @@ export function useFarmHydricState(): FarmHydricState {
             pushIncomplete(pivot, geometry, assignment, culture.name as string, soil.name as string); continue;
           }
 
-          const startAngleDeg = assignment.start_angle_deg as number|null ?? null;
-          const endAngleDeg = assignment.end_angle_deg as number|null ?? null;
+          const startAngleDeg = (assignment.start_angle_deg as number|null) ?? null;
+          const endAngleDeg = (assignment.end_angle_deg as number|null) ?? null;
           const area = parcelManagedAreaHa(Number(pivot.area)||0, assignment.planted_area as number|null, startAngleDeg, endAngleDeg);
           const state = computePivotCurrentState({
             pivotId:pivot.id as string, pivotName:pivot.name as string, cultureName:culture.name as string,
             varietyName:assignment.culture_variety_id ? varietyMap.get(assignment.culture_variety_id as string) ?? null : null,
             seasonName:assignment.season_id ? seasonMap.get(assignment.season_id as string) ?? null : null,
             area, latitude:Number(pivot.latitude)||0, longitude:Number(pivot.longitude)||0, parcelId:assignment.id as string,
-            plantingDate:assignment.planting_date as string ?? null, soilName:soil.name as string, radiusMeters:geometry.radiusMeters,
-            sheetIncomplete:geometry.sheetIncomplete, startAngleDeg, endAngleDeg, parcelName:assignment.name as string|null ?? null,
+            plantingDate:(assignment.planting_date as string) ?? null, soilName:soil.name as string, radiusMeters:geometry.radiusMeters,
+            sheetIncomplete:geometry.sheetIncomplete, startAngleDeg, endAngleDeg, parcelName:(assignment.name as string|null) ?? null,
           }, {
             assignment: {
-              id:assignment.id as string, planting_date:assignment.planting_date as string, emergence_date:assignment.emergence_date as string|null ?? null,
-              parameter_mode:assignment.parameter_mode as "padrao"|"personalizado" ?? "padrao", initial_root_depth:assignment.initial_root_depth as number|null ?? null,
-              max_root_depth:assignment.max_root_depth as number|null ?? null, irrigation_efficiency:assignment.irrigation_efficiency as number|null ?? null,
-              depletion_factor:assignment.depletion_factor as number|null ?? null, kl_override:assignment.kl_override as number|null ?? null,
-              ks_function_override:assignment.ks_function_override as string|null ?? null, initial_soil_moisture_pct:assignment.initial_soil_moisture_pct as number|null ?? null,
-              initial_moisture_unit:assignment.initial_moisture_unit as "field_capacity_fraction"|"weight_pct"|"volume_pct" ?? null,
-              initial_moisture_is_cc:assignment.initial_moisture_is_cc as boolean|null ?? null, deficit_irrigation:assignment.deficit_irrigation as boolean ?? false,
-              stress_point_irrigation:assignment.stress_point_irrigation as boolean ?? false,
+              id:assignment.id as string, planting_date:assignment.planting_date as string, emergence_date:(assignment.emergence_date as string|null) ?? null,
+              parameter_mode:(assignment.parameter_mode as "padrao"|"personalizado") ?? "padrao", initial_root_depth:(assignment.initial_root_depth as number|null) ?? null,
+              max_root_depth:(assignment.max_root_depth as number|null) ?? null, irrigation_efficiency:(assignment.irrigation_efficiency as number|null) ?? null,
+              depletion_factor:(assignment.depletion_factor as number|null) ?? null, kl_override:(assignment.kl_override as number|null) ?? null,
+              ks_function_override:(assignment.ks_function_override as string|null) ?? null, initial_soil_moisture_pct:(assignment.initial_soil_moisture_pct as number|null) ?? null,
+              initial_moisture_unit:(assignment.initial_moisture_unit as "field_capacity_fraction"|"weight_pct"|"volume_pct") ?? null,
+              initial_moisture_is_cc:(assignment.initial_moisture_is_cc as boolean|null) ?? null, deficit_irrigation:(assignment.deficit_irrigation as boolean) ?? false,
+              stress_point_irrigation:(assignment.stress_point_irrigation as boolean) ?? false,
             },
             culture: { root_depth:Number(culture.root_depth)||0.3, depletion_factor:Number(culture.depletion_factor)||0.5, kl:culture.kl as number|null, ks_function:culture.ks_function as string|null, ky:culture.ky as number|null, coefficient_method:culture.coefficient_method as string, kcb_reference_source:culture.kcb_reference_source as string|null },
             phases: phasesByCulture.get(assignment.culture_id as string) ?? [],
