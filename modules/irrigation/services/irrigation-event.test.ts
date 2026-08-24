@@ -104,7 +104,7 @@ describe("evento alimenta o balanço como I bruta", () => {
         initial_moisture_unit: "field_capacity_fraction",
         initial_moisture_is_cc: true,
       },
-      culture: { root_depth: 0.3, depletion_factor: 0.5 },
+      culture: { root_depth: 0.3, depletion_factor: 0.5, coefficient_method: "dual_fao56" },
       phases: [
         {
           phase_order: 1,
@@ -113,6 +113,9 @@ describe("evento alimenta o balanço como I bruta", () => {
           duration_days: 10,
           kc_start: 1,
           kc_end: 1,
+          kcb_start: 0.15,
+          kcb_end: 0.15,
+          kcb_reference_source: "FAO-56 test fixture",
           root_depth_start: 0.3,
           root_depth_end: 0.3,
           depletion_factor: 0.5,
@@ -123,6 +126,9 @@ describe("evento alimenta o balanço como I bruta", () => {
         wilting_point: 0.12,
         bulk_density: 1.3,
         effective_depth: 0.6,
+        texture: "franco-arenoso",
+        evaporation_layer_depth_m: 0.1,
+        readily_evaporable_water_mm: 8,
       },
       pivot: { application_efficiency: 0.85, area: 80, flow_rate: 300 },
       weatherByDate: { "2026-01-01": { et0: 5, precipitation: 0 } },
