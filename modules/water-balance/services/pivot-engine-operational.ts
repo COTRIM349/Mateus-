@@ -99,6 +99,45 @@ export function normalizeOperationalInput(input: PivotEngineInput): PivotEngineI
   };
 }
 
+export interface ManagementUrgency {
+  /** Quanto ainda pode ser depletado antes de atingir a AFD. */
+  remainingToAfdMm: number;
+  /** Percentual da AFD já consumido pela depleção atual. */
+  afdUsedPct: number;
+  /** Estimativa sem chuva/irrigação usando ETc potencial atual. 0 = limite já atingido. */
+  daysToAfd: number | null;
+  atOrBeyondAfd: boolean;
+}
+
+/**
+ * Traduz o estado do balanço em informação operacional de Scheduling.
+ * Usa ETc potencial para não alongar artificialmente o prazo quando o Ks já
+ * começou a reduzir a transpiração. Não é previsão meteorológica; é uma
+ * estimativa estática com a demanda atual, sem chuva e sem nova irrigação.
+ */
+export function calculateManagementUrgency(
+  day: Pick<BalanceDay, "afd" | "deficit" | "etcPotential">,
+): ManagementUrgency {
+  const afd = Math.max(Number(day.afd) || 0, 0);
+  const depletion = Math.max(Number(day.deficit) || 0, 0);
+  const etcPotential = Math.max(Number(day.etcPotential) || 0, 0);
+  const remainingToAfdMm = Math.max(afd - depletion, 0);
+  const afdUsedPct = afd > 0 ? Math.min(Math.max((depletion / afd) * 100, 0), 999) : 0;
+  const atOrBeyondAfd = afd > 0 && depletion >= afd;
+  const daysToAfd = atOrBeyondAfd
+    ? 0
+    : etcPotential > 0
+      ? remainingToAfdMm / etcPotential
+      : null;
+
+  return {
+    remainingToAfdMm: Math.round(remainingToAfdMm * 100) / 100,
+    afdUsedPct: Math.round(afdUsedPct * 10) / 10,
+    daysToAfd: daysToAfd == null ? null : Math.round(daysToAfd * 100) / 100,
+    atOrBeyondAfd,
+  };
+}
+
 export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
   if (!hasCompletePhaseCoverage(input.phases, input)) return [];
   return computePivotBalanceSeriesCore(normalizeOperationalInput(input));
