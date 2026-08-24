@@ -1,10 +1,9 @@
 // ============================================================================
 // Serviço de ingestão meteoblue
 // ----------------------------------------------------------------------------
-// Grava observações/forecast da meteoblue em weather_readings com
-// origin='meteoblue'. A ETo fornecida pelo provedor fica em et0_source apenas
-// para comparação; a ETo operacional é calculada internamente por FAO-56.
-// Nunca altera weather_daily_selection.
+// Grava dias atuais/passados elegíveis em weather_readings e futuro apenas em
+// weather_forecasts. A ETo do provedor fica em et0_source para auditoria; a ETo
+// operacional é sempre calculada internamente pelo núcleo FAO-56.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -21,10 +20,30 @@ function round(value: number, digits = 2): number {
   return Math.round(value * factor) / factor;
 }
 
+function addUtcDays(dateIso: string, days: number): string {
+  const d = new Date(`${dateIso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * Garante que forecast nunca seja persistido como observação operacional.
+ * A API daily pode devolver uma janela que mistura hoje e futuro.
+ */
+export function isOperationalMeteoblueDate(
+  date: string,
+  today: string,
+  pastDays: number,
+): boolean {
+  const window = Math.max(Math.trunc(pastDays), 1);
+  const earliest = addUtcDays(today, -(window - 1));
+  return date >= earliest && date <= today;
+}
+
 /**
  * Calcula ETo interna usando exclusivamente variáveis meteorológicas da fonte.
- * A velocidade do vento da meteoblue é válida a 10 m salvo indicação contrária
- * na variável; o motor FAO-56 faz o ajuste para 2 m.
+ * A velocidade do vento da meteoblue é válida a 10 m; o motor FAO-56 faz o
+ * ajuste para 2 m.
  */
 function calculateInternalEto(
   station: IngestionStation,
@@ -44,8 +63,7 @@ function calculateInternalEto(
     windSpeedMs: day.windSpeed,
     windMeasurementHeightM: 10,
     solarRadiationMjM2Day: day.solarRadiationMjM2Day,
-    // O pacote expõe pressão ao nível do mar; não deve ser usada como pressão
-    // de superfície. O motor deriva P pela altitude da estação.
+    // O pacote expõe pressão ao nível do mar; o motor deriva P pela altitude.
     surfacePressureKpa: null,
   });
 
@@ -62,7 +80,7 @@ function calculateInternalEto(
 export async function ingestMeteoblueObservations(
   supabase: SupabaseClient,
   station: IngestionStation,
-  _pastDays = 7,
+  pastDays = 7,
 ): Promise<ObservationIngestionResult> {
   const startedAt = Date.now();
   let rowsInserted = 0;
@@ -83,20 +101,27 @@ export async function ingestMeteoblueObservations(
       elevationM: station.altitude,
     });
     requestUrl = result.requestUrl;
-    const { daily } = result;
+
+    const today = new Date().toISOString().slice(0, 10);
+    const daily = result.daily.filter((d) => isOperationalMeteoblueDate(d.date, today, pastDays));
+    if (daily.length === 0) {
+      status = "partial";
+    }
 
     const dates = daily.map((d) => d.date);
-    const { data: existing } = await supabase
-      .from("weather_readings")
-      .select("id, date, is_locked")
-      .eq("station_id", station.id)
-      .in("date", dates);
+    const { data: existing } = dates.length > 0
+      ? await supabase
+          .from("weather_readings")
+          .select("id, date, is_locked")
+          .eq("station_id", station.id)
+          .in("date", dates)
+      : { data: [] };
 
     const byDate = new Map(
       (existing ?? []).map((r) => [r.date as string, r as { id: string; is_locked: boolean }]),
     );
 
-    let partial = false;
+    let partial = status === "partial";
 
     for (const d of daily) {
       const existingRow = byDate.get(d.date);
@@ -112,6 +137,12 @@ export async function ingestMeteoblueObservations(
       if (internal.eto != null) etoCalculatedValues.push(internal.eto);
       if (internal.deltaPct != null) etoDeltaPctValues.push(internal.deltaPct);
 
+      const divergenceTooHigh = internal.deltaPct != null && Math.abs(internal.deltaPct) > 15;
+      const quality = internal.eto == null || d.precipitation == null || divergenceTooHigh
+        ? "degraded"
+        : "ok";
+      if (quality !== "ok") partial = true;
+
       const rowPayload = {
         station_id: station.id,
         date: d.date,
@@ -120,20 +151,17 @@ export async function ingestMeteoblueObservations(
         temp_mean: d.tempMean ?? (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : null),
         humidity: d.humidity ?? null,
         wind_speed: d.windSpeed ?? null,
-        // GHI diário recebido do solar-day e normalizado para MJ/m²/dia.
         solar_radiation: d.solarRadiationMjM2Day,
         precipitation: d.precipitation ?? null,
         sunshine: null,
-        // Comparação/auditoria do provedor; nunca é a ETo operacional.
         et0_source: d.referenceEtoFaoMm,
-        // ETo operacional calculada internamente por FAO-56 PM.
         et0_calculated: internal.eto,
         et0_delta: internal.delta,
         et0_delta_pct: internal.deltaPct,
         effective_precip: null,
         data_kind: "model_estimate",
         origin: METEOBLUE_PROVIDER,
-        data_quality: internal.eto == null || d.precipitation == null ? "degraded" : "ok",
+        data_quality: quality,
         imported_at: new Date().toISOString(),
         is_locked: false,
       };
@@ -284,9 +312,7 @@ export async function ingestMeteoblueForecast(
         solar_radiation: d.solarRadiationMjM2Day,
         precipitation: d.precipitation,
         precipitation_probability: d.precipitationProbabilityPct,
-        // Valor fornecido pelo provedor para comparação.
         et0_source: d.referenceEtoFaoMm,
-        // Valor interno da plataforma pelo mesmo motor FAO-56 operacional.
         et0_calculated: internal.eto,
         imported_at: new Date().toISOString(),
       };
