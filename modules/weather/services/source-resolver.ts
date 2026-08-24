@@ -4,7 +4,8 @@
 // Regras operacionais:
 // 1. somente estações ativas da fazenda;
 // 2. leitura missing ou sem ETo interna/chuva válida não é candidata;
-// 3. prioridade da estação + qualidade + tipo + recência;
+// 3. qualidade operacional vem antes da prioridade: `ok` sempre vence
+//    `degraded`; entre leituras da mesma qualidade, vence a maior prioridade;
 // 4. qualidade `ok` com dados completos recebe aprovação operacional automática
 //    auditável; `degraded` pode ser selecionada para diagnóstico, mas NÃO é
 //    aprovada para balanço hídrico;
@@ -13,7 +14,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 
-interface CandidateReading {
+export interface CandidateReading {
   reading_id: string;
   station_id: string;
   station_name: string;
@@ -34,11 +35,16 @@ const KIND_ORDER: Record<string, number> = {
   historical_grid: 3,
 };
 
-function rankCandidate(a: CandidateReading, b: CandidateReading): number {
-  if (a.source_priority !== b.source_priority) return a.source_priority - b.source_priority;
+/**
+ * Ordenação operacional: qualidade primeiro. Isso impede uma fonte prioritária
+ * degradada de bloquear uma fonte secundária `ok` que poderia alimentar o
+ * balanço com segurança.
+ */
+export function rankClimateCandidate(a: CandidateReading, b: CandidateReading): number {
   const qa = QUALITY_ORDER[a.data_quality] ?? 3;
   const qb = QUALITY_ORDER[b.data_quality] ?? 3;
   if (qa !== qb) return qa - qb;
+  if (a.source_priority !== b.source_priority) return a.source_priority - b.source_priority;
   const ka = KIND_ORDER[a.data_kind] ?? 9;
   const kb = KIND_ORDER[b.data_kind] ?? 9;
   if (ka !== kb) return ka - kb;
@@ -182,14 +188,13 @@ export async function resolveDailyClimateSource(
     return result;
   }
 
-  candidates.sort(rankCandidate);
+  candidates.sort(rankClimateCandidate);
   const winner = candidates[0];
   for (const c of candidates.slice(1)) {
-    rejected.push({
-      station_id: c.station_id,
-      station_name: c.station_name,
-      reason: `prioridade inferior (P${c.source_priority}, ${c.data_quality})`,
-    });
+    const reason = c.data_quality !== winner.data_quality
+      ? `qualidade inferior (${c.data_quality}; escolhida ${winner.data_quality})`
+      : `prioridade inferior (P${c.source_priority}, ${c.data_quality})`;
+    rejected.push({ station_id: c.station_id, station_name: c.station_name, reason });
   }
 
   const topPriority = stations[0].source_priority;
@@ -202,9 +207,11 @@ export async function resolveDailyClimateSource(
     selected_reading_id: winner.reading_id,
     priority_used: winner.source_priority,
     quality_used: winner.data_quality,
-    reason: fallbackUsed
-      ? `estação prioritária sem dado válido; usada ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality})`
-      : `prioridade máxima com qualidade ${winner.data_quality} (${winner.station_name})`,
+    reason: approved && fallbackUsed
+      ? `fonte prioritária sem dado operacional ok; usada ${winner.station_name} (P${winner.source_priority}, ok)`
+      : fallbackUsed
+        ? `estação prioritária sem dado válido; usada ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality})`
+        : `prioridade máxima com qualidade ${winner.data_quality} (${winner.station_name})`,
     rejected_sources: rejected,
     fallback_used: fallbackUsed,
     operational_approved: approved,
