@@ -187,7 +187,7 @@ export function useFarmHydricState(): FarmHydricState {
         const [selectionRes, readingsRes] = await Promise.all([
           supabase.from("weather_daily_selection").select("date,selected_reading_id,operational_approved")
             .eq("farm_id", activeFarmId).eq("operational_approved", true).gte("date", dataStart).lte("date", dateEnd),
-          supabase.from("weather_readings").select("id,date,et0_calculated,precipitation,wind_speed,humidity,station_id")
+          supabase.from("weather_readings").select("id,date,et0_calculated,precipitation,wind_speed,station_id")
             .in("station_id", stationIds).gte("date", dataStart).lte("date", dateEnd),
         ]);
         const readingsById = new Map((readingsRes.data ?? []).map((r) => [r.id as string, r]));
@@ -197,12 +197,14 @@ export function useFarmHydricState(): FarmHydricState {
           const et0 = Number(r.et0_calculated), precipitation = Number(r.precipitation);
           if (!Number.isFinite(et0) || et0 < 0 || !Number.isFinite(precipitation) || precipitation < 0) continue;
           const wind = r.wind_speed == null ? null : Number(r.wind_speed);
-          const humidity = r.humidity == null ? null : Number(r.humidity);
           weatherByDate[s.date as string] = {
             et0,
             precipitation,
             wind_speed_2m: Number.isFinite(wind) ? wind : null,
-            rh_min: Number.isFinite(humidity) ? humidity : null,
+            // A tabela diária não armazena RHmin real. Não usamos umidade
+            // média como substituto: o núcleo dual aplica a condição padrão
+            // FAO-56 (u2=2 m/s; RHmin=45%) quando o par climático não é completo.
+            rh_min: null,
           };
         }
       }
