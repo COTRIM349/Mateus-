@@ -12,10 +12,36 @@ interface Parcel {
   culture_id: string;
   name: string | null;
   planting_date: string;
-  initial_soil_moisture_pct: number | null;
-  initial_moisture_unit: "field_capacity_fraction" | "volume_pct" | "weight_pct" | null;
-  initial_moisture_is_cc: boolean | null;
-  initial_condition_source: "measured" | "field_capacity_confirmed" | null;
+}
+
+interface HydricAnchor {
+  pivot_crop_assignment_id: string;
+  effective_date: string;
+  measured_at: string;
+  source: "measured" | "field_capacity_confirmed";
+  moisture_value: number | null;
+  moisture_unit: "field_capacity_fraction" | "volume_pct" | "weight_pct";
+  is_field_capacity: boolean;
+  notes: string | null;
+}
+
+function localDateInputValue(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function localTimeInputValue(): string {
+  const d = new Date();
+  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
+}
+
+function unitLabel(unit: HydricAnchor["moisture_unit"]): string {
+  if (unit === "volume_pct") return "% vol.";
+  if (unit === "weight_pct") return "% grav.";
+  return "% da CC";
 }
 
 export default function InicializarBalancoPage() {
@@ -24,10 +50,14 @@ export default function InicializarBalancoPage() {
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [pivotNames, setPivotNames] = useState<Record<string, string>>({});
   const [cultureNames, setCultureNames] = useState<Record<string, string>>({});
+  const [anchors, setAnchors] = useState<Record<string, HydricAnchor>>({});
   const [parcelId, setParcelId] = useState("");
   const [mode, setMode] = useState<"measured" | "field_capacity_confirmed">("measured");
   const [value, setValue] = useState("");
   const [unit, setUnit] = useState<"field_capacity_fraction" | "volume_pct" | "weight_pct">("field_capacity_fraction");
+  const [effectiveDate, setEffectiveDate] = useState(localDateInputValue());
+  const [measuredTime, setMeasuredTime] = useState(localTimeInputValue());
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
@@ -36,6 +66,7 @@ export default function InicializarBalancoPage() {
     if (!activeFarmId) {
       setParcels([]);
       setParcelId("");
+      setAnchors({});
       return;
     }
     setLoading(true);
@@ -50,11 +81,12 @@ export default function InicializarBalancoPage() {
       setLoading(false);
       return;
     }
+
     const ids = (pivots ?? []).map((p) => p.id as string);
     const { data: assignments, error: assignmentError } = ids.length > 0
       ? await supabase
           .from("pivot_crop_assignments")
-          .select("id, pivot_id, culture_id, name, planting_date, initial_soil_moisture_pct, initial_moisture_unit, initial_moisture_is_cc, initial_condition_source")
+          .select("id, pivot_id, culture_id, name, planting_date")
           .in("pivot_id", ids)
           .eq("active", true)
           .eq("status", "ativa")
@@ -65,14 +97,31 @@ export default function InicializarBalancoPage() {
       setLoading(false);
       return;
     }
+
     const rows = (assignments ?? []) as Parcel[];
     const cultureIds = Array.from(new Set(rows.map((row) => row.culture_id)));
-    const { data: cultures } = cultureIds.length > 0
-      ? await supabase.from("cultures").select("id, name").in("id", cultureIds)
-      : { data: [] };
+    const assignmentIds = rows.map((row) => row.id);
+    const [{ data: cultures }, anchorRes] = await Promise.all([
+      cultureIds.length > 0
+        ? supabase.from("cultures").select("id, name").in("id", cultureIds)
+        : Promise.resolve({ data: [] }),
+      assignmentIds.length > 0
+        ? supabase
+            .from("hydric_initial_conditions")
+            .select("pivot_crop_assignment_id,effective_date,measured_at,source,moisture_value,moisture_unit,is_field_capacity,notes")
+            .in("pivot_crop_assignment_id", assignmentIds)
+            .order("effective_date", { ascending: false })
+        : Promise.resolve({ data: [] }),
+    ]);
+
+    const latest: Record<string, HydricAnchor> = {};
+    for (const row of (anchorRes.data ?? []) as HydricAnchor[]) {
+      if (!latest[row.pivot_crop_assignment_id]) latest[row.pivot_crop_assignment_id] = row;
+    }
 
     setPivotNames(Object.fromEntries((pivots ?? []).map((p) => [p.id as string, p.name as string])));
     setCultureNames(Object.fromEntries((cultures ?? []).map((c) => [c.id as string, c.name as string])));
+    setAnchors(latest);
     setParcels(rows);
     setParcelId((current) => rows.some((row) => row.id === current) ? current : rows[0]?.id ?? "");
     setLoading(false);
@@ -83,77 +132,87 @@ export default function InicializarBalancoPage() {
   }, [load]);
 
   const selected = useMemo(() => parcels.find((row) => row.id === parcelId) ?? null, [parcels, parcelId]);
+  const currentAnchor = selected ? anchors[selected.id] ?? null : null;
 
   const save = async () => {
     setMessage("");
-    if (!selected) {
+    if (!activeFarmId || !selected) {
       setMessage("Selecione uma parcela ativa.");
       return;
     }
+    if (!effectiveDate || !measuredTime) {
+      setMessage("Informe a data e a hora da aferição.");
+      return;
+    }
+    if (effectiveDate < selected.planting_date) {
+      setMessage("A data da calibração não pode ser anterior ao plantio da parcela.");
+      return;
+    }
+    if (effectiveDate > localDateInputValue()) {
+      setMessage("A calibração hídrica não pode ser lançada em data futura.");
+      return;
+    }
 
-    let payload: Record<string, unknown>;
-    if (mode === "field_capacity_confirmed") {
-      payload = {
-        initial_soil_moisture_pct: null,
-        initial_moisture_unit: "field_capacity_fraction",
-        initial_moisture_is_cc: true,
-        initial_condition_source: "field_capacity_confirmed",
-      };
-    } else {
+    const measuredAt = new Date(`${effectiveDate}T${measuredTime}:00`);
+    if (!Number.isFinite(measuredAt.getTime())) {
+      setMessage("Data/hora da aferição inválida.");
+      return;
+    }
+
+    let moistureValue: number | null = null;
+    if (mode === "measured") {
       const numeric = Number(value.replace(",", "."));
       if (!Number.isFinite(numeric) || numeric < 0 || numeric > 100) {
         setMessage("Informe uma medição entre 0 e 100 para a unidade selecionada.");
         return;
       }
-      payload = {
-        initial_soil_moisture_pct: numeric,
-        initial_moisture_unit: unit,
-        initial_moisture_is_cc: false,
-        initial_condition_source: "measured",
-      };
+      moistureValue = numeric;
     }
 
     setSaving(true);
+    const payload = {
+      farm_id: activeFarmId,
+      pivot_crop_assignment_id: selected.id,
+      effective_date: effectiveDate,
+      measured_at: measuredAt.toISOString(),
+      source: mode,
+      moisture_value: moistureValue,
+      moisture_unit: mode === "field_capacity_confirmed" ? "field_capacity_fraction" : unit,
+      is_field_capacity: mode === "field_capacity_confirmed",
+      notes: notes.trim() || null,
+      updated_at: new Date().toISOString(),
+    };
+
     const { error } = await supabase
-      .from("pivot_crop_assignments")
-      .update(payload)
-      .eq("id", selected.id);
+      .from("hydric_initial_conditions")
+      .upsert(payload, { onConflict: "pivot_crop_assignment_id,effective_date" });
+
+    setSaving(false);
     if (error) {
-      setSaving(false);
       setMessage(`Não foi possível salvar: ${error.message}`);
       return;
     }
 
-    // A condição inicial altera toda a trajetória do ARM deste ciclo.
-    const { error: invalidateError } = await supabase
-      .from("water_balances")
-      .delete()
-      .eq("pivot_crop_assignment_id", selected.id)
-      .eq("engine_version", "hydric-v2");
-    setSaving(false);
-    if (invalidateError) {
-      setMessage(`Condição salva, mas houve erro ao invalidar balanços V2: ${invalidateError.message}`);
-      return;
-    }
-    setMessage("Condição inicial confirmada. Abra o Balanço Hídrico e atualize para recalcular o ciclo V2.");
+    setMessage("Calibração hídrica datada salva. O V3 usará essa condição como âncora e calculará a partir do dia seguinte, quando houver clima operacional aprovado.");
+    setNotes("");
     await load();
   };
 
-  const currentCondition = selected?.initial_condition_source === "field_capacity_confirmed"
-    ? "Capacidade de campo confirmada"
-    : selected?.initial_condition_source === "measured"
-      ? `Medição: ${selected.initial_soil_moisture_pct ?? "—"} ${selected.initial_moisture_unit === "volume_pct" ? "% vol." : selected.initial_moisture_unit === "weight_pct" ? "% grav." : "% da CC"}`
-      : "Não definida";
+  const currentCondition = currentAnchor
+    ? currentAnchor.source === "field_capacity_confirmed"
+      ? `CC confirmada em ${currentAnchor.effective_date}`
+      : `${currentAnchor.moisture_value ?? "—"} ${unitLabel(currentAnchor.moisture_unit)} em ${currentAnchor.effective_date}`
+    : "Nenhuma calibração datada";
 
   return (
     <div className="space-y-6">
       <PageHeader
-        titulo="Inicializar Balanço Hídrico"
-        descricao="Defina uma condição inicial explícita e auditável para o ARM da parcela"
+        titulo="Calibrar Balanço Hídrico"
+        descricao="Registre uma condição hídrica datada para iniciar ou recalibrar o motor V3 sem alterar a data de plantio"
       />
 
       <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-sm text-blue-900 dark:border-blue-800/40 dark:bg-blue-900/10 dark:text-blue-200">
-        O sistema nunca assume capacidade de campo automaticamente. Use <b>medição de campo</b> sempre que houver umidade aferida. Se o perfil foi comprovadamente saturado e drenado até CC, selecione <b>Capacidade de campo confirmada</b>.
+        A calibração é uma <b>âncora do estado hídrico</b>, não uma alteração do ciclo da cultura. O sistema preserva plantio e DAE. A condição informada representa o estado ao final da data selecionada; o balanço diário é retomado no dia seguinte para não contar chuva, irrigação ou ET duas vezes.
       </div>
 
       <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-white/[0.08] dark:bg-graphite-800">
@@ -176,15 +235,39 @@ export default function InicializarBalancoPage() {
           </label>
 
           <div className="md:col-span-2 rounded-lg bg-gray-50 p-3 text-sm dark:bg-white/[0.04]">
-            <span className="text-gray-500 dark:text-gray-400">Condição atual: </span>
+            <span className="text-gray-500 dark:text-gray-400">Última calibração: </span>
             <strong className="text-gray-900 dark:text-white">{currentCondition}</strong>
+            {currentAnchor?.measured_at ? (
+              <span className="ml-2 text-gray-500 dark:text-gray-400">({new Date(currentAnchor.measured_at).toLocaleString("pt-BR")})</span>
+            ) : null}
           </div>
+
+          <label className="space-y-1.5 text-sm">
+            <span className="font-medium text-gray-700 dark:text-gray-300">Data da aferição</span>
+            <input
+              type="date"
+              value={effectiveDate}
+              max={localDateInputValue()}
+              onChange={(e) => setEffectiveDate(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-white/[0.1] dark:bg-graphite-900 dark:text-white"
+            />
+          </label>
+
+          <label className="space-y-1.5 text-sm">
+            <span className="font-medium text-gray-700 dark:text-gray-300">Hora da aferição</span>
+            <input
+              type="time"
+              value={measuredTime}
+              onChange={(e) => setMeasuredTime(e.target.value)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-white/[0.1] dark:bg-graphite-900 dark:text-white"
+            />
+          </label>
 
           <label className="flex items-start gap-3 rounded-lg border border-gray-200 p-4 dark:border-white/[0.08]">
             <input type="radio" checked={mode === "measured"} onChange={() => setMode("measured")} className="mt-1" />
             <span>
               <strong className="block text-gray-900 dark:text-white">Medição de campo</strong>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Preferencial quando existe aferição da umidade.</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Preferencial quando existe aferição quantitativa da umidade.</span>
             </span>
           </label>
 
@@ -192,7 +275,7 @@ export default function InicializarBalancoPage() {
             <input type="radio" checked={mode === "field_capacity_confirmed"} onChange={() => setMode("field_capacity_confirmed")} className="mt-1" />
             <span>
               <strong className="block text-gray-900 dark:text-white">Capacidade de campo confirmada</strong>
-              <span className="text-xs text-gray-500 dark:text-gray-400">Use apenas quando essa condição for conhecida.</span>
+              <span className="text-xs text-gray-500 dark:text-gray-400">Use somente quando o perfil realmente estiver nessa condição.</span>
             </span>
           </label>
 
@@ -224,6 +307,17 @@ export default function InicializarBalancoPage() {
               </label>
             </>
           ) : null}
+
+          <label className="space-y-1.5 text-sm md:col-span-2">
+            <span className="font-medium text-gray-700 dark:text-gray-300">Observação</span>
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Ex.: aferição após checagem em três pontos do pivô; perfil uniforme."
+              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 dark:border-white/[0.1] dark:bg-graphite-900 dark:text-white"
+            />
+          </label>
         </div>
 
         <div className="mt-5 flex flex-wrap items-center gap-3">
@@ -233,7 +327,7 @@ export default function InicializarBalancoPage() {
             disabled={saving || !selected}
             className="rounded-lg bg-emerald-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {saving ? "Salvando…" : "Confirmar condição inicial"}
+            {saving ? "Salvando…" : "Salvar calibração hídrica"}
           </button>
           <Link href="/balanco-hidrico" className="text-sm font-semibold text-emerald-700 underline">Voltar ao balanço</Link>
           {message ? <p className="w-full text-sm text-gray-600 dark:text-gray-300">{message}</p> : null}
