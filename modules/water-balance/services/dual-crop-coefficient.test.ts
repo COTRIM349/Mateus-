@@ -25,7 +25,7 @@ describe("FAO-56 Kc dual", () => {
     expect(calculateKe(1, 1.2, 0.8, 0.3)).toBeCloseTo(0.36, 3);
   });
 
-  it("chuva/irrigação reduzem a depleção superficial e elevam evaporação", () => {
+  it("molhamento reduz De antes do Kr e eleva Ke no próprio dia", () => {
     const dry = computeSurfaceEvaporationDay({
       phase: { kc_start: 0.15, kc_end: 0.15, kcb_start: 0.15, kcb_end: 0.15 },
       phaseProgress: 0,
@@ -46,6 +46,8 @@ describe("FAO-56 Kc dual", () => {
     });
     expect(dry).not.toBeNull();
     expect(wet).not.toBeNull();
-    expect(wet!.deEndMm).toBeLessThan(dry!.deEndMm);
+    expect(wet!.deAfterWettingMm).toBeLessThan(dry!.deAfterWettingMm);
+    expect(wet!.kr).toBeGreaterThan(dry!.kr);
+    expect(wet!.ke).toBeGreaterThan(dry!.ke);
   });
 });
