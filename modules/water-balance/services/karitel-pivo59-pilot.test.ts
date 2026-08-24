@@ -1,10 +1,17 @@
 import { describe, expect, it } from "vitest";
-import { computePivotBalanceSeries, type PivotEngineInput } from "./pivot-engine";
+import {
+  calculateManagementUrgency,
+  computePivotBalanceSeries,
+  type PivotEngineInput,
+} from "./pivot-engine";
 
 /**
  * Piloto agronômico baseado no cadastro real do Pivô 59 em 24/08/2026.
  * A condição foi confirmada em capacidade de campo ao fim de 23/08; portanto
  * o primeiro dia calculado é 24/08. Este teste não acessa banco ou API.
+ *
+ * O fator p é ajustado diariamente pela demanda potencial (FAO-56):
+ * p_adj = p_base + 0,04 × (5 − ETc_pot).
  */
 describe("Karitel · Pivô 59 · piloto auditável", () => {
   it("fecha o primeiro dia a partir de CC confirmada sem inventar água", () => {
@@ -78,10 +85,20 @@ describe("Karitel · Pivô 59 · piloto auditável", () => {
     expect(day.etcPotential).toBe(2.2);
     expect(day.etc).toBe(2.2);
     expect(day.adt).toBe(13.79);
-    expect(day.afd).toBe(5.52);
+
+    // p_adj = 0,40 + 0,04 × (5 − 2,20) = 0,512
+    expect(day.afd).toBe(7.06);
+    expect(day.afd / day.adt).toBeCloseTo(0.512, 3);
+
     expect(day.storage).toBe(11.59);
     expect(day.deficit).toBe(2.2);
     expect(day.shouldIrrigate).toBe(false);
     expect(day.recommendedGrossDepth).toBe(0);
+
+    const urgency = calculateManagementUrgency(day);
+    expect(urgency.remainingToAfdMm).toBe(4.86);
+    expect(urgency.afdUsedPct).toBe(31.2);
+    expect(urgency.daysToAfd).toBe(2.21);
+    expect(urgency.atOrBeyondAfd).toBe(false);
   });
 });
