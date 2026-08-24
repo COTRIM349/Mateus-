@@ -9,7 +9,8 @@ export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-function validCoordinate(latitude: number | null, longitude: number | null): boolean {
+/** Guarda explícita para impedir ingestão com coordenadas ausentes/inválidas. */
+export function validFarmCoordinate(latitude: number | null, longitude: number | null): boolean {
   return latitude != null && longitude != null
     && Number.isFinite(latitude) && Number.isFinite(longitude)
     && latitude >= -90 && latitude <= 90
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
       const farmId = farm.id as string;
       const latitude = farm.latitude == null ? null : Number(farm.latitude);
       const longitude = farm.longitude == null ? null : Number(farm.longitude);
-      if (!validCoordinate(latitude, longitude)) {
+      if (!validFarmCoordinate(latitude, longitude)) {
         dailyResults.push({ farmId, status: "skipped", error: "Coordenadas ausentes ou invalidas" });
         continue;
       }
