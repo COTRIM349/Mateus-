@@ -23,6 +23,26 @@ interface FarmHydricState {
   refresh: () => void;
 }
 
+interface HydricAnchor {
+  effectiveDate: string;
+  source: "measured" | "field_capacity_confirmed";
+  moistureValue: number | null;
+  moistureUnit: "field_capacity_fraction" | "weight_pct" | "volume_pct";
+  isFieldCapacity: boolean;
+}
+
+interface PersistedDualSeed {
+  date: string;
+  storage: number;
+  cad: number;
+  surfaceDepletion: number;
+}
+
+type StartReference =
+  | { kind: "anchor"; dateStart: string; anchor: HydricAnchor }
+  | { kind: "prior_v3_dual"; dateStart: string; seed: PersistedDualSeed }
+  | { kind: "assignment_initial"; dateStart: string };
+
 const DISPLAY_WINDOW_DAYS = 30;
 const MAX_RECOVERY_LOOKBACK_DAYS = 60;
 
@@ -92,7 +112,7 @@ export function useFarmHydricState(): FarmHydricState {
       const seasonIds = Array.from(new Set(assignments.map((a) => a.season_id as string).filter(Boolean)));
       const varietyIds = Array.from(new Set(assignments.map((a) => a.culture_variety_id as string).filter(Boolean)));
 
-      const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes, seedRes] = await Promise.all([
+      const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes, seedRes, anchorsRes] = await Promise.all([
         cultureIds.length ? supabase.from("cultures").select("id,name,root_depth,depletion_factor,kl,ks_function,ky,coefficient_method,kcb_reference_source").in("id", cultureIds) : Promise.resolve({ data: [] }),
         cultureIds.length ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order") : Promise.resolve({ data: [] }),
         soilIds.length ? supabase.from("soils").select("id,name,texture,field_capacity,wilting_point,bulk_density,effective_depth,evaporation_layer_depth_m,readily_evaporable_water_mm").in("id", soilIds) : Promise.resolve({ data: [] }),
@@ -104,9 +124,12 @@ export function useFarmHydricState(): FarmHydricState {
           .select("pivot_crop_assignment_id,date,soil_storage,cad,surface_depletion_mm,engine_version")
           .in("pivot_crop_assignment_id", assignmentIds).eq("engine_version", HYDRIC_ENGINE_VERSION)
           .lt("date", displayStart).gte("date", addDays(oldestRecoveryDate, -1)).order("date", { ascending: false }) : Promise.resolve({ data: [] }),
+        assignmentIds.length ? supabase.from("hydric_initial_conditions")
+          .select("pivot_crop_assignment_id,effective_date,source,moisture_value,moisture_unit,is_field_capacity")
+          .in("pivot_crop_assignment_id", assignmentIds).lte("effective_date", dateEnd).order("effective_date", { ascending: false }) : Promise.resolve({ data: [] }),
       ]);
 
-      const latestSeedByAssignment = new Map<string, { date: string; storage: number; cad: number; surfaceDepletion: number }>();
+      const latestSeedByAssignment = new Map<string, PersistedDualSeed>();
       for (const row of seedRes.data ?? []) {
         const id = row.pivot_crop_assignment_id as string;
         if (latestSeedByAssignment.has(id)) continue;
@@ -115,16 +138,47 @@ export function useFarmHydricState(): FarmHydricState {
         latestSeedByAssignment.set(id, { date: row.date as string, storage, cad, surfaceDepletion: surface });
       }
 
-      const recalcStartByAssignment = new Map<string, string>();
+      const latestAnchorByAssignment = new Map<string, HydricAnchor>();
+      for (const row of anchorsRes.data ?? []) {
+        const id = row.pivot_crop_assignment_id as string;
+        if (latestAnchorByAssignment.has(id)) continue;
+        const source = row.source as HydricAnchor["source"];
+        const unit = row.moisture_unit as HydricAnchor["moistureUnit"];
+        if (source !== "measured" && source !== "field_capacity_confirmed") continue;
+        latestAnchorByAssignment.set(id, {
+          effectiveDate: row.effective_date as string,
+          source,
+          moistureValue: row.moisture_value == null ? null : Number(row.moisture_value),
+          moistureUnit: unit,
+          isFieldCapacity: row.is_field_capacity === true,
+        });
+      }
+
+      const startReferenceByAssignment = new Map<string, StartReference>();
       for (const a of assignments) {
+        const id = a.id as string;
         const managementStart = ((a.management_start_date as string | null) ?? (a.planting_date as string));
-        if (managementStart >= displayStart) recalcStartByAssignment.set(a.id as string, managementStart);
-        else {
-          const seed = latestSeedByAssignment.get(a.id as string);
-          if (seed) recalcStartByAssignment.set(a.id as string, addDays(seed.date, 1));
+        const anchor = latestAnchorByAssignment.get(id) ?? null;
+        const seed = latestSeedByAssignment.get(id) ?? null;
+
+        if (anchor && (!seed || anchor.effectiveDate >= seed.date)) {
+          const nextDate = addDays(anchor.effectiveDate, 1);
+          if (nextDate <= dateEnd) startReferenceByAssignment.set(id, { kind: "anchor", dateStart: nextDate, anchor });
+          continue;
+        }
+        if (seed) {
+          const nextDate = addDays(seed.date, 1);
+          if (nextDate <= dateEnd) startReferenceByAssignment.set(id, { kind: "prior_v3_dual", dateStart: nextDate, seed });
+          continue;
+        }
+        if (managementStart >= displayStart) {
+          startReferenceByAssignment.set(id, { kind: "assignment_initial", dateStart: managementStart });
         }
       }
-      const candidateStarts = Array.from(recalcStartByAssignment.values()).filter((d) => daysBetween(d, dateEnd) < MAX_RECOVERY_LOOKBACK_DAYS);
+
+      const candidateStarts = Array.from(startReferenceByAssignment.values())
+        .map((ref) => ref.dateStart)
+        .filter((d) => daysBetween(d, dateEnd) < MAX_RECOVERY_LOOKBACK_DAYS);
       const dataStart = candidateStarts.length ? minIso([displayStart, ...candidateStarts]) : displayStart;
 
       const stationIds = (stationsRes.data ?? []).map((s: { id: string }) => s.id);
@@ -133,7 +187,7 @@ export function useFarmHydricState(): FarmHydricState {
         const [selectionRes, readingsRes] = await Promise.all([
           supabase.from("weather_daily_selection").select("date,selected_reading_id,operational_approved")
             .eq("farm_id", activeFarmId).eq("operational_approved", true).gte("date", dataStart).lte("date", dateEnd),
-          supabase.from("weather_readings").select("id,date,et0_calculated,precipitation,station_id")
+          supabase.from("weather_readings").select("id,date,et0_calculated,precipitation,wind_speed,humidity,station_id")
             .in("station_id", stationIds).gte("date", dataStart).lte("date", dateEnd),
         ]);
         const readingsById = new Map((readingsRes.data ?? []).map((r) => [r.id as string, r]));
@@ -142,7 +196,14 @@ export function useFarmHydricState(): FarmHydricState {
           const r = readingsById.get(s.selected_reading_id as string); if (!r) continue;
           const et0 = Number(r.et0_calculated), precipitation = Number(r.precipitation);
           if (!Number.isFinite(et0) || et0 < 0 || !Number.isFinite(precipitation) || precipitation < 0) continue;
-          weatherByDate[s.date as string] = { et0, precipitation };
+          const wind = r.wind_speed == null ? null : Number(r.wind_speed);
+          const humidity = r.humidity == null ? null : Number(r.humidity);
+          weatherByDate[s.date as string] = {
+            et0,
+            precipitation,
+            wind_speed_2m: Number.isFinite(wind) ? wind : null,
+            rh_min: Number.isFinite(humidity) ? humidity : null,
+          };
         }
       }
 
@@ -204,17 +265,17 @@ export function useFarmHydricState(): FarmHydricState {
             pushIncomplete(pivot, geometry, assignment, culture ? culture.name as string : "—", soil ? soil.name as string : null); continue;
           }
 
-          const managementStart = ((assignment.management_start_date as string|null) ?? (assignment.planting_date as string));
-          const seed = latestSeedByAssignment.get(assignment.id as string) ?? null;
-          const dateStart = recalcStartByAssignment.get(assignment.id as string) ?? null;
-          const oldParcelNeedsSeed = managementStart < displayStart;
-          if (!dateStart || (oldParcelNeedsSeed && !seed) || daysBetween(dateStart,dateEnd) >= MAX_RECOVERY_LOOKBACK_DAYS) {
+          const startRef = startReferenceByAssignment.get(assignment.id as string) ?? null;
+          if (!startRef || daysBetween(startRef.dateStart, dateEnd) >= MAX_RECOVERY_LOOKBACK_DAYS) {
             pushIncomplete(pivot, geometry, assignment, culture.name as string, soil.name as string); continue;
           }
 
           const startAngleDeg = (assignment.start_angle_deg as number|null) ?? null;
           const endAngleDeg = (assignment.end_angle_deg as number|null) ?? null;
           const area = parcelManagedAreaHa(Number(pivot.area)||0, assignment.planted_area as number|null, startAngleDeg, endAngleDeg);
+          const anchor = startRef.kind === "anchor" ? startRef.anchor : null;
+          const seed = startRef.kind === "prior_v3_dual" ? startRef.seed : null;
+
           const state = computePivotCurrentState({
             pivotId:pivot.id as string, pivotName:pivot.name as string, cultureName:culture.name as string,
             varietyName:assignment.culture_variety_id ? varietyMap.get(assignment.culture_variety_id as string) ?? null : null,
@@ -228,9 +289,11 @@ export function useFarmHydricState(): FarmHydricState {
               parameter_mode:(assignment.parameter_mode as "padrao"|"personalizado") ?? "padrao", initial_root_depth:(assignment.initial_root_depth as number|null) ?? null,
               max_root_depth:(assignment.max_root_depth as number|null) ?? null, irrigation_efficiency:(assignment.irrigation_efficiency as number|null) ?? null,
               depletion_factor:(assignment.depletion_factor as number|null) ?? null, kl_override:(assignment.kl_override as number|null) ?? null,
-              ks_function_override:(assignment.ks_function_override as string|null) ?? null, initial_soil_moisture_pct:(assignment.initial_soil_moisture_pct as number|null) ?? null,
-              initial_moisture_unit:(assignment.initial_moisture_unit as "field_capacity_fraction"|"weight_pct"|"volume_pct") ?? null,
-              initial_moisture_is_cc:(assignment.initial_moisture_is_cc as boolean|null) ?? null, deficit_irrigation:(assignment.deficit_irrigation as boolean) ?? false,
+              ks_function_override:(assignment.ks_function_override as string|null) ?? null,
+              initial_soil_moisture_pct: anchor ? anchor.moistureValue : ((assignment.initial_soil_moisture_pct as number|null) ?? null),
+              initial_moisture_unit: anchor ? anchor.moistureUnit : ((assignment.initial_moisture_unit as "field_capacity_fraction"|"weight_pct"|"volume_pct") ?? null),
+              initial_moisture_is_cc: anchor ? anchor.isFieldCapacity : ((assignment.initial_moisture_is_cc as boolean|null) ?? null),
+              deficit_irrigation:(assignment.deficit_irrigation as boolean) ?? false,
               stress_point_irrigation:(assignment.stress_point_irrigation as boolean) ?? false,
             },
             culture: { root_depth:Number(culture.root_depth)||0.3, depletion_factor:Number(culture.depletion_factor)||0.5, kl:culture.kl as number|null, ks_function:culture.ks_function as string|null, ky:culture.ky as number|null, coefficient_method:culture.coefficient_method as string, kcb_reference_source:culture.kcb_reference_source as string|null },
@@ -239,14 +302,14 @@ export function useFarmHydricState(): FarmHydricState {
               texture:soil.texture as string|null, evaporation_layer_depth_m:soil.evaporation_layer_depth_m as number|null, readily_evaporable_water_mm:soil.readily_evaporable_water_mm as number|null,
               layers: effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [] },
             pivot: { application_efficiency:pivot.application_efficiency as number|null, efficiency:pivot.efficiency as number|null, area, flow_rate:Number(pivot.flow_rate)||0 },
-            weatherByDate, irrigationByDate:irrigationByPivot.get(pivot.id as string) ?? {}, dateStart, dateEnd,
-            initialStorageMm:oldParcelNeedsSeed ? seed!.storage : null, initialCadMm:oldParcelNeedsSeed ? seed!.cad : null,
-            initialSurfaceDepletionMm:oldParcelNeedsSeed ? seed!.surfaceDepletion : null,
+            weatherByDate, irrigationByDate:irrigationByPivot.get(pivot.id as string) ?? {}, dateStart:startRef.dateStart, dateEnd,
+            initialStorageMm:seed?.storage ?? null,
+            initialCadMm:seed?.cad ?? null,
+            initialSurfaceDepletionMm:seed?.surfaceDepletion ?? null,
           });
 
           if (state.history.length) {
-            const explicitSource = assignment.initial_condition_source as string|null;
-            const initialConditionSource = oldParcelNeedsSeed ? "prior_v3_dual" : (explicitSource === "measured" || explicitSource === "field_capacity_confirmed" ? explicitSource : null);
+            const initialConditionSource = startRef.kind === "anchor" ? `dated_${startRef.anchor.source}` : startRef.kind;
             const persisted = state.history.map((d) => ({
               pivot_crop_assignment_id:assignment.id as string, date:d.date, engine_version:HYDRIC_ENGINE_VERSION, dae:d.dae, phase:d.phase, et0:d.et0,
               coefficient_method:d.coefficientMethod, kcb_reference:d.kcbReference, kcb_adjusted:d.kcbAdjusted, kcb_source:d.kcbSource,
