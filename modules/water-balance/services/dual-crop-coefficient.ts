@@ -26,6 +26,7 @@ export interface DualWeatherLike {
 
 export interface SurfaceEvaporationState {
   deStartMm: number;
+  deAfterWettingMm: number;
   deEndMm: number;
   tewMm: number;
   rewMm: number;
@@ -158,10 +159,10 @@ export function resolveSurfaceSoilParameters(soil: DualSoilLike): { zeM: number;
 }
 
 /** FAO-56 Eq. 74. */
-export function calculateKr(deStartMm: number, rewMm: number, tewMm: number): number {
-  if (deStartMm <= rewMm) return 1;
+export function calculateKr(deMm: number, rewMm: number, tewMm: number): number {
+  if (deMm <= rewMm) return 1;
   if (tewMm <= rewMm) return 0;
-  return roundTo(clamp((tewMm - deStartMm) / (tewMm - rewMm), 0, 1), 3);
+  return roundTo(clamp((tewMm - deMm) / (tewMm - rewMm), 0, 1), 3);
 }
 
 /** FAO-56 Eq. 71. */
@@ -172,9 +173,10 @@ export function calculateKe(kr: number, kcMax: number, kcbAdjusted: number, few:
 }
 
 /**
- * Passo diário simplificado para aspersão de área total (fw=1): chuva e
- * irrigação efetiva reduzem De; evaporação do solo aumenta De. O estado fica
- * limitado entre 0 e TEW. Não há hipótese silenciosa de molhamento localizado.
+ * Passo diário da camada evaporante para aspersão de área total (fw=1).
+ * Ordem física: (1) carrega De anterior, (2) chuva/irrigação molham a camada,
+ * (3) calcula Kr/Ke sobre a condição já molhada, (4) evaporação aumenta De.
+ * Assim o Ke responde no próprio dia a uma chuva ou passagem do pivô.
  */
 export function computeSurfaceEvaporationDay(input: {
   phase: DualCropPhaseLike;
@@ -198,17 +200,18 @@ export function computeSurfaceEvaporationDay(input: {
   const fw = clamp(input.wettedFraction ?? 1, 0.01, 1);
   const few = calculateExposedWettedFraction(fc, fw);
 
-  // Para o primeiro dia sem seed superficial, assume-se a camada superficial
-  // seca até REW (limite entre estágio 1 e 2), em vez de assumir solo saturado.
+  // Sem seed superficial, usa De=REW como condição neutra auditável, não solo saturado.
   const deStartMm = roundTo(clamp(input.previousDeMm ?? params.rewMm, 0, params.tewMm), 2);
-  const kr = calculateKr(deStartMm, params.rewMm, params.tewMm);
+  const wettingMm = Math.max(input.precipitationMm, 0) + Math.max(input.effectiveIrrigationMm, 0) / fw;
+  const deAfterWettingMm = roundTo(clamp(deStartMm - wettingMm, 0, params.tewMm), 2);
+  const kr = calculateKr(deAfterWettingMm, params.rewMm, params.tewMm);
   const ke = calculateKe(kr, kcMax, adjusted.value, few);
   const soilEvaporationMm = roundTo(Math.max(ke * input.et0Mm, 0), 2);
-  const wettingMm = Math.max(input.precipitationMm, 0) + Math.max(input.effectiveIrrigationMm, 0) / fw;
-  const deEndMm = roundTo(clamp(deStartMm - wettingMm + soilEvaporationMm / few, 0, params.tewMm), 2);
+  const deEndMm = roundTo(clamp(deAfterWettingMm + soilEvaporationMm / few, 0, params.tewMm), 2);
 
   return {
     deStartMm,
+    deAfterWettingMm,
     deEndMm,
     tewMm: params.tewMm,
     rewMm: params.rewMm,
