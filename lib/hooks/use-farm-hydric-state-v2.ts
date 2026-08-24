@@ -9,6 +9,7 @@ import {
   type EngineWeatherDay,
   type FarmHydricSummary,
   type PivotHydricState,
+  type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
@@ -22,42 +23,72 @@ interface FarmHydricState {
   refresh: () => void;
 }
 
-const DISPLAY_WINDOW_DAYS = 30;
-const MAX_RECOVERY_LOOKBACK_DAYS = 60;
+type Anchor = {
+  effectiveDate: string;
+  source: "measured" | "field_capacity_confirmed";
+  moistureValue: number | null;
+  moistureUnit: InitialMoistureUnit;
+  isFieldCapacity: boolean;
+};
 
-function isoToday(): string {
-  return new Date().toISOString().slice(0, 10);
+type IrrigationRow = {
+  id: string;
+  pivot_id: string;
+  parcel_id: string | null;
+  started_at: string;
+  depth_mm: number | null;
+};
+
+const MAX_RECALC_DAYS = 365;
+
+function todayLocalIso(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 function addDays(iso: string, days: number): string {
-  const date = new Date(`${iso}T12:00:00Z`);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString().slice(0, 10);
+  const d = new Date(`${iso}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d.toISOString().slice(0, 10);
 }
 
 function daysBetween(start: string, end: string): number {
-  const a = new Date(`${start}T12:00:00Z`).getTime();
-  const b = new Date(`${end}T12:00:00Z`).getTime();
-  return Math.floor((b - a) / 86400000);
+  return Math.floor((new Date(`${end}T12:00:00Z`).getTime() - new Date(`${start}T12:00:00Z`).getTime()) / 86_400_000);
 }
 
 function minIso(values: string[]): string {
   return [...values].sort()[0];
 }
 
-function legacyWaterStatus(status: "verde" | "amarelo" | "vermelho" | "cinza"): "ideal" | "atencao" | "deficit_critico" {
-  if (status === "amarelo") return "atencao";
-  if (status === "vermelho") return "deficit_critico";
-  return "ideal";
+function hasExactDuplicateEvents(rows: IrrigationRow[]): boolean {
+  const seen = new Set<string>();
+  for (const row of rows) {
+    const depth = Number(row.depth_mm);
+    const key = `${row.pivot_id}|${row.parcel_id ?? "*"}|${row.started_at}|${Number.isFinite(depth) ? depth : "invalid"}`;
+    if (seen.has(key)) return true;
+    seen.add(key);
+  }
+  return false;
 }
 
 /**
- * Estado hídrico da fazenda com recuperação dinâmica de continuidade.
+ * Estado hídrico operacional conservador.
  *
- * A janela de 30 dias é apenas de visualização. Para uma parcela antiga, o
- * motor procura o último ARM/CAD V2 persistido antes dessa janela e recalcula a
- * partir do dia seguinte. Balanços legados nunca são usados como seed.
- * Sem seed V2 real ou sem clima contínuo, o pivô fica como dado incompleto.
+ * Regras de confiança:
+ * - pivô sem parcela ativa não entra no mapa/manejo;
+ * - condição inicial vem de hydric_initial_conditions ou do cadastro inicial
+ *   explícito da parcela; nunca presume capacidade de campo;
+ * - apenas clima daily_selection aprovado alimenta o motor;
+ * - chuva manual pode substituir apenas a precipitação de um dia que já tenha
+ *   ETo aprovada;
+ * - evento de irrigação setorial respeita parcel_id;
+ * - evento legado sem parcel_id só é aceito quando o pivô possui uma única
+ *   parcela ativa; em pivô setorizado ele é ambíguo e bloqueia o cálculo;
+ * - duplicata exata de irrigação bloqueia o cálculo em vez de somar duas vezes;
+ * - não usa water_balances gravado no navegador como seed operacional.
  */
 export function useFarmHydricState(): FarmHydricState {
   const { activeFarmId, loading: authLoading } = useAuth();
@@ -75,31 +106,24 @@ export function useFarmHydricState(): FarmHydricState {
     }
 
     setLoading(true);
-    const dateEnd = isoToday();
-    const displayStart = addDays(dateEnd, -(DISPLAY_WINDOW_DAYS - 1));
-    const oldestRecoveryDate = addDays(dateEnd, -(MAX_RECOVERY_LOOKBACK_DAYS - 1));
+    const dateEnd = todayLocalIso();
 
     try {
       const { data: pivotRows, error: pivotError } = await supabase
         .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, application_efficiency, latitude, longitude, soil_id, radius, last_tower_radius, overhang_m")
+        .select("id,name,area,flow_rate,efficiency,application_efficiency,latitude,longitude,soil_id,radius,last_tower_radius,overhang_m")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("name");
       if (pivotError) throw pivotError;
 
-      const pivots = pivotRows ?? [];
+      const pivots = (pivotRows ?? []) as Array<Record<string, unknown>>;
       const pivotIds = pivots.map((p) => p.id as string);
       if (pivotIds.length === 0) {
-        const empty = computeFarmHydricState([]);
         setStates([]);
-        setSummary(empty);
+        setSummary(computeFarmHydricState([]));
         return;
       }
-
-      const pivotSoilMap = new Map(
-        pivots.map((p) => [p.id as string, (p.soil_id as string | null) ?? null]),
-      );
 
       const { data: assignmentRows, error: assignmentError } = await supabase
         .from("pivot_crop_assignments")
@@ -112,164 +136,46 @@ export function useFarmHydricState(): FarmHydricState {
       if (assignmentError) throw assignmentError;
 
       const assignmentsByPivot = new Map<string, Array<Record<string, unknown>>>();
-      for (const row of assignmentRows ?? []) {
-        const managementStart = ((row.management_start_date as string | null) ?? (row.planting_date as string));
+      for (const raw of assignmentRows ?? []) {
+        const row = raw as Record<string, unknown>;
+        const managementStart = ((row.management_start_date as string | null) ?? (row.planting_date as string | null));
         if (!managementStart || managementStart > dateEnd) continue;
         const pid = row.pivot_id as string;
         const list = assignmentsByPivot.get(pid) ?? [];
-        list.push(row as Record<string, unknown>);
+        list.push(row);
         assignmentsByPivot.set(pid, list);
       }
 
-      const assignments = Array.from(assignmentsByPivot.values()).flat();
+      // Pivôs sem parcela ativa não pertencem ao estado operacional.
+      const operationalPivots = pivots.filter((p) => (assignmentsByPivot.get(p.id as string)?.length ?? 0) > 0);
+      const assignments = operationalPivots.flatMap((p) => assignmentsByPivot.get(p.id as string) ?? []);
+      if (assignments.length === 0) {
+        setStates([]);
+        setSummary(computeFarmHydricState([]));
+        return;
+      }
+
       const assignmentIds = assignments.map((a) => a.id as string);
       const cultureIds = Array.from(new Set(assignments.map((a) => a.culture_id as string).filter(Boolean)));
-      const soilIds = Array.from(new Set([
-        ...(Array.from(pivotSoilMap.values()).filter(Boolean) as string[]),
-        ...assignments.map((a) => a.soil_id as string).filter(Boolean),
-      ]));
+      const pivotSoilIds = operationalPivots.map((p) => p.soil_id as string).filter(Boolean);
+      const soilIds = Array.from(new Set([...pivotSoilIds, ...assignments.map((a) => a.soil_id as string).filter(Boolean)]));
       const seasonIds = Array.from(new Set(assignments.map((a) => a.season_id as string).filter(Boolean)));
       const varietyIds = Array.from(new Set(assignments.map((a) => a.culture_variety_id as string).filter(Boolean)));
 
-      const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes, seedRes] = await Promise.all([
-        cultureIds.length
-          ? supabase.from("cultures").select("id, name, root_depth, depletion_factor, kl, ks_function, ky").in("id", cultureIds)
-          : Promise.resolve({ data: [] }),
-        cultureIds.length
-          ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order")
-          : Promise.resolve({ data: [] }),
-        soilIds.length
-          ? supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").in("id", soilIds)
-          : Promise.resolve({ data: [] }),
-        soilIds.length
-          ? supabase.from("soil_layers").select("soil_id, depth_start, depth_end, field_capacity, wilting_point, bulk_density, kl").in("soil_id", soilIds).order("depth_start")
-          : Promise.resolve({ data: [] }),
-        seasonIds.length
-          ? supabase.from("seasons").select("id, name").in("id", seasonIds)
-          : Promise.resolve({ data: [] }),
-        varietyIds.length
-          ? supabase.from("culture_varieties").select("id, name").in("id", varietyIds)
-          : Promise.resolve({ data: [] }),
+      const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes, anchorsRes] = await Promise.all([
+        cultureIds.length ? supabase.from("cultures").select("id,name,root_depth,depletion_factor,kl,ks_function,ky").in("id", cultureIds) : Promise.resolve({ data: [] }),
+        cultureIds.length ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order") : Promise.resolve({ data: [] }),
+        soilIds.length ? supabase.from("soils").select("id,name,field_capacity,wilting_point,bulk_density,effective_depth").in("id", soilIds) : Promise.resolve({ data: [] }),
+        soilIds.length ? supabase.from("soil_layers").select("soil_id,depth_start,depth_end,field_capacity,wilting_point,bulk_density,kl").in("soil_id", soilIds).order("depth_start") : Promise.resolve({ data: [] }),
+        seasonIds.length ? supabase.from("seasons").select("id,name").in("id", seasonIds) : Promise.resolve({ data: [] }),
+        varietyIds.length ? supabase.from("culture_varieties").select("id,name").in("id", varietyIds) : Promise.resolve({ data: [] }),
         supabase.from("weather_stations").select("id").eq("farm_id", activeFarmId).eq("active", true),
-        assignmentIds.length
-          ? supabase
-              .from("water_balances")
-              .select("pivot_crop_assignment_id, date, soil_storage, cad, engine_version")
-              .in("pivot_crop_assignment_id", assignmentIds)
-              .eq("engine_version", "hydric-v2")
-              .lt("date", displayStart)
-              .gte("date", addDays(oldestRecoveryDate, -1))
-              .order("date", { ascending: false })
-          : Promise.resolve({ data: [] }),
+        supabase.from("hydric_initial_conditions")
+          .select("pivot_crop_assignment_id,effective_date,source,moisture_value,moisture_unit,is_field_capacity")
+          .in("pivot_crop_assignment_id", assignmentIds)
+          .lte("effective_date", dateEnd)
+          .order("effective_date", { ascending: false }),
       ]);
-
-      const latestSeedByAssignment = new Map<string, { date: string; storage: number; cad: number }>();
-      for (const row of seedRes.data ?? []) {
-        if (row.engine_version !== "hydric-v2") continue;
-        const id = row.pivot_crop_assignment_id as string;
-        if (latestSeedByAssignment.has(id)) continue;
-        const storage = Number(row.soil_storage);
-        const cad = Number(row.cad);
-        if (!Number.isFinite(storage) || !Number.isFinite(cad) || cad <= 0 || storage < 0 || storage > cad) continue;
-        latestSeedByAssignment.set(id, {
-          date: row.date as string,
-          storage,
-          cad,
-        });
-      }
-
-      const recalcStartByAssignment = new Map<string, string>();
-      for (const assignment of assignments) {
-        const managementStart = ((assignment.management_start_date as string | null) ?? (assignment.planting_date as string));
-        if (managementStart >= displayStart) {
-          recalcStartByAssignment.set(assignment.id as string, managementStart);
-          continue;
-        }
-        const seed = latestSeedByAssignment.get(assignment.id as string);
-        if (seed) recalcStartByAssignment.set(assignment.id as string, addDays(seed.date, 1));
-      }
-
-      const candidateStarts = Array.from(recalcStartByAssignment.values()).filter(
-        (d) => daysBetween(d, dateEnd) < MAX_RECOVERY_LOOKBACK_DAYS,
-      );
-      const dataStart = candidateStarts.length > 0
-        ? minIso([displayStart, ...candidateStarts])
-        : displayStart;
-
-      const stationIds = (stationsRes.data ?? []).map((s: { id: string }) => s.id);
-      const weatherByDate: Record<string, EngineWeatherDay> = {};
-      if (stationIds.length > 0) {
-        const [selectionRes, readingsRes] = await Promise.all([
-          supabase
-            .from("weather_daily_selection")
-            .select("date, selected_reading_id, operational_approved")
-            .eq("farm_id", activeFarmId)
-            .eq("operational_approved", true)
-            .gte("date", dataStart)
-            .lte("date", dateEnd),
-          supabase
-            .from("weather_readings")
-            .select("id, date, et0_calculated, precipitation, station_id")
-            .in("station_id", stationIds)
-            .gte("date", dataStart)
-            .lte("date", dateEnd),
-        ]);
-
-        const readingsById = new Map((readingsRes.data ?? []).map((r) => [r.id as string, r]));
-        for (const selection of selectionRes.data ?? []) {
-          if (!selection.selected_reading_id || selection.operational_approved !== true) continue;
-          const reading = readingsById.get(selection.selected_reading_id as string);
-          if (!reading) continue;
-          const et0 = reading.et0_calculated as number | null;
-          const precipitation = reading.precipitation as number | null;
-          if (
-            et0 == null || precipitation == null ||
-            !Number.isFinite(et0) || et0 < 0 ||
-            !Number.isFinite(precipitation) || precipitation < 0
-          ) continue;
-          weatherByDate[selection.date as string] = { et0, precipitation };
-        }
-      }
-
-      // Chuva medida em campo tem precedência somente sobre a precipitação.
-      // Ela nunca cria um dia climático sozinha: sem ETo aprovada, o dia segue
-      // incompleto e o motor permanece bloqueado.
-      const { data: manualRainRows, error: manualRainError } = await supabase
-        .from("manual_rainfall_entries")
-        .select("date, precipitation_mm")
-        .eq("farm_id", activeFarmId)
-        .gte("date", dataStart)
-        .lte("date", dateEnd);
-      if (manualRainError) throw manualRainError;
-      for (const row of manualRainRows ?? []) {
-        const existing = weatherByDate[row.date as string];
-        const precipitation = Number(row.precipitation_mm);
-        if (!existing || !Number.isFinite(precipitation) || precipitation < 0) continue;
-        weatherByDate[row.date as string] = { ...existing, precipitation };
-      }
-
-      const { data: irrRows, error: irrError } = await supabase
-        .from("irrigation_events")
-        .select("pivot_id, started_at, depth_mm")
-        .in("pivot_id", pivotIds)
-        .gte("started_at", `${dataStart}T00:00:00`)
-        .lte("started_at", `${dateEnd}T23:59:59`);
-      if (irrError) throw irrError;
-
-      const eventsByPivot = new Map<string, Array<{ started_at: string; depth_mm: number }>>();
-      for (const event of irrRows ?? []) {
-        const pid = event.pivot_id as string;
-        const list = eventsByPivot.get(pid) ?? [];
-        list.push({
-          started_at: event.started_at as string,
-          depth_mm: (event.depth_mm as number) ?? 0,
-        });
-        eventsByPivot.set(pid, list);
-      }
-      const irrigationByPivot = new Map<string, Record<string, number>>();
-      Array.from(eventsByPivot.entries()).forEach(([pid, list]) => {
-        irrigationByPivot.set(pid, sumGrossDepthByDate(list));
-      });
 
       const cultureMap = new Map((culturesRes.data ?? []).map((c: Record<string, unknown>) => [c.id as string, c]));
       const soilMap = new Map((soilsRes.data ?? []).map((s: Record<string, unknown>) => [s.id as string, s]));
@@ -277,15 +183,7 @@ export function useFarmHydricState(): FarmHydricState {
       const varietyMap = new Map((varietiesRes.data ?? []).map((v: Record<string, unknown>) => [v.id as string, v.name as string]));
 
       const layersBySoil = new Map<string, SoilProfileLayer[]>();
-      for (const row of (layersRes.data ?? []) as Array<{
-        soil_id: string;
-        depth_start: number;
-        depth_end: number;
-        field_capacity: number;
-        wilting_point: number;
-        bulk_density: number | null;
-        kl: number | null;
-      }>) {
+      for (const row of (layersRes.data ?? []) as Array<{ soil_id:string; depth_start:number; depth_end:number; field_capacity:number; wilting_point:number; bulk_density:number|null; kl:number|null }>) {
         const list = layersBySoil.get(row.soil_id) ?? [];
         list.push(...mapDbLayersToProfile([row]));
         layersBySoil.set(row.soil_id, list);
@@ -298,217 +196,227 @@ export function useFarmHydricState(): FarmHydricState {
         phasesByCulture.set(phase.culture_id, list);
       }
 
-      const result: PivotHydricState[] = [];
-      const pushIncomplete = (
-        pivot: Record<string, unknown>,
-        geometry: { radiusMeters: number | null; sheetIncomplete: boolean },
-        assignment?: Record<string, unknown>,
-        cultureName = "—",
-        soilName: string | null = null,
-      ) => {
-        result.push({
-          pivotId: pivot.id as string,
-          pivotName: pivot.name as string,
-          cultureName,
-          varietyName: null,
-          seasonName: null,
-          area: (pivot.area as number) ?? 0,
-          latitude: (pivot.latitude as number) ?? 0,
-          longitude: (pivot.longitude as number) ?? 0,
-          parcelId: assignment ? (assignment.id as string) : null,
-          plantingDate: assignment ? ((assignment.planting_date as string) ?? null) : null,
-          soilName,
-          radiusMeters: geometry.radiusMeters,
-          sheetIncomplete: geometry.sheetIncomplete,
-          startAngleDeg: assignment ? ((assignment.start_angle_deg as number | null) ?? null) : null,
-          endAngleDeg: assignment ? ((assignment.end_angle_deg as number | null) ?? null) : null,
-          parcelName: assignment ? ((assignment.name as string | null) ?? null) : null,
-          current: null,
-          history: [],
+      const latestAnchorByAssignment = new Map<string, Anchor>();
+      for (const raw of anchorsRes.data ?? []) {
+        const row = raw as Record<string, unknown>;
+        const id = row.pivot_crop_assignment_id as string;
+        if (latestAnchorByAssignment.has(id)) continue;
+        const source = row.source as Anchor["source"];
+        const unit = row.moisture_unit as InitialMoistureUnit;
+        if (source !== "measured" && source !== "field_capacity_confirmed") continue;
+        if (!(["field_capacity_fraction", "weight_pct", "volume_pct"] as string[]).includes(unit)) continue;
+        latestAnchorByAssignment.set(id, {
+          effectiveDate: row.effective_date as string,
+          source,
+          moistureValue: row.moisture_value == null ? null : Number(row.moisture_value),
+          moistureUnit: unit,
+          isFieldCapacity: row.is_field_capacity === true,
         });
-      };
+      }
 
-      for (const pivot of pivots as Array<Record<string, unknown>>) {
-        const geometry = resolvePivotMapGeometry({
-          radiusM: (pivot.radius as number | null) ?? null,
-          lastTowerRadiusM: (pivot.last_tower_radius as number | null) ?? null,
-          overhangM: (pivot.overhang_m as number | null) ?? null,
-          latitude: (pivot.latitude as number | null) ?? null,
-          longitude: (pivot.longitude as number | null) ?? null,
-        });
-        const pivotAssignments = assignmentsByPivot.get(pivot.id as string) ?? [];
-        if (pivotAssignments.length === 0) {
-          pushIncomplete(pivot, geometry);
+      const startByAssignment = new Map<string, { dateStart: string; anchor: Anchor | null }>();
+      for (const assignment of assignments) {
+        const id = assignment.id as string;
+        const anchor = latestAnchorByAssignment.get(id) ?? null;
+        if (anchor) {
+          const nextDay = addDays(anchor.effectiveDate, 1);
+          if (nextDay <= dateEnd && daysBetween(nextDay, dateEnd) <= MAX_RECALC_DAYS) {
+            startByAssignment.set(id, { dateStart: nextDay, anchor });
+          }
           continue;
         }
 
+        const managementStart = ((assignment.management_start_date as string | null) ?? (assignment.planting_date as string));
+        const initialIsCc = assignment.initial_moisture_is_cc === true;
+        const initialPct = assignment.initial_soil_moisture_pct == null ? null : Number(assignment.initial_soil_moisture_pct);
+        const hasLegacyInitial = initialIsCc || (initialPct != null && Number.isFinite(initialPct));
+        if (hasLegacyInitial && managementStart <= dateEnd && daysBetween(managementStart, dateEnd) <= MAX_RECALC_DAYS) {
+          startByAssignment.set(id, { dateStart: managementStart, anchor: null });
+        }
+      }
+
+      const starts = Array.from(startByAssignment.values()).map((v) => v.dateStart);
+      const dataStart = starts.length ? minIso(starts) : dateEnd;
+
+      const stationIds = (stationsRes.data ?? []).map((s: { id: string }) => s.id);
+      const weatherByDate: Record<string, EngineWeatherDay> = {};
+      if (stationIds.length) {
+        const [selectionRes, readingsRes] = await Promise.all([
+          supabase.from("weather_daily_selection")
+            .select("date,selected_reading_id,operational_approved")
+            .eq("farm_id", activeFarmId)
+            .eq("operational_approved", true)
+            .gte("date", dataStart)
+            .lte("date", dateEnd),
+          supabase.from("weather_readings")
+            .select("id,date,et0_calculated,precipitation,station_id")
+            .in("station_id", stationIds)
+            .gte("date", dataStart)
+            .lte("date", dateEnd),
+        ]);
+        const readingsById = new Map((readingsRes.data ?? []).map((r) => [r.id as string, r]));
+        for (const selection of selectionRes.data ?? []) {
+          if (!selection.selected_reading_id || selection.operational_approved !== true) continue;
+          const reading = readingsById.get(selection.selected_reading_id as string);
+          if (!reading) continue;
+          const et0 = Number(reading.et0_calculated);
+          const precipitation = Number(reading.precipitation);
+          if (!Number.isFinite(et0) || et0 < 0 || !Number.isFinite(precipitation) || precipitation < 0) continue;
+          weatherByDate[selection.date as string] = { et0, precipitation };
+        }
+      }
+
+      const { data: manualRows, error: manualError } = await supabase.from("manual_rainfall_entries")
+        .select("date,precipitation_mm")
+        .eq("farm_id", activeFarmId)
+        .gte("date", dataStart)
+        .lte("date", dateEnd);
+      if (manualError) throw manualError;
+      for (const row of manualRows ?? []) {
+        const current = weatherByDate[row.date as string];
+        const rain = Number(row.precipitation_mm);
+        if (current && Number.isFinite(rain) && rain >= 0) weatherByDate[row.date as string] = { ...current, precipitation: rain };
+      }
+
+      const { data: irrigationRows, error: irrigationError } = await supabase.from("irrigation_events")
+        .select("id,pivot_id,parcel_id,started_at,depth_mm")
+        .in("pivot_id", operationalPivots.map((p) => p.id as string))
+        .gte("started_at", `${dataStart}T00:00:00`)
+        .lte("started_at", `${dateEnd}T23:59:59`);
+      if (irrigationError) throw irrigationError;
+      const allIrrigation = (irrigationRows ?? []) as IrrigationRow[];
+
+      const result: PivotHydricState[] = [];
+      const pushIncomplete = (pivot: Record<string, unknown>, assignment: Record<string, unknown>, cultureName = "—", soilName: string | null = null) => {
+        const geometry = resolvePivotMapGeometry({
+          radiusM:(pivot.radius as number|null) ?? null,
+          lastTowerRadiusM:(pivot.last_tower_radius as number|null) ?? null,
+          overhangM:(pivot.overhang_m as number|null) ?? null,
+          latitude:(pivot.latitude as number|null) ?? null,
+          longitude:(pivot.longitude as number|null) ?? null,
+        });
+        result.push({
+          pivotId:pivot.id as string,
+          pivotName:pivot.name as string,
+          cultureName,
+          varietyName:assignment.culture_variety_id ? varietyMap.get(assignment.culture_variety_id as string) ?? null : null,
+          seasonName:assignment.season_id ? seasonMap.get(assignment.season_id as string) ?? null : null,
+          area:parcelManagedAreaHa(Number(pivot.area)||0, assignment.planted_area as number|null, assignment.start_angle_deg as number|null, assignment.end_angle_deg as number|null),
+          latitude:Number(pivot.latitude)||0,
+          longitude:Number(pivot.longitude)||0,
+          parcelId:assignment.id as string,
+          plantingDate:(assignment.planting_date as string) ?? null,
+          soilName,
+          radiusMeters:geometry.radiusMeters,
+          sheetIncomplete:geometry.sheetIncomplete,
+          startAngleDeg:(assignment.start_angle_deg as number|null) ?? null,
+          endAngleDeg:(assignment.end_angle_deg as number|null) ?? null,
+          parcelName:(assignment.name as string|null) ?? null,
+          current:null,
+          history:[],
+        });
+      };
+
+      for (const pivot of operationalPivots) {
+        const pivotAssignments = assignmentsByPivot.get(pivot.id as string) ?? [];
+        const geometry = resolvePivotMapGeometry({
+          radiusM:(pivot.radius as number|null) ?? null,
+          lastTowerRadiusM:(pivot.last_tower_radius as number|null) ?? null,
+          overhangM:(pivot.overhang_m as number|null) ?? null,
+          latitude:(pivot.latitude as number|null) ?? null,
+          longitude:(pivot.longitude as number|null) ?? null,
+        });
+        const isSectorized = pivotAssignments.length > 1;
+        const pivotEvents = allIrrigation.filter((e) => e.pivot_id === pivot.id);
+
         for (const assignment of pivotAssignments) {
           const culture = cultureMap.get(assignment.culture_id as string) ?? null;
-          const effectiveSoilId = pivotSoilMap.get(pivot.id as string) ?? ((assignment.soil_id as string) || null);
-          const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) : null;
-          if (!culture || !soil) {
-            pushIncomplete(
-              pivot,
-              geometry,
-              assignment,
-              culture ? (culture.name as string) : "—",
-              soil ? ((soil.name as string) ?? null) : null,
-            );
+          const effectiveSoilId = (pivot.soil_id as string | null) ?? ((assignment.soil_id as string) || null);
+          const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) ?? null : null;
+          const start = startByAssignment.get(assignment.id as string) ?? null;
+          if (!culture || !soil || !start) {
+            pushIncomplete(pivot, assignment, culture ? culture.name as string : "—", soil ? soil.name as string : null);
             continue;
           }
 
-          const managementStart = ((assignment.management_start_date as string | null) ?? (assignment.planting_date as string));
-          const seed = latestSeedByAssignment.get(assignment.id as string) ?? null;
-          const dateStart = recalcStartByAssignment.get(assignment.id as string) ?? null;
-          const oldParcelNeedsSeed = managementStart < displayStart;
-
-          if (
-            !dateStart ||
-            (oldParcelNeedsSeed && !seed) ||
-            daysBetween(dateStart, dateEnd) >= MAX_RECOVERY_LOOKBACK_DAYS
-          ) {
-            pushIncomplete(pivot, geometry, assignment, culture.name as string, soil.name as string);
+          const relevantEvents = pivotEvents.filter((e) => e.parcel_id === assignment.id || (!isSectorized && e.parcel_id == null));
+          const hasAmbiguousLegacy = isSectorized && pivotEvents.some((e) => e.parcel_id == null);
+          if (hasAmbiguousLegacy || hasExactDuplicateEvents(relevantEvents)) {
+            pushIncomplete(pivot, assignment, culture.name as string, soil.name as string);
             continue;
           }
 
-          const startAngleDeg = (assignment.start_angle_deg as number | null) ?? null;
-          const endAngleDeg = (assignment.end_angle_deg as number | null) ?? null;
-          const area = parcelManagedAreaHa(
-            (pivot.area as number) ?? 0,
-            (assignment.planted_area as number | null) ?? null,
+          const irrigationByDate = sumGrossDepthByDate(relevantEvents.map((e) => ({
+            started_at:e.started_at,
+            depth_mm:Number(e.depth_mm) || 0,
+          })));
+
+          const anchor = start.anchor;
+          const startAngleDeg = (assignment.start_angle_deg as number|null) ?? null;
+          const endAngleDeg = (assignment.end_angle_deg as number|null) ?? null;
+          const area = parcelManagedAreaHa(Number(pivot.area)||0, assignment.planted_area as number|null, startAngleDeg, endAngleDeg);
+
+          const state = computePivotCurrentState({
+            pivotId:pivot.id as string,
+            pivotName:pivot.name as string,
+            cultureName:culture.name as string,
+            varietyName:assignment.culture_variety_id ? varietyMap.get(assignment.culture_variety_id as string) ?? null : null,
+            seasonName:assignment.season_id ? seasonMap.get(assignment.season_id as string) ?? null : null,
+            area,
+            latitude:Number(pivot.latitude)||0,
+            longitude:Number(pivot.longitude)||0,
+            parcelId:assignment.id as string,
+            plantingDate:(assignment.planting_date as string) ?? null,
+            soilName:soil.name as string,
+            radiusMeters:geometry.radiusMeters,
+            sheetIncomplete:geometry.sheetIncomplete,
             startAngleDeg,
             endAngleDeg,
-          );
-
-          const state = computePivotCurrentState(
-            {
-              pivotId: pivot.id as string,
-              pivotName: pivot.name as string,
-              cultureName: culture.name as string,
-              varietyName: assignment.culture_variety_id
-                ? varietyMap.get(assignment.culture_variety_id as string) ?? null
-                : null,
-              seasonName: assignment.season_id
-                ? seasonMap.get(assignment.season_id as string) ?? null
-                : null,
+            parcelName:(assignment.name as string|null) ?? null,
+          }, {
+            assignment:{
+              id:assignment.id as string,
+              planting_date:assignment.planting_date as string,
+              emergence_date:(assignment.emergence_date as string|null) ?? null,
+              parameter_mode:(assignment.parameter_mode as "padrao"|"personalizado") ?? "padrao",
+              initial_root_depth:(assignment.initial_root_depth as number|null) ?? null,
+              max_root_depth:(assignment.max_root_depth as number|null) ?? null,
+              irrigation_efficiency:(assignment.irrigation_efficiency as number|null) ?? null,
+              depletion_factor:(assignment.depletion_factor as number|null) ?? null,
+              kl_override:(assignment.kl_override as number|null) ?? null,
+              ks_function_override:(assignment.ks_function_override as string|null) ?? null,
+              initial_soil_moisture_pct:anchor ? anchor.moistureValue : ((assignment.initial_soil_moisture_pct as number|null) ?? null),
+              initial_moisture_unit:anchor ? anchor.moistureUnit : ((assignment.initial_moisture_unit as InitialMoistureUnit|null) ?? "field_capacity_fraction"),
+              initial_moisture_is_cc:anchor ? anchor.isFieldCapacity : ((assignment.initial_moisture_is_cc as boolean|null) ?? null),
+              deficit_irrigation:(assignment.deficit_irrigation as boolean) ?? false,
+              stress_point_irrigation:(assignment.stress_point_irrigation as boolean) ?? false,
+            },
+            culture:{
+              root_depth:Number(culture.root_depth)||0.3,
+              depletion_factor:Number(culture.depletion_factor)||0.5,
+              kl:(culture.kl as number|null) ?? null,
+              ks_function:(culture.ks_function as string|null) ?? null,
+              ky:(culture.ky as number|null) ?? null,
+            },
+            phases:phasesByCulture.get(assignment.culture_id as string) ?? [],
+            soil:{
+              field_capacity:Number(soil.field_capacity),
+              wilting_point:Number(soil.wilting_point),
+              bulk_density:Number(soil.bulk_density),
+              effective_depth:Number(soil.effective_depth)||0.6,
+              layers:effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
+            },
+            pivot:{
+              application_efficiency:(pivot.application_efficiency as number|null) ?? null,
+              efficiency:(pivot.efficiency as number|null) ?? null,
               area,
-              latitude: (pivot.latitude as number) ?? 0,
-              longitude: (pivot.longitude as number) ?? 0,
-              parcelId: assignment.id as string,
-              plantingDate: (assignment.planting_date as string) ?? null,
-              soilName: soil.name as string,
-              radiusMeters: geometry.radiusMeters,
-              sheetIncomplete: geometry.sheetIncomplete,
-              startAngleDeg,
-              endAngleDeg,
-              parcelName: (assignment.name as string | null) ?? null,
+              flow_rate:Number(pivot.flow_rate)||0,
             },
-            {
-              assignment: {
-                id: assignment.id as string,
-                planting_date: assignment.planting_date as string,
-                emergence_date: (assignment.emergence_date as string) ?? null,
-                parameter_mode: (assignment.parameter_mode as "padrao" | "personalizado") ?? "padrao",
-                initial_root_depth: (assignment.initial_root_depth as number) ?? null,
-                max_root_depth: (assignment.max_root_depth as number) ?? null,
-                irrigation_efficiency: (assignment.irrigation_efficiency as number) ?? null,
-                depletion_factor: (assignment.depletion_factor as number) ?? null,
-                kl_override: (assignment.kl_override as number) ?? null,
-                ks_function_override: (assignment.ks_function_override as string) ?? null,
-                initial_soil_moisture_pct: (assignment.initial_soil_moisture_pct as number) ?? null,
-                initial_moisture_unit: (assignment.initial_moisture_unit as "field_capacity_fraction" | "weight_pct" | "volume_pct") ?? null,
-                initial_moisture_is_cc: (assignment.initial_moisture_is_cc as boolean) ?? null,
-                deficit_irrigation: (assignment.deficit_irrigation as boolean) ?? false,
-                stress_point_irrigation: (assignment.stress_point_irrigation as boolean) ?? false,
-              },
-              culture: {
-                root_depth: (culture.root_depth as number) ?? 0.3,
-                depletion_factor: (culture.depletion_factor as number) ?? 0.5,
-                kl: (culture.kl as number) ?? null,
-                ks_function: (culture.ks_function as string) ?? null,
-                ky: (culture.ky as number) ?? null,
-              },
-              phases: phasesByCulture.get(assignment.culture_id as string) ?? [],
-              soil: {
-                field_capacity: soil.field_capacity as number,
-                wilting_point: soil.wilting_point as number,
-                bulk_density: soil.bulk_density as number,
-                effective_depth: (soil.effective_depth as number) ?? 0.6,
-                layers: effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
-              },
-              pivot: {
-                application_efficiency: (pivot.application_efficiency as number | null) ?? null,
-                efficiency: (pivot.efficiency as number | null) ?? null,
-                area,
-                flow_rate: (pivot.flow_rate as number) ?? 0,
-              },
-              weatherByDate,
-              irrigationByDate: irrigationByPivot.get(pivot.id as string) ?? {},
-              dateStart,
-              dateEnd,
-              initialStorageMm: oldParcelNeedsSeed ? seed!.storage : null,
-              initialCadMm: oldParcelNeedsSeed ? seed!.cad : null,
-            },
-          );
-
-          if (state.history.length > 0) {
-            const explicitSource = assignment.initial_condition_source as string | null;
-            const initialConditionSource = oldParcelNeedsSeed
-              ? "prior_v2"
-              : explicitSource === "measured" || explicitSource === "field_capacity_confirmed"
-                ? explicitSource
-                : null;
-            const persisted = state.history.map((d) => ({
-              pivot_crop_assignment_id: assignment.id as string,
-              date: d.date,
-              et0: d.et0,
-              kc: d.kc,
-              etc: d.etc,
-              effective_precipitation: d.effectivePrecipitation,
-              applied_depth: d.irrigation,
-              deficit: d.deficit,
-              cad: d.adt,
-              afd: d.afd,
-              soil_storage: d.storage,
-              precipitation: d.precipitation,
-              root_depth: d.rootDepth,
-              depletion_factor: d.adt > 0 ? d.afd / d.adt : 0,
-              surplus: d.surplus,
-              net_depth: d.recommendedNetDepth,
-              gross_depth: d.recommendedGrossDepth,
-              volume_needed: d.recommendedVolume,
-              irrigation_time: d.estimatedIrrigationTime,
-              water_status: legacyWaterStatus(d.status),
-              dae: d.dae,
-              phase: d.phase,
-              effective_irrigation: d.effectiveIrrigation,
-              depletion: d.depletion,
-              should_irrigate: d.shouldIrrigate,
-              recommendation_reason: d.recommendationReason,
-              hydric_status: d.status,
-              ks: d.ks,
-              kl: d.kl,
-              kc_adjusted: d.kcAdjusted,
-              etc_potential: d.etcPotential,
-              ky: d.ky,
-              yield_risk: d.yieldRisk,
-              etc_formula: d.etcFormula,
-              safety_moisture_mm: d.safetyMoistureMm,
-              moisture_pct_cc: d.moisturePctCc,
-              safety_pct_cc: d.safetyPctCc,
-              field_capacity: d.fieldCapacity,
-              wilting_point: d.wiltingPoint,
-              pe_formula: d.peFormula,
-              balance_formula: d.balanceFormula,
-              engine_version: "hydric-v2",
-              initial_condition_source: initialConditionSource,
-            }));
-            const { error: persistError } = await supabase
-              .from("water_balances")
-              .upsert(persisted, { onConflict: "pivot_crop_assignment_id,date" });
-            if (persistError) throw persistError;
-          }
-
+            weatherByDate,
+            irrigationByDate,
+            dateStart:start.dateStart,
+            dateEnd,
+          });
           result.push(state);
         }
       }
@@ -516,7 +424,7 @@ export function useFarmHydricState(): FarmHydricState {
       setStates(result);
       setSummary(computeFarmHydricState(result));
     } catch (error) {
-      console.error("Falha ao carregar estado hídrico da fazenda", error);
+      console.error("Falha ao carregar estado hídrico operacional", error);
       setStates([]);
       setSummary(null);
     } finally {
@@ -525,14 +433,8 @@ export function useFarmHydricState(): FarmHydricState {
   }, [activeFarmId, supabase]);
 
   useEffect(() => {
-    if (authLoading) return;
-    load();
+    if (!authLoading) load();
   }, [authLoading, load]);
 
-  return {
-    states,
-    summary,
-    loading: authLoading || loading,
-    refresh: load,
-  };
+  return { states, summary, loading:authLoading || loading, refresh:load };
 }
