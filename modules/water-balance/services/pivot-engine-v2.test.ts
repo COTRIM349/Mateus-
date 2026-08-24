@@ -32,8 +32,6 @@ function baseInput(overrides: Partial<PivotEngineInput> = {}): PivotEngineInput 
         duration_days: 10,
         kc_start: 1,
         kc_end: 1,
-        kcb_start: 0.9,
-        kcb_end: 0.9,
         root_depth_start: 0.3,
         root_depth_end: 0.3,
         depletion_factor: 0.5,
@@ -52,7 +50,7 @@ function baseInput(overrides: Partial<PivotEngineInput> = {}): PivotEngineInput 
   };
 }
 
-describe("motor hídrico V2 - regressão legada", () => {
+describe("motor hídrico V2 - estabilização", () => {
   it("usa condição inicial explícita e mantém continuidade entre dias", () => {
     const rows = computePivotBalanceSeries(baseInput());
     expect(rows).toHaveLength(2);
@@ -63,14 +61,13 @@ describe("motor hídrico V2 - regressão legada", () => {
 
   it("usa ARM persistido anterior em vez de reiniciar na CAD", () => {
     const rows = computePivotBalanceSeries(baseInput({ initialStorageMm: 30, initialCadMm: 54 }));
-    expect(rows[0].storage).toBeLessThan(49);
     expect(rows[0].storage).toBe(25);
   });
 
   it("bloqueia série com lacuna climática em vez de converter para zero", () => {
-    const rows = computePivotBalanceSeries(baseInput({ weatherByDate: { "2026-08-01": { et0: 5, precipitation: 0 } } }));
-    expect(rows).toHaveLength(0);
-    expect(hasCompleteWeatherSeries({ "2026-08-01": { et0: 5, precipitation: 0 } }, "2026-08-01", "2026-08-02")).toBe(false);
+    const weather = { "2026-08-01": { et0: 5, precipitation: 0 } };
+    expect(computePivotBalanceSeries(baseInput({ weatherByDate: weather }))).toHaveLength(0);
+    expect(hasCompleteWeatherSeries(weather, "2026-08-01", "2026-08-02")).toBe(false);
   });
 
   it("não inicia balanço sem seed nem umidade inicial confiável", () => {
@@ -80,27 +77,32 @@ describe("motor hídrico V2 - regressão legada", () => {
     expect(computePivotBalanceSeries(input)).toHaveLength(0);
   });
 
-  it("usa eficiência de aplicação e não o CUC/legado para irrigação efetiva", () => {
+  it("usa eficiência de aplicação explícita", () => {
     const rows = computePivotBalanceSeries(baseInput({ irrigationByDate: { "2026-08-01": 20 } }));
     expect(rows[0].effectiveIrrigation).toBe(17);
   });
 
   it("chuva diária é limitada pela CAD e excesso vira surplus", () => {
-    const rows = computePivotBalanceSeries(baseInput({ weatherByDate: { "2026-08-01": { et0: 2, precipitation: 20 }, "2026-08-02": { et0: 2, precipitation: 0 } } }));
+    const rows = computePivotBalanceSeries(baseInput({
+      weatherByDate: {
+        "2026-08-01": { et0: 2, precipitation: 20 },
+        "2026-08-02": { et0: 2, precipitation: 0 },
+      },
+    }));
     expect(rows[0].storage).toBe(54);
     expect(rows[0].surplus).toBeGreaterThan(0);
     expect(rows[0].effectivePrecipitation).toBeLessThan(20);
   });
 
-  it("guarda V3 bloqueia cultura sem fases", () => {
+  it("bloqueia cultura sem fases", () => {
     const input = baseInput({ phases: [] });
     expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
   });
 
-  it("guarda V3 bloqueia lacuna ou DAE fora da cobertura das fases", () => {
+  it("bloqueia lacuna ou DAE fora da cobertura das fases", () => {
     const input = baseInput({ phases: [
-      { phase_order: 1, name: "Inicial", days_after_plant: 0, duration_days: 1, kc_start: 0.5, kc_end: 0.5, kcb_start: 0.15, kcb_end: 0.15, root_depth_start: 0.2, root_depth_end: 0.2, depletion_factor: 0.5 },
-      { phase_order: 2, name: "Vegetativo", days_after_plant: 3, duration_days: 10, kc_start: 0.8, kc_end: 1, kcb_start: 0.4, kcb_end: 0.9, root_depth_start: 0.3, root_depth_end: 0.5, depletion_factor: 0.5 },
+      { phase_order: 1, name: "Inicial", days_after_plant: 0, duration_days: 1, kc_start: 0.5, kc_end: 0.5, root_depth_start: 0.2, root_depth_end: 0.2, depletion_factor: 0.5 },
+      { phase_order: 2, name: "Vegetativo", days_after_plant: 3, duration_days: 10, kc_start: 0.8, kc_end: 1, root_depth_start: 0.3, root_depth_end: 0.5, depletion_factor: 0.5 },
     ] });
     expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
   });

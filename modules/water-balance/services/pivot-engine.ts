@@ -1,8 +1,5 @@
 /**
- * Compatibilidade temporária.
- *
- * O motor hídrico operacional foi promovido para pivot-engine-v2. Este arquivo
- * existe somente para não quebrar imports diretos antigos; nenhuma regra de
- * negócio deve voltar a ser implementada aqui.
+ * Entrada pública do motor hídrico operacional.
+ * A guarda valida cobertura de fases antes de delegar ao núcleo V2.
  */
-export * from "./pivot-engine-v2";
+export * from "./pivot-engine-operational";

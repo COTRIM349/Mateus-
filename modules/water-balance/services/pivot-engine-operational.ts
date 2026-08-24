@@ -1,12 +1,11 @@
 // ============================================================================
-// GUARDA OPERACIONAL DO MOTOR HÍDRICO V3 — Kc DUAL FAO-56
+// GUARDA OPERACIONAL DO MOTOR HÍDRICO V2 — FAO-56 Kc simples
 // ============================================================================
-// Porta pública do motor operacional. Bloqueia cálculo quando faltam fases,
-// Kcb explícito ou cobertura temporal completa. Não há fallback silencioso
-// para Kc simples.
+// Mantém o motor V2 como fonte operacional e bloqueia séries quando as fases
+// agronômicas não cobrem todo o período ou possuem Kc inválido.
 // ============================================================================
 
-export * from "./pivot-engine-v3-dual";
+export * from "./pivot-engine-v2";
 
 import { resolveDaeReferenceDate } from "@/modules/assignment/services";
 import type { CulturePhase } from "@/modules/culture/services";
@@ -16,8 +15,7 @@ import {
   type PivotEngineInput,
   type PivotHydricState,
   type PivotIdentity,
-  type DualCulturePhase,
-} from "./pivot-engine-v3-dual";
+} from "./pivot-engine-v2";
 
 function dateRange(start: string, end: string): string[] {
   const out: string[] = [];
@@ -28,13 +26,8 @@ function dateRange(start: string, end: string): string[] {
   return out;
 }
 
-/**
- * Valida cobertura agronômica exata para cada DAE da série.
- * No V3, Kcb explícito é obrigatório; kc_start/kc_end legados não habilitam
- * operação por si só.
- */
 export function hasCompletePhaseCoverage(
-  phases: Array<CulturePhase & Partial<DualCulturePhase>>,
+  phases: CulturePhase[],
   input: Pick<PivotEngineInput, "assignment" | "dateStart" | "dateEnd">,
 ): boolean {
   if (!Array.isArray(phases) || phases.length === 0) return false;
@@ -43,10 +36,10 @@ export function hasCompletePhaseCoverage(
     !Number.isFinite(phase.days_after_plant) ||
     !Number.isFinite(phase.duration_days) ||
     phase.duration_days <= 0 ||
-    phase.kcb_start == null || phase.kcb_end == null ||
-    !Number.isFinite(phase.kcb_start) || !Number.isFinite(phase.kcb_end) ||
-    phase.kcb_start < 0 || phase.kcb_start > 2.5 ||
-    phase.kcb_end < 0 || phase.kcb_end > 2.5
+    phase.kc_start == null || phase.kc_end == null ||
+    !Number.isFinite(phase.kc_start) || !Number.isFinite(phase.kc_end) ||
+    phase.kc_start < 0 || phase.kc_start > 2.5 ||
+    phase.kc_end < 0 || phase.kc_end > 2.5
   ))) return false;
 
   const dates = dateRange(input.dateStart, input.dateEnd);
