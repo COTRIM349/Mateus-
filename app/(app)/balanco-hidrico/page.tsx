@@ -16,6 +16,7 @@ import { useAuth } from "@/components/providers";
 import { createClient } from "@/lib/supabase/client";
 import {
   calculateSummary,
+  calculateManagementUrgency,
   computePivotBalanceSeries,
   WATER_STATUS_CONFIG,
   ARM_FORMULA,
@@ -1051,6 +1052,22 @@ function BalanceTab({
   const stressPct = summary.days > 0 ? (summary.daysInDeficit / summary.days) * 100 : 0;
   const verdict = VERDICT[last?.waterStatus ?? "ideal"];
   const laminaBruta = last?.grossDepth ?? 0;
+  const urgency = last
+    ? calculateManagementUrgency({
+        afd: last.afd,
+        deficit: last.deficit,
+        etcPotential: last.etcPotential ?? last.etc,
+      })
+    : null;
+  const daysToAfdLabel = urgency
+    ? urgency.atOrBeyondAfd
+      ? "limite atingido"
+      : urgency.daysToAfd == null
+        ? "sem demanda"
+        : urgency.daysToAfd < 1
+          ? "< 1 dia"
+          : `${urgency.daysToAfd.toFixed(1)} dias`
+    : "—";
 
   const columns: Column<DailyBalanceRow>[] = [
     { header: "Data", render: (r) => fmtDia(r.date) },
@@ -1167,7 +1184,9 @@ function BalanceTab({
           <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
             {arm < safetyMm
               ? "O ARM está abaixo da umidade de segurança (CAD − AFD) e a demanda (ETc) supera as entradas recentes."
-              : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
+              : urgency?.daysToAfd != null
+                ? `O ARM está dentro da faixa segura. Mantida a demanda atual e sem chuva/irrigação, a AFD seria atingida em aproximadamente ${urgency.daysToAfd.toFixed(1)} dia(s).`
+                : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {[
@@ -1176,6 +1195,9 @@ function BalanceTab({
               { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` },
               { l: "% da CC", v: `${pctCc.toFixed(0)}%` },
               { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
+              { l: "AFD consumida", v: urgency ? `${urgency.afdUsedPct.toFixed(0)}%` : "—" },
+              { l: "Margem até AFD", v: urgency ? (urgency.atOrBeyondAfd ? "limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—" },
+              { l: "Dias até AFD", v: daysToAfdLabel },
               { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
             ].map((f) => (
               <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]">
@@ -1194,9 +1216,10 @@ function BalanceTab({
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
             if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
+            if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `Restam ${urgency.remainingToAfdMm.toFixed(1)} mm até a AFD; na demanda atual, cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).` });
             if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
             if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
-            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: "Nenhum alerta ativo para o pivô no período." });
+            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: urgency && urgency.daysToAfd != null ? `Sem alerta ativo. Janela estimada até a AFD: ${urgency.daysToAfd.toFixed(1)} dia(s).` : "Nenhum alerta ativo para o pivô no período." });
             const sevCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
             return items.map((a, i) => (
               <div key={i} className="flex gap-3 border-t border-gray-100 py-2.5 first:border-0 dark:border-white/[0.06]">
@@ -1298,7 +1321,20 @@ function BalanceTab({
             head.horasOperadas != null ? { l: "Horas operadas", v: `${head.horasOperadas.toFixed(0)} h` } : { l: "Horas operadas", v: "pendente", pend: true },
             head.energiaEspecifica != null ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` } : { l: "Energia específica", v: "pendente", pend: true },
             { l: "Uniformidade (CUC)", v: "pendente", pend: true },
-            { l: "Janela ideal", v: "pendente", pend: true },
+            {
+              l: "Janela até AFD",
+              v: daysToAfdLabel,
+              sub: urgency
+                ? urgency.atOrBeyondAfd
+                  ? "AFD já atingida"
+                  : `${urgency.remainingToAfdMm.toFixed(1)} mm de margem`
+                : undefined,
+              cls: urgency?.atOrBeyondAfd
+                ? "text-red-600 dark:text-red-400"
+                : urgency?.daysToAfd != null && urgency.daysToAfd <= 2
+                  ? "text-orange-600 dark:text-orange-400"
+                  : "text-graphite-900 dark:text-white",
+            },
           ].map((s, i) => (
             <div key={i} className="px-5 py-3.5">
               <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{s.l}</p>
