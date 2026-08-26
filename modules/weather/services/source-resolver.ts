@@ -2,9 +2,9 @@
 // Seleção diária auditável da fonte climática operacional
 // ============================================================================
 // Ordem de decisão: qualidade -> prioridade -> natureza do dado -> recência.
-// Só uma leitura com ETo e precipitação numéricas e fisicamente plausíveis pode
-// ser candidata operacional. Leituras fora da faixa continuam disponíveis para
-// auditoria, mas não alimentam automaticamente o balanço hídrico.
+// Uma leitura pode ser selecionada para diagnóstico sem ser automaticamente
+// aprovada para manejo. Modelos e grades históricas permanecem auditáveis, mas
+// só dados observados/manuais elegíveis alimentam automaticamente o balanço.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -56,6 +56,19 @@ export function candidateHasOperationalValues(candidate: Pick<CandidateReading, 
     && Number.isFinite(candidate.precipitation)
     && candidate.precipitation >= OPERATIONAL_CLIMATE_LIMITS.precipitationMin
     && candidate.precipitation <= OPERATIONAL_CLIMATE_LIMITS.precipitationMax;
+}
+
+/**
+ * Aprovação automática é deliberadamente mais restrita que a seleção.
+ * model_estimate/historical_grid podem ser bons candidatos diagnósticos, mas
+ * não devem virar entrada operacional apenas por passarem em faixa física.
+ */
+export function candidateCanBeOperationallyApproved(
+  candidate: Pick<CandidateReading, "data_quality" | "data_kind" | "et0_calculated" | "precipitation">,
+): boolean {
+  return candidate.data_quality === "ok"
+    && (candidate.data_kind === "observed" || candidate.data_kind === "manual")
+    && candidateHasOperationalValues(candidate);
 }
 
 function invalidOperationalValueReason(et0: number, rain: number): string {
@@ -186,7 +199,7 @@ export async function resolveDailyClimateSource(
 
   const topPriority = Math.min(...stations.map((s) => Number(s.source_priority) || 999));
   const fallbackUsed = winner.source_priority > topPriority;
-  const operationalApproved = winner.data_quality === "ok" && candidateHasOperationalValues(winner);
+  const operationalApproved = candidateCanBeOperationallyApproved(winner);
 
   const result: DailySelectionResult = {
     farm_id:farmId,
@@ -196,8 +209,10 @@ export async function resolveDailyClimateSource(
     priority_used:winner.source_priority,
     quality_used:winner.data_quality,
     reason: operationalApproved
-      ? `leitura operacional aprovada: ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality})`
-      : `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_quality})`,
+      ? `leitura operacional aprovada: ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality}, ${winner.data_kind})`
+      : winner.data_kind === "model_estimate" || winner.data_kind === "historical_grid"
+        ? `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_kind}); modelo não possui aprovação operacional automática`
+        : `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_quality})`,
     rejected_sources:rejected,
     fallback_used:fallbackUsed,
     operational_approved:operationalApproved,
