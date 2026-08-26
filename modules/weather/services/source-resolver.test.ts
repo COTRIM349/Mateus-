@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  candidateCanBeOperationallyApproved,
   candidateHasOperationalValues,
   OPERATIONAL_CLIMATE_LIMITS,
   rankClimateCandidate,
@@ -54,5 +55,17 @@ describe("source resolver operacional", () => {
     expect(candidateHasOperationalValues(candidate({
       precipitation: OPERATIONAL_CLIMATE_LIMITS.precipitationMax + 0.01,
     }))).toBe(false);
+  });
+
+  it("mantém dados de modelo apenas em diagnóstico, sem aprovação operacional automática", () => {
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "model_estimate" }))).toBe(false);
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "historical_grid" }))).toBe(false);
+  });
+
+  it("aprova automaticamente apenas dado observado/manual com qualidade ok e faixa física válida", () => {
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "observed" }))).toBe(true);
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "manual" }))).toBe(true);
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "observed", data_quality: "degraded" }))).toBe(false);
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "observed", et0_calculated: 16 }))).toBe(false);
   });
 });
