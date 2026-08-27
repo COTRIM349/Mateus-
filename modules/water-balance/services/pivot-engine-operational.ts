@@ -10,6 +10,7 @@ export * from "./pivot-engine-v2";
 
 import { resolveDaeReferenceDate, resolveDepletionFactor } from "@/modules/assignment/services";
 import { identifyPhase, interpolateKc, type CulturePhase } from "@/modules/culture/services";
+import { soilProfileIsUsable } from "@/modules/soil/services";
 import { resolveManejoKl } from "./crop-coefficients";
 import {
   computePivotBalanceSeries as computePivotBalanceSeriesCore,
@@ -77,6 +78,80 @@ export function hasCompletePhaseCoverage(
       return dae >= start && dae < endExclusive;
     });
   });
+}
+
+export type OperationalBlockCode =
+  | "invalid_period"
+  | "invalid_phase_coverage"
+  | "invalid_soil_profile"
+  | "missing_weather"
+  | "invalid_weather";
+
+export interface OperationalInputDiagnosis {
+  operational: boolean;
+  code: OperationalBlockCode | null;
+  message: string | null;
+  date: string | null;
+}
+
+/**
+ * Diagnóstico puro das pré-condições operacionais do motor. A tela pode usar
+ * esta função para explicar por que uma parcela foi bloqueada sem transformar
+ * ausência de dado em zero nem adivinhar parâmetros agronômicos.
+ */
+export function diagnoseOperationalInput(input: PivotEngineInput): OperationalInputDiagnosis {
+  const dates = dateRange(input.dateStart, input.dateEnd);
+  if (dates.length === 0) {
+    return {
+      operational: false,
+      code: "invalid_period",
+      message: "Período inválido: verifique as datas inicial e final do balanço.",
+      date: null,
+    };
+  }
+
+  if (!hasCompletePhaseCoverage(input.phases, input)) {
+    return {
+      operational: false,
+      code: "invalid_phase_coverage",
+      message: "Fases da cultura incompletas ou inválidas para o período: revise Kc, duração, raiz, fator p e KL.",
+      date: null,
+    };
+  }
+
+  if (!soilProfileIsUsable(input.soil, input.soil.layers)) {
+    return {
+      operational: false,
+      code: "invalid_soil_profile",
+      message: "Perfil de solo inválido para o balanço: revise capacidade de campo, PMP, profundidade efetiva e camadas.",
+      date: null,
+    };
+  }
+
+  for (const date of dates) {
+    const weather = input.weatherByDate[date];
+    if (!weather) {
+      return {
+        operational: false,
+        code: "missing_weather",
+        message: `Clima operacional ausente em ${date}: o balanço não assume ETo ou chuva iguais a zero.`,
+        date,
+      };
+    }
+    if (
+      !Number.isFinite(weather.et0) || weather.et0 < 0 ||
+      !Number.isFinite(weather.precipitation) || weather.precipitation < 0
+    ) {
+      return {
+        operational: false,
+        code: "invalid_weather",
+        message: `Clima operacional inválido em ${date}: revise ETo e precipitação aprovadas.`,
+        date,
+      };
+    }
+  }
+
+  return { operational: true, code: null, message: null, date: null };
 }
 
 /**
@@ -149,7 +224,8 @@ export function calculateManagementUrgency(
  * responsável por Ks, ETc, balanço, chuva, irrigação e recomendação.
  */
 export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
-  if (!hasCompletePhaseCoverage(input.phases, input)) return [];
+  const diagnosis = diagnoseOperationalInput(input);
+  if (!diagnosis.operational) return [];
 
   const normalized = normalizeOperationalInput(input);
   const dates = dateRange(normalized.dateStart, normalized.dateEnd);
