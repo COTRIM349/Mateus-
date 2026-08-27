@@ -3,6 +3,7 @@ import {
   adjustDepletionFactorForDemand,
   calculateManagementUrgency,
   computePivotBalanceSeries,
+  diagnoseOperationalInput,
   hasCompletePhaseCoverage,
   normalizeOperationalInput,
 } from "./pivot-engine-operational";
@@ -119,6 +120,10 @@ describe("pivot-engine-operational", () => {
     input.dateEnd = "2026-01-02";
 
     expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
+    expect(diagnoseOperationalInput(input)).toMatchObject({
+      operational: false,
+      code: "invalid_phase_coverage",
+    });
     expect(computePivotBalanceSeries(input)).toEqual([]);
   });
 
@@ -136,6 +141,44 @@ describe("pivot-engine-operational", () => {
       kl: 1.2,
     }];
     expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
+  });
+
+  it("explica bloqueio quando clima operacional está ausente ou inválido", () => {
+    const missing = baseInput();
+    missing.weatherByDate = {};
+    expect(diagnoseOperationalInput(missing)).toEqual({
+      operational: false,
+      code: "missing_weather",
+      message: "Clima operacional ausente em 2026-01-01: o balanço não assume ETo ou chuva iguais a zero.",
+      date: "2026-01-01",
+    });
+
+    const invalid = baseInput();
+    invalid.weatherByDate["2026-01-01"] = { et0: -1, precipitation: 0 };
+    expect(diagnoseOperationalInput(invalid)).toMatchObject({
+      operational: false,
+      code: "invalid_weather",
+      date: "2026-01-01",
+    });
+  });
+
+  it("explica bloqueio quando o perfil de solo não é operacional", () => {
+    const input = baseInput();
+    input.soil.field_capacity = 0.08;
+    input.soil.wilting_point = 0.1;
+    expect(diagnoseOperationalInput(input)).toMatchObject({
+      operational: false,
+      code: "invalid_soil_profile",
+    });
+  });
+
+  it("confirma diagnóstico operacional quando as pré-condições estão completas", () => {
+    expect(diagnoseOperationalInput(baseInput())).toEqual({
+      operational: true,
+      code: null,
+      message: null,
+      date: null,
+    });
   });
 
   it("calcula margem e dias até a AFD com a demanda potencial atual", () => {
