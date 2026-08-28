@@ -94,6 +94,16 @@ export interface OperationalInputDiagnosis {
   date: string | null;
 }
 
+export class OperationalInputError extends Error {
+  readonly diagnosis: OperationalInputDiagnosis;
+
+  constructor(diagnosis: OperationalInputDiagnosis) {
+    super(diagnosis.message ?? "Balanço hídrico bloqueado por entrada operacional inválida.");
+    this.name = "OperationalInputError";
+    this.diagnosis = diagnosis;
+  }
+}
+
 /**
  * Diagnóstico puro das pré-condições operacionais do motor. A tela pode usar
  * esta função para explicar por que uma parcela foi bloqueada sem transformar
@@ -225,7 +235,7 @@ export function calculateManagementUrgency(
  */
 export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
   const diagnosis = diagnoseOperationalInput(input);
-  if (!diagnosis.operational) return [];
+  if (!diagnosis.operational) throw new OperationalInputError(diagnosis);
 
   const normalized = normalizeOperationalInput(input);
   const dates = dateRange(normalized.dateStart, normalized.dateEnd);
@@ -292,7 +302,13 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
 }
 
 export function computePivotCurrentState(identity: PivotIdentity, input: PivotEngineInput): PivotHydricState {
-  const history = computePivotBalanceSeries(input);
+  let history: BalanceDay[] = [];
+  try {
+    history = computePivotBalanceSeries(input);
+  } catch (error) {
+    if (!(error instanceof OperationalInputError)) throw error;
+  }
+
   return {
     ...identity,
     plantingDate: identity.plantingDate ?? null,
