@@ -61,7 +61,8 @@ describe("motor hídrico operacional", () => {
   });
 
   it("bloqueia ausência de fases em vez de assumir Kc=1", () => {
-    expect(computePivotBalanceSeries(sampleInput({ phases: [] }))).toHaveLength(0);
+    expect(() => computePivotBalanceSeries(sampleInput({ phases: [] })))
+      .toThrow(/Fases da cultura incompletas ou inválidas/);
   });
 
   it("bloqueia condição inicial ausente", () => {
