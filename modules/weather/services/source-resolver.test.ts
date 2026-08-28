@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   candidateCanBeOperationallyApproved,
   candidateHasOperationalValues,
+  isTrustedOperationalModelOrigin,
   OPERATIONAL_CLIMATE_LIMITS,
   rankClimateCandidate,
   type CandidateReading,
@@ -57,14 +58,39 @@ describe("source resolver operacional", () => {
     }))).toBe(false);
   });
 
-  it("mantém dados de modelo apenas em diagnóstico, sem aprovação operacional automática", () => {
-    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "model_estimate" }))).toBe(false);
-    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "historical_grid" }))).toBe(false);
+  it("reconhece apenas origens virtuais explicitamente autorizadas", () => {
+    expect(isTrustedOperationalModelOrigin("open-meteo")).toBe(true);
+    expect(isTrustedOperationalModelOrigin(" OPEN-METEO ")).toBe(true);
+    expect(isTrustedOperationalModelOrigin("unknown-model")).toBe(false);
   });
 
-  it("aprova automaticamente apenas dado observado/manual com qualidade ok e faixa física válida", () => {
-    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "observed" }))).toBe(true);
-    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "manual" }))).toBe(true);
+  it("aprova Open-Meteo como modelo virtual operacional sem mudar sua natureza para observado", () => {
+    expect(candidateCanBeOperationallyApproved(candidate({
+      data_kind: "model_estimate",
+      origin: "open-meteo",
+    }))).toBe(true);
+  });
+
+  it("mantém modelo desconhecido e grade histórica apenas em diagnóstico", () => {
+    expect(candidateCanBeOperationallyApproved(candidate({
+      data_kind: "model_estimate",
+      origin: "unknown-model",
+    }))).toBe(false);
+    expect(candidateCanBeOperationallyApproved(candidate({
+      data_kind: "historical_grid",
+      origin: "open-meteo",
+    }))).toBe(false);
+  });
+
+  it("não aprova modelo virtual degradado ou fora da faixa física", () => {
+    expect(candidateCanBeOperationallyApproved(candidate({ data_quality: "degraded" }))).toBe(false);
+    expect(candidateCanBeOperationallyApproved(candidate({ et0_calculated: 16 }))).toBe(false);
+    expect(candidateCanBeOperationallyApproved(candidate({ precipitation: 201 }))).toBe(false);
+  });
+
+  it("continua aprovando dado observado/manual com qualidade ok e faixa física válida", () => {
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "observed", origin: "station" }))).toBe(true);
+    expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "manual", origin: "manual" }))).toBe(true);
     expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "observed", data_quality: "degraded" }))).toBe(false);
     expect(candidateCanBeOperationallyApproved(candidate({ data_kind: "observed", et0_calculated: 16 }))).toBe(false);
   });
