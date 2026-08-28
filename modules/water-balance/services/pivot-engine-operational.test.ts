@@ -181,7 +181,17 @@ describe("pivot-engine-operational", () => {
   it("mantém estado agregado seguro e vazio quando a parcela está bloqueada", () => {
     const input = baseInput();
     input.weatherByDate = {};
-    const state = computePivotCurrentState({ id: "p1", name: "Pivô 1" }, input);
+    const state = computePivotCurrentState({
+      pivotId: "p1",
+      pivotName: "Pivô 1",
+      cultureName: "Cultura",
+      varietyName: null,
+      seasonName: null,
+      area: 100,
+      latitude: -14,
+      longitude: -45,
+      parcelId: "assignment-1",
+    }, input);
     expect(state.current).toBeNull();
     expect(state.history).toEqual([]);
   });
