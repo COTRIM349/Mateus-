@@ -68,8 +68,12 @@ export function candidateHasOperationalValues(candidate: Pick<CandidateReading, 
     && candidate.precipitation <= OPERATIONAL_CLIMATE_LIMITS.precipitationMax;
 }
 
+function normalizeProviderOrigin(origin: string): string {
+  return origin.trim().toLowerCase().replace(/_/g, "-");
+}
+
 export function isTrustedOperationalModelOrigin(origin: string): boolean {
-  return TRUSTED_OPERATIONAL_MODEL_ORIGINS.has(origin.trim().toLowerCase());
+  return TRUSTED_OPERATIONAL_MODEL_ORIGINS.has(normalizeProviderOrigin(origin));
 }
 
 /**
