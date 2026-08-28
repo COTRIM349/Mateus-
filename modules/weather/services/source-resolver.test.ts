@@ -17,7 +17,7 @@ function candidate(overrides: Partial<CandidateReading> = {}): CandidateReading 
     data_quality: "ok",
     data_kind: "model_estimate",
     imported_at: "2026-08-24T03:00:00Z",
-    origin: "open-meteo",
+    origin: "open_meteo",
     et0_calculated: 5.2,
     precipitation: 0,
     ...overrides,
@@ -58,16 +58,17 @@ describe("source resolver operacional", () => {
     }))).toBe(false);
   });
 
-  it("reconhece apenas origens virtuais explicitamente autorizadas", () => {
+  it("reconhece alias reais do Open-Meteo e rejeita origem desconhecida", () => {
     expect(isTrustedOperationalModelOrigin("open-meteo")).toBe(true);
-    expect(isTrustedOperationalModelOrigin(" OPEN-METEO ")).toBe(true);
+    expect(isTrustedOperationalModelOrigin("open_meteo")).toBe(true);
+    expect(isTrustedOperationalModelOrigin(" OPEN_METEO ")).toBe(true);
     expect(isTrustedOperationalModelOrigin("unknown-model")).toBe(false);
   });
 
   it("aprova Open-Meteo como modelo virtual operacional sem mudar sua natureza para observado", () => {
     expect(candidateCanBeOperationallyApproved(candidate({
       data_kind: "model_estimate",
-      origin: "open-meteo",
+      origin: "open_meteo",
     }))).toBe(true);
   });
 
@@ -78,7 +79,7 @@ describe("source resolver operacional", () => {
     }))).toBe(false);
     expect(candidateCanBeOperationallyApproved(candidate({
       data_kind: "historical_grid",
-      origin: "open-meteo",
+      origin: "open_meteo",
     }))).toBe(false);
   });
 
