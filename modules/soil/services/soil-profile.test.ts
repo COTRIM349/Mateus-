@@ -5,6 +5,8 @@ import {
   SOIL_UNITS,
   calculateADTFromLayers,
   clipLayersToRootDepth,
+  normalizeCcPmpInput,
+  normalizeSoilWaterContent,
   resolveLayerKl,
   soilProfileIsUsable,
   volumetricFromGravimetric,
@@ -28,14 +30,49 @@ describe("unidades do perfil", () => {
   });
 });
 
-describe("volumetricFromGravimetric", () => {
-  it("converte θg × Da de forma explícita (nunca silenciosa)", () => {
+describe("conversão explícita da base de umidade", () => {
+  it("converte θg × Da de forma explícita", () => {
     expect(volumetricFromGravimetric(0.2, 1.3)).toBe(0.26);
+    expect(normalizeSoilWaterContent(20, "gravimetric_pct", 1.3)).toBe(0.26);
+    expect(normalizeSoilWaterContent(0.2, "gravimetric_fraction", 1.3)).toBe(0.26);
+  });
+
+  it("não usa densidade aparente quando a entrada já é volumétrica", () => {
+    expect(normalizeSoilWaterContent(12.4, "volumetric_pct", 1.82)).toBe(0.124);
+    expect(normalizeSoilWaterContent(0.124, "volumetric_fraction", 1.82)).toBe(0.124);
+  });
+
+  it("reproduz o exemplo gravimétrico 12,4%/6,3% com Da 1,82", () => {
+    const normalized = normalizeCcPmpInput({
+      fieldCapacity: 12.4,
+      wiltingPoint: 6.3,
+      basis: "gravimetric_pct",
+      bulkDensity: 1.82,
+    });
+    expect(normalized).not.toBeNull();
+    expect(normalized!.fieldCapacity).toBe(0.2257);
+    expect(normalized!.wiltingPoint).toBe(0.1147);
+    const cad60 = (normalized!.fieldCapacity - normalized!.wiltingPoint) * 0.6 * 1000;
+    expect(cad60).toBeCloseTo(66.6, 1);
+  });
+
+  it("bloqueia base gravimétrica sem densidade e relação CC <= PMP", () => {
+    expect(normalizeCcPmpInput({
+      fieldCapacity: 12.4,
+      wiltingPoint: 6.3,
+      basis: "gravimetric_pct",
+    })).toBeNull();
+    expect(normalizeCcPmpInput({
+      fieldCapacity: 10,
+      wiltingPoint: 12,
+      basis: "volumetric_pct",
+    })).toBeNull();
   });
 
   it("rejeita densidade ou umidade inválidas", () => {
     expect(volumetricFromGravimetric(0.2, 0)).toBe(0);
     expect(volumetricFromGravimetric(-0.1, 1.3)).toBe(0);
+    expect(normalizeSoilWaterContent(-1, "volumetric_pct")).toBeNull();
   });
 });
 
@@ -47,7 +84,6 @@ describe("KL de pivô central", () => {
   });
 
   it("pondera pela espessura recortada em Z e usa 1 nas camadas sem KL", () => {
-    // Z = 0,30 m → 0–20 (KL=1) + 20–30 (KL=0,8) → (20×1 + 10×0,8) / 30 = 0,933
     expect(weightedKlFromLayers(PROFILE, 0.3)).toBe(0.933);
   });
 
@@ -58,15 +94,11 @@ describe("KL de pivô central", () => {
 
 describe("CAD recortada pela profundidade radicular Z", () => {
   it("soma (CC−PMP)×espessura só até Z, sem multiplicar densidade", () => {
-    // 0–20: (0,30−0,12)×0,20×1000 = 36
-    // 20–30: (0,28−0,14)×0,10×1000 = 14
-    // 40–60 ignorada
     expect(calculateADTFromLayers(PROFILE, 0.3)).toBe(50);
     expect(calculateLayerCAD(PROFILE[0])).toBe(36);
   });
 
   it("usa o perfil inteiro quando Z cobre todas as camadas", () => {
-    // 36 + (0,14)×0,20×1000=28 + (0,11)×0,20×1000=22 → 86
     expect(calculateADTFromLayers(PROFILE, 0.6)).toBe(86);
   });
 

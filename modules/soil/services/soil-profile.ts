@@ -1,12 +1,13 @@
 /**
  * Perfil físico do solo no pivô (Etapa B).
  *
- * CC e PMP entram em base volumétrica (cm³/cm³). Densidade aparente (g/cm³)
- * é informativa: a CAD volumétrica NÃO multiplica Da. Conversão gravimétrica
- * só ocorre por chamada explícita a {@link volumetricFromGravimetric}.
+ * O motor armazena e calcula CC/PMP SEMPRE em base volumétrica (cm³/cm³).
+ * Densidade aparente (g/cm³) não entra na CAD quando CC/PMP já são
+ * volumétricos. Quando o operador recebe um laudo em base gravimétrica
+ * (% em peso), a conversão para volumétrica é explícita antes de persistir.
  *
  * KL padrão em pivô central com molhamento total = 1. Este módulo calcula o
- * KL ponderado; não aplica KL à ETc (isso é Etapa E).
+ * KL ponderado; não aplica KL à ETc.
  */
 
 import { roundTo } from "@/utils/math";
@@ -23,6 +24,12 @@ export const SOIL_UNITS = {
   kl: "adimensional (0–1)",
 } as const;
 
+export type SoilWaterContentBasis =
+  | "volumetric_fraction"
+  | "volumetric_pct"
+  | "gravimetric_fraction"
+  | "gravimetric_pct";
+
 /** Pivô central com molhamento total: KL = 1. Nunca aplicar outro valor às cegas. */
 export const DEFAULT_CENTER_PIVOT_KL = 1;
 
@@ -35,9 +42,9 @@ export interface SoilProfileLayer {
   field_capacity: number;
   /** Ponto de murcha permanente volumétrico (cm³/cm³). */
   wilting_point: number;
-  /** Densidade aparente (g/cm³) — informativa, não entra na CAD. */
+  /** Densidade aparente (g/cm³) — informativa na CAD volumétrica. */
   bulk_density?: number | null;
-  /** Coeficiente de localização 0–1. Null = {@link DEFAULT_CENTER_PIVOT_KL}. */
+  /** Coeficiente de localização 0–1. Null = DEFAULT_CENTER_PIVOT_KL. */
   kl?: number | null;
 }
 
@@ -63,14 +70,62 @@ export function mapDbLayersToProfile(
 
 /**
  * Converte umidade gravimétrica (g/g) em volumétrica (cm³/cm³): θv = θg × Da.
- * Nunca é chamada pelo motor — só quando o operador informa dado em massa.
+ * Nunca deve ser chamada implicitamente pelo motor de balanço.
  */
 export function volumetricFromGravimetric(
   thetaGravimetric: number,
   bulkDensity: number,
 ): number {
+  if (!Number.isFinite(thetaGravimetric) || !Number.isFinite(bulkDensity)) return 0;
   if (thetaGravimetric < 0 || bulkDensity <= 0) return 0;
   return roundTo(thetaGravimetric * bulkDensity, 4);
+}
+
+/**
+ * Normaliza uma leitura de CC/PMP para fração volumétrica (cm³/cm³).
+ * A base da entrada é obrigatória; não tenta adivinhar unidade pelo valor.
+ */
+export function normalizeSoilWaterContent(
+  value: number,
+  basis: SoilWaterContentBasis,
+  bulkDensity?: number | null,
+): number | null {
+  if (!Number.isFinite(value) || value < 0) return null;
+
+  const asFraction = basis.endsWith("_pct") ? value / 100 : value;
+  if (!Number.isFinite(asFraction) || asFraction < 0) return null;
+
+  if (basis.startsWith("gravimetric")) {
+    if (bulkDensity == null || !Number.isFinite(bulkDensity) || bulkDensity <= 0) return null;
+    const converted = volumetricFromGravimetric(asFraction, bulkDensity);
+    return converted > 0 ? converted : null;
+  }
+
+  return roundTo(asFraction, 4);
+}
+
+export interface NormalizedCcPmp {
+  fieldCapacity: number;
+  wiltingPoint: number;
+}
+
+/**
+ * Converte CC/PMP da base declarada para a base volumétrica canônica e valida
+ * a relação física CC > PMP. Retorna null se a entrada não puder ser usada com
+ * segurança no balanço.
+ */
+export function normalizeCcPmpInput(input: {
+  fieldCapacity: number;
+  wiltingPoint: number;
+  basis: SoilWaterContentBasis;
+  bulkDensity?: number | null;
+}): NormalizedCcPmp | null {
+  const fieldCapacity = normalizeSoilWaterContent(input.fieldCapacity, input.basis, input.bulkDensity);
+  const wiltingPoint = normalizeSoilWaterContent(input.wiltingPoint, input.basis, input.bulkDensity);
+  if (fieldCapacity == null || wiltingPoint == null) return null;
+  if (fieldCapacity <= wiltingPoint) return null;
+  if (fieldCapacity > 0.7 || wiltingPoint > 0.5) return null;
+  return { fieldCapacity, wiltingPoint };
 }
 
 export function resolveLayerKl(kl: number | null | undefined): number {
@@ -109,7 +164,8 @@ function toLayerParams(layer: SoilProfileLayer): LayerParams {
 
 /**
  * CAD/ADT (mm) do perfil no intervalo radicular Z.
- * CAD_camada = (CC − PMP) × espessura_m × 1000. Densidade não entra.
+ * CAD_camada = (CC − PMP) × espessura_m × 1000. Densidade não entra porque
+ * todas as camadas já chegam aqui normalizadas para base volumétrica.
  */
 export function calculateADTFromLayers(
   layers: SoilProfileLayer[],
