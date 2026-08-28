@@ -3,8 +3,9 @@
 // ============================================================================
 // Ordem de decisão: qualidade -> prioridade -> natureza do dado -> recência.
 // Uma leitura pode ser selecionada para diagnóstico sem ser automaticamente
-// aprovada para manejo. Modelos e grades históricas permanecem auditáveis, mas
-// só dados observados/manuais elegíveis alimentam automaticamente o balanço.
+// aprovada para manejo. Modelos genéricos e grades históricas permanecem
+// auditáveis; somente dados observados/manuais ou modelos virtuais de origem
+// explicitamente confiável podem alimentar automaticamente o balanço.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -28,6 +29,15 @@ export const OPERATIONAL_CLIMATE_LIMITS = {
   precipitationMin: 0,
   precipitationMax: 200,
 } as const;
+
+/**
+ * Origens virtuais que já passam pelo pipeline interno de ingestão, cálculo de
+ * ETo e validação física. A origem continua registrada como modelo; a lista
+ * apenas autoriza uso operacional quando todas as demais guardas também passam.
+ */
+export const TRUSTED_OPERATIONAL_MODEL_ORIGINS = new Set([
+  "open-meteo",
+]);
 
 const QUALITY_ORDER: Record<string, number> = { ok: 0, degraded: 1, missing: 2 };
 const KIND_ORDER: Record<string, number> = {
@@ -58,17 +68,25 @@ export function candidateHasOperationalValues(candidate: Pick<CandidateReading, 
     && candidate.precipitation <= OPERATIONAL_CLIMATE_LIMITS.precipitationMax;
 }
 
+export function isTrustedOperationalModelOrigin(origin: string): boolean {
+  return TRUSTED_OPERATIONAL_MODEL_ORIGINS.has(origin.trim().toLowerCase());
+}
+
 /**
- * Aprovação automática é deliberadamente mais restrita que a seleção.
- * model_estimate/historical_grid podem ser bons candidatos diagnósticos, mas
- * não devem virar entrada operacional apenas por passarem em faixa física.
+ * Aprovação automática é mais restrita que a seleção:
+ * - observado/manual: qualidade ok + faixa física válida;
+ * - model_estimate: além disso, origem precisa estar na allowlist operacional;
+ * - historical_grid e modelos desconhecidos nunca são aprovados automaticamente.
  */
 export function candidateCanBeOperationallyApproved(
-  candidate: Pick<CandidateReading, "data_quality" | "data_kind" | "et0_calculated" | "precipitation">,
+  candidate: Pick<CandidateReading, "data_quality" | "data_kind" | "origin" | "et0_calculated" | "precipitation">,
 ): boolean {
-  return candidate.data_quality === "ok"
-    && (candidate.data_kind === "observed" || candidate.data_kind === "manual")
-    && candidateHasOperationalValues(candidate);
+  if (candidate.data_quality !== "ok" || !candidateHasOperationalValues(candidate)) return false;
+
+  if (candidate.data_kind === "observed" || candidate.data_kind === "manual") return true;
+
+  return candidate.data_kind === "model_estimate"
+    && isTrustedOperationalModelOrigin(candidate.origin);
 }
 
 function invalidOperationalValueReason(et0: number, rain: number): string {
@@ -209,10 +227,14 @@ export async function resolveDailyClimateSource(
     priority_used:winner.source_priority,
     quality_used:winner.data_quality,
     reason: operationalApproved
-      ? `leitura operacional aprovada: ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality}, ${winner.data_kind})`
-      : winner.data_kind === "model_estimate" || winner.data_kind === "historical_grid"
-        ? `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_kind}); modelo não possui aprovação operacional automática`
-        : `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_quality})`,
+      ? winner.data_kind === "model_estimate"
+        ? `modelo virtual operacional aprovado: ${winner.station_name} (${winner.origin}, P${winner.source_priority}, ${winner.data_quality})`
+        : `leitura operacional aprovada: ${winner.station_name} (P${winner.source_priority}, ${winner.data_quality}, ${winner.data_kind})`
+      : winner.data_kind === "model_estimate"
+        ? `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_kind}, ${winner.origin}); origem de modelo não autorizada para manejo`
+        : winner.data_kind === "historical_grid"
+          ? `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_kind}); grade histórica não possui aprovação operacional automática`
+          : `leitura selecionada apenas para diagnóstico: ${winner.station_name} (${winner.data_quality})`,
     rejected_sources:rejected,
     fallback_used:fallbackUsed,
     operational_approved:operationalApproved,
