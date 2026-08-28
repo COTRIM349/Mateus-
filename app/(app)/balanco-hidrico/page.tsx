@@ -201,12 +201,16 @@ interface StoredBalance {
   balance_formula: string | null;
 }
 
+// ── Constants ─────────────────────────────────────────────────────────────
+
 const TABS = [
   { id: "grafico", label: "Gráfico" },
   { id: "dados", label: "Dados" },
   { id: "decisao", label: "Decisão" },
   { id: "lancamento", label: "Lançamento" },
 ];
+
+// ── Main Page ─────────────────────────────────────────────────────────────
 
 export default function BalancoHidricoPage() {
   const { activeFarmId, farms } = useAuth();
@@ -228,6 +232,7 @@ export default function BalancoHidricoPage() {
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState("");
 
+  // Lançamento tab
   const [lancDate, setLancDate] = useState("");
   const [lancTime, setLancTime] = useState("06:00");
   const [lancDepth, setLancDepth] = useState("");
@@ -236,6 +241,7 @@ export default function BalancoHidricoPage() {
   const [lancSaving, setLancSaving] = useState(false);
   const [lancMsg, setLancMsg] = useState("");
 
+  // Load pivots
   useEffect(() => {
     if (!activeFarmId) return;
     (async () => {
@@ -249,6 +255,7 @@ export default function BalancoHidricoPage() {
     })();
   }, [activeFarmId, supabase]);
 
+  // Load assignment + culture + soil + phases when pivot changes
   useEffect(() => {
     if (!selectedPivotId) {
       setAssignment(null);
@@ -265,6 +272,7 @@ export default function BalancoHidricoPage() {
         .select("*")
         .eq("pivot_id", selectedPivotId)
         .eq("active", true)
+        // Sprint 13 · Etapa 6 — só considera parcela em manejo.
         .or("status.is.null,status.eq.ativa")
         .order("created_at", { ascending: false })
         .limit(1)
@@ -282,6 +290,8 @@ export default function BalancoHidricoPage() {
       const a = pca as CropAssignment;
       setAssignment(a);
 
+      // Sprint 14 · Etapa 7 — solo agora vem do pivô. Fallback para o
+      // soil_id legado da parcela quando o pivô não tem solo cadastrado.
       const { data: pivotSoil } = await supabase
         .from("pivots")
         .select("soil_id")
@@ -339,11 +349,11 @@ export default function BalancoHidricoPage() {
     })();
   }, [selectedPivotId, supabase]);
 
+  // Calculate balance
   const runCalculation = useCallback(async () => {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
     setCalculating(true);
     setError("");
-    setBalanceRows([]);
 
     try {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
@@ -362,6 +372,7 @@ export default function BalancoHidricoPage() {
         throw new Error("Balanço bloqueado: a condição inicial é posterior ao período selecionado.");
       }
 
+      // 1. Get weather readings for the farm stations
       const { data: stations } = await supabase
         .from("weather_stations")
         .select("id")
@@ -396,6 +407,8 @@ export default function BalancoHidricoPage() {
         }
       }
 
+      // 2. Get irrigation events for the selected parcel. Eventos antigos sem
+      // parcel_id só são aceitos quando existe uma única parcela ativa no pivô.
       const [{ data: irrEvents }, { count: activeAssignmentCount }] = await Promise.all([
         supabase
           .from("irrigation_events")
@@ -431,6 +444,9 @@ export default function BalancoHidricoPage() {
         depth_mm: ev.depth_mm,
       })));
 
+      // 3. Build weather lookup by date
+      //    Somente leituras explicitamente aprovadas para uso operacional.
+      //    Não existe fallback automático para dados de modelo.
       const weatherByDate: Record<string, { et0: number; precip: number }> = {};
       const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
       selectedIdByDate.forEach((readingId, date) => {
@@ -438,6 +454,8 @@ export default function BalancoHidricoPage() {
         if (r?.et0_calculated != null) weatherByDate[date] = { et0: r.et0_calculated, precip: r.precipitation };
       });
 
+      // Chuva manual é a observação local preferida, mas só substitui P em um
+      // dia que já possui ETo operacional aprovada.
       const { data: manualRainRows } = await supabase
         .from("manual_rainfall_entries")
         .select("date,precipitation_mm")
@@ -461,6 +479,7 @@ export default function BalancoHidricoPage() {
         );
       }
 
+      // 5. Motor central do balanço hídrico (fonte única de cálculo)
       const engineWeatherByDate: Record<string, { et0: number; precipitation: number }> = {};
       for (const [d, w] of Object.entries(weatherByDate)) {
         engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precip };
@@ -510,6 +529,7 @@ export default function BalancoHidricoPage() {
       }
       const visibleSeries = series.filter((d) => d.date >= dateStart);
 
+      // adapta a saída do motor ao formato de exibição da tela
       const rows: DailyBalanceRow[] = visibleSeries.map((d) => ({
         date: d.date,
         phase: d.phase,
@@ -551,19 +571,21 @@ export default function BalancoHidricoPage() {
 
       setBalanceRows(rows);
     } catch (err) {
-      setBalanceRows([]);
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
       setCalculating(false);
     }
   }, [assignment, culture, soil, soilLayers, phases, hydricAnchor, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
 
+  // O balanço corrente é sempre recalculado de entradas confiáveis; histórico
+  // persistido não é usado como estado atual nem como seed do ARM.
   useEffect(() => {
     setBalanceRows([]);
   }, [assignment?.id, dateStart, dateEnd]);
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
+  // rastreabilidade (estação climática) + operação (eventos de irrigação)
   const [trace, setTrace] = useState<{ stationName: string | null; distanceKm: number | null; lastSync: string | null; qualityPct: number | null }>({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
   const [ops, setOps] = useState<{ volumeM3: number | null; hours: number | null; energyKwh: number | null }>({ volumeM3: null, hours: null, energyKwh: null });
   const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherExtra>>({});
@@ -580,6 +602,7 @@ export default function BalancoHidricoPage() {
     let cancelled = false;
     (async () => {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
+      // mesma estação que venceu a seleção operacional no último dia.
       const { data: latestSelection } = await supabase
         .from("weather_daily_selection")
         .select("selected_station_id")
@@ -621,6 +644,7 @@ export default function BalancoHidricoPage() {
         ? haversineKm(pivot.latitude, pivot.longitude, st.latitude as number, st.longitude as number)
         : null;
 
+      // eventos de irrigação do pivô no período
       const { data: evs } = await supabase
         .from("irrigation_events")
         .select("started_at, ended_at, volume_m3, energy_kwh")
@@ -665,6 +689,7 @@ export default function BalancoHidricoPage() {
     return () => { cancelled = true; };
   }, [activeFarmId, selectedPivotId, dateStart, dateEnd, pivots, supabase]);
 
+  // presets de período — apenas ajustam o intervalo (o carregamento é automático)
   const [activePeriod, setActivePeriod] = useState<number | "safra" | null>(null);
   const applyPeriod = (kind: number | "safra") => {
     const today = new Date();
@@ -680,6 +705,7 @@ export default function BalancoHidricoPage() {
     setActivePeriod(kind);
   };
 
+  // ── Lançamento handler ──────────────────────────────────────────────────
   const handleLancamento = async () => {
     if (!selectedPivotId || !lancDate || !lancDepth) return;
     const pivot = pivots.find((p) => p.id === selectedPivotId);
@@ -751,6 +777,8 @@ export default function BalancoHidricoPage() {
       </div>
     );
   }
+
+  // ── Render ──────────────────────────────────────────────────────────────
 
   const selPivot = pivots.find((p) => p.id === selectedPivotId);
   const centroHead = {
@@ -881,12 +909,20 @@ export default function BalancoHidricoPage() {
   );
 }
 
+// ── Gráfico de manejo (multi-séries, estilo técnico) ─────────────────────────
+// Estrutura inspirada no gráfico de manejo do setor (faixa de KPIs + séries por
+// categoria + linhas/barras num quadro de umidade %CC × mm), com identidade
+// própria. Usa apenas os dados que o motor FAO-56 já calcula.
+
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
+/** Entradas do solo no dia: Pe + I_ef (lâmina bruta × eficiência). */
 function soilInflowMm(r: DailyBalanceRow): number {
   return r.effectivePrecipitation + (r.effectiveIrrigation ?? r.irrigationApplied);
 }
+
+// ── Balance Tab ─────────────────────────────────────────────────────────
 
 interface CentroHead {
   pivotName: string | null;
@@ -913,6 +949,7 @@ const fmtTempoH = (h: number) => {
   return H > 0 ? `${H}h${M.toString().padStart(2, "0")}` : `${M}min`;
 };
 
+// verdicts derivados do status hídrico do motor (sem inventar dado)
 const VERDICT: Record<WaterStatus, { label: string; color: string; irrigar: boolean; texto: (mm: string) => string }> = {
   saturado: { label: "Suspender irrigação", color: "#2f6bff", irrigar: false, texto: () => "Solo saturado — suspender irrigação para evitar drenagem." },
   ideal: { label: "Não irrigar", color: "#1ea85b", irrigar: false, texto: () => "Água disponível dentro da faixa ideal. Manter o manejo." },
@@ -921,7 +958,15 @@ const VERDICT: Record<WaterStatus, { label: string; color: string; irrigar: bool
   deficit_critico: { label: "Irrigação urgente", color: "#c0353a", irrigar: true, texto: (mm) => `Déficit crítico — aplicar ${mm} com prioridade.` },
 };
 
-function BalanceTab({ panel, rows, summary, loading, head, weatherByDate, sensoryByDate }: {
+function BalanceTab({
+  panel,
+  rows,
+  summary,
+  loading,
+  head,
+  weatherByDate,
+  sensoryByDate,
+}: {
   panel: "grafico" | "dados" | "decisao";
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
@@ -959,7 +1004,18 @@ function BalanceTab({ panel, rows, summary, loading, head, weatherByDate, sensor
       const lam = r.deficit >= r.afd && r.afd > 0 ? r.grossDepth : 0;
       const pctCc = moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
       const sens = sensoryByDate[r.date];
-      return [r.date, r.phase, r.kc.toFixed(2), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2), r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1), r.ky != null ? r.ky.toFixed(2) : "", r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "", r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1), (r.effectiveIrrigation ?? r.irrigationApplied).toFixed(1), entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1), r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1), (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1), pctCc.toFixed(1), sens != null ? String(sens) : "", depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label].join(";");
+      return [
+        r.date, r.phase, r.kc.toFixed(2), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
+        r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1),
+        r.ky != null ? r.ky.toFixed(2) : "", r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "",
+        r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1),
+        (r.effectiveIrrigation ?? r.irrigationApplied).toFixed(1),
+        entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1),
+        r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
+        (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1), pctCc.toFixed(1),
+        sens != null ? String(sens) : "",
+        depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label,
+      ].join(";");
     });
     const csv = "﻿" + [headers.join(";"), ...lines].join("\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8;" }));
@@ -996,8 +1052,22 @@ function BalanceTab({ panel, rows, summary, loading, head, weatherByDate, sensor
   const stressPct = summary.days > 0 ? (summary.daysInDeficit / summary.days) * 100 : 0;
   const verdict = VERDICT[last?.waterStatus ?? "ideal"];
   const laminaBruta = last?.grossDepth ?? 0;
-  const urgency = last ? calculateManagementUrgency({ afd: last.afd, deficit: last.deficit, etcPotential: last.etcPotential ?? last.etc }) : null;
-  const daysToAfdLabel = urgency ? urgency.atOrBeyondAfd ? "limite atingido" : urgency.daysToAfd == null ? "sem demanda" : urgency.daysToAfd < 1 ? "< 1 dia" : `${urgency.daysToAfd.toFixed(1)} dias` : "—";
+  const urgency = last
+    ? calculateManagementUrgency({
+        afd: last.afd,
+        deficit: last.deficit,
+        etcPotential: last.etcPotential ?? last.etc,
+      })
+    : null;
+  const daysToAfdLabel = urgency
+    ? urgency.atOrBeyondAfd
+      ? "limite atingido"
+      : urgency.daysToAfd == null
+        ? "sem demanda"
+        : urgency.daysToAfd < 1
+          ? "< 1 dia"
+          : `${urgency.daysToAfd.toFixed(1)} dias`
+    : "—";
 
   const columns: Column<DailyBalanceRow>[] = [
     { header: "Data", render: (r) => fmtDia(r.date) },
@@ -1025,21 +1095,52 @@ function BalanceTab({ panel, rows, summary, loading, head, weatherByDate, sensor
     { header: "Sens.", render: (r) => sensoryByDate[r.date] != null ? <span className="font-semibold text-violet-600 dark:text-violet-400">{sensoryByDate[r.date]}</span> : "—" },
     { header: "Déficit", render: (r) => r.deficit > 0 ? <span className="text-red-600 dark:text-red-400">{r.deficit.toFixed(1)}</span> : "0.0" },
     { header: "Lâm. rec.", render: (r) => r.deficit >= r.afd && r.afd > 0 ? r.grossDepth.toFixed(1) : "0.0" },
-    { header: "Status", render: (r) => { const cfg = WATER_STATUS_CONFIG[r.waterStatus]; return <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{cfg.label}</span>; } },
+    {
+      header: "Status",
+      render: (r) => {
+        const cfg = WATER_STATUS_CONFIG[r.waterStatus];
+        return (
+          <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>
+            <span className="h-1.5 w-1.5 rounded-full bg-current" />
+            {cfg.label}
+          </span>
+        );
+      },
+    },
   ];
 
   if (loading) {
-    return <Card className="flex items-center justify-center gap-3 py-16"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></Card>;
+    return (
+      <Card className="flex items-center justify-center gap-3 py-16">
+        <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+        <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      </Card>
+    );
   }
 
   if (panel === "grafico") {
     return (
       <Card className="overflow-hidden p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 dark:border-white/[0.06]">
-          <div><p className="text-[15px] font-bold text-graphite-900 dark:text-white">{head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}</p><p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">{pctCc.toFixed(0)}% da CC · ARM {arm.toFixed(1)} mm · {classificacao.label}</p></div>
-          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-bold" style={{ color: verdict.color, background: `${verdict.color}18` }}><span className="h-2 w-2 rounded-full" style={{ background: verdict.color }} />{verdict.label}</span>
+          <div>
+            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">
+              {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
+            </p>
+            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
+              {pctCc.toFixed(0)}% da CC · ARM {arm.toFixed(1)} mm · {classificacao.label}
+            </p>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-bold" style={{ color: verdict.color, background: `${verdict.color}18` }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: verdict.color }} />
+            {verdict.label}
+          </span>
         </div>
-        <div className="flex min-h-[min(72vh,calc(100vh-14rem))] flex-col lg:flex-row"><ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} /><div className="min-w-0 flex-1 p-3 sm:p-4"><ManejoChart rows={manejoRows} visible={visible} /></div></div>
+        <div className="flex min-h-[min(72vh,calc(100vh-14rem))] flex-col lg:flex-row">
+          <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />
+          <div className="min-w-0 flex-1 p-3 sm:p-4">
+            <ManejoChart rows={manejoRows} visible={visible} />
+          </div>
+        </div>
       </Card>
     );
   }
@@ -1047,35 +1148,347 @@ function BalanceTab({ panel, rows, summary, loading, head, weatherByDate, sensor
   if (panel === "decisao") {
     return (
       <div className="grid items-start gap-5 lg:grid-cols-3">
+        {/* Recomendação de hoje */}
         <Card className="overflow-hidden p-0">
-          <div className="bg-gradient-to-br from-forest-800 to-forest-900 p-4 text-white"><p className="text-[10.5px] font-bold uppercase tracking-wide text-brand-300">Recomendação de hoje</p><p className="mt-1.5 flex items-center gap-2 text-[20px] font-extrabold" style={{ color: "#eafaf1" }}><span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: verdict.color }} />{verdict.label}</p><p className="mt-1.5 text-[12.5px] leading-relaxed text-brand-100/90">{verdict.texto(`${laminaBruta.toFixed(1)} mm`)}</p></div>
-          <div className="p-4">{verdict.irrigar ? <div className="space-y-0">{[{ l: "Lâmina líquida", v: `${(last?.netDepth ?? 0).toFixed(1)} mm` }, { l: "Lâmina bruta", v: `${laminaBruta.toFixed(1)} mm` }, { l: "Eficiência", v: `${efPct.toFixed(0)}%` }, { l: "Volume necessário", v: `${(last?.volumeNeeded ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³` }, { l: "Tempo estimado", v: fmtTempoH(last?.irrigationTime ?? 0) }].map((r) => <div key={r.l} className="flex items-center justify-between border-b border-dashed border-gray-100 py-1.5 text-[12.5px] last:border-0 dark:border-white/[0.06]"><span className="text-graphite-500 dark:text-gray-400">{r.l}</span><span className="font-bold text-graphite-800 dark:text-white">{r.v}</span></div>)}</div> : <p className="text-[12.5px] text-graphite-500 dark:text-gray-400">Sem necessidade de irrigação para hoje. Acompanhar a evolução da umidade.</p>}</div>
+          <div className="bg-gradient-to-br from-forest-800 to-forest-900 p-4 text-white">
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-brand-300">Recomendação de hoje</p>
+            <p className="mt-1.5 flex items-center gap-2 text-[20px] font-extrabold" style={{ color: "#eafaf1" }}>
+              <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: verdict.color }} />{verdict.label}
+            </p>
+            <p className="mt-1.5 text-[12.5px] leading-relaxed text-brand-100/90">{verdict.texto(`${laminaBruta.toFixed(1)} mm`)}</p>
+          </div>
+          <div className="p-4">
+            {verdict.irrigar ? (
+              <div className="space-y-0">
+                {[
+                  { l: "Lâmina líquida", v: `${(last?.netDepth ?? 0).toFixed(1)} mm` },
+                  { l: "Lâmina bruta", v: `${laminaBruta.toFixed(1)} mm` },
+                  { l: "Eficiência", v: `${efPct.toFixed(0)}%` },
+                  { l: "Volume necessário", v: `${(last?.volumeNeeded ?? 0).toLocaleString("pt-BR", { maximumFractionDigits: 0 })} m³` },
+                  { l: "Tempo estimado", v: fmtTempoH(last?.irrigationTime ?? 0) },
+                ].map((r) => (
+                  <div key={r.l} className="flex items-center justify-between border-b border-dashed border-gray-100 py-1.5 text-[12.5px] last:border-0 dark:border-white/[0.06]">
+                    <span className="text-graphite-500 dark:text-gray-400">{r.l}</span>
+                    <span className="font-bold text-graphite-800 dark:text-white">{r.v}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-[12.5px] text-graphite-500 dark:text-gray-400">Sem necessidade de irrigação para hoje. Acompanhar a evolução da umidade.</p>
+            )}
+          </div>
         </Card>
+
         <Card className="p-4">
           <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
-          <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">{arm < safetyMm ? "O ARM está abaixo da umidade de segurança (CAD − AFD) e a demanda (ETc) supera as entradas recentes." : urgency?.daysToAfd != null ? `O ARM está dentro da faixa segura. Mantida a demanda atual e sem chuva/irrigação, a AFD seria atingida em aproximadamente ${urgency.daysToAfd.toFixed(1)} dia(s).` : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}</p>
-          <div className="mt-3 grid grid-cols-2 gap-2">{[{ l: "ARM atual", v: `${arm.toFixed(1)} mm` }, { l: "CAD / AFD", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` }, { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` }, { l: "% da CC", v: `${pctCc.toFixed(0)}%` }, { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` }, { l: "AFD consumida", v: urgency ? `${urgency.afdUsedPct.toFixed(0)}%` : "—" }, { l: "Margem até AFD", v: urgency ? (urgency.atOrBeyondAfd ? "limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—" }, { l: "Dias até AFD", v: daysToAfdLabel }, { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color }].map((f) => <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{f.l}</p><p className="mt-1 text-[14px] font-extrabold tabular-nums" style={{ color: f.c ?? undefined }}>{f.v}</p></div>)}</div>
+          <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
+            {arm < safetyMm
+              ? "O ARM está abaixo da umidade de segurança (CAD − AFD) e a demanda (ETc) supera as entradas recentes."
+              : urgency?.daysToAfd != null
+                ? `O ARM está dentro da faixa segura. Mantida a demanda atual e sem chuva/irrigação, a AFD seria atingida em aproximadamente ${urgency.daysToAfd.toFixed(1)} dia(s).`
+                : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
+          </p>
+          <div className="mt-3 grid grid-cols-2 gap-2">
+            {[
+              { l: "ARM atual", v: `${arm.toFixed(1)} mm` },
+              { l: "CAD / AFD", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
+              { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` },
+              { l: "% da CC", v: `${pctCc.toFixed(0)}%` },
+              { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
+              { l: "AFD consumida", v: urgency ? `${urgency.afdUsedPct.toFixed(0)}%` : "—" },
+              { l: "Margem até AFD", v: urgency ? (urgency.atOrBeyondAfd ? "limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—" },
+              { l: "Dias até AFD", v: daysToAfdLabel },
+              { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
+            ].map((f) => (
+              <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]">
+                <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{f.l}</p>
+                <p className="mt-1 text-[14px] font-extrabold tabular-nums" style={{ color: f.c ?? undefined }}>{f.v}</p>
+              </div>
+            ))}
+          </div>
         </Card>
-        <Card className="p-4"><p className="mb-2.5 text-[13px] font-bold text-graphite-900 dark:text-white">Alertas e observações</p><p className="text-[12.5px] text-graphite-500 dark:text-gray-400">{classificacao.label === "Crítico" ? "Solo abaixo da faixa de segurança. Priorizar correção após validação dos dados." : urgency && urgency.daysToAfd != null && urgency.daysToAfd <= 2 ? `Limite de manejo próximo: ${urgency.remainingToAfdMm.toFixed(1)} mm de margem.` : "Nenhum alerta ativo para o pivô no período."}</p></Card>
+
+        <Card className="p-4">
+          <p className="mb-2.5 flex items-center gap-2 text-[13px] font-bold text-graphite-900 dark:text-white">
+            <svg className="h-4 w-4 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
+            Alertas e observações
+          </p>
+          {(() => {
+            const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
+            if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
+            if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `Restam ${urgency.remainingToAfdMm.toFixed(1)} mm até a AFD; na demanda atual, cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).` });
+            if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
+            if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
+            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: urgency && urgency.daysToAfd != null ? `Sem alerta ativo. Janela estimada até a AFD: ${urgency.daysToAfd.toFixed(1)} dia(s).` : "Nenhum alerta ativo para o pivô no período." });
+            const sevCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
+            return items.map((a, i) => (
+              <div key={i} className="flex gap-3 border-t border-gray-100 py-2.5 first:border-0 dark:border-white/[0.06]">
+                <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sevCls[a.sev]}`} />
+                <div>
+                  <p className="text-[12.5px] font-bold text-graphite-800 dark:text-white">{a.title}</p>
+                  <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-400 dark:text-gray-500">{a.desc}</p>
+                </div>
+              </div>
+            ));
+          })()}
+        </Card>
       </div>
     );
   }
 
   return (
     <div className="space-y-5">
-      <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-forest-900 to-forest-800 p-5 text-white shadow-elevated sm:p-6"><div className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brand-300">Dados do balanço</p><h2 className="mt-1 text-[22px] font-extrabold tracking-tight sm:text-[26px]">{head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}</h2></div><span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-bold" style={{ color: classificacao.color, background: `${classificacao.color}22` }}>{classificacao.label} · {pctCc.toFixed(0)}% da CC</span></div></div>
-      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4"><Card className="p-4"><p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400">ARM</p><p className="mt-2 text-[26px] font-extrabold">{arm.toFixed(1)} mm</p></Card><Card className="p-4"><p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400">CAD / AFD</p><p className="mt-2 text-[26px] font-extrabold">{cad.toFixed(1)} / {afd.toFixed(1)} mm</p></Card><Card className="p-4"><p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400">Umidade de segurança</p><p className="mt-2 text-[26px] font-extrabold">{safetyMm.toFixed(1)} mm</p></Card><Card className="p-4"><p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400">Situação do solo</p><p className="mt-2 text-[22px] font-extrabold" style={{ color: classificacao.color }}>{classificacao.label}</p></Card></div>
-      <Card className="p-0"><div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]"><p className="text-[15px] font-bold text-graphite-900 dark:text-white">Dados diários do balanço hídrico <span className="font-normal text-graphite-400">({filteredRows.length} de {rows.length})</span></p><div className="flex items-center gap-2">{showFilter && <input type="text" autoFocus value={tblFilter} onChange={(e) => setTblFilter(e.target.value)} placeholder="Filtrar data ou fase…" className="h-8 w-40 rounded-lg border px-2.5 text-[12px]" />}<button type="button" onClick={() => { setShowFilter((s) => !s); if (showFilter) setTblFilter(""); }} className="rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold">Filtros</button><button type="button" onClick={exportCsv} className="rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold">Excel</button><button type="button" onClick={() => window.print()} className="rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold">PDF</button></div></div><div className="overflow-x-auto px-2 pb-2"><Table columns={columns} data={filteredRows} getKey={(r) => r.date} /></div></Card>
-      <div className="flex flex-wrap gap-x-7 gap-y-2 rounded-2xl border px-6 py-4 text-[11.5px] text-graphite-500"><span>Método ETo <strong>FAO Penman-Monteith</strong></span><span>Chuva efetiva <strong>{PE_METHOD}</strong></span><span>Balanço <strong>{ARM_FORMULA}</strong></span><span>Fonte climática <strong>{head.stationName ?? "pendente"}</strong></span></div>
+      <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-forest-900 to-forest-800 p-5 text-white shadow-elevated sm:p-6">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brand-300">Dados do balanço</p>
+            <h2 className="mt-1 text-[22px] font-extrabold tracking-tight sm:text-[26px]">
+              {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
+            </h2>
+            <div className="mt-2.5 flex flex-wrap gap-x-5 gap-y-1.5 text-[12.5px] text-brand-100/90">
+              {head.farmName && <span>Fazenda <strong className="font-semibold text-white">{head.farmName}</strong></span>}
+              {head.area != null && <span>Área <strong className="font-semibold text-white">{head.area} ha</strong></span>}
+              {head.efficiency != null && <span>Eficiência <strong className="font-semibold text-white">{head.efficiency.toFixed(0)}%</strong></span>}
+              <span>Atualizado <strong className="font-semibold text-white">{fmtDia(last?.date ?? "")}</strong></span>
+            </div>
+          </div>
+          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-bold" style={{ color: classificacao.color, background: `${classificacao.color}22` }}>
+            <span className="h-2 w-2 rounded-full" style={{ background: classificacao.color }} />
+            {classificacao.label} · {pctCc.toFixed(0)}% da CC
+          </span>
+        </div>
+      </div>
+
+      {/* 2 · Situação atual (CAD / AFD / ARM / segurança — unidades explícitas) */}
+      <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">ARM</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{arm.toFixed(1)}<span className="text-[14px] text-graphite-400"> mm</span> <span className="text-[14px] font-bold text-graphite-400">· {pctCc.toFixed(0)}% da CC</span></p>
+          <div className="mt-2.5 h-[5px] overflow-hidden rounded bg-gray-100 dark:bg-white/[0.06]"><div className="h-full rounded" style={{ width: `${clampN(pctCc, 0, 100)}%`, background: classificacao.color }} /></div>
+          <span className={`mt-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${tendencia.down ? "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400" : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"}`}>{tendencia.down ? "▼" : "▲"} {tendencia.label}</span>
+        </Card>
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">CAD / AFD</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{cad.toFixed(1)}<span className="text-[14px] text-graphite-400"> mm</span></p>
+          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">AFD {afd.toFixed(1)} mm · p {cad > 0 ? (afd / cad).toFixed(2) : "—"}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Umidade de segurança</p>
+          <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{safetyMm.toFixed(1)}<span className="text-[14px] text-graphite-400"> mm</span> <span className="text-[14px] font-bold text-graphite-400">· {safetyPct.toFixed(0)}% da CC</span></p>
+          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">{untilSafety >= 0 ? `a ${untilSafety.toFixed(1)} mm do limite` : "abaixo do limite de segurança"}</p>
+        </Card>
+        <Card className="p-4">
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Situação do solo</p>
+          <p className="mt-2 text-[22px] font-extrabold leading-none" style={{ color: classificacao.color }}>{classificacao.label}</p>
+          <p className="mt-2 text-[11.5px] leading-relaxed text-graphite-400 dark:text-gray-500">
+            {classificacao.label === "Adequado" ? "ARM acima da umidade de segurança." : classificacao.label === "Atenção" ? "Próximo do limite CAD − AFD." : "Déficit relevante — repor a água do solo."}
+          </p>
+        </Card>
+      </div>
+
+      {/* 3 · Totais do período */}
+      <Card className="overflow-hidden p-0">
+        <div className="border-b border-white/10 bg-forest-900 px-6 py-4">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.14em] text-brand-300">Totais do período</p>
+          <p className="mt-0.5 text-[14px] font-semibold text-white">
+            {first ? fmtDia(first.date) : ""} – {last ? fmtDia(last.date) : ""} · {summary.days} dias
+          </p>
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-white/10 bg-forest-900 sm:grid-cols-4 xl:grid-cols-8 xl:divide-y-0">
+          {[
+            { l: "Dias manejados", v: String(summary.days) },
+            { l: "DAP", v: last?.dae != null ? String(last.dae) : "—" },
+            { l: "Irrigação", v: `${summary.totalIrrigation.toFixed(0)} mm` },
+            { l: "Chuva", v: `${summary.totalPrecipitation.toFixed(0)} mm` },
+            { l: "Irrigação efetiva", v: `${(summary.totalIrrigation * efPct / 100).toFixed(0)} mm` },
+            { l: "ETo", v: `${etoTotal.toFixed(0)} mm` },
+            { l: "ETc", v: `${summary.totalETc.toFixed(0)} mm` },
+            { l: "Índice de estresse", v: `${stressPct.toFixed(0)}%` },
+          ].map((k) => (
+            <div key={k.l} className="px-4 py-3.5">
+              <p className="text-[9.5px] font-semibold uppercase tracking-wide text-brand-200/80">{k.l}</p>
+              <p className="mt-1 text-[16px] font-extrabold tabular-nums text-white">{k.v}</p>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 divide-x divide-y divide-gray-100 sm:grid-cols-3 dark:divide-white/[0.06]">
+          {[
+            { l: "Chuva efetiva", v: `${summary.totalEffPrecipitation.toFixed(0)} mm` },
+            { l: "Variação armaz.", v: `${variacao >= 0 ? "+" : ""}${variacao.toFixed(1)} mm`, cls: variacao >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400" },
+            { l: "Dias em estresse", v: `${summary.daysInDeficit}`, sub: `${stressPct.toFixed(0)}% do período` },
+            { l: "Eficiência média", v: `${efPct.toFixed(0)}%` },
+            head.volumeM3 != null ? { l: "Volume acumulado", v: `${(head.volumeM3 / 1000).toLocaleString("pt-BR", { maximumFractionDigits: 1 })} mil m³` } : { l: "Volume acumulado", v: "pendente", pend: true },
+            head.horasOperadas != null ? { l: "Horas operadas", v: `${head.horasOperadas.toFixed(0)} h` } : { l: "Horas operadas", v: "pendente", pend: true },
+            head.energiaEspecifica != null ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` } : { l: "Energia específica", v: "pendente", pend: true },
+            { l: "Uniformidade (CUC)", v: "pendente", pend: true },
+            {
+              l: "Janela até AFD",
+              v: daysToAfdLabel,
+              sub: urgency
+                ? urgency.atOrBeyondAfd
+                  ? "AFD já atingida"
+                  : `${urgency.remainingToAfdMm.toFixed(1)} mm de margem`
+                : undefined,
+              cls: urgency?.atOrBeyondAfd
+                ? "text-red-600 dark:text-red-400"
+                : urgency?.daysToAfd != null && urgency.daysToAfd <= 2
+                  ? "text-orange-600 dark:text-orange-400"
+                  : "text-graphite-900 dark:text-white",
+            },
+          ].map((s, i) => (
+            <div key={i} className="px-5 py-3.5">
+              <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{s.l}</p>
+              <p className={`mt-1 text-[16px] font-extrabold tabular-nums ${s.pend ? "text-graphite-300 dark:text-gray-600" : s.cls ?? "text-graphite-900 dark:text-white"}`}>{s.v}</p>
+              {s.sub && <p className="mt-0.5 text-[10.5px] tabular-nums text-graphite-400 dark:text-gray-500">{s.sub}</p>}
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* 9 · Tabela técnica */}
+      <Card className="p-0">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
+          <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Dados diários do balanço hídrico <span className="font-normal text-graphite-400 dark:text-gray-500">({filteredRows.length} de {rows.length})</span></p>
+          <div className="flex items-center gap-2">
+            {showFilter && (
+              <input
+                type="text"
+                autoFocus
+                value={tblFilter}
+                onChange={(e) => setTblFilter(e.target.value)}
+                placeholder="Filtrar data ou fase…"
+                className="h-8 w-40 rounded-lg border border-gray-200 bg-white px-2.5 text-[12px] text-graphite-700 outline-none focus:border-brand-400 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-200"
+              />
+            )}
+            <button type="button" onClick={() => { setShowFilter((s) => !s); if (showFilter) setTblFilter(""); }} className={`rounded-lg border px-3 py-1.5 text-[11.5px] font-semibold transition-colors ${showFilter ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}>Filtros</button>
+            <button type="button" onClick={exportCsv} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]">Excel</button>
+            <button type="button" onClick={() => window.print()} className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-[11.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]">PDF</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto px-2 pb-2">
+          <Table columns={columns} data={filteredRows} getKey={(r) => r.date} />
+        </div>
+      </Card>
+
+      {/* 10 · Rastreabilidade */}
+      <div className="flex flex-wrap gap-x-7 gap-y-2 rounded-2xl border border-gray-100 bg-gray-50/60 px-6 py-4 text-[11.5px] text-graphite-500 dark:border-white/[0.06] dark:bg-white/[0.02] dark:text-gray-400">
+        <p className="w-full text-[10px] font-bold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Rastreabilidade</p>
+        <span>Método ETo <strong className="font-semibold text-graphite-800 dark:text-white">FAO Penman-Monteith</strong></span>
+        <span>Origem do Kc <strong className="font-semibold text-graphite-800 dark:text-white">Interpolação linear na fase</strong></span>
+        <span>ETc <strong className="font-semibold text-graphite-800 dark:text-white">ETo × Kc × KL × Ks</strong></span>
+        <span>Ks <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56 (Dr vs AFD)</strong></span>
+        <span>Ky <strong className="font-semibold text-graphite-800 dark:text-white">risco produtivo, não lâmina</strong></span>
+        <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">{PE_METHOD}</strong></span>
+        <span>Balanço <strong className="font-semibold text-graphite-800 dark:text-white">{ARM_FORMULA}</strong></span>
+        <span>Unidades <strong className="font-semibold text-graphite-800 dark:text-white">CAD/AFD/ARM mm · % da CC volumétrico</strong></span>
+        <span>Sensorial <strong className="font-semibold text-graphite-800 dark:text-white">nota 1–10, sem conversão para % da CC</strong></span>
+        <span>Irrigação <strong className="font-semibold text-graphite-800 dark:text-white">evento real · I_ef = I × eficiência</strong></span>
+        <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
+        <span>Motor <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56</strong></span>
+        <span>Fonte climática {head.stationName ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.stationName}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        <span>Distância estação {head.distanceKm != null ? <strong className="font-semibold text-graphite-800 dark:text-white">{head.distanceKm.toFixed(1)} km</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        <span>Última sincronização {head.lastSync ? <strong className="font-semibold text-graphite-800 dark:text-white">{fmtDia(head.lastSync.slice(0, 10))} {head.lastSync.slice(11, 16)}</strong> : <strong className="font-semibold text-graphite-300 dark:text-gray-600">pendente</strong>}</span>
+        {head.qualityPct != null && (
+          <span className="inline-flex items-center gap-2">Qualidade
+            <span className="inline-block h-1.5 w-16 overflow-hidden rounded-full bg-gray-200 dark:bg-white/[0.1]"><span className="block h-full rounded-full bg-brand-500" style={{ width: `${head.qualityPct}%` }} /></span>
+            <strong className="font-semibold text-graphite-800 dark:text-white">{head.qualityPct}%</strong>
+          </span>
+        )}
+      </div>
     </div>
   );
 }
 
-function LancamentoTab({ pivotId, pivots, date, time, depth, hours, notes, saving, message, onDateChange, onTimeChange, onDepthChange, onHoursChange, onNotesChange, onSave }: {
-  pivotId: string; pivots: Pivot[]; date: string; time: string; depth: string; hours: string; notes: string; saving: boolean; message: string; onDateChange: (v: string) => void; onTimeChange: (v: string) => void; onDepthChange: (v: string) => void; onHoursChange: (v: string) => void; onNotesChange: (v: string) => void; onSave: () => void;
+// ── Lancamento Tab ──────────────────────────────────────────────────────
+
+function LancamentoTab({
+  pivotId,
+  pivots,
+  date,
+  time,
+  depth,
+  hours,
+  notes,
+  saving,
+  message,
+  onDateChange,
+  onTimeChange,
+  onDepthChange,
+  onHoursChange,
+  onNotesChange,
+  onSave,
+}: {
+  pivotId: string;
+  pivots: Pivot[];
+  date: string;
+  time: string;
+  depth: string;
+  hours: string;
+  notes: string;
+  saving: boolean;
+  message: string;
+  onDateChange: (v: string) => void;
+  onTimeChange: (v: string) => void;
+  onDepthChange: (v: string) => void;
+  onHoursChange: (v: string) => void;
+  onNotesChange: (v: string) => void;
+  onSave: () => void;
 }) {
   const pivot = pivots.find((p) => p.id === pivotId);
   const depthN = parseFloat(depth);
-  const volume = pivot && Number.isFinite(depthN) && depthN > 0 ? deriveAppliedVolume(depthN, pivot.area) : null;
-  return <Card><h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">Registrar irrigação realizada</h3>{!pivotId ? <p className="text-sm text-graphite-400">Selecione um pivô acima para lançar o evento.</p> : <div className="grid max-w-lg grid-cols-1 gap-5 sm:grid-cols-2"><Input label="Data" type="date" value={date} onChange={(e) => onDateChange(e.target.value)} /><Input label="Hora" type="time" value={time} onChange={(e) => onTimeChange(e.target.value)} /><Input label="Lâmina bruta (mm)" type="number" step="0.1" min="0" value={depth} onChange={(e) => onDepthChange(e.target.value)} /><Input label="Horas de operação" type="number" step="0.1" min="0" value={hours} onChange={(e) => onHoursChange(e.target.value)} />{volume != null && <p className="col-span-full text-xs text-graphite-400">Volume: <strong>{volume.toLocaleString("pt-BR")} m³</strong></p>}<div className="col-span-full"><TextArea label="Observação (opcional)" value={notes} onChange={(e) => onNotesChange(e.target.value)} /></div><div className="col-span-full"><Button onClick={onSave} disabled={!date || !depth || saving}>{saving ? "Salvando..." : "Lançar Irrigação"}</Button></div>{message && <p role="alert" className={`col-span-full rounded-xl p-3.5 text-xs ${message.includes("sucesso") ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>{message}</p>}</div>}</Card>;
+  const volume = pivot && Number.isFinite(depthN) && depthN > 0
+    ? deriveAppliedVolume(depthN, pivot.area)
+    : null;
+
+  return (
+    <Card>
+      <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
+        Registrar irrigação realizada
+      </h3>
+      {!pivotId ? (
+        <p className="text-sm text-graphite-400 dark:text-gray-500">
+          Selecione um pivô acima para lançar o evento.
+        </p>
+      ) : (
+        <div className="grid max-w-lg grid-cols-1 gap-5 sm:grid-cols-2">
+          <Input label="Data" type="date" value={date} onChange={(e) => onDateChange(e.target.value)} />
+          <Input label="Hora" type="time" value={time} onChange={(e) => onTimeChange(e.target.value)} />
+          <Input
+            label="Lâmina bruta (mm)"
+            type="number"
+            step="0.1"
+            min="0"
+            value={depth}
+            onChange={(e) => onDepthChange(e.target.value)}
+          />
+          <Input
+            label="Horas de operação"
+            type="number"
+            step="0.1"
+            min="0"
+            value={hours}
+            onChange={(e) => onHoursChange(e.target.value)}
+          />
+          {volume != null && (
+            <p className="col-span-full text-xs text-graphite-400 dark:text-gray-500">
+              Volume: <strong>{volume.toLocaleString("pt-BR")} m³</strong>
+            </p>
+          )}
+          <div className="col-span-full">
+            <TextArea label="Observação (opcional)" value={notes} onChange={(e) => onNotesChange(e.target.value)} />
+          </div>
+          <div className="col-span-full">
+            <Button onClick={onSave} disabled={!date || !depth || saving}>
+              {saving ? "Salvando..." : "Lançar Irrigação"}
+            </Button>
+          </div>
+          {message && (
+            <p role="alert" className={`col-span-full rounded-xl p-3.5 text-xs ${message.includes("sucesso") ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"}`}>
+              {message}
+            </p>
+          )}
+        </div>
+      )}
+    </Card>
+  );
 }
