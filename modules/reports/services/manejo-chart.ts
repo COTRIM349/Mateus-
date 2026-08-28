@@ -1,9 +1,9 @@
 /**
- * Catálogo do gráfico central de manejo (Etapa K / §21–22).
+ * Catálogo do gráfico central de manejo.
  *
- * Quatro grupos: Irrigação, Solo, Cultura, Clima.
- * Curvas ligam/desligam individualmente. Padrão NÃO liga todas.
- * Nota sensorial entra como ponto (1–10), nunca como % da CC.
+ * Mantém a leitura operacional consagrada no Scheduling: séries organizadas em
+ * Irrigação, Solo, Cultura e Clima, com seleção individual. A interface não
+ * inventa dados: apenas deriva indicadores quando as entradas do motor existem.
  */
 
 import {
@@ -29,6 +29,7 @@ export type ManejoSeriesKey =
   | "sensorial"
   | "dap"
   | "kc"
+  | "p"
   | "ks"
   | "kl"
   | "ky"
@@ -68,24 +69,25 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
     cat: "Solo",
     items: [
       { k: "umidade", label: "Umidade (% da CC)", color: "#8a5a2b", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "cc", label: "CC", color: "#2f6bff", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "pmp", label: "PMP", color: "#111827", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "cc", label: "CC — Capacidade de Campo", color: "#2f6bff", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "pmp", label: "PMP — Ponto de Murcha", color: "#111827", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
       { k: "seg", label: "Umidade de segurança", color: "#c0272d", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "cad", label: "CAD", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
-      { k: "afd", label: "AFD", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
-      { k: "arm", label: "ARM", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
-      { k: "sensorial", label: "Nota sensorial", color: "#a855f7", kind: "marker", axis: "marker", unit: MANAGEMENT_UNITS.sensoryNote },
+      { k: "cad", label: "CAD — Água Disponível", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
+      { k: "afd", label: "CRA / AFD — Limite de manejo", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
+      { k: "arm", label: "ARM — Água armazenada", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
+      { k: "sensorial", label: "Nota sensorial de campo", color: "#a855f7", kind: "marker", axis: "marker", unit: MANAGEMENT_UNITS.sensoryNote },
     ],
   },
   {
     cat: "Cultura",
     items: [
-      { k: "dap", label: "Dias após plantio", color: "#16a34a", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.dae, norm: [0, 200] },
-      { k: "kc", label: "Kc", color: "#22c55e", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.kc, norm: [0, 1.5] },
-      { k: "ks", label: "Ks", color: "#15803d", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.ks, norm: [0, 1] },
-      { k: "kl", label: "KL", color: "#4ade80", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.kl, norm: [0, 1.2] },
-      { k: "ky", label: "Ky", color: "#65a30d", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.ky, norm: [0, 1.5] },
-      { k: "rootdepth", label: "Profundidade radicular", color: "#5eaa97", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.rootDepth, norm: [0, 1.5] },
+      { k: "dap", label: "Dias após plantio (DAP)", color: "#16a34a", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.dae, norm: [0, 200] },
+      { k: "kc", label: "Kc — Coeficiente da cultura", color: "#22c55e", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.kc, norm: [0, 1.5] },
+      { k: "p", label: "Fator de disponibilidade hídrica (p)", color: "#10b981", kind: "dash", axis: "norm", unit: "adimensional", norm: [0, 1] },
+      { k: "ks", label: "Ks — Coeficiente de estresse", color: "#15803d", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.ks, norm: [0, 1] },
+      { k: "kl", label: "KL — Coeficiente de localização", color: "#4ade80", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.kl, norm: [0, 1.2] },
+      { k: "ky", label: "Ky — Sensibilidade produtiva", color: "#65a30d", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.ky, norm: [0, 1.5] },
+      { k: "rootdepth", label: "Profundidade da raiz (Zr)", color: "#5eaa97", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.rootDepth, norm: [0, 1.5] },
       { k: "fase", label: "Fases fenológicas", color: "#84cc16", kind: "marker", axis: "marker", unit: "fase" },
     ],
   },
@@ -108,7 +110,6 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
 
 export const MANEJO_ALL: ManejoSeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.items);
 
-/** Recorte do gráfico-herói (centro de decisão). Não é dado agronômico. */
 export const MANEJO_CHART_LAYOUT = {
   width: 1280,
   height: 560,
@@ -123,6 +124,7 @@ export const MANEJO_DEFAULT_ON: ManejoSeriesKey[] = [
   "chuva",
   "etc",
   "sensorial",
+  "fase",
 ];
 
 export function phaseRanges(rows: Array<{ phase: string }>): Array<{ phase: string; start: number; end: number }> {
@@ -171,6 +173,7 @@ export function seriesValue(
     case "sensorial": return row.sensoryNote;
     case "dap": return row.dae;
     case "kc": return row.kc;
+    case "p": return row.cadMm > 0 ? row.afdMm / row.cadMm : null;
     case "ks": return row.ks;
     case "kl": return row.kl;
     case "ky": return row.ky;
@@ -207,7 +210,7 @@ export function formatSeriesValue(key: ManejoSeriesKey, row: ManagementReportRow
   const v = seriesValue(key, row, extras);
   if (v == null || !Number.isFinite(v)) return "—";
   if (key === "sensorial") return `nota ${v}`;
-  if (key === "kc" || key === "ks" || key === "kl" || key === "ky") return v.toFixed(2);
+  if (key === "kc" || key === "p" || key === "ks" || key === "kl" || key === "ky") return v.toFixed(2);
   if (def.axis === "pct") return `${v.toFixed(0)}% da CC`;
   if (def.axis === "mm") return `${v.toFixed(1)} mm`;
   if (key === "dap") return `${v.toFixed(0)} d`;
