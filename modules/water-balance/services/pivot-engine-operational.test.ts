@@ -3,9 +3,11 @@ import {
   adjustDepletionFactorForDemand,
   calculateManagementUrgency,
   computePivotBalanceSeries,
+  computePivotCurrentState,
   diagnoseOperationalInput,
   hasCompletePhaseCoverage,
   normalizeOperationalInput,
+  OperationalInputError,
 } from "./pivot-engine-operational";
 import type { PivotEngineInput } from "./pivot-engine-v2";
 
@@ -104,7 +106,7 @@ describe("pivot-engine-operational", () => {
     expect(rows[0].etcPotential).toBe(7);
   });
 
-  it("bloqueia linha do tempo com buraco entre fases", () => {
+  it("bloqueia linha do tempo com buraco entre fases e expõe o motivo à execução operacional", () => {
     const input = baseInput();
     input.phases = [
       { ...input.phases[0], duration_days: 10 },
@@ -124,7 +126,8 @@ describe("pivot-engine-operational", () => {
       operational: false,
       code: "invalid_phase_coverage",
     });
-    expect(computePivotBalanceSeries(input)).toEqual([]);
+    expect(() => computePivotBalanceSeries(input)).toThrow(OperationalInputError);
+    expect(() => computePivotBalanceSeries(input)).toThrow(/Fases da cultura incompletas ou inválidas/);
   });
 
   it("bloqueia fase com raiz decrescente ou Kl inválido", () => {
@@ -152,6 +155,7 @@ describe("pivot-engine-operational", () => {
       message: "Clima operacional ausente em 2026-01-01: o balanço não assume ETo ou chuva iguais a zero.",
       date: "2026-01-01",
     });
+    expect(() => computePivotBalanceSeries(missing)).toThrow(/Clima operacional ausente em 2026-01-01/);
 
     const invalid = baseInput();
     invalid.weatherByDate["2026-01-01"] = { et0: -1, precipitation: 0 };
@@ -160,6 +164,7 @@ describe("pivot-engine-operational", () => {
       code: "invalid_weather",
       date: "2026-01-01",
     });
+    expect(() => computePivotBalanceSeries(invalid)).toThrow(/Clima operacional inválido em 2026-01-01/);
   });
 
   it("explica bloqueio quando o perfil de solo não é operacional", () => {
@@ -170,6 +175,15 @@ describe("pivot-engine-operational", () => {
       operational: false,
       code: "invalid_soil_profile",
     });
+    expect(() => computePivotBalanceSeries(input)).toThrow(/Perfil de solo inválido/);
+  });
+
+  it("mantém estado agregado seguro e vazio quando a parcela está bloqueada", () => {
+    const input = baseInput();
+    input.weatherByDate = {};
+    const state = computePivotCurrentState({ id: "p1", name: "Pivô 1" }, input);
+    expect(state.current).toBeNull();
+    expect(state.history).toEqual([]);
   });
 
   it("confirma diagnóstico operacional quando as pré-condições estão completas", () => {
