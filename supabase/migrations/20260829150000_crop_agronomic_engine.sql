@@ -85,6 +85,11 @@ COMMENT ON COLUMN cultures.degree_day_method IS
 
 -- ── CULTIVARES ─────────────────────────────────────────────────────────────
 
+-- O schema legado obrigava uma classe precoce/médio/tardio e default médio.
+-- Isso inventa classificação quando só existe GRM. A partir daqui o campo é opcional.
+ALTER TABLE culture_varieties ALTER COLUMN maturity DROP NOT NULL;
+ALTER TABLE culture_varieties ALTER COLUMN maturity DROP DEFAULT;
+
 ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS breeder TEXT;
 ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS technology TEXT;
 ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS relative_maturity_group NUMERIC(4,2);
@@ -107,6 +112,10 @@ ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS calibration_status TEXT N
   CHECK (calibration_status IN (
     'nao_calibrada','em_coleta','calibracao_parcial','calibrada_localmente'
   ));
+ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS data_source_id UUID
+  REFERENCES agronomic_sources(id) ON DELETE SET NULL;
+ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS data_confidence TEXT NOT NULL DEFAULT 'nao_validada'
+  CHECK (data_confidence IN ('alta','media','baixa','nao_validada'));
 
 COMMENT ON COLUMN culture_varieties.planning_occupancy_days IS
   'Janela de ocupação operacional. Não equivale automaticamente ao ciclo fenológico observado.';
