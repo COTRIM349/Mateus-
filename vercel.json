@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/cron/climate-daily",
-      "schedule": "15 9 * * *"
+      "schedule": "30 9 * * *"
     }
   ]
 }
