@@ -15,7 +15,6 @@ import {
   type Column,
 } from "@/components/ui";
 import { useCrud } from "@/lib/hooks";
-import { useAuth } from "@/components/providers";
 import {
   CROP_STAGES,
   CULTURE_GROUPS,
@@ -29,26 +28,8 @@ import { AgronomicKcTab } from "@/modules/culture/components/AgronomicKcTab";
 import { AgronomicRootWaterTab } from "@/modules/culture/components/AgronomicRootWaterTab";
 import { AgronomicDegreeDayTab } from "@/modules/culture/components/AgronomicDegreeDayTab";
 import { HydricSensitivityTab } from "@/modules/culture/components/HydricSensitivityTab";
-import {
-  interpolateKc,
-  interpolateRootDepth,
-  identifyPhase,
-  validatePhases,
-  type CulturePhase,
-  type CultureValidation,
-} from "@/modules/culture/services";
-import { rebuildPhaseTimeline } from "@/modules/culture/services/culture-phases";
 
 // ── Types ─────────────────────────────────────────────────────────────────
-
-interface KcByStage {
-  germinacao: number;
-  vegetativo: number;
-  floracao: number;
-  enchimento: number;
-  maturacao: number;
-  colheita: number;
-}
 
 interface Culture {
   id: string;
@@ -57,48 +38,7 @@ interface Culture {
   culture_group: string | null;
   description: string | null;
   status: string;
-  kc_by_stage: KcByStage;
-  root_depth: number;
-  depletion_factor: number;
-  cycle_days: number;
   active: boolean;
-  // Sprint 13 · Etapa 4 — variáveis de manejo de irrigação
-  kl: number | null;
-  ks_function: string | null;
-  optimal_temperature_c: number | null;
-  basal_temperature_c: number | null;
-  by_phase: boolean | null;
-  kc_constant: boolean | null;
-  // Sprint 14 · Etapa 5 — Kl como função selecionável
-  kl_function: string | null;
-}
-
-interface PhaseRow {
-  id: string;
-  culture_id: string;
-  phase_order: number;
-  name: string;
-  days_after_plant: number;
-  duration_days: number;
-  kc_start: number;
-  kc_end: number;
-  root_depth_start: number;
-  root_depth_end: number;
-  depletion_factor: number;
-  description: string | null;
-  // Sprint 13 · Etapa 4 — parâmetros avançados
-  color: string | null;
-  duration_degree_days: number | null;
-  kc_constant: boolean | null;
-  shaded_area_pct: number | null;
-  ks_function: string | null;
-  itn_pct: number | null;
-  cycle_count: number | null;
-  ends_cycle: boolean | null;
-  // Sprint 14 · Etapa 5 — coeficiente Ky para método FAO 33
-  ky: number | null;
-  kl: number | null;
-  phase_key: string | null;
 }
 
 interface AssignmentRow {
@@ -195,275 +135,150 @@ function CulturesTab({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const activeCultures = data.filter((c) => c.active);
+  const activeCultures = data.filter((row) => row.active);
 
   useEffect(() => {
     onCulturesChange(activeCultures);
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groupLabels: Record<string, string> = Object.fromEntries(
-    CULTURE_GROUPS.map((g) => [g.value, g.label])
+    CULTURE_GROUPS.map((g) => [g.value, g.label]),
   );
   const statusLabels: Record<string, string> = Object.fromEntries(
-    CULTURE_STATUSES.map((s) => [s.value, s.label])
+    CULTURE_STATUSES.map((s) => [s.value, s.label]),
   );
-
-  const statusColors: Record<string, string> = {
-    ativo: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    inativo: "bg-gray-100 text-gray-500 dark:bg-gray-700/30 dark:text-gray-400",
-    em_teste: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  };
 
   const columns: Column<Culture>[] = [
     {
       header: "",
-      render: (r) => (
+      render: (row) => (
         <input
           type="radio"
           name="culture_select"
-          checked={selectedCultureId === r.id}
-          onChange={() => onSelectCulture(r.id)}
+          checked={selectedCultureId === row.id}
+          onChange={() => onSelectCulture(row.id)}
           className="h-4 w-4 accent-brand-500"
+          aria-label={`Selecionar ${row.name}`}
         />
       ),
     },
-    { header: "Nome", render: (r) => <span className="font-medium">{r.name}</span> },
-    { header: "Grupo", render: (r) => groupLabels[r.culture_group ?? ""] ?? "—" },
-    { header: "Ciclo", render: (r) => `${r.cycle_days} dias`, align: "right" },
-    { header: "Raiz (m)", render: (r) => r.root_depth.toFixed(2), align: "right" },
-    { header: "p", render: (r) => r.depletion_factor.toFixed(2), align: "right" },
-    {
-      header: "Status",
-      render: (r) => (
-        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${statusColors[r.status] ?? ""}`}>
-          {statusLabels[r.status] ?? r.status}
-        </span>
-      ),
-    },
+    { header: "Cultura", render: (row) => <span className="font-medium">{row.name}</span> },
+    { header: "Nome científico", render: (row) => row.scientific_name ?? "Sem informação" },
+    { header: "Categoria", render: (row) => groupLabels[row.culture_group ?? ""] ?? "Sem informação" },
+    { header: "Status", render: (row) => statusLabels[row.status] ?? row.status },
     {
       header: "Ações",
       align: "right",
-      render: (r) => (
+      render: (row) => (
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setModalOpen(true); }}>Editar</Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
+          <Button variant="ghost" size="sm" onClick={() => { setEditing(row); setModalOpen(true); setFormError(""); }}>
+            Editar
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(row)}>
+            Desativar
+          </Button>
         </div>
       ),
     },
   ];
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setSaving(true);
     setFormError("");
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(event.currentTarget);
 
-    const depletionFactor = Number(fd.get("depletion_factor"));
-    if (depletionFactor < 0 || depletionFactor > 1) {
-      setFormError("Fator de depleção deve estar entre 0 e 1");
+    const payload = {
+      name: String(fd.get("name") ?? "").trim(),
+      scientific_name: String(fd.get("scientific_name") ?? "").trim() || null,
+      culture_group: String(fd.get("culture_group") ?? "").trim() || null,
+      description: String(fd.get("description") ?? "").trim() || null,
+      status: String(fd.get("status") ?? "ativo"),
+      active: true,
+    };
+
+    if (!payload.name) {
+      setFormError("Nome da cultura é obrigatório.");
       setSaving(false);
       return;
     }
 
-    const kc_by_stage: KcByStage = {
-      germinacao: Number(fd.get("kc_germinacao")),
-      vegetativo: Number(fd.get("kc_vegetativo")),
-      floracao: Number(fd.get("kc_floracao")),
-      enchimento: Number(fd.get("kc_enchimento")),
-      maturacao: Number(fd.get("kc_maturacao")),
-      colheita: Number(fd.get("kc_colheita")),
-    };
-
-    const numOrNull = (name: string) => {
-      const v = fd.get(name) as string;
-      return v ? Number(v) : null;
-    };
-
-    const payload = {
-      name: fd.get("name") as string,
-      scientific_name: (fd.get("scientific_name") as string) || null,
-      culture_group: fd.get("culture_group") as string,
-      description: (fd.get("description") as string) || null,
-      status: fd.get("status") as string,
-      kc_by_stage,
-      root_depth: Number(fd.get("root_depth")),
-      depletion_factor: depletionFactor,
-      cycle_days: Number(fd.get("cycle_days")),
-      // Sprint 13 · Etapa 4 — manejo de irrigação
-      kl: numOrNull("kl"),
-      ks_function: (fd.get("ks_function") as string) || "linear",
-      kl_function: (fd.get("kl_function") as string) || "constant",
-      optimal_temperature_c: numOrNull("optimal_temperature_c"),
-      basal_temperature_c: numOrNull("basal_temperature_c"),
-      by_phase: fd.get("by_phase") === "on",
-      kc_constant: fd.get("kc_constant") === "on",
-    };
     try {
-      const supabase = createClient();
       if (editing) {
         await update(editing.id, payload);
+        const supabase = createClient();
         await supabase.from("culture_history").insert({
           culture_id: editing.id,
           change_type: "edicao",
-          description: `Cultura "${payload.name}" editada`,
-          old_values: { name: editing.name, cycle_days: editing.cycle_days },
-          new_values: { name: payload.name, cycle_days: payload.cycle_days },
+          description: `Cadastro mestre da cultura "${payload.name}" editado`,
         });
       } else {
-        await create(payload as Omit<Culture, "id" | "created_at" | "updated_at">);
+        await create(payload as Omit<Culture, "id">);
       }
       setModalOpen(false);
       setEditing(null);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao salvar");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Erro ao salvar cultura.");
     }
     setSaving(false);
   };
 
   return (
     <>
-      <div className="mb-4 flex justify-end">
-        <Button onClick={() => { setEditing(null); setModalOpen(true); }}>Nova cultura</Button>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
+          O cadastro mestre contém apenas a identidade da espécie. Kc, fenologia, graus-dia, raiz e p ficam nas abas próprias com fonte e validação.
+        </div>
+        <Button onClick={() => { setEditing(null); setModalOpen(true); setFormError(""); }}>
+          Nova cultura
+        </Button>
       </div>
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <p className="py-8 text-center text-sm text-graphite-400">Carregando culturas...</p>
         ) : activeCultures.length === 0 ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma cultura cadastrada.</p>
+          <p className="py-8 text-center text-sm text-graphite-400">Nenhuma cultura cadastrada.</p>
         ) : (
-          <Table columns={columns} data={activeCultures} getKey={(r) => r.id} />
+          <Table columns={columns} data={activeCultures} getKey={(row) => row.id} />
         )}
       </Card>
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar cultura" : "Nova cultura"} size="lg">
+      <Modal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); setFormError(""); }}
+        title={editing ? "Editar cultura" : "Nova cultura"}
+      >
         <form onSubmit={handleSubmit} className="space-y-5">
+          <Input id="name" name="name" label="Nome comum" required defaultValue={editing?.name ?? ""} />
+          <Input id="scientific_name" name="scientific_name" label="Nome científico" defaultValue={editing?.scientific_name ?? ""} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="name" name="name" label="Nome" placeholder="Soja" required defaultValue={editing?.name} />
-            <Input id="scientific_name" name="scientific_name" label="Nome científico" placeholder="Glycine max" defaultValue={editing?.scientific_name ?? ""} />
-            <Select id="culture_group" name="culture_group" label="Grupo" options={[...CULTURE_GROUPS]} required defaultValue={editing?.culture_group ?? "graos"} />
-            <Select id="status" name="status" label="Status" options={[...CULTURE_STATUSES]} required defaultValue={editing?.status ?? "ativo"} />
-            <Input id="cycle_days" name="cycle_days" label="Ciclo (dias)" type="number" required defaultValue={editing?.cycle_days} />
-            <Input id="root_depth" name="root_depth" label="Prof. raiz máx. (m)" type="number" step="0.01" required defaultValue={editing?.root_depth} />
-            <Input id="depletion_factor" name="depletion_factor" label="Fator de depleção (p)" type="number" step="0.01" min="0" max="1" required defaultValue={editing?.depletion_factor} />
+            <Select
+              id="culture_group"
+              name="culture_group"
+              label="Categoria"
+              options={[...CULTURE_GROUPS]}
+              defaultValue={editing?.culture_group ?? CULTURE_GROUPS[0]?.value}
+            />
+            <Select
+              id="status"
+              name="status"
+              label="Status"
+              options={[...CULTURE_STATUSES]}
+              defaultValue={editing?.status ?? "ativo"}
+            />
           </div>
+          <TextArea id="description" name="description" label="Observações gerais da espécie" defaultValue={editing?.description ?? ""} />
 
-          <TextArea id="description" name="description" label="Descrição" defaultValue={editing?.description ?? ""} />
-
-          <div>
-            <p className="mb-2 text-sm font-medium text-graphite-900 dark:text-gray-200">Kc por estágio (referência rápida)</p>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {CROP_STAGES.map((stage) => (
-                <Input
-                  key={stage.value}
-                  id={`kc_${stage.value}`}
-                  name={`kc_${stage.value}`}
-                  label={stage.label}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="2.5"
-                  required
-                  defaultValue={editing?.kc_by_stage?.[stage.value as keyof KcByStage] ?? ""}
-                />
-              ))}
-            </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
+            Não informe Kc, Tb, GDA, profundidade radicular, p ou duração fenológica nesta tela.
           </div>
-
-          {/* ── Manejo de irrigação (Sprint 13 · Etapa 4) ────────────── */}
-          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
-            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
-              Manejo de irrigação
-            </legend>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Select
-                id="kl_function"
-                name="kl_function"
-                label="Kl — Função (Sprint 14)"
-                options={[
-                  { value: "constant", label: "Constante (valor fixo)" },
-                  { value: "custom", label: "Personalizado" },
-                  { value: "fereres", label: "Fereres 1981 (área sombreada)" },
-                  { value: "keller_karmeli", label: "Keller-Karmeli 1975 (área molhada)" },
-                  { value: "freitas", label: "Freitas (Vermeiren-Jobling)" },
-                  { value: "bernardo", label: "Bernardo 2019 (conservador)" },
-                ]}
-                defaultValue={editing?.kl_function ?? "constant"}
-              />
-              <Input
-                id="kl"
-                name="kl"
-                label="Kl — valor (usado se função = constant/custom)"
-                type="number"
-                step="0.01"
-                min="0"
-                max="1"
-                placeholder="1.0 (pivô central)"
-                defaultValue={editing?.kl ?? 1.0}
-              />
-              <Select
-                id="ks_function"
-                name="ks_function"
-                label="Ks — Função de estresse"
-                options={[
-                  { value: "linear", label: "Linear (FAO-56 padrão)" },
-                  { value: "fao33", label: "FAO 33 (Doorenbos-Kassam, usa Ky por fase)" },
-                  { value: "exponential", label: "Exponencial (castiga estresse mais rápido)" },
-                  { value: "sigmoid", label: "Sigmoide (transição suave)" },
-                  { value: "none", label: "Nenhum (Ks fixo em 1)" },
-                ]}
-                defaultValue={editing?.ks_function ?? "linear"}
-              />
-              <Input
-                id="optimal_temperature_c"
-                name="optimal_temperature_c"
-                label="Temp. ótima (°C)"
-                type="number"
-                step="0.1"
-                min="0"
-                max="45"
-                placeholder="Ex: algodão 28"
-                defaultValue={editing?.optimal_temperature_c ?? ""}
-              />
-              <Input
-                id="basal_temperature_c"
-                name="basal_temperature_c"
-                label="Temp. basal (°C) — graus-dia"
-                type="number"
-                step="0.1"
-                min="0"
-                max="30"
-                placeholder="Ex: algodão 10"
-                defaultValue={editing?.basal_temperature_c ?? ""}
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-6">
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  name="by_phase"
-                  defaultChecked={editing?.by_phase ?? true}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Manejo por fase
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(usa parâmetros da fase atual)</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  name="kc_constant"
-                  defaultChecked={editing?.kc_constant ?? false}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Kc constante no ciclo
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(pastagens perenes)</span>
-              </label>
-            </div>
-          </fieldset>
 
           {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
@@ -475,21 +290,19 @@ function CulturesTab({
         onConfirm={async () => {
           if (!deleteTarget) return;
           setSaving(true);
-          try { await softDelete(deleteTarget.id); if (selectedCultureId === deleteTarget.id) onSelectCulture(null); setDeleteTarget(null); } catch { setFormError("Erro ao excluir"); }
+          await softDelete(deleteTarget.id);
+          if (selectedCultureId === deleteTarget.id) onSelectCulture(null);
+          setDeleteTarget(null);
           setSaving(false);
         }}
-        title="Excluir cultura"
-        message={`Deseja excluir a cultura "${deleteTarget?.name}"?`}
-        confirmLabel="Excluir"
+        title="Desativar cultura"
+        message={`Desativar a cultura "${deleteTarget?.name ?? ""}"? O histórico será preservado.`}
+        confirmLabel="Desativar"
         loading={saving}
       />
     </>
   );
 }
-
-// ── Variedades ────────────────────────────────────────────────────────────
-
-// ── Fases Fenológicas ─────────────────────────────────────────────────────
 
 // ── Associação ────────────────────────────────────────────────────────────
 
