@@ -190,6 +190,12 @@ export interface BalanceDay {
   /** Umidade de segurança em % da CC (volumétrico). */
   safetyPctCc: number;
   balanceFormula: string;
+  /** ARM no início do dia (mm), antes de Pe + I_ef − ETc. */
+  armStartMm: number;
+  /** Dr no início do dia (mm) = CAD − ARM₀. */
+  drStartMm: number;
+  /** Depleção relativa no início do dia (Dr/CAD). */
+  depletionAtStart: number;
   status: HydricStatus;
   /** Cor do mapa hídrico — independente do gatilho de irrigação. */
   mapStatus: MapHydricStatus;
@@ -405,6 +411,9 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       moisturePctCc,
       safetyPctCc,
       balanceFormula: step.balanceFormula,
+      armStartMm: roundTo(armStart, 2),
+      drStartMm: roundTo(startDeficit, 2),
+      depletionAtStart: roundTo(startDepletion, 3),
       status,
       mapStatus,
       shouldIrrigate: rec.shouldIrrigate,

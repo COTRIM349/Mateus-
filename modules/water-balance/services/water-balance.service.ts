@@ -73,6 +73,9 @@ export interface DailyBalanceRow extends WaterBalanceResult {
   safetyPctCc?: number;
   peFormula?: string;
   balanceFormula?: string;
+  armStartMm?: number;
+  drStartMm?: number;
+  depletionAtStart?: number;
 }
 
 export interface BalanceSummary {
