@@ -195,7 +195,14 @@ CREATE TABLE IF NOT EXISTS cultivar_phenology_targets (
   gdd_expected DOUBLE PRECISION,
   dae_calibrated DOUBLE PRECISION,
   gdd_calibrated DOUBLE PRECISION,
+  -- source_id permanece por compatibilidade com o schema V1; novos registros
+  -- devem preferir expected_source_id/calibrated_source_id.
   source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
+  expected_source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
+  calibrated_source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
+  calibration_confidence TEXT CHECK (
+    calibration_confidence IS NULL OR calibration_confidence IN ('alta','media','baixa','nao_validada')
+  ),
   confidence TEXT NOT NULL DEFAULT 'nao_validada'
     CHECK (confidence IN ('alta','media','baixa','nao_validada')),
   validation_status TEXT NOT NULL DEFAULT 'draft'
@@ -207,6 +214,14 @@ CREATE TABLE IF NOT EXISTS cultivar_phenology_targets (
 
 CREATE INDEX IF NOT EXISTS idx_cultivar_phenology_targets
   ON cultivar_phenology_targets(cultivar_id, stage_id, planting_window_id);
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cultivar_phenology_target_global
+  ON cultivar_phenology_targets(cultivar_id, stage_id)
+  WHERE planting_window_id IS NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_cultivar_phenology_target_window
+  ON cultivar_phenology_targets(cultivar_id, stage_id, planting_window_id)
+  WHERE planting_window_id IS NOT NULL;
 
 -- ── CURVAS DE Kc ───────────────────────────────────────────────────────────
 
@@ -462,6 +477,10 @@ CREATE TABLE IF NOT EXISTS agronomic_calibration_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   notes TEXT
 );
+
+ALTER TABLE cultivar_phenology_targets
+  ADD COLUMN IF NOT EXISTS calibration_run_id UUID
+    REFERENCES agronomic_calibration_runs(id) ON DELETE SET NULL;
 
 CREATE TABLE IF NOT EXISTS base_temperature_candidates (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
