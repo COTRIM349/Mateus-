@@ -227,7 +227,7 @@ export function evaluateBaseTemperatureCandidates(
   candidateBaseTemperaturesC: number[],
   options?: Omit<DegreeDayOptions, "baseTemperatureC">,
 ): BaseTemperatureCandidateResult[] {
-  const uniqueCandidates = [...new Set(candidateBaseTemperaturesC)]
+  const uniqueCandidates = Array.from(new Set(candidateBaseTemperaturesC))
     .filter((value) => Number.isFinite(value))
     .sort((a, b) => a - b);
 
