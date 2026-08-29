@@ -179,6 +179,56 @@ function layerDepthLabel(layer: PivotSoilLayer, orderedLayers: PivotSoilLayer[])
   return "Não informado";
 }
 
+function BackIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+      <path d="M19 12H5M11 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function ResetIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+      <path d="M4.5 7.5V3.8m0 0H8.2M4.5 3.8l3 3A7.5 7.5 0 1 1 4.7 12" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function SaveIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+      <path d="M5 3.8h11.2L20 7.6V20H5z" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M8 3.8V9h8V3.8M8 20v-7h8v7" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function PlusIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+      <path d="M12 5v14M5 12h14" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TrashIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+      <path d="M4 7h16M9 7V4h6v3M7 7l1 13h8l1-13M10 11v5M14 11v5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+function InfoIcon() {
+  return (
+    <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4 fill-none stroke-current" strokeWidth="1.8">
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 10.8v5.2M12 7.6h.01" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 export default function SolosPage() {
   const { activeFarmId } = useAuth();
   const [supabase] = useState(() => createClient());
@@ -506,39 +556,36 @@ function SoilDetail({
     }
   }, [pivot.id, supabase]);
 
-  const saveProfile = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
+  const saveProfileFields = async (showMessage = true) => {
     setSavingProfile(true);
     setProfileError("");
-    setProfileMessage("");
+    if (showMessage) setProfileMessage("");
 
     const vibNumber = vib.trim() === "" ? null : Number(vib.replace(",", "."));
     if (vibNumber != null && (!Number.isFinite(vibNumber) || vibNumber < 0)) {
       setProfileError("A VIB deve ser um número maior ou igual a zero.");
       setSavingProfile(false);
-      return;
+      return false;
     }
-
-    const payload = {
-      soil_class: soilClass.trim() || null,
-      infiltration_rate_mm_h: vibNumber,
-    };
 
     const result = await supabase
       .from("pivot_soils")
-      .update(payload)
+      .update({
+        soil_class: soilClass.trim() || null,
+        infiltration_rate_mm_h: vibNumber,
+      })
       .eq("pivot_id", pivot.id);
 
     if (result.error) {
       setProfileError(result.error.message);
       setSavingProfile(false);
-      return;
+      return false;
     }
 
-    await refreshLayers();
     await onChanged();
-    setProfileMessage("Cadastro salvo.");
+    if (showMessage) setProfileMessage("Informações do solo salvas.");
     setSavingProfile(false);
+    return true;
   };
 
   const updateLayerDraft = (
@@ -735,6 +782,45 @@ function SoilDetail({
       ? cadTotal / profileDepthCm
       : null;
 
+  const originalSoilClass = normalizeSoilClass(profile?.soil_class);
+  const originalVib =
+    profile?.infiltration_rate_mm_h == null
+      ? ""
+      : String(profile.infiltration_rate_mm_h);
+
+  const profileDirty = soilClass !== originalSoilClass || vib !== originalVib;
+  const hasUnsavedChanges = profileDirty || layersDirty;
+
+  const saveAllChanges = async () => {
+    setProfileMessage("");
+    setLayerMessage("");
+
+    if (layersDirty) {
+      const layersSaved = await persistLayerDrafts(false);
+      if (!layersSaved) return;
+    }
+
+    if (profileDirty) {
+      const profileSaved = await saveProfileFields(false);
+      if (!profileSaved) return;
+    }
+
+    setProfileMessage("Alterações salvas.");
+  };
+
+  const discardUnsavedChanges = () => {
+    setSoilClass(originalSoilClass);
+    setVib(originalVib);
+    setLayerDrafts(
+      Object.fromEntries(layers.map((layer) => [layer.id, makeLayerDraft(layer)]))
+    );
+    setLayersDirty(false);
+    setProfileError("");
+    setLayerError("");
+    setProfileMessage("");
+    setLayerMessage("");
+  };
+
   const saveLayer = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSavingLayer(true);
@@ -829,167 +915,213 @@ function SoilDetail({
   };
 
   return (
-    <div className="space-y-6">
-      <div>
-        <Button variant="ghost" size="sm" onClick={onBack}>
-          ← Voltar para solos
-        </Button>
+    <div className="space-y-5 pb-8">
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 text-sm font-medium text-graphite-500 transition hover:text-graphite-900 dark:text-gray-400 dark:hover:text-white"
+        >
+          <BackIcon />
+          Voltar para solos
+        </button>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={discardUnsavedChanges}
+            disabled={!hasUnsavedChanges}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-gray-200 bg-white px-4 text-sm font-semibold text-graphite-700 transition hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-40 dark:border-white/[0.10] dark:bg-transparent dark:text-gray-200 dark:hover:bg-white/[0.04]"
+          >
+            <ResetIcon />
+            Descartar alterações
+          </button>
+          <button
+            type="button"
+            onClick={() => void saveAllChanges()}
+            disabled={!hasUnsavedChanges || savingProfile || savingInlineLayers}
+            className="inline-flex h-11 items-center gap-2 rounded-xl bg-brand-600 px-5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            <SaveIcon />
+            {savingProfile || savingInlineLayers ? "Salvando..." : "Salvar alterações"}
+          </button>
+        </div>
       </div>
 
-      <PageHeader titulo={`Solo ${pivot.name}`} />
+      <section>
+        <h1 className="text-3xl font-semibold tracking-tight text-graphite-950 dark:text-white">
+          Solo {pivot.name}
+        </h1>
 
-      <Card>
-        <form onSubmit={saveProfile} className="space-y-5">
-          <div>
-            <h2 className="text-base font-semibold text-graphite-900 dark:text-white">
-              Informações do solo
-            </h2>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <Input id="pivot_name" label="Pivô" value={pivot.name} disabled />
-            <Input id="soil_name" label="Nome" value={`Solo ${pivot.name}`} disabled />
-            <Select
-              id="soil_class"
-              label="Classe do solo"
+        <div className="mt-6 grid gap-4 border-b border-gray-200 pb-6 md:grid-cols-2 xl:grid-cols-[minmax(220px,1.35fr)_minmax(120px,.65fr)_minmax(180px,.85fr)_minmax(140px,.75fr)] dark:border-white/[0.08]">
+          <div className="xl:border-r xl:border-gray-200 xl:pr-6 dark:xl:border-white/[0.08]">
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-graphite-400 dark:text-gray-500">
+              Classe do solo
+            </label>
+            <select
               value={soilClass}
               onChange={(event) => setSoilClass(event.target.value)}
-              options={[
-                { value: "", label: "Não informado" },
-                ...SOIL_CLASS_OPTIONS.map((soilClassOption) => ({
-                  value: soilClassOption,
-                  label: soilClassOption,
-                })),
-              ]}
-            />
-            <Input
-              id="infiltration_rate_mm_h"
-              label="VIB (mm/h)"
+              className="h-12 w-full rounded-xl border border-gray-200 bg-white px-4 text-base font-medium text-graphite-900 outline-none transition focus:border-brand-500 focus:ring-2 focus:ring-brand-500/10 dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-white"
+            >
+              <option value="">Não informado</option>
+              {SOIL_CLASS_OPTIONS.map((soilClassOption) => (
+                <option key={soilClassOption} value={soilClassOption}>
+                  {soilClassOption}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="xl:border-r xl:border-gray-200 xl:px-6 dark:xl:border-white/[0.08]">
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-graphite-400 dark:text-gray-500">
+              VIB (mm/h)
+            </label>
+            <input
               type="number"
               step="0.1"
               min="0"
-              placeholder="Não informado"
               value={vib}
               onChange={(event) => setVib(event.target.value)}
+              className="h-12 w-full rounded-xl border border-transparent bg-transparent px-0 text-xl font-medium text-graphite-900 outline-none transition focus:border-gray-200 focus:bg-white focus:px-3 dark:text-white dark:focus:border-white/[0.10] dark:focus:bg-white/[0.03]"
             />
           </div>
 
-          <div className="max-w-sm">
-            <Select
-              id="cc_pmp_unit"
-              label="Unidade de CC e PMP"
+          <div className="xl:border-r xl:border-gray-200 xl:px-6 dark:xl:border-white/[0.08]">
+            <label className="mb-2 block text-[11px] font-semibold uppercase tracking-[0.08em] text-graphite-400 dark:text-gray-500">
+              Unidade
+            </label>
+            <select
               value={unit ?? ""}
               onChange={(event) =>
                 void handleUnitChange((event.target.value || null) as CcPmpUnit)
               }
               disabled={changingUnit}
-              options={[
-                { value: "", label: "Não informado" },
-                { value: "gravimetric_pct", label: "% em peso" },
-                { value: "volumetric_pct", label: "% volumétrica" },
-              ]}
-            />
+              className="h-12 w-full rounded-xl border border-transparent bg-transparent px-0 text-xl font-medium text-graphite-900 outline-none transition focus:border-gray-200 focus:bg-white focus:px-3 dark:text-white dark:focus:border-white/[0.10] dark:focus:bg-white/[0.03]"
+            >
+              <option value="">Não informado</option>
+              <option value="gravimetric_pct">% em peso</option>
+              <option value="volumetric_pct">% volumétrica</option>
+            </select>
           </div>
 
-          {profileError && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {profileError}
+          <div className="xl:pl-6">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-graphite-400 dark:text-gray-500">
+              Perfil
             </p>
-          )}
-          {profileMessage && (
-            <p className="text-sm text-green-700 dark:text-green-400">
-              {profileMessage}
+            <p className="h-12 pt-2 text-xl font-medium text-graphite-900 dark:text-white">
+              {profileDepthCm == null ? "—" : `0–${Math.round(profileDepthCm)} cm`}
             </p>
-          )}
-
-          <div className="flex justify-end">
-            <Button type="submit" disabled={savingProfile}>
-              {savingProfile ? "Salvando..." : "Salvar informações"}
-            </Button>
           </div>
-        </form>
-      </Card>
+        </div>
 
-      <Card>
-        <div className="space-y-5">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="text-base font-semibold text-graphite-900 dark:text-white">
-                Perfil do solo
-              </h2>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                variant="secondary"
-                disabled={!layersDirty || savingInlineLayers}
-                onClick={() => void persistLayerDrafts(true)}
-              >
-                {savingInlineLayers ? "Salvando..." : "Salvar alterações"}
-              </Button>
-              <Button
-                onClick={() => {
-                  setEditingLayer(null);
-                  setLayerError("");
-                  setLayerModalOpen(true);
-                }}
-              >
-                Adicionar camada
-              </Button>
-            </div>
+        {(profileError || layerError || profileMessage || layerMessage) && (
+          <div className="mt-4 space-y-2">
+            {profileError && (
+              <p className="text-sm text-red-600 dark:text-red-400">{profileError}</p>
+            )}
+            {layerError && !layerModalOpen && (
+              <p className="text-sm text-red-600 dark:text-red-400">{layerError}</p>
+            )}
+            {(profileMessage || layerMessage) && (
+              <p className="text-sm text-emerald-600 dark:text-emerald-400">
+                {profileMessage || layerMessage}
+              </p>
+            )}
+          </div>
+        )}
+      </section>
+
+      <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/[0.10] dark:bg-white/[0.025]">
+          <p className="text-xs font-medium uppercase tracking-[0.06em] text-graphite-400 dark:text-gray-400">
+            Profundidade total
+          </p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-brand-600 dark:text-brand-400">
+            {profileDepthCm == null ? "—" : `${Math.round(profileDepthCm)} cm`}
+          </p>
+          <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
+            {profileDepthCm == null ? "Perfil não informado" : `0–${Math.round(profileDepthCm)} cm`}
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/[0.10] dark:bg-white/[0.025]">
+          <p className="text-xs font-medium uppercase tracking-[0.06em] text-graphite-400 dark:text-gray-400">
+            DTA média do perfil
+          </p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-brand-600 dark:text-brand-400">
+            {dtaProfileAverage == null ? "—" : `${formatNumber(dtaProfileAverage, 3)} mm/cm`}
+          </p>
+          <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
+            Disponibilidade de água
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/[0.10] dark:bg-white/[0.025]">
+          <p className="text-xs font-medium uppercase tracking-[0.06em] text-graphite-400 dark:text-gray-400">
+            CAD total do perfil
+          </p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-brand-600 dark:text-brand-400">
+            {cadTotal == null ? "—" : `${formatNumber(cadTotal, 2)} mm`}
+          </p>
+          <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
+            Capacidade de água disponível
+          </p>
+        </div>
+
+        <div className="rounded-2xl border border-gray-200 bg-white p-5 dark:border-white/[0.10] dark:bg-white/[0.025]">
+          <p className="text-xs font-medium uppercase tracking-[0.06em] text-graphite-400 dark:text-gray-400">
+            Número de camadas
+          </p>
+          <p className="mt-3 text-3xl font-semibold tracking-tight text-brand-600 dark:text-brand-400">
+            {layers.length}
+          </p>
+          <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
+            Camadas cadastradas
+          </p>
+        </div>
+      </section>
+
+      <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white dark:border-white/[0.10] dark:bg-white/[0.02]">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-gray-200 px-6 py-5 dark:border-white/[0.08]">
+          <div>
+            <h2 className="text-xl font-semibold text-graphite-950 dark:text-white">
+              Perfil do solo
+            </h2>
+            <p className="mt-1 text-sm text-graphite-400 dark:text-gray-500">
+              Edite os valores das camadas do solo
+            </p>
           </div>
 
-          <div className="grid gap-3 md:grid-cols-4">
-            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                Profundidade
-              </p>
-              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
-                {profileDepthCm == null ? "—" : `${Math.round(profileDepthCm)} cm`}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                Camadas
-              </p>
-              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
-                {layers.length}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                DTA média
-              </p>
-              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
-                {dtaProfileAverage == null ? "—" : `${formatNumber(dtaProfileAverage, 3)} mm/cm`}
-              </p>
-            </div>
-            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                CAD do perfil
-              </p>
-              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
-                {cadTotal == null ? "—" : `${formatNumber(cadTotal, 2)} mm`}
-              </p>
-            </div>
-          </div>
+          <button
+            type="button"
+            onClick={() => {
+              setEditingLayer(null);
+              setLayerError("");
+              setLayerModalOpen(true);
+            }}
+            className="inline-flex h-11 items-center gap-2 rounded-xl border border-brand-600/50 px-4 text-sm font-semibold text-brand-600 transition hover:bg-brand-50 dark:text-brand-400 dark:hover:bg-brand-500/10"
+          >
+            <PlusIcon />
+            Adicionar camada
+          </button>
+        </div>
 
-          {layerError && !layerModalOpen && (
-            <p role="alert" className="text-sm text-red-600 dark:text-red-400">
-              {layerError}
-            </p>
-          )}
-          {layerMessage && (
-            <p className="text-sm text-green-700 dark:text-green-400">
-              {layerMessage}
-            </p>
-          )}
+        {layers.length === 0 ? (
+          <p className="py-10 text-center text-sm text-graphite-400 dark:text-gray-500">
+            Nenhuma camada foi fornecida para este pivô.
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <div className="min-w-[980px]">
+              <div className="grid grid-cols-[1.25fr_.9fr_.9fr_1.15fr_1fr_80px] items-center border-b border-gray-200 px-6 py-3 text-[11px] font-semibold uppercase tracking-[0.06em] text-graphite-400 dark:border-white/[0.08] dark:text-gray-500">
+                <div>Camada <span className="normal-case tracking-normal">(profundidade)</span></div>
+                <div className="text-center">CC (%) <span className="ml-1 inline-flex align-middle text-graphite-300 dark:text-gray-600"><InfoIcon /></span></div>
+                <div className="text-center">PMP (%) <span className="ml-1 inline-flex align-middle text-graphite-300 dark:text-gray-600"><InfoIcon /></span></div>
+                <div className="text-center">Densidade aparente (g/cm³) <span className="ml-1 inline-flex align-middle text-graphite-300 dark:text-gray-600"><InfoIcon /></span></div>
+                <div className="text-center">CAD da camada (mm) <span className="ml-1 inline-flex align-middle text-graphite-300 dark:text-gray-600"><InfoIcon /></span></div>
+                <div className="text-center">Ações</div>
+              </div>
 
-          {layers.length === 0 ? (
-            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-              Nenhuma camada foi fornecida para este pivô.
-            </p>
-          ) : (
-            <div className="space-y-3">
               {[...layers]
                 .sort((a, b) => a.layer_number - b.layer_number)
                 .map((layer) => {
@@ -999,97 +1131,93 @@ function SoilDetail({
                   return (
                     <div
                       key={layer.id}
-                      className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.02]"
+                      className="grid grid-cols-[1.25fr_.9fr_.9fr_1.15fr_1fr_80px] items-center border-b border-gray-100 px-6 py-4 last:border-b-0 dark:border-white/[0.06]"
                     >
-                      <div className="grid gap-4 xl:grid-cols-[170px_repeat(3,minmax(140px,1fr))_120px_70px] xl:items-end">
-                        <div>
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                            Camada {layer.layer_number}
-                          </p>
-                          <p className="mt-1 text-lg font-bold text-graphite-900 dark:text-white">
-                            {layerDepthLabel(layer, layers)}
-                          </p>
-                        </div>
+                      <div>
+                        <p className="text-base font-semibold text-graphite-900 dark:text-white">
+                          Camada {layer.layer_number}
+                        </p>
+                        <p className="mt-1 text-sm font-medium text-brand-600 dark:text-brand-400">
+                          {layerDepthLabel(layer, layers)}
+                        </p>
+                      </div>
 
-                        <div>
-                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                            CC (%)
-                          </label>
-                          <input
-                            aria-label={`Capacidade de Campo da camada ${layer.layer_number}`}
-                            type="number"
-                            step="0.001"
-                            value={draft.field_capacity_pct}
-                            onChange={(event) =>
-                              updateLayerDraft(layer.id, "field_capacity_pct", event.target.value)
-                            }
-                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-right text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-                          />
-                        </div>
+                      <div className="px-3">
+                        <input
+                          aria-label={`Capacidade de Campo da camada ${layer.layer_number}`}
+                          type="number"
+                          step="0.001"
+                          value={draft.field_capacity_pct}
+                          onChange={(event) =>
+                            updateLayerDraft(layer.id, "field_capacity_pct", event.target.value)
+                          }
+                          className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-center text-base font-medium text-graphite-900 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/10 dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-white dark:focus:bg-white/[0.05]"
+                        />
+                      </div>
 
-                        <div>
-                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                            PMP (%)
-                          </label>
-                          <input
-                            aria-label={`Ponto de Murchamento da camada ${layer.layer_number}`}
-                            type="number"
-                            step="0.001"
-                            value={draft.wilting_point_pct}
-                            onChange={(event) =>
-                              updateLayerDraft(layer.id, "wilting_point_pct", event.target.value)
-                            }
-                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-right text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-                          />
-                        </div>
+                      <div className="px-3">
+                        <input
+                          aria-label={`Ponto de Murchamento da camada ${layer.layer_number}`}
+                          type="number"
+                          step="0.001"
+                          value={draft.wilting_point_pct}
+                          onChange={(event) =>
+                            updateLayerDraft(layer.id, "wilting_point_pct", event.target.value)
+                          }
+                          className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-center text-base font-medium text-graphite-900 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/10 dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-white dark:focus:bg-white/[0.05]"
+                        />
+                      </div>
 
-                        <div>
-                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                            Densidade
-                          </label>
-                          <input
-                            aria-label={`Densidade aparente da camada ${layer.layer_number}`}
-                            type="number"
-                            min="0.01"
-                            step="0.001"
-                            value={draft.bulk_density_g_cm3}
-                            onChange={(event) =>
-                              updateLayerDraft(layer.id, "bulk_density_g_cm3", event.target.value)
-                            }
-                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-right text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-                          />
-                          <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">
-                            g/cm³
-                          </p>
-                        </div>
+                      <div className="px-3">
+                        <input
+                          aria-label={`Densidade aparente da camada ${layer.layer_number}`}
+                          type="number"
+                          min="0.01"
+                          step="0.001"
+                          value={draft.bulk_density_g_cm3}
+                          onChange={(event) =>
+                            updateLayerDraft(layer.id, "bulk_density_g_cm3", event.target.value)
+                          }
+                          className="h-12 w-full rounded-xl border border-gray-200 bg-gray-50 px-4 text-center text-base font-medium text-graphite-900 outline-none transition focus:border-brand-500 focus:bg-white focus:ring-2 focus:ring-brand-500/10 dark:border-white/[0.10] dark:bg-white/[0.03] dark:text-white dark:focus:bg-white/[0.05]"
+                        />
+                      </div>
 
-                        <div className="rounded-xl bg-brand-50 px-3 py-2.5 text-right dark:bg-brand-900/20">
-                          <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-300">
-                            CAD
-                          </p>
-                          <p className="mt-0.5 text-base font-bold text-brand-700 dark:text-brand-200">
+                      <div className="px-3">
+                        <div className="h-12 rounded-xl border border-gray-200 bg-gray-50 px-4 text-center dark:border-white/[0.10] dark:bg-transparent">
+                          <span className="inline-flex h-full items-center gap-2 text-lg font-medium text-graphite-900 dark:text-white">
                             {metrics.cad == null ? "—" : formatNumber(metrics.cad, 2)}
-                          </p>
-                          <p className="text-[10px] text-brand-500 dark:text-brand-400">mm</p>
+                            <span className="text-sm font-semibold text-brand-600 dark:text-brand-400">mm</span>
+                          </span>
                         </div>
+                      </div>
 
-                        <div className="flex xl:justify-end">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setDeleteTarget(layer)}
-                          >
-                            Excluir
-                          </Button>
-                        </div>
+                      <div className="flex justify-center">
+                        <button
+                          type="button"
+                          aria-label={`Excluir camada ${layer.layer_number}`}
+                          onClick={() => setDeleteTarget(layer)}
+                          className="inline-flex h-10 w-10 items-center justify-center rounded-lg text-red-500 transition hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-500/10"
+                        >
+                          <TrashIcon />
+                        </button>
                       </div>
                     </div>
                   );
                 })}
             </div>
-          )}
+          </div>
+        )}
+      </section>
+
+      <section className="flex gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm text-graphite-500 dark:border-white/[0.10] dark:bg-white/[0.02] dark:text-gray-400">
+        <span className="mt-0.5 shrink-0 text-graphite-400 dark:text-gray-500">
+          <InfoIcon />
+        </span>
+        <div className="space-y-1">
+          <p>DTA média do perfil é calculada com base no CAD total e na profundidade total do solo.</p>
+          <p>CAD da camada = DTA × espessura da camada.</p>
         </div>
-      </Card>
+      </section>
 
       <Modal
         open={layerModalOpen}
@@ -1161,12 +1289,6 @@ function SoilDetail({
               defaultValue={editingLayer?.bulk_density_g_cm3 ?? ""}
             />
           </div>
-
-          <p className="text-xs text-graphite-400 dark:text-gray-500">
-            DTA e CAD não são digitados. O sistema calcula somente com os dados
-            informados. Se faltar unidade, CC, PMP, densidade (quando necessária)
-            ou espessura, o resultado ficará como “Não calculado”.
-          </p>
 
           {layerError && (
             <p role="alert" className="text-sm text-red-600 dark:text-red-400">
