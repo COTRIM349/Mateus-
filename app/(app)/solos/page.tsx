@@ -36,6 +36,7 @@ interface PivotSoilLayer {
   id: string;
   pivot_id: string;
   layer_number: number;
+  soil_class: string | null;
   thickness_m: number | null;
   field_capacity_pct: number | null;
   wilting_point_pct: number | null;
@@ -46,6 +47,7 @@ interface PivotSoilLayer {
 }
 
 interface LayerDraft {
+  soil_class: string;
   thickness_m: string;
   field_capacity_pct: string;
   wilting_point_pct: string;
@@ -123,6 +125,7 @@ function draftNumber(value: string) {
 
 function makeLayerDraft(layer: PivotSoilLayer): LayerDraft {
   return {
+    soil_class: normalizeSoilClass(layer.soil_class),
     thickness_m: layer.thickness_m == null ? "" : String(layer.thickness_m),
     field_capacity_pct:
       layer.field_capacity_pct == null ? "" : String(layer.field_capacity_pct),
@@ -226,7 +229,7 @@ export default function SolosPage() {
       const layersResult = await supabase
         .from("pivot_soil_layers_calculated")
         .select(
-          "id,pivot_id,layer_number,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
+          "id,pivot_id,layer_number,soil_class,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
         )
         .in("pivot_id", pivotIds)
         .order("layer_number");
@@ -490,7 +493,7 @@ function SoilDetail({
     const result = await supabase
       .from("pivot_soil_layers_calculated")
       .select(
-        "id,pivot_id,layer_number,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
+        "id,pivot_id,layer_number,soil_class,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
       )
       .eq("pivot_id", pivot.id)
       .order("layer_number");
@@ -549,6 +552,7 @@ function SoilDetail({
       ...current,
       [layerId]: {
         ...(current[layerId] ?? {
+          soil_class: "",
           thickness_m: "",
           field_capacity_pct: "",
           wilting_point_pct: "",
@@ -601,6 +605,7 @@ function SoilDetail({
         id: layer.id,
         pivot_id: layer.pivot_id,
         layer_number: layer.layer_number,
+        soil_class: draft.soil_class.trim() || null,
         thickness_m: thickness,
         field_capacity_pct: fieldCapacity,
         wilting_point_pct: wiltingPoint,
@@ -707,6 +712,26 @@ function SoilDetail({
       header: "Camada",
       render: (row) => (
         <span className="font-semibold">Camada {row.layer_number}</span>
+      ),
+    },
+    {
+      header: "Tipo de solo",
+      render: (row) => (
+        <select
+          aria-label={`Tipo de solo da camada ${row.layer_number}`}
+          value={layerDrafts[row.id]?.soil_class ?? ""}
+          onChange={(event) =>
+            updateLayerDraft(row.id, "soil_class", event.target.value)
+          }
+          className="min-w-[180px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+        >
+          <option value="">Não informado</option>
+          {SOIL_CLASS_OPTIONS.map((soilClassOption) => (
+            <option key={soilClassOption} value={soilClassOption}>
+              {soilClassOption}
+            </option>
+          ))}
+        </select>
       ),
     },
     {
@@ -821,6 +846,7 @@ function SoilDetail({
 
     const fd = new FormData(event.currentTarget);
     const layerNumber = Number(fd.get("layer_number"));
+    const soilClassValue = String(fd.get("soil_class") ?? "").trim();
     const thickness = nullableNumber(fd.get("thickness_m"));
     const fieldCapacity = nullableNumber(fd.get("field_capacity_pct"));
     const wiltingPoint = nullableNumber(fd.get("wilting_point_pct"));
@@ -853,6 +879,7 @@ function SoilDetail({
 
     const payload = {
       layer_number: layerNumber,
+      soil_class: soilClassValue || null,
       thickness_m: thickness,
       field_capacity_pct: fieldCapacity,
       wilting_point_pct: wiltingPoint,
@@ -1103,6 +1130,19 @@ function SoilDetail({
                   ? Math.max(...layers.map((layer) => layer.layer_number)) + 1
                   : 1)
               }
+            />
+            <Select
+              id="soil_class"
+              name="soil_class"
+              label="Tipo de solo"
+              defaultValue={normalizeSoilClass(editingLayer?.soil_class)}
+              options={[
+                { value: "", label: "Não informado" },
+                ...SOIL_CLASS_OPTIONS.map((soilClassOption) => ({
+                  value: soilClassOption,
+                  label: soilClassOption,
+                })),
+              ]}
             />
             <Input
               id="thickness_m"
