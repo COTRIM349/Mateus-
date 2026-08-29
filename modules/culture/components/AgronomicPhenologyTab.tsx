@@ -48,6 +48,9 @@ interface PhenologyTarget {
   dae_calibrated: number | null;
   gdd_calibrated: number | null;
   source_id: string | null;
+  expected_source_id: string | null;
+  calibrated_source_id: string | null;
+  calibration_confidence: string | null;
   confidence: string;
   validation_status: string;
   notes: string | null;
@@ -206,7 +209,7 @@ export function AgronomicPhenologyTab({
       header: "Origem",
       render: (stage) => {
         const target = targetsByStage[stage.id];
-        const id = target?.source_id ?? stage.source_id;
+        const id = target?.expected_source_id ?? target?.source_id ?? stage.source_id;
         return (
           <div>
             <p className="text-xs">{id ? sourceLabel[id] ?? "Fonte arquivada" : "Sem fonte específica"}</p>
@@ -250,6 +253,7 @@ export function AgronomicPhenologyTab({
       dae_expected: numberOrNull(fd.get("dae_expected")),
       gdd_expected: numberOrNull(fd.get("gdd_expected")),
       source_id: sourceId,
+      expected_source_id: sourceId,
       confidence: String(fd.get("confidence") ?? "nao_validada"),
       validation_status: String(fd.get("validation_status") ?? "draft"),
       notes: String(fd.get("notes") ?? "").trim() || null,
@@ -370,7 +374,7 @@ export function AgronomicPhenologyTab({
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
-              <Select id="source_id" name="source_id" label="Fonte" options={sourceOptions} required defaultValue={target?.source_id ?? ""} />
+              <Select id="source_id" name="source_id" label="Fonte" options={sourceOptions} required defaultValue={target?.expected_source_id ?? target?.source_id ?? ""} />
               <Select id="confidence" name="confidence" label="Confiabilidade" options={CONFIDENCE_OPTIONS} required defaultValue={target?.confidence ?? "nao_validada"} />
               <Select id="validation_status" name="validation_status" label="Validação" options={VALIDATION_OPTIONS} required defaultValue={target?.validation_status ?? "draft"} />
             </div>
