@@ -148,11 +148,11 @@ export function getDepletionFactor(
 
 export function adjustDepletionFactor(
   baseFactor: number,
-  et0: number
+  etcPotential: number
 ): number {
-  // FAO-56 adjustment: p = p_table + 0.04 * (5 - ETc)
-  // Simplification using ET0 as proxy
-  const adjusted = baseFactor + 0.04 * (5 - et0);
+  // FAO-56: p = p_table + 0.04 * (5 - ETc).
+  // ETc potencial deve ser fornecida pelo motor; ETo não é usada como proxy.
+  const adjusted = baseFactor + 0.04 * (5 - etcPotential);
   return roundTo(clamp(adjusted, 0.1, 0.8), 3);
 }
 
