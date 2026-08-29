@@ -252,7 +252,7 @@ export async function GET(request: Request) {
   ] = await Promise.all([
     supabase
       .from("weather_readings")
-      .select("date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, et0_source, imported_at")
+      .select("date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, et0_source, et0_calculated, imported_at")
       .eq("station_id", station.id)
       .gte("date", historyStart)
       .lte("date", today)
@@ -260,7 +260,7 @@ export async function GET(request: Request) {
       .order("imported_at", { ascending: false }),
     supabase
       .from("weather_forecasts")
-      .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source")
+      .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source, et0_calculated")
       .eq("station_id", station.id)
       .gte("target_date", today)
       .order("issued_at", { ascending: false })
@@ -268,7 +268,7 @@ export async function GET(request: Request) {
     meteoblueStation
       ? supabase
           .from("weather_forecasts")
-          .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source")
+          .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source, et0_calculated")
           .eq("station_id", meteoblueStation.id)
           .eq("provider", "meteoblue")
           .gte("target_date", today)
@@ -373,7 +373,7 @@ export async function GET(request: Request) {
   const etoHargreavesSamani = buildEtoSummary(
     readings.map((reading) => ({
       ...reading,
-      et0_source: hargreavesValue(
+      et0_calculated: hargreavesValue(
         reading.date,
         reading.temp_min,
         reading.temp_max,
@@ -463,7 +463,7 @@ export async function GET(request: Request) {
   const buildCalculatedSummary = (method: keyof NonNullable<ReturnType<typeof calculateFullMethods>>) =>
     buildEtoSummary(readings.map((reading) => ({
       ...reading,
-      et0_source: readingMethodValues.get(reading)?.[method] ?? null,
+      et0_calculated: readingMethodValues.get(reading)?.[method] ?? null,
     })), today);
   const etoAsceEwri = buildCalculatedSummary("asceEwri");
   const etoPriestleyTaylor = buildCalculatedSummary("priestleyTaylor");
@@ -735,7 +735,7 @@ export async function GET(request: Request) {
       quality: eto.todayMm === null && etoHargreavesSamani.todayMm === null
         ? "missing"
         : "model_unvalidated",
-      sourceLabel: "Penman-Monteith recebido do Open-Meteo",
+      sourceLabel: "Penman-Monteith FAO-56 calculado internamente pela Cotrim",
       hargreavesSamani: {
         ...etoHargreavesSamani,
         method: "Hargreaves-Samani 1985",
@@ -827,11 +827,12 @@ export async function GET(request: Request) {
     dailyForecast: forecasts.map((forecast) => {
       const meteoblueForecast = meteoblueForecastByDate.get(forecast.target_date) ?? null;
       const merged = mergeDailyForecastFields(forecast, meteoblueForecast);
-      const meteoblueDeltaMm = forecast.et0_source != null && meteoblueForecast?.et0_source != null
-        ? meteoblueForecast.et0_source - forecast.et0_source
+      const canonicalEtoMm = forecast.et0_calculated ?? null;
+      const meteoblueDeltaMm = canonicalEtoMm != null && meteoblueForecast?.et0_source != null
+        ? meteoblueForecast.et0_source - canonicalEtoMm
         : null;
-      const meteoblueDeltaPct = meteoblueDeltaMm != null && forecast.et0_source != null && forecast.et0_source !== 0
-        ? (meteoblueDeltaMm / forecast.et0_source) * 100
+      const meteoblueDeltaPct = meteoblueDeltaMm != null && canonicalEtoMm != null && canonicalEtoMm !== 0
+        ? (meteoblueDeltaMm / canonicalEtoMm) * 100
         : null;
       return {
       id: forecast.id,
@@ -849,14 +850,10 @@ export async function GET(request: Request) {
       precipitationMeteoblueMm: meteoblueForecast?.precipitation ?? null,
       precipitationProbabilityMeteobluePct: meteoblueForecast?.precipitation_probability ?? null,
       solarRadiationMeteoblueMjM2Day: meteoblueForecast?.solar_radiation ?? null,
-      etoMm: forecast.et0_source,
+      etoMm: canonicalEtoMm,
       etoMeteoblueMm: meteoblueForecast?.et0_source ?? null,
-      etoOperationalMm: meteoblueForecast?.et0_source ?? forecast.et0_source ?? null,
-      etoOperationalSource: meteoblueForecast?.et0_source != null
-        ? "meteoblue_fao"
-        : forecast.et0_source != null
-          ? "open_meteo_pm_fao56"
-          : null,
+      etoOperationalMm: canonicalEtoMm,
+      etoOperationalSource: canonicalEtoMm != null ? "cotrim_fao56" : null,
       etoMeteoblueIssuedAt: meteoblueForecast?.issued_at ?? null,
       etoMeteoblueDeltaMm: meteoblueDeltaMm,
       etoMeteoblueDeltaPct: meteoblueDeltaPct,
