@@ -14,7 +14,7 @@ import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
 import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { parcelManagedAreaHa } from "@/modules/assignment/services/parcel-geometry";
-import { operationalEtoMm } from "@/modules/weather/services/operational-eto";
+import { assembleWeatherByDate } from "@/modules/weather/services/operational-weather";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -143,7 +143,7 @@ export function useFarmHydricState(): FarmHydricState {
       phasesByCulture.get(cid)!.push(p);
     }
 
-    // clima da fazenda — somente dias com seleção aprovada para uso operacional
+    // clima da fazenda — seleção diária + fallback automático para qualquer ETo válida
     const stationIds = (stationsRes.data ?? []).map((s: { id: string }) => s.id);
     const weatherByDate: Record<string, EngineWeatherDay> = {};
 
@@ -151,9 +151,8 @@ export function useFarmHydricState(): FarmHydricState {
       const [selectionRes, readingsRes] = await Promise.all([
         supabase
           .from("weather_daily_selection")
-          .select("date, selected_reading_id, operational_approved")
+          .select("date, selected_reading_id")
           .eq("farm_id", activeFarmId)
-          .eq("operational_approved", true)
           .gte("date", dateStart)
           .lte("date", dateEnd),
         supabase
@@ -165,27 +164,19 @@ export function useFarmHydricState(): FarmHydricState {
           .order("date"),
       ]);
 
-      const readingsById = new Map<string, { date: string; et0: number; precipitation: number }>();
-      for (const r of readingsRes.data ?? []) {
-        const et0 = operationalEtoMm({
-          et0_calculated: r.et0_calculated as number | null,
-          et0_source: r.et0_source as number | null,
-        });
-        if (et0 == null) continue;
-        readingsById.set(r.id as string, {
-          date: r.date as string,
-          et0,
-          precipitation: (r.precipitation as number) ?? 0,
-        });
-      }
-
-      for (const s of selectionRes.data ?? []) {
-        if (!s.selected_reading_id || s.operational_approved !== true) continue;
-        const r = readingsById.get(s.selected_reading_id as string);
-        if (r) {
-          weatherByDate[s.date as string] = { et0: r.et0, precipitation: r.precipitation };
-        }
-      }
+      Object.assign(
+        weatherByDate,
+        assembleWeatherByDate(
+          (readingsRes.data ?? []) as Array<{
+            id: string;
+            date: string;
+            et0_calculated: number | null;
+            et0_source: number | null;
+            precipitation: number | null;
+          }>,
+          (selectionRes.data ?? []) as Array<{ date: string; selected_reading_id: string | null }>,
+        ),
+      );
     }
 
     // irrigação aplicada por pivô/data

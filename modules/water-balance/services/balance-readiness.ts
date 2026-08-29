@@ -22,6 +22,8 @@ export interface BalanceReadinessInput {
   totalDaysInRange: number;
   approvedClimateDays: number;
   missingClimateSample: string[];
+  /** Dias >= hoje sem ETo fechada — aviso, não bloqueia. */
+  openClimateMissing?: string[];
 }
 
 export interface BalanceReadinessResult {
@@ -90,16 +92,23 @@ export function assessBalanceReadiness(input: BalanceReadinessInput): BalanceRea
         },
   );
 
-  const climateOk = input.totalDaysInRange > 0 && input.approvedClimateDays >= input.totalDaysInRange;
-  const climatePartial =
-    input.approvedClimateDays > 0 && input.approvedClimateDays < input.totalDaysInRange;
+  const openMissing = input.openClimateMissing ?? [];
+  const historicalMissing = input.totalDaysInRange - input.approvedClimateDays - openMissing.length;
+  const climateOk =
+    input.totalDaysInRange > 0 &&
+    historicalMissing <= 0 &&
+    (input.approvedClimateDays > 0 || openMissing.length < input.totalDaysInRange);
+  const climatePartial = historicalMissing > 0 && input.approvedClimateDays > 0;
 
   if (climateOk) {
     items.push({
       id: "climate",
       label: "Clima operacional",
-      level: "ok",
-      detail: `${input.approvedClimateDays}/${input.totalDaysInRange} dias com ETo operacional (automático).`,
+      level: openMissing.length > 0 ? "warn" : "ok",
+      detail:
+        openMissing.length > 0
+          ? `${input.approvedClimateDays} dia(s) com ETo. ${openMissing.join(", ")} ainda em atualização automática.`
+          : `${input.approvedClimateDays}/${input.totalDaysInRange} dias com ETo operacional (automático).`,
       href: "/clima",
     });
   } else if (climatePartial) {
@@ -107,7 +116,7 @@ export function assessBalanceReadiness(input: BalanceReadinessInput): BalanceRea
       id: "climate",
       label: "Clima operacional",
       level: "error",
-      detail: `Faltam ${input.totalDaysInRange - input.approvedClimateDays} dia(s) sem ETo — aguarde sincronização (ex.: ${input.missingClimateSample.join(", ")}).`,
+      detail: `Faltam ${historicalMissing} dia(s) encerrado(s) sem ETo (ex.: ${input.missingClimateSample.join(", ")}).`,
       href: "/clima",
     });
   } else {
@@ -115,7 +124,7 @@ export function assessBalanceReadiness(input: BalanceReadinessInput): BalanceRea
       id: "climate",
       label: "Clima operacional",
       level: "error",
-      detail: "Nenhum dia com ETo operacional no período — sincronize o clima automaticamente em Clima.",
+      detail: "Nenhum dia com ETo operacional no período — o clima sincroniza automaticamente em Clima.",
       href: "/clima",
     });
   }

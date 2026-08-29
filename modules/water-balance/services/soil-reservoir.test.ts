@@ -58,6 +58,23 @@ describe("balance-readiness", () => {
     expect(r.blockingCount).toBeGreaterThan(0);
   });
 
+  it("avisa o dia corrente sem bloquear", () => {
+    const r = assessBalanceReadiness({
+      hasAssignment: true,
+      hasCulture: true,
+      hasSoil: true,
+      phaseCount: 4,
+      soilUsable: true,
+      layerCount: 3,
+      totalDaysInRange: 6,
+      approvedClimateDays: 5,
+      missingClimateSample: ["2026-08-29"],
+      openClimateMissing: ["2026-08-29"],
+    });
+    expect(r.ready).toBe(true);
+    expect(r.items.find((i) => i.id === "climate")?.level).toBe("warn");
+  });
+
   it("libera quando todos os requisitos ok", () => {
     const r = assessBalanceReadiness({
       hasAssignment: true,

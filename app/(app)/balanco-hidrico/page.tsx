@@ -30,7 +30,11 @@ import {
   type BalanceReadinessResult,
   type SoilReservoirSummary,
 } from "@/modules/water-balance/services";
-import { operationalEtoMm } from "@/modules/weather/services/operational-eto";
+import {
+  assembleWeatherByDate,
+  classifyMissingClimateDays,
+  effectiveClimateEndDate,
+} from "@/modules/weather/services/operational-weather";
 import { identifyPhase, type CulturePhase } from "@/modules/culture/services";
 import {
   computeRootDepth,
@@ -183,9 +187,11 @@ export default function BalancoHidricoPage() {
   const [dateEnd, setDateEnd] = useState("");
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState("");
+  const [climateNotice, setClimateNotice] = useState("");
   const [climateCheckLoading, setClimateCheckLoading] = useState(false);
   const [approvedClimateDays, setApprovedClimateDays] = useState(0);
   const [missingClimateSample, setMissingClimateSample] = useState<string[]>([]);
+  const [openClimateMissing, setOpenClimateMissing] = useState<string[]>([]);
   const climateAutoSyncRef = useRef<string | null>(null);
 
   // Lançamento tab
@@ -288,6 +294,7 @@ export default function BalancoHidricoPage() {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
     setCalculating(true);
     setError("");
+    setClimateNotice("");
 
     try {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
@@ -302,9 +309,9 @@ export default function BalancoHidricoPage() {
 
       const stationIds = (stations ?? []).map((s: { id: string }) => s.id);
 
-      let weatherReadings: WeatherReading[] = [];
-      const selectedIdByDate = new Map<string, string>();
-      if (stationIds.length > 0) {
+      // 4. Clima automático: seleção diária + fallback para qualquer ETo válida.
+      const loadClimate = async () => {
+        if (stationIds.length === 0) return assembleWeatherByDate([], []);
         const [wrRes, dsRes] = await Promise.all([
           supabase
             .from("weather_readings")
@@ -315,17 +322,48 @@ export default function BalancoHidricoPage() {
             .order("date"),
           supabase
             .from("weather_daily_selection")
-            .select("date, selected_reading_id, operational_approved")
+            .select("date, selected_reading_id")
             .eq("farm_id", activeFarmId!)
             .gte("date", dateStart)
             .lte("date", dateEnd),
         ]);
-        weatherReadings = (wrRes.data ?? []) as WeatherReading[];
-        for (const s of dsRes.data ?? []) {
-          if (s.selected_reading_id && s.operational_approved === true) {
-            selectedIdByDate.set(s.date as string, s.selected_reading_id as string);
-          }
-        }
+        return assembleWeatherByDate(
+          (wrRes.data ?? []) as WeatherReading[],
+          (dsRes.data ?? []) as Array<{ date: string; selected_reading_id: string | null }>,
+        );
+      };
+
+      let weatherByDate = await loadClimate();
+      let missingApprovedDates = datesInRange(dateStart, dateEnd).filter((date) => !weatherByDate[date]);
+      if (missingApprovedDates.length > 0 && activeFarmId) {
+        const pastDays = Math.max(1, Math.min(datesInRange(dateStart, dateEnd).length, 92));
+        await fetch("/api/climate/sync-farm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            farmId: activeFarmId,
+            pastDays,
+            forecastDays: 7,
+            ensureVirtual: true,
+          }),
+        });
+        weatherByDate = await loadClimate();
+        missingApprovedDates = datesInRange(dateStart, dateEnd).filter((date) => !weatherByDate[date]);
+      }
+
+      const { historical, open } = classifyMissingClimateDays(missingApprovedDates);
+      if (historical.length > 0) {
+        const sample = historical.slice(0, 3).join(", ");
+        throw new Error(
+          `Balanço bloqueado: ${historical.length} dia(s) encerrado(s) sem ETo (${sample}${historical.length > 3 ? ", …" : ""}). O clima sincroniza automaticamente — tente novamente em instantes.`,
+        );
+      }
+
+      const seriesEnd = effectiveClimateEndDate(dateEnd, weatherByDate);
+      if (open.length > 0 && seriesEnd < dateEnd) {
+        setClimateNotice(
+          `ETo de ${open.join(", ")} ainda está atualizando. Balanço calculado até ${seriesEnd}.`,
+        );
       }
 
       // 2. Get irrigation events for the pivot
@@ -357,30 +395,10 @@ export default function BalancoHidricoPage() {
         }
       }
 
-      // 4. Build weather lookup by date
-      //    Somente leituras explicitamente aprovadas para uso operacional.
-      //    Não existe fallback automático para dados de modelo.
-      const weatherByDate: Record<string, { et0: number; precip: number }> = {};
-      const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
-      selectedIdByDate.forEach((readingId, date) => {
-        const r = readingsById.get(readingId);
-        const et0 = r ? operationalEtoMm(r) : null;
-        if (et0 != null) weatherByDate[date] = { et0, precip: r!.precipitation };
-      });
-
-      const missingApprovedDates = datesInRange(dateStart, dateEnd)
-        .filter((date) => !weatherByDate[date]);
-      if (missingApprovedDates.length > 0) {
-        const sample = missingApprovedDates.slice(0, 3).join(", ");
-        throw new Error(
-          `Balanço bloqueado: ${missingApprovedDates.length} dia(s) sem ETo operacional (${sample}${missingApprovedDates.length > 3 ? ", …" : ""}). Aguarde a sincronização automática do clima.`,
-        );
-      }
-
       // 5. Motor central do balanço hídrico (fonte única de cálculo)
       const engineWeatherByDate: Record<string, { et0: number; precipitation: number }> = {};
       for (const [d, w] of Object.entries(weatherByDate)) {
-        engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precip };
+        engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precipitation };
       }
 
       const series = computePivotBalanceSeries({
@@ -415,7 +433,7 @@ export default function BalancoHidricoPage() {
         weatherByDate: engineWeatherByDate,
         irrigationByDate,
         dateStart,
-        dateEnd,
+        dateEnd: seriesEnd,
       });
 
       // adapta a saída do motor ao formato de exibição da tela
@@ -530,6 +548,7 @@ export default function BalancoHidricoPage() {
     if (!activeFarmId || !dateStart || !dateEnd) {
       setApprovedClimateDays(0);
       setMissingClimateSample([]);
+      setOpenClimateMissing([]);
       return;
     }
     let cancelled = false;
@@ -546,28 +565,36 @@ export default function BalancoHidricoPage() {
         if (!cancelled) {
           setApprovedClimateDays(0);
           setMissingClimateSample(range.slice(0, 3));
+          setOpenClimateMissing(classifyMissingClimateDays(range).open);
           setClimateCheckLoading(false);
         }
         return;
       }
 
-      const countApproved = async () => {
-        const { data: selections } = await supabase
-          .from("weather_daily_selection")
-          .select("date, selected_reading_id, operational_approved")
-          .eq("farm_id", activeFarmId)
-          .gte("date", dateStart)
-          .lte("date", dateEnd);
-        const approved = new Set<string>();
-        for (const row of selections ?? []) {
-          if (row.operational_approved === true && row.selected_reading_id) {
-            approved.add(row.date as string);
-          }
-        }
-        return { approved, missing: range.filter((d) => !approved.has(d)) };
+      const countAvailable = async () => {
+        const [wrRes, dsRes] = await Promise.all([
+          supabase
+            .from("weather_readings")
+            .select("id, date, et0_source, et0_calculated, precipitation")
+            .in("station_id", stationIds)
+            .gte("date", dateStart)
+            .lte("date", dateEnd),
+          supabase
+            .from("weather_daily_selection")
+            .select("date, selected_reading_id")
+            .eq("farm_id", activeFarmId)
+            .gte("date", dateStart)
+            .lte("date", dateEnd),
+        ]);
+        const weather = assembleWeatherByDate(
+          (wrRes.data ?? []) as WeatherReading[],
+          (dsRes.data ?? []) as Array<{ date: string; selected_reading_id: string | null }>,
+        );
+        const missing = range.filter((d) => !weather[d]);
+        return { available: range.length - missing.length, missing };
       };
 
-      let { approved, missing } = await countApproved();
+      let { available, missing } = await countAvailable();
 
       const syncKey = `${activeFarmId}:${dateStart}:${dateEnd}`;
       if (missing.length > 0 && climateAutoSyncRef.current !== syncKey) {
@@ -584,8 +611,8 @@ export default function BalancoHidricoPage() {
               ensureVirtual: true,
             }),
           });
-          const recount = await countApproved();
-          approved = recount.approved;
+          const recount = await countAvailable();
+          available = recount.available;
           missing = recount.missing;
         } catch {
           // mantém contagem anterior se sync falhar
@@ -593,8 +620,10 @@ export default function BalancoHidricoPage() {
       }
 
       if (!cancelled) {
-        setApprovedClimateDays(approved.size);
-        setMissingClimateSample(missing.slice(0, 3));
+        const classified = classifyMissingClimateDays(missing);
+        setApprovedClimateDays(available);
+        setMissingClimateSample(classified.historical.slice(0, 3));
+        setOpenClimateMissing(classified.open);
         setClimateCheckLoading(false);
       }
     })();
@@ -623,6 +652,7 @@ export default function BalancoHidricoPage() {
       totalDaysInRange,
       approvedClimateDays,
       missingClimateSample,
+      openClimateMissing,
     });
   }, [
     selectedPivotId,
@@ -634,6 +664,7 @@ export default function BalancoHidricoPage() {
     totalDaysInRange,
     approvedClimateDays,
     missingClimateSample,
+    openClimateMissing,
   ]);
 
   const soilReservoirSummary = useMemo((): SoilReservoirSummary | null => {
@@ -946,6 +977,11 @@ export default function BalancoHidricoPage() {
           </p>
         )}
         {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
+        {climateNotice && !error && (
+          <p role="status" className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-400">
+            {climateNotice}
+          </p>
+        )}
       </Card>
 
       {selectedPivotId && (

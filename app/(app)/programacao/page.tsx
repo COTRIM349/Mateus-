@@ -349,15 +349,18 @@ export default function ProgramacaoPage() {
 
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const { data: climateApproval } = await supabase
+      const { data: climateToday } = await supabase
         .from("weather_daily_selection")
-        .select("id")
+        .select("id, selected_reading_id")
         .eq("farm_id", activeFarmId)
         .eq("date", today)
-        .eq("operational_approved", true)
         .maybeSingle();
-      if (!climateApproval) {
-        throw new Error("Programação bloqueada: os dados climáticos de hoje ainda não foram sincronizados para uso operacional.");
+      if (!climateToday?.selected_reading_id) {
+        await fetch("/api/climate/sync-farm", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ farmId: activeFarmId, pastDays: 7, forecastDays: 7, ensureVirtual: true }),
+        });
       }
       const currentHour = new Date().getHours();
       const constraints = await loadConstraints();
