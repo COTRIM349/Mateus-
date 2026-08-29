@@ -108,6 +108,22 @@ describe("motor hídrico operacional", () => {
     expect(stressed[0].etc).toBeLessThan(stressed[0].etcPotential);
   });
 
+  it("Ks FAO-56 em mm: (CAD − Dr) / (CAD − AFD) reduz a ETc ajustada", () => {
+    const day = computePivotBalanceSeries(sampleInput({
+      initialStorageMm: 20,
+      initialCadMm: 54,
+    }))[0];
+    expect(day.adt).toBe(54);
+    expect(day.afd).toBe(27);
+    expect(day.drStartMm).toBe(34);
+    expect(day.ks).toBeCloseTo((54 - 34) / (54 - 27), 3);
+    expect(day.ks).toBeCloseTo(0.741, 3);
+    expect(day.etcPotential).toBe(5);
+    expect(day.etc).toBeCloseTo(5 * day.ks, 2);
+    expect(day.ksFormula).toContain("CAD − Dr");
+    expect(day.etcFormula).toContain("ETc_ajustada = Ks × Kc × ETo");
+  });
+
   it("KL da parcela reduz ETc potencial", () => {
     const full = computePivotBalanceSeries(sampleInput())[0];
     const assignment = { ...sampleInput().assignment, kl_override: 0.6 };

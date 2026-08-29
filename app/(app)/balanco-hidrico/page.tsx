@@ -21,6 +21,9 @@ import {
   WATER_STATUS_CONFIG,
   ARM_FORMULA,
   PE_METHOD,
+  ETC_FORMULA,
+  KS_FAO56_FORMULA,
+  interpretFao56Ks,
   moisturePctCcForDisplay,
   safetyPctCcForDisplay,
   type DailyBalanceRow,
@@ -555,6 +558,8 @@ export default function BalancoHidricoPage() {
         waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
         dae: d.dae,
         ks: d.ks,
+        ksFormula: d.ksFormula,
+        drStartMm: d.drStartMm,
         kl: d.kl,
         kcAdjusted: d.kcAdjusted,
         etcPotential: d.etcPotential,
@@ -1089,7 +1094,7 @@ function BalanceTab({
     { header: "Data", render: (r) => fmtDia(r.date) },
     { header: "Fase", render: (r) => <span className="text-xs">{r.phase}</span> },
     { header: "Kc", render: (r) => r.kc.toFixed(2) },
-    { header: "Ks", render: (r) => (r.ks ?? 1).toFixed(2) },
+    { header: "Ks", render: (r) => <span title={r.ksFormula}>{(r.ks ?? 1).toFixed(2)}</span> },
     { header: "KL", render: (r) => (r.kl ?? 1).toFixed(2) },
     { header: "ETo", render: (r) => r.et0.toFixed(1) },
     { header: "ETc pot.", render: (r) => (r.etcPotential ?? r.etc).toFixed(1) },
@@ -1204,6 +1209,24 @@ function BalanceTab({
                 ? `O ARM está dentro da faixa segura. Mantida a demanda atual e sem chuva/irrigação, a AFD seria atingida em aproximadamente ${urgency.daysToAfd.toFixed(1)} dia(s).`
                 : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
           </p>
+          <div className="mt-3 rounded-xl border border-brand-100 bg-brand-50/60 p-3 dark:border-brand-500/20 dark:bg-brand-900/15">
+            <p className="text-[9.5px] font-semibold uppercase tracking-wide text-brand-700 dark:text-brand-300">Ks — estresse hídrico FAO-56</p>
+            <p className="mt-1 text-[22px] font-extrabold tabular-nums text-graphite-900 dark:text-white">
+              {(last?.ks ?? 1).toFixed(2)}
+            </p>
+            <p className="mt-1 text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">
+              {last?.ksFormula ?? KS_FAO56_FORMULA}
+            </p>
+            <p className="mt-1.5 text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">
+              {interpretFao56Ks(last?.ks)}
+            </p>
+            <p className="mt-1.5 text-[11px] tabular-nums text-graphite-400 dark:text-gray-500">
+              Dr {(last?.drStartMm ?? last?.deficit ?? 0).toFixed(1)} mm · CAD {cad.toFixed(1)} mm · AFD {afd.toFixed(1)} mm
+            </p>
+            <p className="mt-1 text-[11px] tabular-nums text-graphite-400 dark:text-gray-500" title={last?.etcFormula}>
+              {ETC_FORMULA}: ETc {(last?.etc ?? 0).toFixed(1)} mm · ETc pot. {(last?.etcPotential ?? last?.etc ?? 0).toFixed(1)} mm
+            </p>
+          </div>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {[
               { l: "ARM atual", v: `${arm.toFixed(1)} mm` },
@@ -1232,6 +1255,7 @@ function BalanceTab({
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
             if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
+            if ((last?.ks ?? 1) < 1) items.push({ sev: "md", title: "Ks < 1 — transpiração limitada pela água do solo", desc: interpretFao56Ks(last?.ks) });
             if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `Restam ${urgency.remainingToAfdMm.toFixed(1)} mm até a AFD; na demanda atual, cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).` });
             if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
             if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
@@ -1391,8 +1415,8 @@ function BalanceTab({
         <p className="w-full text-[10px] font-bold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Rastreabilidade</p>
         <span>Método ETo <strong className="font-semibold text-graphite-800 dark:text-white">FAO Penman-Monteith</strong></span>
         <span>Origem do Kc <strong className="font-semibold text-graphite-800 dark:text-white">Interpolação linear na fase</strong></span>
-        <span>ETc <strong className="font-semibold text-graphite-800 dark:text-white">ETo × Kc × KL × Ks</strong></span>
-        <span>Ks <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56 (Dr vs AFD)</strong></span>
+        <span>ETc <strong className="font-semibold text-graphite-800 dark:text-white">{ETC_FORMULA}</strong></span>
+        <span>Ks <strong className="font-semibold text-graphite-800 dark:text-white">{KS_FAO56_FORMULA}</strong></span>
         <span>Ky <strong className="font-semibold text-graphite-800 dark:text-white">risco produtivo, não lâmina</strong></span>
         <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">{PE_METHOD}</strong></span>
         <span>Balanço <strong className="font-semibold text-graphite-800 dark:text-white">{ARM_FORMULA}</strong></span>

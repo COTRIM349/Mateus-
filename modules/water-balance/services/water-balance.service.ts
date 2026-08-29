@@ -65,6 +65,8 @@ export interface DailyBalanceRow extends WaterBalanceResult {
   ky?: number | null;
   yieldRisk?: number | null;
   etcFormula?: string;
+  ksFormula?: string;
+  drStartMm?: number;
   effectiveIrrigation?: number;
   fieldCapacity?: number;
   wiltingPoint?: number;

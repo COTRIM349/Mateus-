@@ -11,9 +11,9 @@
 import { roundTo } from "@/utils/math";
 import { interpolateKc, identifyPhase, type CulturePhase } from "@/modules/culture/services";
 import { resolveDaeReferenceDate, computeRootDepth, resolveDepletionFactor } from "@/modules/assignment/services";
-import { calculateKs } from "@/modules/assignment/services/parcel-motor-adapter";
 import { calculateADTFromLayers, soilProfileIsUsable, type SoilProfileLayer } from "@/modules/soil/services";
 import {
+  calculateFao56Ks,
   formatEtcFormula,
   ksFunctionForEtc,
   resolveManejoKl,
@@ -136,6 +136,8 @@ export interface BalanceDay {
   etcPotential: number;
   etc: number;
   etcFormula: string;
+  ksFormula: string;
+  drStartMm: number;
   ky: number | null;
   yieldRisk: number | null;
   precipitation: number;
@@ -277,9 +279,11 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     }
 
     const startDeficit = Math.max(adt - armStart, 0);
-    const startDepletion = startDeficit / adt;
     const ksConfigured = resolveKsFunctionName(assignment.ks_function_override, phaseId?.phase.ks_function, culture.ks_function);
-    const ks = roundTo(calculateKs(startDepletion, pFactor, ksFunctionForEtc(ksConfigured), null), 3);
+    const skipStress = ksFunctionForEtc(ksConfigured) === "none";
+    const fao56Ks = calculateFao56Ks({ cadMm: adt, afdMm: afd, drMm: startDeficit });
+    const ks = skipStress ? 1 : fao56Ks.ks;
+    const ksFormula = skipStress ? "Ks = 1 (redução desligada)" : fao56Ks.formula;
     const etcPotential = roundTo(Math.max(weather.et0 * kc * kl, 0), 2);
     const etc = roundTo(etcPotential * ks, 2);
     const kcAdjusted = roundTo(kc * kl * ks, 3);
@@ -313,6 +317,8 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       kc: roundTo(kc, 3),
       kcAdjusted,
       ks,
+      ksFormula,
+      drStartMm: roundTo(startDeficit, 2),
       kl,
       et0: roundTo(weather.et0, 2),
       etcPotential,
