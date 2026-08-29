@@ -27,7 +27,7 @@ interface Anchor {
   id: string;
   curve_id: string;
   sequence_no: number;
-  stage_id: string | null;
+  marker_id: string | null;
   x_value: number;
   kc_value: number;
   source_id: string | null;
@@ -203,7 +203,7 @@ export function AgronomicKcTab({
     const payload={
       curve_id:selectedCurve.id,
       sequence_no:num(fd.get("sequence_no"))??anchors.length+1,
-      stage_id:null,
+      marker_id:null,
       x_value:x,
       kc_value:kc,
       source_id:selectedCurve.source_id,
