@@ -246,6 +246,7 @@ export async function GET(request: Request) {
     currentConsensusResult,
     currentCandidatesResult,
     hourlyOpenMeteoResult,
+    dailySelectionResult,
     publicObservationResults,
     nasaPowerReference,
     nasaPowerClimatology,
@@ -323,6 +324,12 @@ export async function GET(request: Request) {
           .order("fetched_at", { ascending: false })
           .limit(300)
       : emptyResult,
+    supabase
+      .from("weather_daily_selection")
+      .select("operational_approved, quality_used, reason, selected_at")
+      .eq("farm_id", farmId)
+      .eq("date", today)
+      .limit(1),
     publicObservationsPromise,
     nasaPowerPromise,
     nasaPowerClimatologyPromise,
@@ -337,12 +344,20 @@ export async function GET(request: Request) {
     currentConsensusResult.error,
     currentCandidatesResult.error,
     hourlyOpenMeteoResult.error,
+    dailySelectionResult.error,
   ].find(Boolean);
   if (queryError) {
     return NextResponse.json({ error: queryError.message }, { status: 422 });
   }
 
   const readings = (readingsResult.data ?? []) as ClimateReadingInput[];
+  const todaySelection = (dailySelectionResult.data?.[0] ?? null) as {
+    operational_approved?: boolean | null;
+    quality_used?: string | null;
+    reason?: string | null;
+    selected_at?: string | null;
+  } | null;
+  const dailyOperationalApproved = Boolean(todaySelection?.operational_approved);
   const forecasts = ensureDailyForecastWindow(
     (forecastsResult.data ?? []) as ClimateForecastInput[],
     today,
@@ -812,10 +827,12 @@ export async function GET(request: Request) {
       },
     },
     validation: {
-      mode: "validation",
-      operationalUse: "blocked",
-      confidence: "low",
-      message: "Dados de modelo em validação. Não usar automaticamente para balanço hídrico, recomendação ou programação de irrigação.",
+      mode: dailyOperationalApproved ? "operational" : "validation",
+      operationalUse: dailyOperationalApproved ? "allowed" : "blocked",
+      confidence: dailyOperationalApproved ? "medium" : "low",
+      message: dailyOperationalApproved
+        ? "Fechamento diário aprovado pelas regras automáticas de qualidade; ETo interna FAO-56 disponível para o manejo."
+        : (todaySelection?.reason ?? "Fechamento diário ainda não aprovado para a data."),
       latitude: virtualStation?.latitude ?? station.latitude,
       longitude: virtualStation?.longitude ?? station.longitude,
       elevationM: virtualStation?.elevation_m ?? station.altitude,
