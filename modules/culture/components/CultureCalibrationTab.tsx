@@ -205,7 +205,7 @@ export function CultureCalibrationTab({
       nextMarkers.some((item) => item.id === current) ? current : (nextMarkers[0]?.id ?? ""),
     );
 
-    const pivotIds = [...new Set(nextParcels.map((parcel) => parcel.pivot_id))];
+    const pivotIds = Array.from(new Set(nextParcels.map((parcel) => parcel.pivot_id)));
     if (pivotIds.length > 0) {
       const { data } = await supabase
         .from("pivots")
