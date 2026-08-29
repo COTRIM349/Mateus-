@@ -8,6 +8,7 @@ export interface ClimateReadingInput {
   solar_radiation: number | null;
   precipitation: number | null;
   et0_source: number | null;
+  et0_calculated: number | null;
   imported_at: string | null;
 }
 
@@ -23,6 +24,7 @@ export interface ClimateForecastInput {
   precipitation: number | null;
   precipitation_probability: number | null;
   et0_source: number | null;
+  et0_calculated: number | null;
 }
 
 export type DashboardClimateProvider = "open_meteo" | "meteoblue" | "weatherapi" | "met_norway";
@@ -197,7 +199,7 @@ export interface ClimateDashboardResponse {
     etoMm: number | null;
     etoMeteoblueMm: number | null;
     etoOperationalMm: number | null;
-    etoOperationalSource: "meteoblue_fao" | "open_meteo_pm_fao56" | null;
+    etoOperationalSource: "cotrim_fao56" | null;
     etoMeteoblueIssuedAt: string | null;
     etoMeteoblueDeltaMm: number | null;
     etoMeteoblueDeltaPct: number | null;
@@ -332,24 +334,24 @@ export function buildEtoSummary(
     const start = addDays(today, -(days - 1));
     return latest
       .filter((reading) => reading.date >= start && reading.date <= today)
-      .map((reading) => reading.et0_source)
+      .map((reading) => reading.et0_calculated)
       .filter((value): value is number => value !== null && Number.isFinite(value));
   };
   const monthPrefix = today.slice(0, 7);
   const monthValues = latest
     .filter((reading) => reading.date.startsWith(monthPrefix) && reading.date <= today)
-    .map((reading) => reading.et0_source)
+    .map((reading) => reading.et0_calculated)
     .filter((value): value is number => value !== null && Number.isFinite(value));
 
   const history = Array.from({ length: 7 }, (_, index) => {
     const date = addDays(today, index - 6);
-    const etoMm = byDate.get(date)?.et0_source ?? null;
+    const etoMm = byDate.get(date)?.et0_calculated ?? null;
     return { date, etoMm, quality: etoMm === null ? "missing" : "available" } as const;
   });
 
   return {
-    todayMm: byDate.get(today)?.et0_source ?? null,
-    yesterdayMm: byDate.get(addDays(today, -1))?.et0_source ?? null,
+    todayMm: byDate.get(today)?.et0_calculated ?? null,
+    yesterdayMm: byDate.get(addDays(today, -1))?.et0_calculated ?? null,
     average7dMm: average(valuesInRange(7)),
     average30dMm: average(valuesInRange(30)),
     monthTotalMm: monthValues.length > 0
@@ -397,6 +399,7 @@ export function ensureDailyForecastWindow(
       precipitation: null,
       precipitation_probability: null,
       et0_source: null,
+      et0_calculated: null,
     };
   });
 }
