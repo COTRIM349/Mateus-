@@ -295,6 +295,43 @@ CREATE TABLE IF NOT EXISTS root_depth_anchor_points (
   UNIQUE(curve_id, x_value)
 );
 
+-- ── SENSIBILIDADE HÍDRICA POR ESTÁDIO ─────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS hydric_sensitivity_stages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  culture_id UUID NOT NULL REFERENCES cultures(id) ON DELETE CASCADE,
+  cultivar_id UUID REFERENCES culture_varieties(id) ON DELETE CASCADE,
+  stage_id UUID NOT NULL REFERENCES phenology_stages(id) ON DELETE CASCADE,
+  sensitivity_level TEXT NOT NULL CHECK (
+    sensitivity_level IN ('baixa','media','alta','muito_alta')
+  ),
+  physiological_process TEXT NOT NULL,
+  yield_component_at_risk TEXT,
+  irrigation_priority_weight DOUBLE PRECISION CHECK (
+    irrigation_priority_weight IS NULL OR
+    (irrigation_priority_weight >= 0 AND irrigation_priority_weight <= 10)
+  ),
+  source_id UUID NOT NULL REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
+  confidence TEXT NOT NULL DEFAULT 'nao_validada'
+    CHECK (confidence IN ('alta','media','baixa','nao_validada')),
+  validation_status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (validation_status IN ('draft','review','approved','rejected','superseded')),
+  active_for_calculation BOOLEAN NOT NULL DEFAULT false,
+  version INTEGER NOT NULL DEFAULT 1,
+  approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  approved_at TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_hydric_sensitivity_resolution
+  ON hydric_sensitivity_stages(
+    culture_id, cultivar_id, stage_id, validation_status, active_for_calculation
+  );
+
+COMMENT ON TABLE hydric_sensitivity_stages IS
+  'Sensibilidade hídrica rastreável e separada da definição da escala fenológica. Não inferir nível de sensibilidade apenas pelo código do estádio.';
+
 -- ── OBSERVAÇÕES DE CAMPO ──────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS field_phenology_observations (
@@ -515,7 +552,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'agronomic_sources','phenology_scales','phenology_stages','planting_windows',
     'agronomic_parameter_values','cultivar_phenology_targets','kc_curves','kc_anchor_points',
-    'root_depth_curves','root_depth_anchor_points','legacy_agronomic_data'
+    'root_depth_curves','root_depth_anchor_points','hydric_sensitivity_stages','legacy_agronomic_data'
   ]
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'authenticated_read_' || t, t);
