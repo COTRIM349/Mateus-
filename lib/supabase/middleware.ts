@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 
 export function bypassesUserSession(pathname: string): boolean {
   return pathname === "/api/cron/meteoblue-agro"
-    || pathname === "/api/cron/climate-v2";
+    || pathname === "/api/cron/climate-v2"
+    || pathname === "/api/cron/climate-daily";
 }
 
 export async function updateSession(request: NextRequest) {
