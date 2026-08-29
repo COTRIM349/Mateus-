@@ -767,6 +767,27 @@ function SoilDetail({
       ? liveLayerMetrics.reduce((total, item) => total + (item.cad ?? 0), 0)
       : null;
 
+  const profileDepthCm =
+    liveLayerMetrics.length > 0 &&
+    liveLayerMetrics.every(({ layer }) => {
+      const thickness = draftNumber(
+        layerDrafts[layer.id]?.thickness_m ?? String(layer.thickness_m ?? "")
+      );
+      return thickness != null && thickness > 0;
+    })
+      ? liveLayerMetrics.reduce((total, { layer }) => {
+          const thickness = draftNumber(
+            layerDrafts[layer.id]?.thickness_m ?? String(layer.thickness_m ?? "")
+          );
+          return total + (thickness ?? 0) * 100;
+        }, 0)
+      : null;
+
+  const dtaProfileAverage =
+    cadTotal != null && profileDepthCm != null && profileDepthCm > 0
+      ? cadTotal / profileDepthCm
+      : null;
+
   const saveLayer = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     setSavingLayer(true);
@@ -981,19 +1002,14 @@ function SoilDetail({
             </div>
 
             <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
-              <p className="text-xs text-graphite-400 dark:text-gray-500">DTA (mm/cm)</p>
-              <div className="mt-2 space-y-1 text-sm font-semibold text-graphite-900 dark:text-white">
-                {liveLayerMetrics.length === 0 ? (
-                  <p>Não calculado</p>
-                ) : (
-                  liveLayerMetrics.map(({ layer, dta }) => (
-                    <p key={layer.id}>
-                      C{layer.layer_number}:{" "}
-                      {dta == null ? "Não calculado" : formatNumber(dta, 3)}
-                    </p>
-                  ))
-                )}
-              </div>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">
+                DTA média do perfil (mm/cm)
+              </p>
+              <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
+                {dtaProfileAverage == null
+                  ? "Não calculado"
+                  : formatNumber(dtaProfileAverage, 3)}
+              </p>
             </div>
 
             <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
