@@ -357,7 +357,7 @@ export default function ProgramacaoPage() {
         .eq("operational_approved", true)
         .maybeSingle();
       if (!climateApproval) {
-        throw new Error("Programação bloqueada: os dados climáticos de hoje ainda não foram validados e aprovados para uso operacional.");
+        throw new Error("Programação bloqueada: os dados climáticos de hoje ainda não foram sincronizados para uso operacional.");
       }
       const currentHour = new Date().getHours();
       const constraints = await loadConstraints();

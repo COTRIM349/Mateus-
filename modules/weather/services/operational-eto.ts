@@ -12,3 +12,29 @@ export function operationalEtoMm(reading: {
   if (source != null && Number.isFinite(source)) return source;
   return null;
 }
+
+export const AUTO_APPROVAL_NOTE = "aprovação automática na resolução da fonte";
+
+export function autoApprovalFieldsForReading(
+  reading: { et0_calculated?: number | null; et0_source?: number | null } | null | undefined,
+): {
+  operational_approved: boolean;
+  approved_at: string | null;
+  approved_by: null;
+  approval_note: string | null;
+} {
+  if (!reading || operationalEtoMm(reading) == null) {
+    return {
+      operational_approved: false,
+      approved_at: null,
+      approved_by: null,
+      approval_note: null,
+    };
+  }
+  return {
+    operational_approved: true,
+    approved_at: new Date().toISOString(),
+    approved_by: null,
+    approval_note: AUTO_APPROVAL_NOTE,
+  };
+}

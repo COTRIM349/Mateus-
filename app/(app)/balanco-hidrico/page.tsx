@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -186,6 +186,7 @@ export default function BalancoHidricoPage() {
   const [climateCheckLoading, setClimateCheckLoading] = useState(false);
   const [approvedClimateDays, setApprovedClimateDays] = useState(0);
   const [missingClimateSample, setMissingClimateSample] = useState<string[]>([]);
+  const climateAutoSyncRef = useRef<string | null>(null);
 
   // Lançamento tab
   const [lancDate, setLancDate] = useState("");
@@ -372,7 +373,7 @@ export default function BalancoHidricoPage() {
       if (missingApprovedDates.length > 0) {
         const sample = missingApprovedDates.slice(0, 3).join(", ");
         throw new Error(
-          `Balanço bloqueado: ${missingApprovedDates.length} dia(s) sem dado climático aprovado (${sample}${missingApprovedDates.length > 3 ? ", …" : ""}). A ETo de modelo está em validação.`,
+          `Balanço bloqueado: ${missingApprovedDates.length} dia(s) sem ETo operacional (${sample}${missingApprovedDates.length > 3 ? ", …" : ""}). Aguarde a sincronização automática do clima.`,
         );
       }
 
@@ -524,7 +525,7 @@ export default function BalancoHidricoPage() {
     }
   }, [assignment, culture, soil, soilLayers, phases, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
 
-  // Pré-checagem de clima operacional (dias com ETo aprovada)
+  // Pré-checagem de clima operacional (dias com ETo disponível após sync automático)
   useEffect(() => {
     if (!activeFarmId || !dateStart || !dateEnd) {
       setApprovedClimateDays(0);
@@ -549,19 +550,48 @@ export default function BalancoHidricoPage() {
         }
         return;
       }
-      const { data: selections } = await supabase
-        .from("weather_daily_selection")
-        .select("date, selected_reading_id, operational_approved")
-        .eq("farm_id", activeFarmId)
-        .gte("date", dateStart)
-        .lte("date", dateEnd);
-      const approved = new Set<string>();
-      for (const row of selections ?? []) {
-        if (row.operational_approved === true && row.selected_reading_id) {
-          approved.add(row.date as string);
+
+      const countApproved = async () => {
+        const { data: selections } = await supabase
+          .from("weather_daily_selection")
+          .select("date, selected_reading_id, operational_approved")
+          .eq("farm_id", activeFarmId)
+          .gte("date", dateStart)
+          .lte("date", dateEnd);
+        const approved = new Set<string>();
+        for (const row of selections ?? []) {
+          if (row.operational_approved === true && row.selected_reading_id) {
+            approved.add(row.date as string);
+          }
+        }
+        return { approved, missing: range.filter((d) => !approved.has(d)) };
+      };
+
+      let { approved, missing } = await countApproved();
+
+      const syncKey = `${activeFarmId}:${dateStart}:${dateEnd}`;
+      if (missing.length > 0 && climateAutoSyncRef.current !== syncKey) {
+        climateAutoSyncRef.current = syncKey;
+        const pastDays = Math.max(1, Math.min(range.length, 92));
+        try {
+          await fetch("/api/climate/sync-farm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              farmId: activeFarmId,
+              pastDays,
+              forecastDays: 7,
+              ensureVirtual: true,
+            }),
+          });
+          const recount = await countApproved();
+          approved = recount.approved;
+          missing = recount.missing;
+        } catch {
+          // mantém contagem anterior se sync falhar
         }
       }
-      const missing = range.filter((d) => !approved.has(d));
+
       if (!cancelled) {
         setApprovedClimateDays(approved.size);
         setMissingClimateSample(missing.slice(0, 3));

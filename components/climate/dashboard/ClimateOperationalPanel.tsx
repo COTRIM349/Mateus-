@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/providers";
 import { Card } from "@/components/ui/Card";
 import type { OperationalSelectionSummary } from "@/modules/weather/services/climate-approval";
@@ -10,14 +10,14 @@ function statusBadge(day: OperationalSelectionSummary["days"][number]) {
   if (day.operationalApproved) {
     return (
       <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300">
-        Aprovado
+        Operacional
       </span>
     );
   }
   if (day.canApprove) {
     return (
       <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
-        Pendente
+        Sincronizando…
       </span>
     );
   }
@@ -33,45 +33,27 @@ export function ClimateOperationalPanel() {
   const [summary, setSummary] = useState<OperationalSelectionSummary | null>(null);
   const [loading, setLoading] = useState(false);
   const [syncing, setSyncing] = useState(false);
-  const [acting, setActing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [reloadKey, setReloadKey] = useState(0);
+  const autoSyncAttemptedRef = useRef<string | null>(null);
 
-  const load = useCallback(async () => {
-    if (!activeFarmId) {
-      setSummary(null);
-      return;
+  const fetchSummary = useCallback(async (): Promise<OperationalSelectionSummary | null> => {
+    if (!activeFarmId) return null;
+    const res = await fetch(
+      `/api/climate/operational-selections?farmId=${encodeURIComponent(activeFarmId)}&pastDays=14`,
+      { cache: "no-store" },
+    );
+    const payload = await res.json();
+    if (!res.ok) {
+      throw new Error(payload.error ?? "Falha ao carregar ETo operacional");
     }
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/climate/operational-selections?farmId=${encodeURIComponent(activeFarmId)}&pastDays=14`,
-        { cache: "no-store" },
-      );
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload.error ?? "Falha ao carregar aprovações");
-      }
-      setSummary(payload as OperationalSelectionSummary);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao carregar aprovações");
-      setSummary(null);
-    } finally {
-      setLoading(false);
-    }
+    return payload as OperationalSelectionSummary;
   }, [activeFarmId]);
 
-  useEffect(() => {
-    load();
-  }, [load, reloadKey]);
-
-  const syncClimate = async () => {
-    if (!activeFarmId) return;
+  const syncClimate = useCallback(async (): Promise<boolean> => {
+    if (!activeFarmId) return false;
     setSyncing(true);
     setError(null);
-    setMessage(null);
     try {
       const res = await fetch("/api/climate/sync-farm", {
         method: "POST",
@@ -87,72 +69,61 @@ export function ClimateOperationalPanel() {
       if (!res.ok) {
         throw new Error(payload.error ?? "Falha na sincronização");
       }
-      setMessage("Clima sincronizado. Revise os dias pendentes e aprove para liberar o balanço.");
-      setReloadKey((k) => k + 1);
+      return true;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Falha na sincronização");
+      return false;
     } finally {
       setSyncing(false);
     }
-  };
+  }, [activeFarmId]);
 
-  const approvePending = async () => {
-    if (!activeFarmId || !summary) return;
-    const dates = summary.days.filter((d) => d.canApprove && !d.operationalApproved).map((d) => d.date);
-    if (dates.length === 0) {
-      setMessage("Nenhum dia pendente com ETo válida.");
+  const load = useCallback(async () => {
+    if (!activeFarmId) {
+      setSummary(null);
       return;
     }
-    setActing(true);
+    setLoading(true);
     setError(null);
-    setMessage(null);
     try {
-      const res = await fetch("/api/climate/operational-selections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ farmId: activeFarmId, action: "approve", dates }),
-      });
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload.error ?? "Falha ao aprovar");
-      }
-      const updated = (payload.updated as string[] | undefined)?.length ?? 0;
-      const skipped = (payload.skipped as Array<{ date: string }> | undefined)?.length ?? 0;
-      setMessage(`${updated} dia(s) aprovado(s).${skipped > 0 ? ` ${skipped} ignorado(s).` : ""}`);
-      setReloadKey((k) => k + 1);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao aprovar");
-    } finally {
-      setActing(false);
-    }
-  };
+      let data = await fetchSummary();
+      const needsSync =
+        data != null &&
+        (data.missingSelection > 0 || data.pendingApproval > 0);
 
-  const approveToday = async () => {
-    if (!activeFarmId || !summary) return;
-    const today = summary.days[summary.days.length - 1];
-    if (!today?.canApprove) {
-      setMessage("Hoje não tem leitura com ETo válida — sincronize primeiro.");
-      return;
-    }
-    setActing(true);
-    setError(null);
-    setMessage(null);
-    try {
-      const res = await fetch("/api/climate/operational-selections", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ farmId: activeFarmId, action: "approve", dates: [today.date] }),
-      });
-      const payload = await res.json();
-      if (!res.ok) {
-        throw new Error(payload.error ?? "Falha ao aprovar");
+      if (needsSync && autoSyncAttemptedRef.current !== activeFarmId) {
+        autoSyncAttemptedRef.current = activeFarmId;
+        const ok = await syncClimate();
+        if (ok) {
+          data = await fetchSummary();
+          setMessage("Clima sincronizado automaticamente para uso operacional.");
+        }
       }
-      setMessage("ETo de hoje aprovada para uso operacional.");
-      setReloadKey((k) => k + 1);
+
+      setSummary(data);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Falha ao aprovar");
+      setError(err instanceof Error ? err.message : "Falha ao carregar ETo operacional");
+      setSummary(null);
     } finally {
-      setActing(false);
+      setLoading(false);
+    }
+  }, [activeFarmId, fetchSummary, syncClimate]);
+
+  useEffect(() => {
+    autoSyncAttemptedRef.current = null;
+    load();
+  }, [load]);
+
+  const manualSync = async () => {
+    setMessage(null);
+    const ok = await syncClimate();
+    if (!ok) return;
+    try {
+      const data = await fetchSummary();
+      setSummary(data);
+      setMessage("Clima atualizado.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Falha ao recarregar");
     }
   };
 
@@ -164,44 +135,26 @@ export function ClimateOperationalPanel() {
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <h2 className="text-[15px] font-extrabold text-graphite-900 dark:text-white">
-              Aprovação operacional da ETo
+              ETo operacional (automática)
             </h2>
             <p className="mt-0.5 text-[11px] leading-relaxed text-graphite-400 dark:text-gray-500">
-              O balanço hídrico e a programação só usam dias com leitura aprovada explicitamente.
-              Estimativas de modelo ficam em validação até você liberar.
+              Após cada sincronização, dias com leitura válida entram automaticamente no balanço
+              hídrico e na programação — sem aprovação manual.
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={syncClimate}
-              disabled={syncing || acting}
-              className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-graphite-700 shadow-sm hover:border-brand-200 hover:text-brand-700 disabled:opacity-50 dark:border-white/[0.08] dark:bg-graphite-800 dark:text-gray-300"
-            >
-              {syncing ? "Sincronizando…" : "Sincronizar clima"}
-            </button>
-            <button
-              type="button"
-              onClick={approveToday}
-              disabled={acting || syncing}
-              className="rounded-xl bg-brand-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-brand-700 disabled:opacity-50"
-            >
-              Aprovar hoje
-            </button>
-            <button
-              type="button"
-              onClick={approvePending}
-              disabled={acting || syncing}
-              className="rounded-xl bg-emerald-600 px-3 py-2 text-[11px] font-bold text-white hover:bg-emerald-700 disabled:opacity-50"
-            >
-              Aprovar pendentes
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={manualSync}
+            disabled={syncing || loading}
+            className="rounded-xl border border-gray-200 bg-white px-3 py-2 text-[11px] font-bold text-graphite-700 shadow-sm hover:border-brand-200 hover:text-brand-700 disabled:opacity-50 dark:border-white/[0.08] dark:bg-graphite-800 dark:text-gray-300"
+          >
+            {syncing ? "Sincronizando…" : "Atualizar agora"}
+          </button>
         </div>
         {summary && (
           <p className="mt-3 text-[11px] font-semibold text-graphite-500 dark:text-gray-400">
-            {summary.approvedDays}/{summary.totalDays} dias aprovados · {summary.pendingApproval} pendente(s) ·{" "}
-            {summary.missingSelection} sem seleção
+            {summary.approvedDays}/{summary.totalDays} dias operacionais · {summary.missingSelection} aguardando
+            sincronização
           </p>
         )}
       </div>
@@ -252,7 +205,7 @@ export function ClimateOperationalPanel() {
           </table>
         </div>
       ) : (
-        <p className="px-6 py-8 text-center text-sm text-graphite-400">Sem dados de aprovação.</p>
+        <p className="px-6 py-8 text-center text-sm text-graphite-400">Sem dados operacionais.</p>
       )}
     </Card>
   );

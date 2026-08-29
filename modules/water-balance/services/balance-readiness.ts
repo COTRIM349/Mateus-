@@ -99,7 +99,7 @@ export function assessBalanceReadiness(input: BalanceReadinessInput): BalanceRea
       id: "climate",
       label: "Clima operacional",
       level: "ok",
-      detail: `${input.approvedClimateDays}/${input.totalDaysInRange} dias com ETo aprovada.`,
+      detail: `${input.approvedClimateDays}/${input.totalDaysInRange} dias com ETo operacional (automático).`,
       href: "/clima",
     });
   } else if (climatePartial) {
@@ -107,7 +107,7 @@ export function assessBalanceReadiness(input: BalanceReadinessInput): BalanceRea
       id: "climate",
       label: "Clima operacional",
       level: "error",
-      detail: `Faltam ${input.totalDaysInRange - input.approvedClimateDays} dia(s) sem ETo aprovada (ex.: ${input.missingClimateSample.join(", ")}).`,
+      detail: `Faltam ${input.totalDaysInRange - input.approvedClimateDays} dia(s) sem ETo — aguarde sincronização (ex.: ${input.missingClimateSample.join(", ")}).`,
       href: "/clima",
     });
   } else {
@@ -115,7 +115,7 @@ export function assessBalanceReadiness(input: BalanceReadinessInput): BalanceRea
       id: "climate",
       label: "Clima operacional",
       level: "error",
-      detail: "Nenhum dia com leitura climática aprovada no período.",
+      detail: "Nenhum dia com ETo operacional no período — sincronize o clima automaticamente em Clima.",
       href: "/clima",
     });
   }

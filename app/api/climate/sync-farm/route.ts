@@ -21,6 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { ingestFarmClimate } from "@/modules/weather/services/ingestion.service";
 import { resolveDailyRange } from "@/modules/weather/services/source-resolver";
+import { autoApproveEligibleSelections } from "@/modules/weather/services/climate-approval";
 import { ensureVirtualStation } from "@/modules/weather/services/virtual-station.service";
 
 export const runtime = "nodejs";
@@ -91,6 +92,8 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    const windowStart = isoDate(-(pastDays - 1));
+    const windowEnd = isoDate(0);
     const runs = await ingestFarmClimate(supabase, body.farmId, {
       pastDays,
       forecastDays,
@@ -98,14 +101,21 @@ export async function POST(req: NextRequest) {
     const selections = await resolveDailyRange(
       supabase,
       body.farmId,
-      isoDate(-(pastDays - 1)),
-      isoDate(0),
+      windowStart,
+      windowEnd,
+    );
+    const autoApproved = await autoApproveEligibleSelections(
+      supabase,
+      body.farmId,
+      windowStart,
+      windowEnd,
     );
     return NextResponse.json({
       farmId: body.farmId,
       virtualStationCreated,
       runs,
       selections: selections.length,
+      autoApproved: autoApproved.updated.length,
       window: { pastDays, forecastDays },
     });
   } catch (err) {

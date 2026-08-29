@@ -25,6 +25,7 @@ import {
   type ObservationIngestionResult,
 } from "@/modules/weather/services/ingestion.service";
 import { resolveDailyRange } from "@/modules/weather/services/source-resolver";
+import { autoApproveEligibleSelections } from "@/modules/weather/services/climate-approval";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -106,6 +107,7 @@ export async function POST(req: NextRequest) {
       allRuns.push(...runs);
       const selections = await resolveDailyRange(supabase, farmId, startDate, endDate);
       selectionCount += selections.length;
+      await autoApproveEligibleSelections(supabase, farmId, startDate, endDate);
     } catch (err) {
       errors.push(`${farmId}: ${err instanceof Error ? err.message : String(err)}`);
     }

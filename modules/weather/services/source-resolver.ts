@@ -18,6 +18,7 @@
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { autoApprovalFieldsForReading } from "./operational-eto";
 
 interface CandidateReading {
   reading_id: string;
@@ -204,18 +205,18 @@ async function persistSelection(
   supabase: SupabaseClient,
   r: DailySelectionResult,
 ): Promise<void> {
-  const { data: existing } = await supabase
-    .from("weather_daily_selection")
-    .select("selected_reading_id, operational_approved")
-    .eq("farm_id", r.farm_id)
-    .eq("date", r.date)
-    .maybeSingle();
+  let approvalFields = autoApprovalFieldsForReading(null);
 
-  const readingChanged =
-    existing?.selected_reading_id != null &&
-    existing.selected_reading_id !== r.selected_reading_id;
+  if (r.selected_reading_id) {
+    const { data: reading } = await supabase
+      .from("weather_readings")
+      .select("et0_calculated, et0_source")
+      .eq("id", r.selected_reading_id)
+      .maybeSingle();
+    approvalFields = autoApprovalFieldsForReading(reading);
+  }
 
-  const payload: Record<string, unknown> = {
+  const payload = {
     farm_id: r.farm_id,
     date: r.date,
     selected_station_id: r.selected_station_id,
@@ -226,14 +227,8 @@ async function persistSelection(
     rejected_sources: r.rejected_sources,
     fallback_used: r.fallback_used,
     selected_at: new Date().toISOString(),
+    ...approvalFields,
   };
-
-  if (readingChanged) {
-    payload.operational_approved = false;
-    payload.approved_at = null;
-    payload.approved_by = null;
-    payload.approval_note = null;
-  }
 
   await supabase
     .from("weather_daily_selection")

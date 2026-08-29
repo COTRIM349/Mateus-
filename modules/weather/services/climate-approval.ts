@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { operationalEtoMm } from "./operational-eto";
+import { AUTO_APPROVAL_NOTE, autoApprovalFieldsForReading, operationalEtoMm } from "./operational-eto";
 
 export interface OperationalSelectionDay {
   date: string;
@@ -242,6 +242,54 @@ export async function approveOperationalSelections(
       continue;
     }
     updated.push(date);
+  }
+
+  return { updated, skipped };
+}
+
+/**
+ * Aprova automaticamente dias com leitura selecionada e ETo válida.
+ * Usado após sync/resolve e para backfill de registros antigos.
+ */
+export async function autoApproveEligibleSelections(
+  supabase: SupabaseClient,
+  farmId: string,
+  startDate: string,
+  endDate: string,
+): Promise<ApprovalMutationResult> {
+  const summary = await listOperationalSelections(supabase, farmId, startDate, endDate);
+  const updated: string[] = [];
+  const skipped: Array<{ date: string; reason: string }> = [];
+
+  for (const day of summary.days) {
+    if (!day.canApprove) {
+      if (!day.selectedReadingId) {
+        skipped.push({ date: day.date, reason: "sem leitura selecionada" });
+      } else {
+        skipped.push({ date: day.date, reason: "leitura sem ETo válida" });
+      }
+      continue;
+    }
+    if (day.operationalApproved) {
+      updated.push(day.date);
+      continue;
+    }
+
+    const { error: upErr } = await supabase
+      .from("weather_daily_selection")
+      .update({
+        operational_approved: true,
+        approved_at: new Date().toISOString(),
+        approved_by: null,
+        approval_note: AUTO_APPROVAL_NOTE,
+      })
+      .eq("farm_id", farmId)
+      .eq("date", day.date);
+    if (upErr) {
+      skipped.push({ date: day.date, reason: upErr.message });
+      continue;
+    }
+    updated.push(day.date);
   }
 
   return { updated, skipped };
