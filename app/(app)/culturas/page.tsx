@@ -107,7 +107,7 @@ export default function CulturasPage() {
         {activeTab === "graus-dia" && <div className="animate-in"><AgronomicDegreeDayTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "sensibilidade" && <div className="animate-in"><HydricSensitivityTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "calibracao" && <div className="animate-in"><AgronomicCalibrationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
-        {activeTab === "fontes" && <div className="animate-in"><AgronomicSourcesTab /></div>
+        {activeTab === "fontes" && <div className="animate-in"><AgronomicSourcesTab /></div>}
         {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTabComponent selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
       </div>
