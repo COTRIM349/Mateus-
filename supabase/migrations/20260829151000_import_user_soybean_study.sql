@@ -7,15 +7,19 @@ DECLARE
   crop UUID;
 BEGIN
   SELECT id INTO src FROM agronomic_sources
-   WHERE title = 'dados de cultura(1).xlsx — base de estudo fornecida pelo usuário'
-   ORDER BY created_at LIMIT 1;
+   WHERE source_key = 'user-study-cultivars-2026-08'
+   LIMIT 1;
 
   IF src IS NULL THEN
-    INSERT INTO agronomic_sources(source_type,institution,title,methodology,notes)
+    INSERT INTO agronomic_sources(
+      source_key,source_type,title,institution,citation,methodology,notes
+    )
     VALUES(
+      'user-study-cultivars-2026-08',
       'estimativa_provisoria',
-      'Dados fornecidos pelo usuário',
       'dados de cultura(1).xlsx — base de estudo fornecida pelo usuário',
+      'Dados fornecidos pelo usuário',
+      'Planilha fornecida pelo usuário em agosto de 2026; não é fonte bibliográfica.',
       'Importação direta somente dos campos existentes.',
       'Material de estudo; requer validação antes de uso agronômico.'
     ) RETURNING id INTO src;
