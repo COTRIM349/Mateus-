@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeDailyBalanceV4,
   calculateKs,
+  classifyState,
   effectiveRainfall,
   adjustP,
   type SoilLayerCanonical,
@@ -124,5 +125,42 @@ describe("funções puras auxiliares", () => {
     expect(effectiveRainfall(10, { kind: "threshold", abstractionMm: 3 })).toBeCloseTo(7);
     expect(effectiveRainfall(10, { kind: "full" })).toBe(10);
     expect(effectiveRainfall(0, { kind: "full" })).toBe(0);
+  });
+});
+
+// ── Correções de revisão (Codex) ────────────────────────────────────────────
+
+describe("classifyState — estado 'alerta' é alcançável (correção Codex)", () => {
+  it("Dr logo acima da AFD cai em 'alerta', não pula pra abaixo_seguranca", () => {
+    // CAD 66,6; AFD 33,3 (p 0,5). Dr = 45 (> AFD, < AFD+(CAD-AFD)/2=49,95).
+    const state = classifyState(true, 66.6, 66.6 - 45, 33.3, 0.7);
+    expect(state).toBe("alerta");
+  });
+  it("Dr bem acima da AFD cai em abaixo_seguranca/critico", () => {
+    const state = classifyState(true, 66.6, 66.6 - 60, 33.3, 0.2);
+    expect(["abaixo_seguranca", "critico"]).toContain(state);
+  });
+});
+
+describe("modo dual exige Ke (correção Codex)", () => {
+  const layersDual: SoilLayerCanonical[] = [
+    { topM: 0, bottomM: 0.6, thetaCC: 0.31102, thetaPMP: 0.2 },
+  ];
+  it("dual sem Ke → bloqueia com requisito de Ke", () => {
+    const r = computeDailyBalanceV4({
+      eto: 6, kc: 0.9, rootDepthM: 0.6, effectiveSoilDepthM: 0.6,
+      layers: layersDual, pBase: 0.5, rainfall: 0, irrigationGross: 0,
+      applicationEfficiency: 0.85, previousArm: 60, mode: "dual", ke: null,
+    });
+    expect(r.computed).toBe(false);
+    expect(r.missing.join(" ")).toMatch(/Ke/);
+  });
+  it("dual com Ke computa", () => {
+    const r = computeDailyBalanceV4({
+      eto: 6, kc: 0.9, rootDepthM: 0.6, effectiveSoilDepthM: 0.6,
+      layers: layersDual, pBase: 0.5, rainfall: 0, irrigationGross: 0,
+      applicationEfficiency: 0.85, previousArm: 60, mode: "dual", ke: 0.15,
+    });
+    expect(r.computed).toBe(true);
   });
 });

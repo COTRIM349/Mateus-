@@ -40,10 +40,9 @@ CREATE TABLE IF NOT EXISTS hydric_initial_condition (
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-  -- Pelo menos um dos dois valores de âncora deve existir.
-  CHECK (arm_mm IS NOT NULL OR dr_mm IS NOT NULL),
-  -- Uma âncora por parcela/data (histórico permitido em datas diferentes).
-  UNIQUE (pivot_id, parcel_id, anchor_date)
+  -- EXATAMENTE um dos dois valores de âncora (ARM xor Dr) — evita estado
+  -- ambíguo em que ambos são informados e podem divergir.
+  CHECK ((arm_mm IS NOT NULL) <> (dr_mm IS NOT NULL))
 );
 
 COMMENT ON TABLE hydric_initial_condition IS
@@ -51,6 +50,16 @@ COMMENT ON TABLE hydric_initial_condition IS
 
 CREATE INDEX IF NOT EXISTS idx_hic_farm ON hydric_initial_condition(farm_id);
 CREATE INDEX IF NOT EXISTS idx_hic_pivot_date ON hydric_initial_condition(pivot_id, anchor_date DESC);
+
+-- Unicidade null-safe: um índice para âncoras de PARCELA (parcel_id não nulo)
+-- e outro para âncoras de PIVÔ (parcel_id nulo — que a UNIQUE comum não cobre,
+-- pois no Postgres cada NULL é distinto). Garante 1 âncora por escopo/data.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hic_parcel_anchor
+  ON hydric_initial_condition(pivot_id, parcel_id, anchor_date)
+  WHERE parcel_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_hic_pivot_anchor
+  ON hydric_initial_condition(pivot_id, anchor_date)
+  WHERE parcel_id IS NULL;
 CREATE INDEX IF NOT EXISTS idx_hic_parcel ON hydric_initial_condition(parcel_id);
 
 -- ── 2. Balanço diário canônico versionado (§10, §25, §40) ──────────────────

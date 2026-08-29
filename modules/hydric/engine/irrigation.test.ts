@@ -32,7 +32,8 @@ describe("lâmina / volume / tempo (spec-2 §20-23)", () => {
   });
   it("lâmina bruta = LL / Ea (§21)", () => {
     expect(calculateGrossDepth(25, 0.85)).toBeCloseTo(29.41, 2);
-    expect(calculateGrossDepth(25, 0)).toBe(0);
+    // Ea ≤ 0 é config impossível → null (indisponível), não 0.
+    expect(calculateGrossDepth(25, 0)).toBeNull();
   });
   it("volume = LB × área × 10 (§22)", () => {
     expect(calculateIrrigationVolume(30, 150)).toBe(45000);

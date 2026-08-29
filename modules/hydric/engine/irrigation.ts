@@ -69,9 +69,13 @@ export function calculateIrrigationRequirement(dr: number, drTarget = 0): number
   return Math.max(dr - drTarget, 0);
 }
 
-/** Lâmina bruta = LL / Ea. */
-export function calculateGrossDepth(netDepthMm: number, ea: number): number {
-  if (ea <= 0) return 0;
+/**
+ * Lâmina bruta = LL / Ea.
+ * Ea ≤ 0 é configuração impossível de equipamento → retorna null (indisponível)
+ * em vez de 0, para não apresentar "não irrigar" como resultado válido.
+ */
+export function calculateGrossDepth(netDepthMm: number, ea: number): number | null {
+  if (ea <= 0) return null;
   return netDepthMm / ea;
 }
 

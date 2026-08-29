@@ -48,18 +48,45 @@ describe("computeSeries — chuva reabastece o perfil", () => {
   });
 });
 
-describe("computeSeries — dia bloqueado mantém ARM anterior", () => {
-  it("ETo null no meio não zera o encadeamento", () => {
+describe("computeSeries — dia bloqueado bloqueia downstream (correção Codex)", () => {
+  it("ETo null no meio bloqueia os dias seguintes até re-âncora", () => {
     const days: SeriesDayInput[] = [
       { date: "2026-08-01", eto: 6, kc: 1.0, rootDepthM: 0.6, rainfall: 0, irrigationGross: 0, segment: "realizado" },
       { date: "2026-08-02", eto: null, kc: 1.0, rootDepthM: 0.6, rainfall: 0, irrigationGross: 0, segment: "realizado" },
       { date: "2026-08-03", eto: 6, kc: 1.0, rootDepthM: 0.6, rainfall: 0, irrigationGross: 0, segment: "realizado" },
     ];
     const s = computeSeries(days, fixed, 66.6);
-    expect(s[1].computed).toBe(false);
-    // dia 3 usa o ARM do dia 1 (dia 2 não avançou)
-    expect(s[2].computed).toBe(true);
-    expect(s[2].arm!).toBeLessThan(s[0].arm!);
+    expect(s[1].computed).toBe(false); // dado ausente
+    // dia 3 NÃO retoma do estado pré-lacuna (evita omitir fluxos do dia 2)
+    expect(s[2].computed).toBe(false);
+    expect(s[2].missing.join(" ")).toMatch(/re-âncora|interrompida/i);
+  });
+
+  it("re-âncora explícita retoma a série após a lacuna", () => {
+    const days: SeriesDayInput[] = [
+      { date: "2026-08-01", eto: 6, kc: 1.0, rootDepthM: 0.6, rainfall: 0, irrigationGross: 0, segment: "realizado" },
+      { date: "2026-08-02", eto: null, kc: 1.0, rootDepthM: 0.6, rainfall: 0, irrigationGross: 0, segment: "realizado" },
+      { date: "2026-08-03", eto: 6, kc: 1.0, rootDepthM: 0.6, rainfall: 0, irrigationGross: 0, segment: "realizado", anchorArm: 55 },
+    ];
+    const s = computeSeries(days, fixed, 66.6);
+    expect(s[2].computed).toBe(true); // re-ancorado
+  });
+});
+
+describe("computeSeries — crescimento radicular não cria depleção artificial", () => {
+  it("dobrar a raiz aumenta a CAD e o ARM (água nova disponível, não déficit)", () => {
+    // Solo cheio a 20 cm (ARM = CAD_20). No dia 2 a raiz vai a 40 cm.
+    const cad20 = 22.204; // 1 camada de 20 cm do solo dourado
+    const days: SeriesDayInput[] = [
+      { date: "2026-08-01", eto: 0, kc: 1.0, rootDepthM: 0.2, rainfall: 0, irrigationGross: 0, segment: "realizado" },
+      { date: "2026-08-02", eto: 0, kc: 1.0, rootDepthM: 0.4, rainfall: 0, irrigationGross: 0, segment: "realizado" },
+    ];
+    const s = computeSeries(days, fixed, cad20); // começa cheio a 20 cm
+    // Dia 1: ARM ≈ CAD_20 (cheio). Dia 2: CAD dobra, Dr preservado (0) →
+    // ARM cresce, %ARM permanece alto (não cai para ~50%).
+    expect(s[0].pctArm!).toBeGreaterThan(95);
+    expect(s[1].pctArm!).toBeGreaterThan(95);
+    expect(s[1].cad!).toBeGreaterThan(s[0].cad!);
   });
 });
 

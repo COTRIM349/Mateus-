@@ -188,13 +188,15 @@ export function classifyState(
   if (cad <= 0) return "critico";
 
   const dr = cad - arm;
-  const armCritico = cad - afd;
 
+  // Faixas por depleção crescente. `alerta` é a zona logo APÓS cruzar a AFD
+  // (Dr > AFD mas ainda na primeira metade do que resta até a CAD).
   if (arm >= cad * 0.98) return "capacidade";
   if (dr <= afd * 0.5) return "otimo";
   if (dr <= afd) return "adequado";
-  if (arm >= armCritico) return "alerta";
-  // abaixo do crítico: usa Ks para separar vermelho de preto
+  // A partir daqui Dr > AFD (há estresse). Separa amarelo → vermelho → preto.
+  const stressBand = afd + (cad - afd) * 0.5; // metade do caminho AFD→CAD
+  if (dr <= stressBand) return "alerta";
   if (ks != null && ks < 0.4) return "critico";
   return "abaixo_seguranca";
 }
@@ -204,6 +206,10 @@ export function classifyState(
 export function computeDailyBalanceV4(input: DailyBalanceInputV4): DailyBalanceResultV4 {
   const missing: string[] = [];
   if (input.eto == null) missing.push("ETo do dia (indisponível)");
+  // Modo dual exige Ke validado (spec §6.3) — nunca substituir por 0.
+  if (input.mode === "dual" && (input.ke == null)) {
+    missing.push("Ke (obrigatório no modo dual — não substituir por 0)");
+  }
   if (input.rainfall == null) missing.push("Chuva do dia (indisponível — não assumir 0)");
   if (input.irrigationGross == null) missing.push("Irrigação do dia (indisponível)");
   if (!input.layers || input.layers.length === 0) missing.push("Camadas de solo (sem cadastro)");
