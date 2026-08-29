@@ -64,6 +64,30 @@ const UNIT_LABELS: Record<Exclude<CcPmpUnit, null>, string> = {
   volumetric_pct: "% volumétrica",
 };
 
+const SOIL_CLASS_OPTIONS = [
+  "Areia franca",
+  "Arenoso",
+  "Argilo-arenoso",
+  "Argilo-siltoso",
+  "Argiloso",
+  "Franco",
+  "Franco-arenoso",
+  "Franco-argilo-arenoso",
+  "Franco-argilo-siltoso",
+  "Franco-argiloso",
+  "Franco-siltoso",
+  "Siltoso",
+] as const;
+
+function normalizeSoilClass(value: string | null | undefined) {
+  if (!value) return "";
+  const normalized = value.trim().toLocaleLowerCase("pt-BR");
+  const match = SOIL_CLASS_OPTIONS.find(
+    (option) => option.toLocaleLowerCase("pt-BR") === normalized
+  );
+  return match ?? value;
+}
+
 function formatNumber(value: number | null | undefined, digits = 2) {
   if (value == null || !Number.isFinite(value)) return "Não informado";
   return value.toLocaleString("pt-BR", {
@@ -427,7 +451,9 @@ function SoilDetail({
   onChanged: () => Promise<void>;
 }) {
   const [supabase] = useState(() => createClient());
-  const [soilClass, setSoilClass] = useState(profile?.soil_class ?? "");
+  const [soilClass, setSoilClass] = useState(
+    normalizeSoilClass(profile?.soil_class)
+  );
   const [vib, setVib] = useState(
     profile?.infiltration_rate_mm_h == null
       ? ""
@@ -902,12 +928,18 @@ function SoilDetail({
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Input id="pivot_name" label="Pivô" value={pivot.name} disabled />
             <Input id="soil_name" label="Nome" value={`Solo ${pivot.name}`} disabled />
-            <Input
+            <Select
               id="soil_class"
               label="Classe do solo"
-              placeholder="Não informado"
               value={soilClass}
               onChange={(event) => setSoilClass(event.target.value)}
+              options={[
+                { value: "", label: "Não informado" },
+                ...SOIL_CLASS_OPTIONS.map((soilClassOption) => ({
+                  value: soilClassOption,
+                  label: soilClassOption,
+                })),
+              ]}
             />
             <Input
               id="infiltration_rate_mm_h"
