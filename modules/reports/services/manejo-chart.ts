@@ -199,6 +199,22 @@ export function safetyAvailableWaterPct(safetyMoistureMm: number, cadMm: number)
   return Math.max(0, Math.min((safetyMoistureMm / cadMm) * 100, 100));
 }
 
+export function visibleMmValues(
+  rows: ManagementReportRow[],
+  visible: Record<ManejoSeriesKey, boolean>,
+  extras: { cumulativeIrrigation?: number[] } = {},
+): number[] {
+  const out: number[] = [];
+  for (const s of MANEJO_ALL) {
+    if (s.axis !== "mm" || !visible[s.k]) continue;
+    rows.forEach((r, i) => {
+      const v = seriesValue(s.k, r, { cumulativeIrrigation: extras.cumulativeIrrigation?.[i] });
+      if (v != null && Number.isFinite(v)) out.push(v);
+    });
+  }
+  return out;
+}
+
 export function mmAxisMax(values: number[], floor = MANEJO_CHART_LAYOUT.mmFloor, step = MANEJO_CHART_LAYOUT.mmStep): number {
   const finite = values.filter((v) => Number.isFinite(v));
   const dataMax = finite.length ? Math.max(0, ...finite) : 0;

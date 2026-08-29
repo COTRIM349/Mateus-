@@ -27,9 +27,11 @@ import {
   seriesValue,
   stepAfterPath,
   summarizeManejoKpis,
+  visibleMmValues,
 } from "./manejo-chart";
 import { groupByParcel, groupByPeriod, summarizeOperational } from "./operational-reports";
 import { REPORT_TYPE_CONFIG, calculateReportKPIs } from "./reports.service";
+import { MANEJO_PREVIEW_TITLE, buildManejoPreviewRows } from "./manejo-preview-fixture";
 
 function balance(overrides: Partial<StoredBalanceForReport> = {}): StoredBalanceForReport {
   return {
@@ -218,6 +220,13 @@ describe("gráfico central de manejo", () => {
     expect(mmAxisTicks(75)).toEqual([0, 15, 30, 45, 60, 75]);
   });
 
+  it("eixo mm do padrão ignora CAD e lâmina acumulada ocultas", () => {
+    const demo = buildManejoPreviewRows(80);
+    const vis = initialManejoVisibility();
+    expect(Math.max(...visibleMmValues(demo, vis))).toBeLessThanOrEqual(75);
+    expect(mmAxisMax(visibleMmValues(demo, vis))).toBe(75);
+  });
+
   it("linha de segurança é desenhada em degrau (step-after)", () => {
     expect(stepAfterPath([])).toBe("");
     expect(stepAfterPath([{ x: 10, y: 20 }])).toBe("M 10 20");
@@ -354,5 +363,16 @@ describe("telas de relatórios e gráfico", () => {
     expect(src).not.toContain("min-h-[min(68vh,720px)]");
     expect(src).not.toContain("xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]");
     expect(src).not.toContain("justexc");
+  });
+
+  it("prévia pública usa o mesmo workspace do gráfico, com série fictícia", () => {
+    const src = readFileSync(join(process.cwd(), "app/preview-manejo/page.tsx"), "utf8");
+    expect(src).toContain("ManejoChartWorkspace");
+    expect(src).toContain("buildManejoPreviewRows");
+    const demo = buildManejoPreviewRows(80);
+    expect(MANEJO_PREVIEW_TITLE).toContain("Pivô 22");
+    expect(demo).toHaveLength(80);
+    expect(demo[0].pivotName).toBe("Pivô 22");
+    expect(summarizeManejoKpis(demo).daysManaged).toBe(80);
   });
 });

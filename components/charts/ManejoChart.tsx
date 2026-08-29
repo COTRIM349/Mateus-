@@ -14,6 +14,7 @@ import {
   legendLabel,
   mmAxisMax,
   mmAxisTicks,
+  visibleMmValues,
   seriesHasData,
   seriesValue,
   stepAfterPath,
@@ -208,11 +209,7 @@ export function ManejoChart({
   const cum = cumulativeIrrigationMm(rows);
 
   const yP = (p: number) => y1 - (clampN(p, 0, pctMax) / pctMax) * (y1 - y0);
-  const mmCandidates = rows.flatMap((r, i) => [
-    r.rainMm, r.irrigationGrossMm, r.etcMm, r.etoMm, r.etpMm ?? 0,
-    r.cadMm, r.afdMm, r.armMm, r.recommendedGrossMm, cum[i],
-  ]);
-  const mmMax = mmAxisMax(mmCandidates);
+  const mmMax = mmAxisMax(visibleMmValues(rows, visible, { cumulativeIrrigation: cum }));
   const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
   const mmTicks = mmAxisTicks(mmMax);
 
