@@ -35,6 +35,7 @@ import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/servi
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
+import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -354,6 +355,7 @@ export default function BalancoHidricoPage() {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
     setCalculating(true);
     setError("");
+    setBalanceRows([]);
 
     try {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
@@ -571,6 +573,7 @@ export default function BalancoHidricoPage() {
 
       setBalanceRows(rows);
     } catch (err) {
+      setBalanceRows([]);
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
       setCalculating(false);
@@ -860,6 +863,19 @@ export default function BalancoHidricoPage() {
           </p>
         )}
         {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
+        {assignment && !hydricAnchor && (
+          <HydricInitialConditionForm
+            farmId={activeFarmId}
+            assignmentId={assignment.id}
+            defaultDate={assignment.management_start_date ?? assignment.planting_date}
+            onSaved={(anchor) => {
+              setHydricAnchor(anchor);
+              setBalanceRows([]);
+              setError("");
+              setDateStart(addDaysIso(anchor.effectiveDate, 1));
+            }}
+          />
+        )}
       </Card>
 
       <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
