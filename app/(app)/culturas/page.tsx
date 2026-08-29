@@ -26,6 +26,7 @@ import { AgronomicSourcesTab } from "@/modules/culture/components/AgronomicSourc
 import { AgronomicCultivarsTab } from "@/modules/culture/components/AgronomicCultivarsTab";
 import { AgronomicPhenologyTab } from "@/modules/culture/components/AgronomicPhenologyTab";
 import { AgronomicKcTab } from "@/modules/culture/components/AgronomicKcTab";
+import { AgronomicRootWaterTab } from "@/modules/culture/components/AgronomicRootWaterTab";
 import {
   interpolateKc,
   interpolateRootDepth,
@@ -118,6 +119,7 @@ const cultureTabs = [
   { id: "variedades", label: "Cultivares" },
   { id: "fases", label: "Fenologia" },
   { id: "kc", label: "Kc e ETc" },
+  { id: "raiz", label: "Raiz e Água" },
   { id: "fontes", label: "Fontes" },
   { id: "associacao", label: "Parcelas" },
   { id: "historico", label: "Histórico" },
@@ -155,6 +157,7 @@ export default function CulturasPage() {
         {activeTab === "variedades" && <div className="animate-in"><AgronomicCultivarsTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fases" && <div className="animate-in"><AgronomicPhenologyTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "kc" && <div className="animate-in"><AgronomicKcTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "raiz" && <div className="animate-in"><AgronomicRootWaterTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fontes" && <div className="animate-in"><AgronomicSourcesTab /></div>}
         {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTabComponent selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
