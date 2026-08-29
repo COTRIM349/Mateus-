@@ -15,42 +15,22 @@ import {
   type Column,
 } from "@/components/ui";
 import { useCrud } from "@/lib/hooks";
-import { useAuth } from "@/components/providers";
 import {
   CROP_STAGES,
   CULTURE_GROUPS,
-  CULTURE_STATUSES,
-  MATURITY_TYPES,
+  CULTURE_STATUSES
 } from "@/constants/brazil";
 import { createClient } from "@/lib/supabase/client";
-import {
-  interpolateKc,
-  interpolateRootDepth,
-  identifyPhase,
-  validatePhases,
-  type CulturePhase,
-  type CultureValidation,
-} from "@/modules/culture/services";
-import {
-  buildPhasesFromTemplate,
-  inferCultureKind,
-  insertPayloadFromTimeline,
-  rebuildPhaseTimeline,
-  type CultureKind,
-} from "@/modules/culture/services/culture-phases";
-import { CultureAgronomyTab } from "@/modules/culture/components/CultureAgronomyTab";
+import { AgronomicSourcesTab } from "@/modules/culture/components/AgronomicSourcesTab";
+import { AgronomicCultivarsTab } from "@/modules/culture/components/AgronomicCultivarsTab";
+import { AgronomicPhenologyTab } from "@/modules/culture/components/AgronomicPhenologyTab";
+import { AgronomicKcTab } from "@/modules/culture/components/AgronomicKcTab";
+import { AgronomicRootWaterTab } from "@/modules/culture/components/AgronomicRootWaterTab";
+import { AgronomicDegreeDayTab } from "@/modules/culture/components/AgronomicDegreeDayTab";
+import { HydricSensitivityTab } from "@/modules/culture/components/HydricSensitivityTab";
 import { CultureCalibrationTab } from "@/modules/culture/components/CultureCalibrationTab";
 
 // ── Types ─────────────────────────────────────────────────────────────────
-
-interface KcByStage {
-  germinacao: number;
-  vegetativo: number;
-  floracao: number;
-  enchimento: number;
-  maturacao: number;
-  colheita: number;
-}
 
 interface Culture {
   id: string;
@@ -59,66 +39,13 @@ interface Culture {
   culture_group: string | null;
   description: string | null;
   status: string;
-  kc_by_stage: KcByStage;
-  root_depth: number;
-  depletion_factor: number;
-  cycle_days: number;
   active: boolean;
-  // Sprint 13 · Etapa 4 — variáveis de manejo de irrigação
-  kl: number | null;
-  ks_function: string | null;
-  optimal_temperature_c: number | null;
-  basal_temperature_c: number | null;
-  by_phase: boolean | null;
-  kc_constant: boolean | null;
-  // Sprint 14 · Etapa 5 — Kl como função selecionável
-  kl_function: string | null;
-}
-
-interface Variety {
-  id: string;
-  culture_id: string;
-  name: string;
-  company: string | null;
-  maturity: string;
-  cycle_days: number | null;
-  observations: string | null;
-  active: boolean;
-}
-
-interface PhaseRow {
-  id: string;
-  culture_id: string;
-  phase_order: number;
-  name: string;
-  days_after_plant: number;
-  duration_days: number;
-  kc_start: number;
-  kc_end: number;
-  root_depth_start: number;
-  root_depth_end: number;
-  depletion_factor: number;
-  description: string | null;
-  // Sprint 13 · Etapa 4 — parâmetros avançados
-  color: string | null;
-  duration_degree_days: number | null;
-  kc_constant: boolean | null;
-  shaded_area_pct: number | null;
-  ks_function: string | null;
-  itn_pct: number | null;
-  cycle_count: number | null;
-  ends_cycle: boolean | null;
-  // Sprint 14 · Etapa 5 — coeficiente Ky para método FAO 33
-  ky: number | null;
-  kl: number | null;
-  phase_key: string | null;
 }
 
 interface AssignmentRow {
   id: string;
   pivot_name: string;
   season_name: string;
-  soil_name: string;
   crop_stage: string;
   planting_date: string;
 }
@@ -131,12 +58,16 @@ interface HistoryEntry {
 }
 
 const cultureTabs = [
-  { id: "cadastro", label: "Cadastro" },
-  { id: "variedades", label: "Variedades" },
-  { id: "agronomia", label: "Agronomia" },
-  { id: "fases", label: "Fases Fenológicas" },
+  { id: "cadastro", label: "Geral" },
+  { id: "variedades", label: "Cultivares" },
+  { id: "fases", label: "Fenologia" },
+  { id: "kc", label: "Kc e ETc" },
+  { id: "raiz", label: "Raiz e Água" },
+  { id: "graus-dia", label: "Graus-dia" },
+  { id: "sensibilidade", label: "Sensibilidade Hídrica" },
   { id: "calibracao", label: "Calibração" },
-  { id: "associacao", label: "Associação" },
+  { id: "fontes", label: "Fontes" },
+  { id: "associacao", label: "Parcelas" },
   { id: "historico", label: "Histórico" },
 ];
 
@@ -159,7 +90,7 @@ export default function CulturasPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader titulo="Culturas" descricao="Motor de cultura — coeficientes, fases fenológicas e sistema radicular" />
+      <PageHeader titulo="Culturas" descricao="Motor agronômico — fenologia, Kc, graus-dia, rastreabilidade e calibração" />
       <Tabs tabs={cultureTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
         {activeTab === "cadastro" && (
@@ -169,10 +100,14 @@ export default function CulturasPage() {
             onCulturesChange={setCultures}
           />
         )}
-        {activeTab === "variedades" && <div className="animate-in"><VarietiesTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
-        {activeTab === "agronomia" && <div className="animate-in"><CultureAgronomyTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
-        {activeTab === "fases" && <div className="animate-in"><PhasesTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "variedades" && <div className="animate-in"><AgronomicCultivarsTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "fases" && <div className="animate-in"><AgronomicPhenologyTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "kc" && <div className="animate-in"><AgronomicKcTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "raiz" && <div className="animate-in"><AgronomicRootWaterTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "graus-dia" && <div className="animate-in"><AgronomicDegreeDayTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "sensibilidade" && <div className="animate-in"><HydricSensitivityTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "calibracao" && <div className="animate-in"><CultureCalibrationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "fontes" && <div className="animate-in"><AgronomicSourcesTab /></div>}
         {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTabComponent selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
       </div>
@@ -203,275 +138,150 @@ function CulturesTab({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const activeCultures = data.filter((c) => c.active);
+  const activeCultures = data.filter((row) => row.active);
 
   useEffect(() => {
     onCulturesChange(activeCultures);
   }, [data]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const groupLabels: Record<string, string> = Object.fromEntries(
-    CULTURE_GROUPS.map((g) => [g.value, g.label])
+    CULTURE_GROUPS.map((g) => [g.value, g.label]),
   );
   const statusLabels: Record<string, string> = Object.fromEntries(
-    CULTURE_STATUSES.map((s) => [s.value, s.label])
+    CULTURE_STATUSES.map((s) => [s.value, s.label]),
   );
-
-  const statusColors: Record<string, string> = {
-    ativo: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400",
-    inativo: "bg-gray-100 text-gray-500 dark:bg-gray-700/30 dark:text-gray-400",
-    em_teste: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400",
-  };
 
   const columns: Column<Culture>[] = [
     {
       header: "",
-      render: (r) => (
+      render: (row) => (
         <input
           type="radio"
           name="culture_select"
-          checked={selectedCultureId === r.id}
-          onChange={() => onSelectCulture(r.id)}
+          checked={selectedCultureId === row.id}
+          onChange={() => onSelectCulture(row.id)}
           className="h-4 w-4 accent-brand-500"
+          aria-label={`Selecionar ${row.name}`}
         />
       ),
     },
-    { header: "Nome", render: (r) => <span className="font-medium">{r.name}</span> },
-    { header: "Grupo", render: (r) => groupLabels[r.culture_group ?? ""] ?? "—" },
-    { header: "Ciclo", render: (r) => `${r.cycle_days} dias`, align: "right" },
-    { header: "Raiz (m)", render: (r) => r.root_depth.toFixed(2), align: "right" },
-    { header: "p", render: (r) => r.depletion_factor.toFixed(2), align: "right" },
-    {
-      header: "Status",
-      render: (r) => (
-        <span className={`inline-flex rounded-lg px-2 py-0.5 text-xs font-medium ${statusColors[r.status] ?? ""}`}>
-          {statusLabels[r.status] ?? r.status}
-        </span>
-      ),
-    },
+    { header: "Cultura", render: (row) => <span className="font-medium">{row.name}</span> },
+    { header: "Nome científico", render: (row) => row.scientific_name ?? "Sem informação" },
+    { header: "Categoria", render: (row) => groupLabels[row.culture_group ?? ""] ?? "Sem informação" },
+    { header: "Status", render: (row) => statusLabels[row.status] ?? row.status },
     {
       header: "Ações",
       align: "right",
-      render: (r) => (
+      render: (row) => (
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setModalOpen(true); }}>Editar</Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
+          <Button variant="ghost" size="sm" onClick={() => { setEditing(row); setModalOpen(true); setFormError(""); }}>
+            Editar
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(row)}>
+            Desativar
+          </Button>
         </div>
       ),
     },
   ];
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
     setSaving(true);
     setFormError("");
-    const fd = new FormData(e.currentTarget);
+    const fd = new FormData(event.currentTarget);
 
-    const depletionFactor = Number(fd.get("depletion_factor"));
-    if (depletionFactor < 0 || depletionFactor > 1) {
-      setFormError("Fator de depleção deve estar entre 0 e 1");
+    const payload = {
+      name: String(fd.get("name") ?? "").trim(),
+      scientific_name: String(fd.get("scientific_name") ?? "").trim() || null,
+      culture_group: String(fd.get("culture_group") ?? "").trim() || null,
+      description: String(fd.get("description") ?? "").trim() || null,
+      status: String(fd.get("status") ?? "ativo"),
+      active: true,
+    };
+
+    if (!payload.name) {
+      setFormError("Nome da cultura é obrigatório.");
       setSaving(false);
       return;
     }
 
-    const kc_by_stage: KcByStage = {
-      germinacao: Number(fd.get("kc_germinacao")),
-      vegetativo: Number(fd.get("kc_vegetativo")),
-      floracao: Number(fd.get("kc_floracao")),
-      enchimento: Number(fd.get("kc_enchimento")),
-      maturacao: Number(fd.get("kc_maturacao")),
-      colheita: Number(fd.get("kc_colheita")),
-    };
-
-    const numOrNull = (name: string) => {
-      const v = fd.get(name) as string;
-      return v ? Number(v) : null;
-    };
-
-    const payload = {
-      name: fd.get("name") as string,
-      scientific_name: (fd.get("scientific_name") as string) || null,
-      culture_group: fd.get("culture_group") as string,
-      description: (fd.get("description") as string) || null,
-      status: fd.get("status") as string,
-      kc_by_stage,
-      root_depth: Number(fd.get("root_depth")),
-      depletion_factor: depletionFactor,
-      cycle_days: Number(fd.get("cycle_days")),
-      // Sprint 13 · Etapa 4 — manejo de irrigação
-      kl: numOrNull("kl"),
-      ks_function: (fd.get("ks_function") as string) || "linear",
-      kl_function: (fd.get("kl_function") as string) || "constant",
-      optimal_temperature_c: numOrNull("optimal_temperature_c"),
-      basal_temperature_c: numOrNull("basal_temperature_c"),
-      by_phase: fd.get("by_phase") === "on",
-      kc_constant: fd.get("kc_constant") === "on",
-    };
     try {
-      const supabase = createClient();
       if (editing) {
         await update(editing.id, payload);
+        const supabase = createClient();
         await supabase.from("culture_history").insert({
           culture_id: editing.id,
           change_type: "edicao",
-          description: `Cultura "${payload.name}" editada`,
-          old_values: { name: editing.name, cycle_days: editing.cycle_days },
-          new_values: { name: payload.name, cycle_days: payload.cycle_days },
+          description: `Cadastro mestre da cultura "${payload.name}" editado`,
         });
       } else {
-        await create(payload as Omit<Culture, "id" | "created_at" | "updated_at">);
+        await create(payload as Omit<Culture, "id">);
       }
       setModalOpen(false);
       setEditing(null);
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao salvar");
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Erro ao salvar cultura.");
     }
     setSaving(false);
   };
 
   return (
     <>
-      <div className="mb-4 flex justify-end">
-        <Button onClick={() => { setEditing(null); setModalOpen(true); }}>Nova cultura</Button>
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <div className="rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
+          O cadastro mestre contém apenas a identidade da espécie. Kc, fenologia, graus-dia, raiz e p ficam nas abas próprias com fonte e validação.
+        </div>
+        <Button onClick={() => { setEditing(null); setModalOpen(true); setFormError(""); }}>
+          Nova cultura
+        </Button>
       </div>
 
       <Card>
         {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
+          <p className="py-8 text-center text-sm text-graphite-400">Carregando culturas...</p>
         ) : activeCultures.length === 0 ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma cultura cadastrada.</p>
+          <p className="py-8 text-center text-sm text-graphite-400">Nenhuma cultura cadastrada.</p>
         ) : (
-          <Table columns={columns} data={activeCultures} getKey={(r) => r.id} />
+          <Table columns={columns} data={activeCultures} getKey={(row) => row.id} />
         )}
       </Card>
 
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar cultura" : "Nova cultura"} size="lg">
+      <Modal
+        open={modalOpen}
+        onClose={() => { setModalOpen(false); setEditing(null); setFormError(""); }}
+        title={editing ? "Editar cultura" : "Nova cultura"}
+      >
         <form onSubmit={handleSubmit} className="space-y-5">
+          <Input id="name" name="name" label="Nome comum" required defaultValue={editing?.name ?? ""} />
+          <Input id="scientific_name" name="scientific_name" label="Nome científico" defaultValue={editing?.scientific_name ?? ""} />
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="name" name="name" label="Nome" placeholder="Soja" required defaultValue={editing?.name} />
-            <Input id="scientific_name" name="scientific_name" label="Nome científico" placeholder="Glycine max" defaultValue={editing?.scientific_name ?? ""} />
-            <Select id="culture_group" name="culture_group" label="Grupo" options={[...CULTURE_GROUPS]} required defaultValue={editing?.culture_group ?? "graos"} />
-            <Select id="status" name="status" label="Status" options={[...CULTURE_STATUSES]} required defaultValue={editing?.status ?? "ativo"} />
-            <Input id="cycle_days" name="cycle_days" label="Ciclo (dias)" type="number" required defaultValue={editing?.cycle_days} />
-            <Input id="root_depth" name="root_depth" label="Prof. raiz máx. (m)" type="number" step="0.01" required defaultValue={editing?.root_depth} />
-            <Input id="depletion_factor" name="depletion_factor" label="Fator de depleção (p)" type="number" step="0.01" min="0" max="1" required defaultValue={editing?.depletion_factor} />
+            <Select
+              id="culture_group"
+              name="culture_group"
+              label="Categoria"
+              options={[...CULTURE_GROUPS]}
+              defaultValue={editing?.culture_group ?? CULTURE_GROUPS[0]?.value}
+            />
+            <Select
+              id="status"
+              name="status"
+              label="Status"
+              options={[...CULTURE_STATUSES]}
+              defaultValue={editing?.status ?? "ativo"}
+            />
           </div>
+          <TextArea id="description" name="description" label="Observações gerais da espécie" defaultValue={editing?.description ?? ""} />
 
-          <TextArea id="description" name="description" label="Descrição" defaultValue={editing?.description ?? ""} />
-
-          <div>
-            <p className="mb-2 text-sm font-medium text-graphite-900 dark:text-gray-200">Kc por estágio (referência rápida)</p>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {CROP_STAGES.map((stage) => (
-                <Input
-                  key={stage.value}
-                  id={`kc_${stage.value}`}
-                  name={`kc_${stage.value}`}
-                  label={stage.label}
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max="2.5"
-                  required
-                  defaultValue={editing?.kc_by_stage?.[stage.value as keyof KcByStage] ?? ""}
-                />
-              ))}
-            </div>
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
+            Não informe Kc, Tb, GDA, profundidade radicular, p ou duração fenológica nesta tela.
           </div>
-
-          {/* ── Manejo de irrigação (Sprint 13 · Etapa 4) ────────────── */}
-          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
-            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
-              Manejo de irrigação
-            </legend>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <Select
-                id="kl_function"
-                name="kl_function"
-                label="Kl — Função (Sprint 14)"
-                options={[
-                  { value: "constant", label: "Constante (valor fixo)" },
-                  { value: "custom", label: "Personalizado" },
-                  { value: "fereres", label: "Fereres 1981 (área sombreada)" },
-                  { value: "keller_karmeli", label: "Keller-Karmeli 1975 (área molhada)" },
-                  { value: "freitas", label: "Freitas (Vermeiren-Jobling)" },
-                  { value: "bernardo", label: "Bernardo 2019 (conservador)" },
-                ]}
-                defaultValue={editing?.kl_function ?? "constant"}
-              />
-              <Input
-                id="kl"
-                name="kl"
-                label="Kl — valor (usado se função = constant/custom)"
-                type="number"
-                step="0.01"
-                min="0"
-                max="1"
-                placeholder="1.0 (pivô central)"
-                defaultValue={editing?.kl ?? 1.0}
-              />
-              <Select
-                id="ks_function"
-                name="ks_function"
-                label="Ks — Função de estresse"
-                options={[
-                  { value: "linear", label: "Linear (FAO-56 padrão)" },
-                  { value: "fao33", label: "FAO 33 (Doorenbos-Kassam, usa Ky por fase)" },
-                  { value: "exponential", label: "Exponencial (castiga estresse mais rápido)" },
-                  { value: "sigmoid", label: "Sigmoide (transição suave)" },
-                  { value: "none", label: "Nenhum (Ks fixo em 1)" },
-                ]}
-                defaultValue={editing?.ks_function ?? "linear"}
-              />
-              <Input
-                id="optimal_temperature_c"
-                name="optimal_temperature_c"
-                label="Temp. ótima (°C)"
-                type="number"
-                step="0.1"
-                min="0"
-                max="45"
-                placeholder="Ex: algodão 28"
-                defaultValue={editing?.optimal_temperature_c ?? ""}
-              />
-              <Input
-                id="basal_temperature_c"
-                name="basal_temperature_c"
-                label="Temp. basal (°C) — graus-dia"
-                type="number"
-                step="0.1"
-                min="0"
-                max="30"
-                placeholder="Ex.: valor de literatura com fonte"
-                defaultValue={editing?.basal_temperature_c ?? ""}
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-6">
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  name="by_phase"
-                  defaultChecked={editing?.by_phase ?? true}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Manejo por fase
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(usa parâmetros da fase atual)</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  name="kc_constant"
-                  defaultChecked={editing?.kc_constant ?? false}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Kc constante no ciclo
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(pastagens perenes)</span>
-              </label>
-            </div>
-          </fieldset>
 
           {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>
+              Cancelar
+            </Button>
             <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
           </div>
         </form>
@@ -483,688 +293,14 @@ function CulturesTab({
         onConfirm={async () => {
           if (!deleteTarget) return;
           setSaving(true);
-          try { await softDelete(deleteTarget.id); if (selectedCultureId === deleteTarget.id) onSelectCulture(null); setDeleteTarget(null); } catch { setFormError("Erro ao excluir"); }
+          await softDelete(deleteTarget.id);
+          if (selectedCultureId === deleteTarget.id) onSelectCulture(null);
+          setDeleteTarget(null);
           setSaving(false);
         }}
-        title="Excluir cultura"
-        message={`Deseja excluir a cultura "${deleteTarget?.name}"?`}
-        confirmLabel="Excluir"
-        loading={saving}
-      />
-    </>
-  );
-}
-
-// ── Variedades ────────────────────────────────────────────────────────────
-
-function VarietiesTab({
-  selectedCultureId,
-  onSelectCulture,
-  cultures,
-}: {
-  selectedCultureId: string | null;
-  onSelectCulture: (id: string | null) => void;
-  cultures: Culture[];
-}) {
-  const supabase = createClient();
-  const [varieties, setVarieties] = useState<Variety[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Variety | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Variety | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState("");
-
-  const fetchVarieties = useCallback(async () => {
-    if (!selectedCultureId) { setVarieties([]); return; }
-    setLoading(true);
-    const { data } = await supabase
-      .from("culture_varieties")
-      .select("*")
-      .eq("culture_id", selectedCultureId)
-      .eq("active", true)
-      .order("name");
-    if (data) setVarieties(data as Variety[]);
-    setLoading(false);
-  }, [selectedCultureId, supabase]);
-
-  useEffect(() => { fetchVarieties(); }, [fetchVarieties]);
-
-  const maturityLabels: Record<string, string> = Object.fromEntries(
-    MATURITY_TYPES.map((m) => [m.value, m.label])
-  );
-
-  const columns: Column<Variety>[] = [
-    { header: "Cultivar", render: (r) => <span className="font-medium">{r.name}</span> },
-    { header: "Empresa", render: (r) => r.company ?? "—" },
-    { header: "Maturação", render: (r) => maturityLabels[r.maturity] ?? r.maturity },
-    { header: "Ciclo (dias)", render: (r) => r.cycle_days ?? "—", align: "right" },
-    {
-      header: "Ações",
-      align: "right",
-      render: (r) => (
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setModalOpen(true); }}>Editar</Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
-        </div>
-      ),
-    },
-  ];
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedCultureId) return;
-    setSaving(true);
-    setFormError("");
-    const fd = new FormData(e.currentTarget);
-    const payload = {
-      culture_id: selectedCultureId,
-      name: fd.get("name") as string,
-      company: (fd.get("company") as string) || null,
-      maturity: fd.get("maturity") as string,
-      cycle_days: fd.get("cycle_days") ? Number(fd.get("cycle_days")) : null,
-      observations: (fd.get("observations") as string) || null,
-    };
-    try {
-      if (editing) {
-        const { error } = await supabase.from("culture_varieties").update(payload).eq("id", editing.id);
-        if (error) throw new Error(error.message);
-        await supabase.from("culture_history").insert({
-          culture_id: selectedCultureId, change_type: "variedade_edit",
-          description: `Variedade "${payload.name}" editada`,
-        });
-      } else {
-        const { error } = await supabase.from("culture_varieties").insert(payload);
-        if (error) throw new Error(error.message);
-        await supabase.from("culture_history").insert({
-          culture_id: selectedCultureId, change_type: "variedade_add",
-          description: `Variedade "${payload.name}" adicionada`,
-        });
-      }
-      setModalOpen(false);
-      setEditing(null);
-      fetchVarieties();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao salvar");
-    }
-    setSaving(false);
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget || !selectedCultureId) return;
-    setSaving(true);
-    await supabase.from("culture_varieties").update({ active: false }).eq("id", deleteTarget.id);
-    await supabase.from("culture_history").insert({
-      culture_id: selectedCultureId, change_type: "variedade_del",
-      description: `Variedade "${deleteTarget.name}" removida`,
-    });
-    setDeleteTarget(null);
-    setSaving(false);
-    fetchVarieties();
-  };
-
-  return (
-    <>
-      <div className="mb-4 flex flex-wrap items-end gap-4">
-        <div className="min-w-[220px]">
-          <Select
-            id="culture_select_var"
-            name="culture_select_var"
-            label="Cultura"
-            options={cultures.map((c) => ({ value: c.id, label: c.name }))}
-            value={selectedCultureId ?? ""}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectCulture(e.target.value || null)}
-          />
-        </div>
-        {selectedCultureId && (
-          <Button onClick={() => { setEditing(null); setModalOpen(true); }}>Nova variedade</Button>
-        )}
-      </div>
-
-      {!selectedCultureId ? (
-        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para gerenciar variedades.</p></Card>
-      ) : (
-        <Card>
-          {loading ? (
-            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-          ) : varieties.length === 0 ? (
-            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma variedade cadastrada.</p>
-          ) : (
-            <Table columns={columns} data={varieties} getKey={(r) => r.id} />
-          )}
-        </Card>
-      )}
-
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar variedade" : "Nova variedade"}>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <Input id="name" name="name" label="Cultivar" placeholder="BRS 388" required defaultValue={editing?.name} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="company" name="company" label="Empresa" placeholder="Embrapa" defaultValue={editing?.company ?? ""} />
-            <Select id="maturity" name="maturity" label="Ciclo de maturação" options={[...MATURITY_TYPES]} required defaultValue={editing?.maturity ?? "medio"} />
-            <Input id="cycle_days" name="cycle_days" label="Ciclo (dias)" type="number" defaultValue={editing?.cycle_days ?? ""} />
-          </div>
-          <TextArea id="observations" name="observations" label="Observações" defaultValue={editing?.observations ?? ""} />
-          {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
-          </div>
-        </form>
-      </Modal>
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Excluir variedade"
-        message={`Deseja excluir a variedade "${deleteTarget?.name}"?`}
-        confirmLabel="Excluir"
-        loading={saving}
-      />
-    </>
-  );
-}
-
-// ── Fases Fenológicas ─────────────────────────────────────────────────────
-
-function PhasesTab({
-  selectedCultureId,
-  onSelectCulture,
-  cultures,
-}: {
-  selectedCultureId: string | null;
-  onSelectCulture: (id: string | null) => void;
-  cultures: Culture[];
-}) {
-  const supabase = createClient();
-  const [phases, setPhases] = useState<PhaseRow[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<PhaseRow | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<PhaseRow | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState("");
-  const [warnings, setWarnings] = useState<CultureValidation[]>([]);
-  const [templateTarget, setTemplateTarget] = useState<Exclude<CultureKind, "outro"> | null>(null);
-
-  const selectedCulture = cultures.find((c) => c.id === selectedCultureId);
-  const suggestedKind = selectedCulture ? inferCultureKind(selectedCulture.name) : "outro";
-
-  const fetchPhases = useCallback(async () => {
-    if (!selectedCultureId) { setPhases([]); return; }
-    setLoading(true);
-    const { data } = await supabase
-      .from("culture_phases")
-      .select("*")
-      .eq("culture_id", selectedCultureId)
-      .order("phase_order");
-    if (data) setPhases(data as PhaseRow[]);
-    setLoading(false);
-  }, [selectedCultureId, supabase]);
-
-  useEffect(() => { fetchPhases(); }, [fetchPhases]);
-
-  const previewDay = phases.length > 0 && selectedCulture
-    ? Math.floor(selectedCulture.cycle_days / 2)
-    : null;
-
-  const columns: Column<PhaseRow>[] = [
-    { header: "#", render: (r) => r.phase_order, align: "center" },
-    {
-      header: "Cor",
-      render: (r) => (
-        <span
-          className="inline-block h-4 w-4 rounded-full border border-gray-200 dark:border-white/10"
-          style={{ backgroundColor: r.color ?? "#94a3b8" }}
-          title={r.color ?? ""}
-        />
-      ),
-      align: "center",
-    },
-    { header: "Fase", render: (r) => <span className="font-medium">{r.name}</span> },
-    { header: "Chave", render: (r) => r.phase_key ?? "—", align: "center" },
-    { header: "DAP", render: (r) => r.days_after_plant, align: "right" },
-    { header: "Duração", render: (r) => `${r.duration_days} dias`, align: "right" },
-    { header: "Kc início", render: (r) => r.kc_start.toFixed(2), align: "right" },
-    { header: "Kc fim", render: (r) => r.kc_end.toFixed(2), align: "right" },
-    { header: "Raiz ini (m)", render: (r) => r.root_depth_start.toFixed(2), align: "right" },
-    { header: "Raiz fim (m)", render: (r) => r.root_depth_end.toFixed(2), align: "right" },
-    { header: "p", render: (r) => r.depletion_factor.toFixed(2), align: "right" },
-    { header: "ITN", render: (r) => r.itn_pct != null ? `${r.itn_pct.toFixed(0)}%` : "100%", align: "right" },
-    { header: "Área somb.", render: (r) => r.shaded_area_pct != null ? `${r.shaded_area_pct.toFixed(0)}%` : "—", align: "right" },
-    {
-      header: "Ações",
-      align: "right",
-      render: (r) => (
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setModalOpen(true); }}>Editar</Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
-        </div>
-      ),
-    },
-  ];
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedCultureId || !selectedCulture) return;
-    setSaving(true);
-    setFormError("");
-    setWarnings([]);
-    const fd = new FormData(e.currentTarget);
-
-    const newPhase = {
-      phase_order: Number(fd.get("phase_order")),
-      duration_days: Number(fd.get("duration_days")),
-      kc_start: Number(fd.get("kc_start")),
-      kc_end: Number(fd.get("kc_end")),
-    };
-
-    const otherPhases = editing
-      ? phases.filter((p) => p.id !== editing.id)
-      : phases;
-    const allPhases = rebuildPhaseTimeline([
-      ...otherPhases.map((p) => ({
-        phase_order: p.phase_order,
-        duration_days: p.duration_days,
-        kc_start: p.kc_start,
-        kc_end: p.kc_end,
-      })),
-      newPhase,
-    ]);
-
-    const issues = validatePhases(allPhases, selectedCulture.cycle_days);
-    const errors = issues.filter((i) => i.level === "error");
-    if (errors.length > 0) {
-      setFormError(errors.map((e) => e.message).join("; "));
-      setSaving(false);
-      return;
-    }
-    setWarnings(issues.filter((i) => i.level === "warning"));
-
-    const numOrNull = (name: string) => {
-      const v = fd.get(name) as string;
-      return v ? Number(v) : null;
-    };
-
-    const rebuiltRow = allPhases.find((p) => p.phase_order === newPhase.phase_order) ?? allPhases[0];
-    const payload = {
-      culture_id: selectedCultureId,
-      phase_order: newPhase.phase_order,
-      name: fd.get("name") as string,
-      phase_key: ((fd.get("phase_key") as string) || "").trim() || null,
-      days_after_plant: rebuiltRow.days_after_plant,
-      duration_days: newPhase.duration_days,
-      kc_start: newPhase.kc_start,
-      kc_end: newPhase.kc_end,
-      root_depth_start: Number(fd.get("root_depth_start")),
-      root_depth_end: Number(fd.get("root_depth_end")),
-      depletion_factor: Number(fd.get("depletion_factor")),
-      description: (fd.get("description") as string) || null,
-      // Sprint 13 · Etapa 4 — parâmetros avançados
-      color: (fd.get("color") as string) || "#94a3b8",
-      duration_degree_days: numOrNull("duration_degree_days"),
-      kc_constant: fd.get("kc_constant") === "on",
-      shaded_area_pct: numOrNull("shaded_area_pct"),
-      ks_function: (fd.get("ks_function") as string) || null,
-      itn_pct: numOrNull("itn_pct") ?? 100,
-      cycle_count: numOrNull("cycle_count") ?? 1,
-      ends_cycle: fd.get("ends_cycle") === "on",
-      ky: numOrNull("ky"),
-      kl: numOrNull("kl") ?? 1,
-    };
-
-    try {
-      if (editing) {
-        const { error } = await supabase.from("culture_phases").update(payload).eq("id", editing.id);
-        if (error) throw new Error(error.message);
-        await supabase.from("culture_history").insert({
-          culture_id: selectedCultureId, change_type: "fase_edit",
-          description: `Fase "${payload.name}" editada`,
-        });
-      } else {
-        const { error } = await supabase.from("culture_phases").insert(payload);
-        if (error) throw new Error(error.message);
-        await supabase.from("culture_history").insert({
-          culture_id: selectedCultureId, change_type: "fase_add",
-          description: `Fase "${payload.name}" adicionada (ordem ${payload.phase_order})`,
-        });
-      }
-      setModalOpen(false);
-      setEditing(null);
-      await persistRebuiltTimeline(selectedCultureId);
-      fetchPhases();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao salvar");
-    }
-    setSaving(false);
-  };
-
-  const persistRebuiltTimeline = async (cultureId: string) => {
-    const { data } = await supabase
-      .from("culture_phases")
-      .select("id, phase_order, duration_days")
-      .eq("culture_id", cultureId)
-      .order("phase_order");
-    if (!data) return;
-    const rebuilt = rebuildPhaseTimeline(
-      data.map((p) => ({
-        id: p.id as string,
-        phase_order: p.phase_order as number,
-        duration_days: p.duration_days as number,
-      })),
-    );
-    await Promise.all(
-      rebuilt.map((p) =>
-        supabase.from("culture_phases").update({ days_after_plant: p.days_after_plant }).eq("id", p.id),
-      ),
-    );
-  };
-
-  const applyTemplate = async (kind: Exclude<CultureKind, "outro">) => {
-    if (!selectedCultureId || !selectedCulture) return;
-    setSaving(true);
-    setFormError("");
-    try {
-      if (phases.length > 0) {
-        const { error: delErr } = await supabase
-          .from("culture_phases")
-          .delete()
-          .eq("culture_id", selectedCultureId);
-        if (delErr) throw new Error(delErr.message);
-      }
-      const rows = buildPhasesFromTemplate(kind, selectedCulture.cycle_days);
-      const payload = insertPayloadFromTimeline(selectedCultureId, rows);
-      const { error } = await supabase.from("culture_phases").insert(payload);
-      if (error) throw new Error(error.message);
-      await supabase.from("culture_history").insert({
-        culture_id: selectedCultureId,
-        change_type: "fase_add",
-        description: `Modelo ${kind === "soja" ? "soja" : "algodão"} aplicado (${rows.length} fases, ${rows.reduce((s, p) => s + p.duration_days, 0)} dias)`,
-      });
-      setTemplateTarget(null);
-      fetchPhases();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao aplicar modelo");
-    }
-    setSaving(false);
-  };
-
-  const requestTemplate = (kind: Exclude<CultureKind, "outro">) => {
-    if (phases.length > 0) {
-      setTemplateTarget(kind);
-      return;
-    }
-    void applyTemplate(kind);
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget || !selectedCultureId) return;
-    setSaving(true);
-    await supabase.from("culture_phases").delete().eq("id", deleteTarget.id);
-    await supabase.from("culture_history").insert({
-      culture_id: selectedCultureId, change_type: "fase_del",
-      description: `Fase "${deleteTarget.name}" removida`,
-    });
-    await persistRebuiltTimeline(selectedCultureId);
-    setDeleteTarget(null);
-    setSaving(false);
-    fetchPhases();
-  };
-
-  const nextOrder = phases.length > 0 ? Math.max(...phases.map((p) => p.phase_order)) + 1 : 1;
-  const nextDAP = phases.length > 0
-    ? phases[phases.length - 1].days_after_plant + phases[phases.length - 1].duration_days
-    : 0;
-
-  return (
-    <>
-      <div className="mb-4 flex flex-wrap items-end gap-4">
-        <div className="min-w-[220px]">
-          <Select
-            id="culture_select_phases"
-            name="culture_select_phases"
-            label="Cultura"
-            options={cultures.map((c) => ({ value: c.id, label: `${c.name} (${c.cycle_days}d)` }))}
-            value={selectedCultureId ?? ""}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectCulture(e.target.value || null)}
-          />
-        </div>
-        {selectedCultureId && (
-          <>
-            <Button variant="secondary" type="button" onClick={() => requestTemplate("soja")}>
-              Aplicar modelo soja
-            </Button>
-            <Button variant="secondary" type="button" onClick={() => requestTemplate("algodao")}>
-              Aplicar modelo algodão
-            </Button>
-            <Button onClick={() => { setEditing(null); setModalOpen(true); setWarnings([]); }}>Nova fase</Button>
-          </>
-        )}
-      </div>
-
-      {!selectedCultureId ? (
-        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para gerenciar fases fenológicas.</p></Card>
-      ) : (
-        <>
-          <p className="mb-4 text-[11px] text-graphite-400 dark:text-gray-500">
-            A duração (dias) organiza a linha do tempo. O motor interpola o Kc diariamente, de forma linear entre kc_start e kc_end; os modelos são referências iniciais, não parâmetros oficiais de cultivar.
-          </p>
-          {formError && !modalOpen && (
-            <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>
-          )}
-          {previewDay !== null && phases.length > 0 && (
-            <div className="mb-4 grid gap-3 rounded-xl border border-gray-100 bg-gray-50/80 p-5 dark:border-white/[0.06] dark:bg-white/[0.03] sm:grid-cols-4">
-              <div>
-                <p className="text-xs text-graphite-400 dark:text-gray-500">Dia exemplo (DAP {previewDay})</p>
-                <p className="text-sm font-semibold text-graphite-900 dark:text-white">
-                  {identifyPhase(phases as CulturePhase[], previewDay)?.phase.name ?? "—"}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-graphite-400 dark:text-gray-500">Kc interpolado</p>
-                <p className="text-sm font-semibold text-graphite-900 dark:text-white">
-                  {interpolateKc(phases as CulturePhase[], previewDay).toFixed(3)}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-graphite-400 dark:text-gray-500">Raiz interpolada</p>
-                <p className="text-sm font-semibold text-graphite-900 dark:text-white">
-                  {interpolateRootDepth(phases as CulturePhase[], previewDay).toFixed(3)} m
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-graphite-400 dark:text-gray-500">Total fases</p>
-                <p className="text-sm font-semibold text-graphite-900 dark:text-white">{phases.length}</p>
-              </div>
-            </div>
-          )}
-
-          <Card>
-            {loading ? (
-              <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-            ) : phases.length === 0 ? (
-              <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-                Nenhuma fase cadastrada. Aplique o modelo soja ou algodão, ou adicione fases manualmente.
-                {suggestedKind !== "outro" && ` Esta cultura parece ${suggestedKind === "soja" ? "soja" : "algodão"}.`}
-              </p>
-            ) : (
-              <Table columns={columns} data={phases} getKey={(r) => r.id} />
-            )}
-          </Card>
-        </>
-      )}
-
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); setWarnings([]); }} title={editing ? "Editar fase" : "Nova fase"} size="lg">
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="phase_order" name="phase_order" label="Ordem" type="number" min="1" required defaultValue={editing?.phase_order ?? nextOrder} />
-            <Input id="name" name="name" label="Nome da fase" placeholder="Emergência" required defaultValue={editing?.name} />
-            <Input id="phase_key" name="phase_key" label="Chave (opcional)" placeholder="emergencia" defaultValue={editing?.phase_key ?? ""} />
-            <Input id="days_after_plant" name="days_after_plant" label="DAP início (calculado)" type="number" min="0" readOnly defaultValue={editing?.days_after_plant ?? nextDAP} />
-            <Input id="duration_days" name="duration_days" label="Duração (dias)" type="number" min="1" required defaultValue={editing?.duration_days} />
-            <Input id="kl" name="kl" label="KL (0–1)" type="number" step="0.01" min="0" max="1" defaultValue={editing?.kl ?? 1} />
-          </div>
-
-          <p className="text-sm font-medium text-graphite-900 dark:text-gray-200">Kc (interpolação linear)</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="kc_start" name="kc_start" label="Kc início" type="number" step="0.01" min="0" max="2.5" required defaultValue={editing?.kc_start} />
-            <Input id="kc_end" name="kc_end" label="Kc fim" type="number" step="0.01" min="0" max="2.5" required defaultValue={editing?.kc_end} />
-          </div>
-
-          <p className="text-sm font-medium text-graphite-900 dark:text-gray-200">Sistema radicular</p>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="root_depth_start" name="root_depth_start" label="Raiz início (m)" type="number" step="0.01" min="0" required defaultValue={editing?.root_depth_start ?? 0.1} />
-            <Input id="root_depth_end" name="root_depth_end" label="Raiz fim (m)" type="number" step="0.01" min="0" required defaultValue={editing?.root_depth_end ?? 0.3} />
-          </div>
-
-          <Input id="depletion_factor" name="depletion_factor" label="Fator de depleção (p)" type="number" step="0.01" min="0" max="1" required defaultValue={editing?.depletion_factor ?? selectedCulture?.depletion_factor ?? 0.5} />
-
-          {/* ── Parâmetros avançados (Sprint 13 · Etapa 4) ────────── */}
-          <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
-            <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
-              Parâmetros avançados
-            </legend>
-            <div className="grid gap-4 sm:grid-cols-3">
-              <div>
-                <label className="mb-1 block text-xs font-medium text-graphite-700 dark:text-gray-300">
-                  Cor da fase (timeline)
-                </label>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="color"
-                    id="color"
-                    name="color"
-                    defaultValue={editing?.color ?? "#94a3b8"}
-                    className="h-9 w-14 cursor-pointer rounded border border-gray-200 dark:border-white/10"
-                  />
-                  <span className="text-xs text-graphite-400 dark:text-gray-500">clique para escolher</span>
-                </div>
-              </div>
-              <Input
-                id="duration_degree_days"
-                name="duration_degree_days"
-                label="Duração (graus-dia °C)"
-                type="number"
-                step="0.1"
-                min="0"
-                placeholder="Alternativa a dias"
-                defaultValue={editing?.duration_degree_days ?? ""}
-              />
-              <Input
-                id="itn_pct"
-                name="itn_pct"
-                label="ITN — Irrigação total (%)"
-                type="number"
-                step="1"
-                min="0"
-                max="150"
-                placeholder="100"
-                defaultValue={editing?.itn_pct ?? 100}
-              />
-              <Input
-                id="shaded_area_pct"
-                name="shaded_area_pct"
-                label="Área sombreada (%)"
-                type="number"
-                step="1"
-                min="0"
-                max="100"
-                placeholder="0-100"
-                defaultValue={editing?.shaded_area_pct ?? ""}
-              />
-              <Select
-                id="ks_function"
-                name="ks_function"
-                label="Ks — Função (override)"
-                options={[
-                  { value: "", label: "Herda da cultura" },
-                  { value: "linear", label: "Linear (FAO-56)" },
-                  { value: "fao33", label: "FAO 33 (Doorenbos-Kassam)" },
-                  { value: "exponential", label: "Exponencial" },
-                  { value: "sigmoid", label: "Sigmoide" },
-                  { value: "none", label: "Nenhum (Ks = 1)" },
-                ]}
-                defaultValue={editing?.ks_function ?? ""}
-              />
-              <Input
-                id="ky"
-                name="ky"
-                label="Ky (só para FAO 33)"
-                type="number"
-                step="0.05"
-                min="0"
-                max="3"
-                placeholder="Ex.: milho floração 1.5"
-                defaultValue={editing?.ky ?? ""}
-              />
-              <Input
-                id="cycle_count"
-                name="cycle_count"
-                label="Nº de ciclos (rebrotas)"
-                type="number"
-                step="1"
-                min="1"
-                placeholder="1"
-                defaultValue={editing?.cycle_count ?? 1}
-              />
-            </div>
-            <div className="mt-4 flex flex-wrap gap-6">
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  name="kc_constant"
-                  defaultChecked={editing?.kc_constant ?? false}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Kc constante nesta fase
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(usa só kc_início)</span>
-              </label>
-              <label className="flex items-center gap-2 text-sm text-graphite-700 dark:text-gray-300">
-                <input
-                  type="checkbox"
-                  name="ends_cycle"
-                  defaultChecked={editing?.ends_cycle ?? false}
-                  className="h-4 w-4 accent-brand-500"
-                />
-                Encerra o ciclo aqui
-                <span className="text-xs text-graphite-400 dark:text-gray-500">(reinicia após esta fase)</span>
-              </label>
-            </div>
-          </fieldset>
-
-          <TextArea id="description" name="description" label="Observações" defaultValue={editing?.description ?? ""} />
-
-          {warnings.length > 0 && (
-            <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3.5 dark:border-yellow-900/50 dark:bg-yellow-900/20">
-              {warnings.map((w, i) => (
-                <p key={i} className="text-xs text-yellow-700 dark:text-yellow-400">{w.message}</p>
-              ))}
-            </div>
-          )}
-          {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
-          </div>
-        </form>
-      </Modal>
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Excluir fase"
-        message={`Excluir a fase "${deleteTarget?.name}"?`}
-        confirmLabel="Excluir"
-        loading={saving}
-      />
-      <ConfirmDialog
-        open={!!templateTarget}
-        onClose={() => setTemplateTarget(null)}
-        onConfirm={() => { if (templateTarget) void applyTemplate(templateTarget); }}
-        title={templateTarget === "algodao" ? "Aplicar modelo algodão" : "Aplicar modelo soja"}
-        message="Isso substitui as fases atuais desta cultura. Parcelas com estádio manual perdem a referência (voltam ao automático pelo DAP). Continuar?"
-        confirmLabel="Substituir fases"
+        title="Desativar cultura"
+        message={`Desativar a cultura "${deleteTarget?.name ?? ""}"? O histórico será preservado.`}
+        confirmLabel="Desativar"
         loading={saving}
       />
     </>
@@ -1192,7 +328,7 @@ function AssociationTab({
     // Sprint 13 · Etapa 6 — só parcelas ativas nesta cultura.
     const { data } = await supabase
       .from("pivot_crop_assignments")
-      .select("id, crop_stage, planting_date, pivots(name), seasons(name), soils(name)")
+      .select("id, crop_stage, planting_date, pivots(name), seasons(name)")
       .eq("culture_id", selectedCultureId)
       .eq("active", true)
       .or("status.is.null,status.eq.ativa");
@@ -1202,7 +338,6 @@ function AssociationTab({
           id: d.id,
           pivot_name: (d.pivots as unknown as { name: string })?.name ?? "—",
           season_name: (d.seasons as unknown as { name: string })?.name ?? "—",
-          soil_name: (d.soils as unknown as { name: string })?.name ?? "—",
           crop_stage: d.crop_stage,
           planting_date: d.planting_date,
         }))
@@ -1220,7 +355,6 @@ function AssociationTab({
   const columns: Column<AssignmentRow>[] = [
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivot_name}</span> },
     { header: "Safra", render: (r) => r.season_name },
-    { header: "Solo", render: (r) => r.soil_name },
     { header: "Estágio", render: (r) => stageLabels[r.crop_stage] ?? r.crop_stage },
     { header: "Plantio", render: (r) => new Date(r.planting_date + "T12:00:00").toLocaleDateString("pt-BR") },
   ];

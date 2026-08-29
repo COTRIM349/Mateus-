@@ -80,6 +80,21 @@ export function hasCompletePhaseCoverage(
   });
 }
 
+function hasCompleteAgronomicCoverage(input: PivotEngineInput): boolean {
+  const dates = dateRange(input.dateStart, input.dateEnd);
+  if (dates.length === 0 || !input.agronomicByDate) return false;
+  return dates.every((date) => {
+    const day = input.agronomicByDate?.[date];
+    return Boolean(
+      day &&
+      Number.isFinite(day.kc) && day.kc >= 0 && day.kc <= 2.5 &&
+      Number.isFinite(day.rootDepthM) && day.rootDepthM > 0 &&
+      Number.isFinite(day.depletionFractionP) &&
+      day.depletionFractionP > 0 && day.depletionFractionP < 1
+    );
+  });
+}
+
 export type OperationalBlockCode =
   | "invalid_period"
   | "invalid_phase_coverage"
@@ -120,11 +135,11 @@ export function diagnoseOperationalInput(input: PivotEngineInput): OperationalIn
     };
   }
 
-  if (!hasCompletePhaseCoverage(input.phases, input)) {
+  if (!hasCompleteAgronomicCoverage(input) && !hasCompletePhaseCoverage(input.phases, input)) {
     return {
       operational: false,
       code: "invalid_phase_coverage",
-      message: "Fases da cultura incompletas ou inválidas para o período: revise Kc, duração, raiz, fator p e KL.",
+      message: "Fases da cultura incompletas ou inválidas e parâmetros agronômicos diários ausentes: o balanço não inventa Kc, raiz ou p.",
       date: null,
     };
   }
@@ -254,37 +269,55 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
 
     const dateMs = new Date(`${date}T00:00:00Z`).getTime();
     const dae = Math.max(0, Math.floor((dateMs - referenceMs) / 86_400_000));
-    const phase = identifyPhase(normalized.phases, dae)?.phase ?? null;
-    if (!phase) return [];
+    const agronomic = normalized.agronomicByDate?.[date] ?? null;
+    const phase = normalized.phases.length > 0
+      ? identifyPhase(normalized.phases, dae)?.phase ?? null
+      : null;
 
-    const kc = interpolateKc(normalized.phases, dae);
+    const legacyKc = phase ? interpolateKc(normalized.phases, dae) : null;
+    const kc = agronomic?.kc ?? legacyKc;
+    if (kc == null || !Number.isFinite(kc)) return [];
+
     const kl = resolveManejoKl({
       parcelOverride: normalized.assignment.kl_override,
-      phaseKl: phase.kl,
+      phaseKl: phase?.kl ?? null,
       cultureKl: normalized.culture.kl,
     });
     const etcPotential = Math.max(weather.et0 * kc * kl, 0);
-    const baseP = resolveDepletionFactor(
-      normalized.assignment,
-      phase.depletion_factor,
-      normalized.culture.depletion_factor,
-    );
+
+    const legacyP = normalized.culture.depletion_factor ?? phase?.depletion_factor ?? null;
+    const baseP = agronomic?.depletionFractionP
+      ?? (legacyP == null
+        ? null
+        : resolveDepletionFactor(normalized.assignment, phase?.depletion_factor ?? null, legacyP));
+    if (baseP == null || !Number.isFinite(baseP)) return [];
+
     const adjustedP = adjustDepletionFactorForDemand(baseP, etcPotential);
 
-    const dailyPhases = normalized.phases.map((item) =>
-      item.phase_order === phase.phase_order
-        ? { ...item, depletion_factor: adjustedP }
-        : item,
-    );
+    const dailyPhases = phase
+      ? normalized.phases.map((item) =>
+          item.phase_order === phase.phase_order
+            ? { ...item, depletion_factor: adjustedP }
+            : item
+        )
+      : normalized.phases;
 
     const dailyAssignment = normalized.assignment.parameter_mode === "personalizado" && normalized.assignment.depletion_factor != null
       ? { ...normalized.assignment, depletion_factor: adjustedP }
       : normalized.assignment;
 
+    const dailyAgronomicByDate = agronomic
+      ? {
+          ...normalized.agronomicByDate,
+          [date]: { ...agronomic, depletionFractionP: adjustedP },
+        }
+      : normalized.agronomicByDate;
+
     const daily = computePivotBalanceSeriesCore({
       ...normalized,
       assignment: dailyAssignment,
       phases: dailyPhases,
+      agronomicByDate: dailyAgronomicByDate,
       dateStart: date,
       dateEnd: date,
       initialStorageMm: previousStorage,
