@@ -137,7 +137,7 @@ export function AgronomicRootWaterTab({
   const saveAnchor=async(e:React.FormEvent<HTMLFormElement>)=>{
     e.preventDefault(); if(!curve)return; const fd=new FormData(e.currentTarget); const x=n(fd.get("x_value")),z=n(fd.get("root_depth_m"));
     if(x==null||z==null){setError("Eixo e profundidade são obrigatórios.");return;}
-    const payload={curve_id:curve.id,sequence_no:n(fd.get("sequence_no"))??anchors.length+1,stage_id:null,x_value:x,root_depth_m:z,source_id:curve.source_id,confidence:curve.confidence,notes:String(fd.get("notes")??"").trim()||null};
+    const payload={curve_id:curve.id,sequence_no:n(fd.get("sequence_no"))??anchors.length+1,marker_id:null,x_value:x,root_depth_m:z,source_id:curve.source_id,confidence:curve.confidence,notes:String(fd.get("notes")??"").trim()||null};
     setSaving(true);setError("");
     const res=editingAnchor?await supabase.from("root_depth_anchor_points").update(payload).eq("id",editingAnchor.id):await supabase.from("root_depth_anchor_points").insert(payload);
     if(res.error){setError(res.error.message);setSaving(false);return;}
