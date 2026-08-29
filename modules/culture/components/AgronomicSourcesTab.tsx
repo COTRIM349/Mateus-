@@ -48,6 +48,7 @@ export function AgronomicSourcesTab() {
     const { data, error: queryError } = await supabase
       .from("agronomic_sources")
       .select("*")
+      .eq("active", true)
       .order("created_at", { ascending: false });
     if (!queryError && data) setSources(data as AgronomicSource[]);
     setLoading(false);
@@ -74,7 +75,7 @@ export function AgronomicSourcesTab() {
       render: (r) => (
         <div className="flex justify-end gap-2">
           <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setModalOpen(true); }}>Editar</Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
+          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Arquivar</Button>
         </div>
       ),
     },
@@ -125,7 +126,10 @@ export function AgronomicSourcesTab() {
   const remove = async () => {
     if (!deleteTarget) return;
     setSaving(true);
-    const { error: deleteError } = await supabase.from("agronomic_sources").delete().eq("id", deleteTarget.id);
+    const { error: deleteError } = await supabase
+      .from("agronomic_sources")
+      .update({ active: false, archived_at: new Date().toISOString() })
+      .eq("id", deleteTarget.id);
     if (deleteError) setError(deleteError.message);
     setDeleteTarget(null);
     setSaving(false);
@@ -194,9 +198,9 @@ export function AgronomicSourcesTab() {
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
         onConfirm={remove}
-        title="Excluir fonte"
-        message="Excluir esta fonte? A operação poderá falhar se houver parâmetros vinculados."
-        confirmLabel="Excluir"
+        title="Arquivar fonte"
+        message="Arquivar esta fonte? Os parâmetros e históricos vinculados continuarão preservados."
+        confirmLabel="Arquivar"
         loading={saving}
       />
     </>
