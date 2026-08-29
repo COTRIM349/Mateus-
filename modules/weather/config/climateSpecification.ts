@@ -1,7 +1,7 @@
 // ============================================================================
 // modules/weather/config/climateSpecification.ts
 // ----------------------------------------------------------------------------
-// Climate Specification v1.0.0 — representação em código.
+// Climate Specification v2.0.0 — representação em código.
 //
 // Este arquivo é a fonte única e versionada das regras da camada climática.
 // Documento humano equivalente: modules/weather/CLIMATE_SPECIFICATION.md
@@ -22,7 +22,7 @@ import type {
 } from "@/modules/weather/types/weatherTypes";
 
 // ── Versão ──────────────────────────────────────────────────────────────────
-export const CLIMATE_SPEC_VERSION = "1.0.0" as const;
+export const CLIMATE_SPEC_VERSION = "2.0.0" as const;
 
 // ── Fuso oficial (spec) ─────────────────────────────────────────────────────
 // A camada climática adota America/Bahia (fazendas da BA e fallbacks).
@@ -62,12 +62,17 @@ export const MAX_AGE = {
   forecastHours: 24,
 } as const;
 
-// ── ETo — política de validação ────────────────────────────────────────────
-/** Nenhuma ETo está liberada como oficial enquanto não houver validação local. */
-export const ETO_OPERATIONAL_STATUS = "validation_blocked" as const;
-export const OFFICIAL_ETO_METHOD = null;
-export const OFFICIAL_ETO_FIELD = null;
-export const INTERNAL_ETO_AUDIT_FIELD = "internallyCalculatedEtoMm" as const;
+// ── ETo — política operacional com trava de qualidade ─────────────────────
+/**
+ * A ETo canônica é calculada internamente por FAO-56 Penman-Monteith.
+ * A liberação diária é condicionada ao resolver de qualidade/origem; não
+ * depende de clique manual quando a fonte está na allowlist operacional.
+ * Validação contra estação física continua recomendada para elevar confiança.
+ */
+export const ETO_OPERATIONAL_STATUS = "quality_gated" as const;
+export const OFFICIAL_ETO_METHOD = "fao_56_penman_monteith" as const;
+export const OFFICIAL_ETO_FIELD = "internallyCalculatedEtoMm" as const;
+export const INTERNAL_ETO_AUDIT_FIELD = OFFICIAL_ETO_FIELD;
 export const PROVIDER_ETO_FIELD = "providerReferenceEtoMm" as const;
 /** Consumidores autorizados a usar `providerReferenceEtoMm`. */
 export const PROVIDER_ETO_ALLOWED_USES = [
@@ -282,11 +287,11 @@ export const KNOWN_DIVERGENCES: readonly KnownDivergence[] = [
     location:
       "app/(app)/clima/page.tsx: `d.et0_calculated ?? d.et0_source ?? 0`",
     legacyBehavior:
-      "UI usa providerReferenceEtoMm como fallback de exibição com `?? 0`",
+      "UI usava providerReferenceEtoMm como fallback operacional e podia transformar ausência em zero.",
     specDecision:
-      "UI PODE mostrar providerReferenceEtoMm para comparação, mas nunca como ETo oficial e nunca como zero por ausência. Balanço hídrico e recomendação continuam PROIBIDOS de consumir providerEto.",
+      "Resolvido: ETo operacional vem exclusivamente do cálculo interno FAO-56; ETo de provedor fica apenas para comparação/auditoria.",
     toFixIn:
-      "Etapa futura de limpeza da UI (`?? 0` → tratamento explícito de null)",
+      "Resolvido no refactor de fechamento climático diário.",
   },
 ] as const;
 
@@ -314,6 +319,7 @@ export const CLIMATE_SPECIFICATION = {
   completenessThresholds: COMPLETENESS_THRESHOLDS,
   maxAge: MAX_AGE,
   eto: {
+    operationalStatus: ETO_OPERATIONAL_STATUS,
     method: OFFICIAL_ETO_METHOD,
     officialField: OFFICIAL_ETO_FIELD,
     providerField: PROVIDER_ETO_FIELD,

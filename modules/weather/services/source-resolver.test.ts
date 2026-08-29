@@ -58,17 +58,22 @@ describe("source resolver operacional", () => {
     }))).toBe(false);
   });
 
-  it("reconhece alias reais do Open-Meteo e rejeita origem desconhecida", () => {
+  it("reconhece modelos homologados e rejeita origem desconhecida", () => {
     expect(isTrustedOperationalModelOrigin("open-meteo")).toBe(true);
     expect(isTrustedOperationalModelOrigin("open_meteo")).toBe(true);
     expect(isTrustedOperationalModelOrigin(" OPEN_METEO ")).toBe(true);
+    expect(isTrustedOperationalModelOrigin("meteoblue")).toBe(true);
     expect(isTrustedOperationalModelOrigin("unknown-model")).toBe(false);
   });
 
-  it("aprova Open-Meteo como modelo virtual operacional sem mudar sua natureza para observado", () => {
+  it("aprova Open-Meteo e Meteoblue após quality gate sem tratá-los como observado", () => {
     expect(candidateCanBeOperationallyApproved(candidate({
       data_kind: "model_estimate",
       origin: "open_meteo",
+    }))).toBe(true);
+    expect(candidateCanBeOperationallyApproved(candidate({
+      data_kind: "model_estimate",
+      origin: "meteoblue",
     }))).toBe(true);
   });
 

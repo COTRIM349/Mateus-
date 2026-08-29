@@ -10,8 +10,8 @@ export function ClimateStatusBar({ status }: { status: ClimateDashboardResponse[
       </span>
       <span>{status.consensusLabel}</span>
       <span>{status.qualityLabel}</span>
-      <span>Modo validação</span>
-      <span>Uso operacional bloqueado</span>
+      <span>Fechamento diário automático</span>
+      <span>ETo interna FAO-56</span>
       <span>{formatRelativeUpdate(status.updatedAt)}</span>
     </div>
   );

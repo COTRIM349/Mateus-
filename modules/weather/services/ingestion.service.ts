@@ -10,7 +10,7 @@
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { calculateET0 } from "@/modules/irrigation/services/irrigation.service";
+import { calculateReferenceEtoFao56 } from "@/modules/weather/calculations/referenceEtoFao56";
 import { calculateEffectivePrecipitation, validateWeatherReading } from "./weather.service";
 import {
   fetchRecentObservations,
@@ -32,13 +32,6 @@ function hasEt0Inputs(d: OpenMeteoDaily): boolean {
     d.solarRadiation != null &&
     d.tempMin <= d.tempMax
   );
-}
-
-function dayOfYear(dateIso: string): number {
-  const d = new Date(dateIso + "T12:00:00Z");
-  const start = new Date(Date.UTC(d.getUTCFullYear(), 0, 0));
-  const diff = d.getTime() - start.getTime();
-  return Math.floor(diff / 86400000);
 }
 
 // ── Estação alvo da ingestão ─────────────────────────────────────────────────
@@ -181,18 +174,25 @@ export async function ingestOpenMeteoObservations(
       }
 
       const canComputeEt0 = hasEt0Inputs(d);
-      const et0Calculated = canComputeEt0
-        ? calculateET0({
-            tempMax: d.tempMax as number,
-            tempMin: d.tempMin as number,
-            humidity: d.humidity as number,
-            windSpeed: d.windSpeed2m as number,
-            solarRadiation: d.solarRadiation as number,
-            altitude: resolved.altitude,
+      const etoResult = canComputeEt0
+        ? calculateReferenceEtoFao56({
+            date: d.date,
             latitude: station.latitude,
-            dayOfYear: dayOfYear(d.date),
+            elevationM: resolved.origin === "unknown" ? null : resolved.altitude,
+            temperatureMinC: d.tempMin,
+            temperatureMaxC: d.tempMax,
+            temperatureMeanC: d.tempMean,
+            relativeHumidityMinPct: d.humidityMin,
+            relativeHumidityMaxPct: d.humidityMax,
+            relativeHumidityMeanPct: d.humidity,
+            actualVapourPressureKpa: null,
+            windSpeedMs: d.windSpeed2m,
+            windMeasurementHeightM: 2,
+            solarRadiationMjM2Day: d.solarRadiation,
+            surfacePressureKpa: null,
           })
         : null;
+      const et0Calculated = etoResult?.etoMmDay ?? null;
 
       const precipitation = d.precipitation ?? null;
       const effectivePrecip = precipitation != null ? calculateEffectivePrecipitation(precipitation) : null;
@@ -232,6 +232,8 @@ export async function ingestOpenMeteoObservations(
           d.tempMean ??
           (d.tempMax != null && d.tempMin != null ? (d.tempMax + d.tempMin) / 2 : null),
         humidity: d.humidity ?? null,
+        humidity_min: d.humidityMin ?? null,
+        humidity_max: d.humidityMax ?? null,
         wind_speed: d.windSpeed2m ?? null,
         solar_radiation: d.solarRadiation ?? null,
         precipitation,
@@ -388,18 +390,25 @@ export async function ingestOpenMeteoForecast(
       );
 
       const canComputeEt0 = hasEt0Inputs(d);
-      const et0Calculated = canComputeEt0
-        ? calculateET0({
-            tempMax: d.tempMax as number,
-            tempMin: d.tempMin as number,
-            humidity: d.humidity as number,
-            windSpeed: d.windSpeed2m as number,
-            solarRadiation: d.solarRadiation as number,
-            altitude: resolved.altitude,
+      const etoResult = canComputeEt0
+        ? calculateReferenceEtoFao56({
+            date: d.date,
             latitude: station.latitude,
-            dayOfYear: dayOfYear(d.date),
+            elevationM: resolved.origin === "unknown" ? null : resolved.altitude,
+            temperatureMinC: d.tempMin,
+            temperatureMaxC: d.tempMax,
+            temperatureMeanC: d.tempMean,
+            relativeHumidityMinPct: d.humidityMin,
+            relativeHumidityMaxPct: d.humidityMax,
+            relativeHumidityMeanPct: d.humidity,
+            actualVapourPressureKpa: null,
+            windSpeedMs: d.windSpeed2m,
+            windMeasurementHeightM: 2,
+            solarRadiationMjM2Day: d.solarRadiation,
+            surfacePressureKpa: null,
           })
         : null;
+      const et0Calculated = etoResult?.etoMmDay ?? null;
 
       const rowPayload = {
         farm_id: station.farm_id,
@@ -413,6 +422,8 @@ export async function ingestOpenMeteoForecast(
         temp_min: d.tempMin,
         temp_mean: d.tempMean,
         humidity: d.humidity,
+        humidity_min: d.humidityMin,
+        humidity_max: d.humidityMax,
         wind_speed: d.windSpeed2m,
         solar_radiation: d.solarRadiation,
         precipitation: d.precipitation,

@@ -52,7 +52,7 @@ export function ClimateCurrentMetrics({ current }: { current: ClimateDashboardRe
         <MetricCard label="Umidade" value={formatNumber(current.relativeHumidityPct, 0)} unit="%" detail="Atual" tone="blue" kind="humidity" />
         <MetricCard label="Vento" value={formatNumber(current.windSpeed2mMs)} unit="m/s" detail={current.windDirection ? `Direção ${current.windDirection}` : "Velocidade a 2 m"} tone="green" kind="wind" />
         <MetricCard label="Chuva hoje" value={formatNumber(current.precipitationTodayMm)} unit="mm" detail="0 mm = sem chuva · — = sem dado" tone="blue" kind="rain" />
-        <MetricCard label="ETo hoje" value={formatNumber(current.etoTodayMm)} unit="mm" detail="Penman-Monteith / fonte operacional" tone="green" kind="humidity" />
+        <MetricCard label="ETo hoje" value={formatNumber(current.etoTodayMm)} unit="mm" detail="FAO-56 Penman-Monteith · cálculo Cotrim" tone="green" kind="humidity" />
       </div>
     </section>
   );

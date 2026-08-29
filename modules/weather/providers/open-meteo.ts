@@ -23,6 +23,8 @@ const DAILY_VARS = [
   "temperature_2m_min",
   "temperature_2m_mean",
   "relative_humidity_2m_mean",
+  "relative_humidity_2m_min",
+  "relative_humidity_2m_max",
   "wind_speed_10m_mean",
   "shortwave_radiation_sum",
   "precipitation_sum",
@@ -36,7 +38,9 @@ export interface OpenMeteoDaily {
   tempMax: number | null;          // °C
   tempMin: number | null;          // °C
   tempMean: number | null;         // °C
-  humidity: number | null;         // %
+  humidity: number | null;         // % média
+  humidityMin: number | null;      // % mínima
+  humidityMax: number | null;      // % máxima
   windSpeed2m: number | null;      // m/s (convertido de 10m para 2m)
   solarRadiation: number | null;   // MJ/m²/dia
   precipitation: number | null;    // mm
@@ -99,6 +103,8 @@ interface OpenMeteoDailyPayload {
     temperature_2m_min?: (number | null)[];
     temperature_2m_mean?: (number | null)[];
     relative_humidity_2m_mean?: (number | null)[];
+    relative_humidity_2m_min?: (number | null)[];
+    relative_humidity_2m_max?: (number | null)[];
     wind_speed_10m_mean?: (number | null)[];
     shortwave_radiation_sum?: (number | null)[];
     precipitation_sum?: (number | null)[];
@@ -140,6 +146,8 @@ function parseDaily(payload: OpenMeteoDailyPayload): OpenMeteoDaily[] {
       tempMin: d.temperature_2m_min?.[i] ?? null,
       tempMean: d.temperature_2m_mean?.[i] ?? null,
       humidity: d.relative_humidity_2m_mean?.[i] ?? null,
+      humidityMin: d.relative_humidity_2m_min?.[i] ?? null,
+      humidityMax: d.relative_humidity_2m_max?.[i] ?? null,
       windSpeed2m: wind10 == null ? null : convertWind10mTo2m(wind10),
       solarRadiation: d.shortwave_radiation_sum?.[i] ?? null,
       precipitation: d.precipitation_sum?.[i] ?? null,
