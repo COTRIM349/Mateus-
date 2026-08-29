@@ -31,7 +31,7 @@ export default function ClimaLayout({ children }: { children: ReactNode }) {
               : "text-amber-700 hover:bg-amber-50 dark:text-amber-300 dark:hover:bg-amber-500/[0.08]"
           }`}
         >
-          Dados administrativos
+          Fechamento diário
         </Link> : null}
       </div>
       {children}
