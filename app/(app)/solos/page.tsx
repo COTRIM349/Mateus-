@@ -680,28 +680,15 @@ function SoilDetail({
     {
       header: "Camada",
       render: (row) => (
-        <div>
-          <p className="font-semibold">Camada {row.layer_number}</p>
-          <p className="text-xs text-graphite-400 dark:text-gray-500">
-            {layerDepthLabel(row, layers)}
-          </p>
-        </div>
+        <span className="font-semibold">Camada {row.layer_number}</span>
       ),
     },
     {
-      header: "Espessura (m)",
+      header: "Espessura",
       render: (row) => (
-        <input
-          aria-label={`Espessura da camada ${row.layer_number}`}
-          type="number"
-          min="0.001"
-          step="0.01"
-          value={layerDrafts[row.id]?.thickness_m ?? ""}
-          onChange={(event) =>
-            updateLayerDraft(row.id, "thickness_m", event.target.value)
-          }
-          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-        />
+        <span className="font-medium text-graphite-800 dark:text-gray-200">
+          {layerDepthLabel(row, layers)}
+        </span>
       ),
     },
     {
@@ -751,14 +738,6 @@ function SoilDetail({
       ),
     },
     {
-      header: "DTA (mm/cm)",
-      align: "right",
-      render: (row) => {
-        const metrics = calculateDraftMetrics(layerDrafts[row.id], unit);
-        return metrics.dta == null ? "Não calculado" : formatNumber(metrics.dta, 3);
-      },
-    },
-    {
       header: "CAD (mm)",
       align: "right",
       render: (row) => {
@@ -777,9 +756,15 @@ function SoilDetail({
     },
   ];
 
+  const liveLayerMetrics = layers.map((layer) => ({
+    layer,
+    ...calculateDraftMetrics(layerDrafts[layer.id], unit),
+  }));
+
   const cadTotal =
-    layers.length > 0 && layers.every((layer) => layer.cad_mm != null)
-      ? layers.reduce((total, layer) => total + (layer.cad_mm ?? 0), 0)
+    liveLayerMetrics.length > 0 &&
+    liveLayerMetrics.every((item) => item.cad != null)
+      ? liveLayerMetrics.reduce((total, item) => total + (item.cad ?? 0), 0)
       : null;
 
   const saveLayer = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -883,10 +868,7 @@ function SoilDetail({
         </Button>
       </div>
 
-      <PageHeader
-        titulo={`Solo ${pivot.name}`}
-        descricao="Cadastro físico individual do pivô. Sem vínculo manual e sem dados estimados."
-      />
+      <PageHeader titulo={`Solo ${pivot.name}`} />
 
       <Card>
         <form onSubmit={saveProfile} className="space-y-5">
@@ -894,9 +876,6 @@ function SoilDetail({
             <h2 className="text-base font-semibold text-graphite-900 dark:text-white">
               Informações do solo
             </h2>
-            <p className="mt-1 text-xs text-graphite-400 dark:text-gray-500">
-              O cadastro existe automaticamente porque o pivô existe.
-            </p>
           </div>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
@@ -964,11 +943,6 @@ function SoilDetail({
               <h2 className="text-base font-semibold text-graphite-900 dark:text-white">
                 Camadas do solo
               </h2>
-              <p className="mt-1 text-xs text-graphite-400 dark:text-gray-500">
-                Unidade atual: {unit ? UNIT_LABELS[unit] : "Não informado"}.
-                Ao trocar entre % em peso e % volumétrica, CC e PMP são convertidos
-                automaticamente usando a densidade aparente de cada camada.
-              </p>
             </div>
             <div className="flex flex-wrap gap-2">
               <Button
@@ -993,20 +967,39 @@ function SoilDetail({
           <div className="grid gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
               <p className="text-xs text-graphite-400 dark:text-gray-500">Camadas</p>
-              <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
-                {layers.length}
-              </p>
+              <div className="mt-2 space-y-1 text-sm font-semibold text-graphite-900 dark:text-white">
+                {layers.length === 0 ? (
+                  <p>Não informado</p>
+                ) : (
+                  [...layers]
+                    .sort((a, b) => a.layer_number - b.layer_number)
+                    .map((layer) => (
+                      <p key={layer.id}>Camada {layer.layer_number}</p>
+                    ))
+                )}
+              </div>
             </div>
+
+            <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
+              <p className="text-xs text-graphite-400 dark:text-gray-500">DTA (mm/cm)</p>
+              <div className="mt-2 space-y-1 text-sm font-semibold text-graphite-900 dark:text-white">
+                {liveLayerMetrics.length === 0 ? (
+                  <p>Não calculado</p>
+                ) : (
+                  liveLayerMetrics.map(({ layer, dta }) => (
+                    <p key={layer.id}>
+                      C{layer.layer_number}:{" "}
+                      {dta == null ? "Não calculado" : formatNumber(dta, 3)}
+                    </p>
+                  ))
+                )}
+              </div>
+            </div>
+
             <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
               <p className="text-xs text-graphite-400 dark:text-gray-500">CAD total do perfil</p>
               <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
                 {cadTotal == null ? "Não calculado" : `${formatNumber(cadTotal, 2)} mm`}
-              </p>
-            </div>
-            <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
-              <p className="text-xs text-graphite-400 dark:text-gray-500">Dados ausentes</p>
-              <p className="mt-1 text-sm font-medium text-graphite-900 dark:text-white">
-                permanecem “Não informado”
               </p>
             </div>
           </div>
@@ -1031,17 +1024,6 @@ function SoilDetail({
           )}
         </div>
       </Card>
-
-      <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 text-xs text-graphite-500 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-gray-400">
-        <p className="font-medium text-graphite-700 dark:text-gray-300">
-          Perfil padrão
-        </p>
-        <p className="mt-1">
-          Camada 1: 0–20 cm · Camada 2: 20–40 cm · Camada 3: 40–60 cm.
-          Os intervalos exibidos acompanham a espessura cadastrada. DTA e CAD
-          são recalculados automaticamente conforme os valores editados.
-        </p>
-      </div>
 
       <Modal
         open={layerModalOpen}
@@ -1077,7 +1059,7 @@ function SoilDetail({
             <Input
               id="thickness_m"
               name="thickness_m"
-              label="Espessura (m)"
+              label="Espessura da camada (m)"
               type="number"
               min="0.001"
               step="0.01"
