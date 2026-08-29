@@ -9,6 +9,7 @@ interface StationRow {
   name: string;
   data_source: string;
   source_priority: number;
+  timezone: string | null;
 }
 
 interface ReadingRow {
@@ -88,9 +89,8 @@ export async function GET(request: Request) {
   const [stationsResult, virtualStationResult] = await Promise.all([
     supabase
       .from("weather_stations")
-      .select("id,name,data_source,source_priority")
+      .select("id,name,data_source,source_priority,timezone")
       .eq("farm_id", farmId)
-      .eq("active", true)
       .order("source_priority", { ascending: true }),
     supabase
       .from("virtual_weather_stations")
@@ -109,7 +109,10 @@ export async function GET(request: Request) {
   }
 
   const stations = (stationsResult.data ?? []) as StationRow[];
-  const timezone = String(virtualStationResult.data?.[0]?.timezone ?? "America/Bahia");
+  const stationTimezone = stations.find((station) => station.data_source === "open_meteo")?.timezone
+    ?? stations.find((station) => station.timezone)?.timezone
+    ?? null;
+  const timezone = String(virtualStationResult.data?.[0]?.timezone ?? stationTimezone ?? "America/Bahia");
   const today = localDate(new Date(), timezone);
   const startDate = addDays(today, -9);
   const stationIds = stations.map((station) => station.id);
@@ -172,7 +175,11 @@ export async function GET(request: Request) {
     const selectedReading = selection?.selected_reading_id
       ? readingById.get(selection.selected_reading_id) ?? null
       : null;
-    const reading = selectedReading ?? latestByDate.get(date) ?? null;
+    // Se existe seleção e selected_reading_id é null, o resolver rejeitou
+    // explicitamente todos os candidatos daquele dia: preserve como bloqueado.
+    const reading = selection
+      ? selectedReading
+      : (latestByDate.get(date) ?? null);
     const station = reading ? stationById.get(reading.station_id) ?? null : null;
     const operationalApproved = Boolean(selection?.operational_approved);
 
