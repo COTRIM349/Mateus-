@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS phenology_scales (
 CREATE TABLE IF NOT EXISTS phenology_stages (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   scale_id UUID NOT NULL REFERENCES phenology_scales(id) ON DELETE CASCADE,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   code TEXT NOT NULL,
   name TEXT NOT NULL,
   stage_order NUMERIC(8,3) NOT NULL,
