@@ -47,7 +47,6 @@ interface PivotSoilLayer {
 }
 
 interface LayerDraft {
-  soil_class: string;
   thickness_m: string;
   field_capacity_pct: string;
   wilting_point_pct: string;
@@ -125,7 +124,6 @@ function draftNumber(value: string) {
 
 function makeLayerDraft(layer: PivotSoilLayer): LayerDraft {
   return {
-    soil_class: normalizeSoilClass(layer.soil_class),
     thickness_m: layer.thickness_m == null ? "" : String(layer.thickness_m),
     field_capacity_pct:
       layer.field_capacity_pct == null ? "" : String(layer.field_capacity_pct),
@@ -229,7 +227,7 @@ export default function SolosPage() {
       const layersResult = await supabase
         .from("pivot_soil_layers_calculated")
         .select(
-          "id,pivot_id,layer_number,soil_class,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
+          "id,pivot_id,layer_number,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
         )
         .in("pivot_id", pivotIds)
         .order("layer_number");
@@ -474,6 +472,8 @@ function SoilDetail({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileError, setProfileError] = useState("");
+  const [pendingSoilClass, setPendingSoilClass] = useState<string | null>(null);
+  const [applyingSoilClass, setApplyingSoilClass] = useState(false);
 
   const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [editingLayer, setEditingLayer] = useState<PivotSoilLayer | null>(null);
@@ -493,7 +493,7 @@ function SoilDetail({
     const result = await supabase
       .from("pivot_soil_layers_calculated")
       .select(
-        "id,pivot_id,layer_number,soil_class,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
+        "id,pivot_id,layer_number,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3,cc_pmp_unit,dta_mm_cm,cad_mm"
       )
       .eq("pivot_id", pivot.id)
       .order("layer_number");
@@ -543,6 +543,35 @@ function SoilDetail({
     setSavingProfile(false);
   };
 
+  const applySoilClass = async () => {
+    if (!pendingSoilClass) return;
+
+    setApplyingSoilClass(true);
+    setProfileError("");
+    setProfileMessage("");
+    setLayerError("");
+    setLayerMessage("");
+
+    const result = await supabase.rpc("apply_pivot_soil_class_reference", {
+      p_pivot_id: pivot.id,
+      p_soil_class: pendingSoilClass,
+    });
+
+    if (result.error) {
+      setProfileError(result.error.message);
+      setApplyingSoilClass(false);
+      setPendingSoilClass(null);
+      return;
+    }
+
+    setSoilClass(pendingSoilClass);
+    setPendingSoilClass(null);
+    await refreshLayers();
+    await onChanged();
+    setProfileMessage("Classe alterada. CC, PMP e densidade foram atualizados e continuam editáveis.");
+    setApplyingSoilClass(false);
+  };
+
   const updateLayerDraft = (
     layerId: string,
     field: keyof LayerDraft,
@@ -552,7 +581,6 @@ function SoilDetail({
       ...current,
       [layerId]: {
         ...(current[layerId] ?? {
-          soil_class: "",
           thickness_m: "",
           field_capacity_pct: "",
           wilting_point_pct: "",
@@ -605,7 +633,6 @@ function SoilDetail({
         id: layer.id,
         pivot_id: layer.pivot_id,
         layer_number: layer.layer_number,
-        soil_class: draft.soil_class.trim() || null,
         thickness_m: thickness,
         field_capacity_pct: fieldCapacity,
         wilting_point_pct: wiltingPoint,
@@ -746,7 +773,6 @@ function SoilDetail({
 
     const fd = new FormData(event.currentTarget);
     const layerNumber = Number(fd.get("layer_number"));
-    const soilClassValue = String(fd.get("soil_class") ?? "").trim();
     const thickness = nullableNumber(fd.get("thickness_m"));
     const fieldCapacity = nullableNumber(fd.get("field_capacity_pct"));
     const wiltingPoint = nullableNumber(fd.get("wilting_point_pct"));
@@ -779,7 +805,6 @@ function SoilDetail({
 
     const payload = {
       layer_number: layerNumber,
-      soil_class: soilClassValue || null,
       thickness_m: thickness,
       field_capacity_pct: fieldCapacity,
       wilting_point_pct: wiltingPoint,
@@ -859,7 +884,11 @@ function SoilDetail({
               id="soil_class"
               label="Classe do solo"
               value={soilClass}
-              onChange={(event) => setSoilClass(event.target.value)}
+              onChange={(event) => {
+                const nextClass = event.target.value;
+                if (!nextClass || nextClass === soilClass) return;
+                setPendingSoilClass(nextClass);
+              }}
               options={[
                 { value: "", label: "Não informado" },
                 ...SOIL_CLASS_OPTIONS.map((soilClassOption) => ({
@@ -1007,7 +1036,7 @@ function SoilDetail({
                       key={layer.id}
                       className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.02]"
                     >
-                      <div className="grid gap-4 xl:grid-cols-[170px_minmax(180px,1.3fr)_repeat(3,minmax(120px,0.8fr))_120px_70px] xl:items-end">
+                      <div className="grid gap-4 xl:grid-cols-[170px_repeat(3,minmax(140px,1fr))_120px_70px] xl:items-end">
                         <div>
                           <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
                             Camada {layer.layer_number}
@@ -1015,27 +1044,6 @@ function SoilDetail({
                           <p className="mt-1 text-lg font-bold text-graphite-900 dark:text-white">
                             {layerDepthLabel(layer, layers)}
                           </p>
-                        </div>
-
-                        <div>
-                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
-                            Tipo de solo
-                          </label>
-                          <select
-                            aria-label={`Tipo de solo da camada ${layer.layer_number}`}
-                            value={draft.soil_class}
-                            onChange={(event) =>
-                              updateLayerDraft(layer.id, "soil_class", event.target.value)
-                            }
-                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-                          >
-                            <option value="">Não informado</option>
-                            {SOIL_CLASS_OPTIONS.map((soilClassOption) => (
-                              <option key={soilClassOption} value={soilClassOption}>
-                                {soilClassOption}
-                              </option>
-                            ))}
-                          </select>
                         </div>
 
                         <div>
@@ -1149,19 +1157,6 @@ function SoilDetail({
                   : 1)
               }
             />
-            <Select
-              id="soil_class"
-              name="soil_class"
-              label="Tipo de solo"
-              defaultValue={normalizeSoilClass(editingLayer?.soil_class)}
-              options={[
-                { value: "", label: "Não informado" },
-                ...SOIL_CLASS_OPTIONS.map((soilClassOption) => ({
-                  value: soilClassOption,
-                  label: soilClassOption,
-                })),
-              ]}
-            />
             <Input
               id="thickness_m"
               name="thickness_m"
@@ -1232,6 +1227,16 @@ function SoilDetail({
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!pendingSoilClass}
+        onClose={() => setPendingSoilClass(null)}
+        onConfirm={applySoilClass}
+        title="Alterar classe do solo"
+        message={`Alterar para "${pendingSoilClass ?? ""}" vai substituir CC, PMP e densidade aparente das camadas pelos valores de referência desta classe. Depois, os campos continuam editáveis.`}
+        confirmLabel="Alterar classe"
+        loading={applyingSoilClass}
+      />
 
       <ConfirmDialog
         open={!!deleteTarget}
