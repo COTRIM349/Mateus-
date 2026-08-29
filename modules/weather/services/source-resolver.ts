@@ -37,7 +37,6 @@ export const OPERATIONAL_CLIMATE_LIMITS = {
  */
 export const TRUSTED_OPERATIONAL_MODEL_ORIGINS = new Set([
   "open-meteo",
-  "meteoblue",
 ]);
 
 const QUALITY_ORDER: Record<string, number> = { ok: 0, degraded: 1, missing: 2 };

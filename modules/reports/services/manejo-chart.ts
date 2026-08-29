@@ -27,7 +27,6 @@ export type ManejoSeriesKey =
   | "afd"
   | "arm"
   | "sensorial"
-  | "excesso"
   | "dap"
   | "kc"
   | "p"
@@ -50,58 +49,33 @@ export type ManejoSeriesKey =
 export interface ManejoSeriesDef {
   k: ManejoSeriesKey;
   label: string;
-  legend?: string;
   color: string;
   kind: ManejoKind;
   axis: ManejoAxis;
   unit: string;
-  /** Linha em degrau (FAO-56: umidade de segurança muda com o p da fase). */
-  stepped?: boolean;
   norm?: [number, number];
 }
-
-/** Paleta do gráfico de manejo (eixo %CC disponível: PM = 0, CC = 100). */
-export const MANEJO_COLORS = {
-  cc: "#2f6bff",
-  seg: "#c0272d",
-  umidade: "#8a5a2b",
-  pmp: "#111827",
-  irrig: "#5ec8d8",
-  chuva: "#1e4ea1",
-  flag: "#f59e0b",
-  excesso: "#dc2626",
-} as const;
-
-export const MANEJO_VIEW_OPTIONS = [
-  { value: "umidade_cc", label: "Umidade do Solo (%CC)" },
-] as const;
-
-export const MANEJO_PRESET_OPTIONS = [
-  { value: "padrao", label: "Padrão" },
-  { value: "personalizado", label: "Personalizado" },
-] as const;
 
 export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
   {
     cat: "Irrigação",
     items: [
-      { k: "irrig", label: "Irrigação", legend: "Irrigação (mm)", color: MANEJO_COLORS.irrig, kind: "bar", axis: "mm", unit: MANAGEMENT_UNITS.irrigation },
+      { k: "irrig", label: "Irrigação realizada", color: "#14b8c9", kind: "bar", axis: "mm", unit: MANAGEMENT_UNITS.irrigation },
       { k: "irrigRec", label: "Irrigação recomendada", color: "#3b82f6", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.recommendedDepth },
       { k: "irrigAcum", label: "Lâmina acumulada", color: "#0e7490", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.appliedDepth },
-      { k: "excesso", label: "Justificativa de Excesso", legend: "Justificativa de Excesso", color: MANEJO_COLORS.excesso, kind: "marker", axis: "marker", unit: "mm" },
     ],
   },
   {
     cat: "Solo",
     items: [
-      { k: "umidade", label: "Umidade", legend: "Umidade (%CC)", color: MANEJO_COLORS.umidade, kind: "line", axis: "pct", unit: "%CC" },
-      { k: "cc", label: "CC", legend: "CC (%CC)", color: MANEJO_COLORS.cc, kind: "line", axis: "pct", unit: "%CC" },
-      { k: "pmp", label: "PM", legend: "PM (%CC)", color: MANEJO_COLORS.pmp, kind: "line", axis: "pct", unit: "%CC" },
-      { k: "seg", label: "Umid Segurança", legend: "Umid Segurança (%CC)", color: MANEJO_COLORS.seg, kind: "line", axis: "pct", unit: "%CC", stepped: true },
-      { k: "cad", label: "CTA / CAD — Água Disponível", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
+      { k: "umidade", label: "Umidade (% da CC)", color: "#8a5a2b", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "cc", label: "CC — Capacidade de Campo", color: "#2f6bff", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "pmp", label: "PMP — Ponto de Murcha", color: "#111827", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "seg", label: "Umidade de segurança", color: "#c0272d", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "cad", label: "CAD — Água Disponível", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
       { k: "afd", label: "CRA / AFD — Limite de manejo", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
       { k: "arm", label: "ARM — Água armazenada", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
-      { k: "sensorial", label: "Flags / nota sensorial", legend: "Flags", color: MANEJO_COLORS.flag, kind: "marker", axis: "marker", unit: MANAGEMENT_UNITS.sensoryNote },
+      { k: "sensorial", label: "Nota sensorial de campo", color: "#a855f7", kind: "marker", axis: "marker", unit: MANAGEMENT_UNITS.sensoryNote },
     ],
   },
   {
@@ -120,7 +94,7 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
   {
     cat: "Clima",
     items: [
-      { k: "chuva", label: "Chuva", legend: "Chuva (mm)", color: MANEJO_COLORS.chuva, kind: "bar", axis: "mm", unit: MANAGEMENT_UNITS.rain },
+      { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm", unit: MANAGEMENT_UNITS.rain },
       { k: "etc", label: "ETc", color: "#22c55e", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.etc },
       { k: "eto", label: "ETo", color: "#166534", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.eto },
       { k: "etp", label: "ETP", color: "#4d7c0f", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.etp },
@@ -138,26 +112,19 @@ export const MANEJO_ALL: ManejoSeriesDef[] = MANEJO_GROUPS.flatMap((g) => g.item
 
 export const MANEJO_CHART_LAYOUT = {
   width: 1280,
-  height: 580,
-  padL: 56,
-  padR: 52,
-  padT: 22,
-  padB: 92,
-  pctMax: 125,
-  mmFloor: 75,
-  mmStep: 15,
+  height: 560,
 } as const;
 
-/** Padrão visual: umidade, CC, segurança, PM, irrigação e chuva (eixo %CC disponível). */
 export const MANEJO_DEFAULT_ON: ManejoSeriesKey[] = [
   "umidade",
   "cc",
   "seg",
-  "pmp",
+  "arm",
   "irrig",
   "chuva",
+  "etc",
   "sensorial",
-  "excesso",
+  "fase",
 ];
 
 export function phaseRanges(rows: Array<{ phase: string }>): Array<{ phase: string; start: number; end: number }> {
@@ -179,110 +146,6 @@ export function isDefaultManejoSubset(): boolean {
   return MANEJO_DEFAULT_ON.length < MANEJO_ALL.length;
 }
 
-export function visibilityMatchesDefault(visible: Record<ManejoSeriesKey, boolean>): boolean {
-  const def = initialManejoVisibility();
-  return MANEJO_ALL.every((s) => Boolean(visible[s.k]) === def[s.k]);
-}
-
-export function legendLabel(s: ManejoSeriesDef): string {
-  return s.legend ?? s.label;
-}
-
-/** Água disponível no eixo do gráfico: PM = 0%CC, CC = 100%CC. */
-export function availableWaterPct(armMm: number, cadMm: number): number {
-  if (!(cadMm > 0) || !Number.isFinite(armMm)) return 0;
-  return Math.max(0, Math.min((armMm / cadMm) * 100, 125));
-}
-
-export function safetyAvailableWaterPct(safetyMoistureMm: number, cadMm: number): number {
-  if (!(cadMm > 0) || !Number.isFinite(safetyMoistureMm)) return 0;
-  return Math.max(0, Math.min((safetyMoistureMm / cadMm) * 100, 100));
-}
-
-export function visibleMmValues(
-  rows: ManagementReportRow[],
-  visible: Record<ManejoSeriesKey, boolean>,
-  extras: { cumulativeIrrigation?: number[] } = {},
-): number[] {
-  const out: number[] = [];
-  for (const s of MANEJO_ALL) {
-    if (s.axis !== "mm" || !visible[s.k]) continue;
-    rows.forEach((r, i) => {
-      const v = seriesValue(s.k, r, { cumulativeIrrigation: extras.cumulativeIrrigation?.[i] });
-      if (v != null && Number.isFinite(v)) out.push(v);
-    });
-  }
-  return out;
-}
-
-export function mmAxisMax(values: number[], floor = MANEJO_CHART_LAYOUT.mmFloor, step = MANEJO_CHART_LAYOUT.mmStep): number {
-  const finite = values.filter((v) => Number.isFinite(v));
-  const dataMax = finite.length ? Math.max(0, ...finite) : 0;
-  if (dataMax <= floor) return floor;
-  return Math.ceil(dataMax / step) * step;
-}
-
-export function mmAxisTicks(max: number, step = MANEJO_CHART_LAYOUT.mmStep): number[] {
-  const ticks: number[] = [];
-  for (let v = 0; v <= max; v += step) ticks.push(v);
-  return ticks;
-}
-
-export function stepAfterPath(pts: ReadonlyArray<{ x: number; y: number }>): string {
-  if (pts.length === 0) return "";
-  let d = `M ${pts[0].x} ${pts[0].y}`;
-  for (let i = 1; i < pts.length; i += 1) {
-    d += ` H ${pts[i].x} V ${pts[i].y}`;
-  }
-  return d;
-}
-
-export function formatManejoDate(iso: string): string {
-  if (iso.length < 10) return iso;
-  return `${iso.slice(8, 10)}/${iso.slice(5, 7)}/${iso.slice(0, 4)}`;
-}
-
-export function formatPtNumber(value: number, digits = 2): string {
-  return value.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
-}
-
-export interface ManejoKpis {
-  daysManaged: number;
-  daysPlanted: number | null;
-  irrigationMm: number;
-  rainMm: number;
-  effectiveIrrigationMm: number;
-  effectiveIrrigationPct: number | null;
-  etpMm: number;
-  etcMm: number;
-  stressIndexPct: number | null;
-}
-
-/**
- * Totais do resultado de manejo. ETp = soma da ETc potencial (sem Ks);
- * índice de stress = (1 − ETc/ETp) × 100.
- */
-export function summarizeManejoKpis(rows: ManagementReportRow[]): ManejoKpis {
-  const daysManaged = rows.length;
-  const lastDae = [...rows].reverse().find((r) => r.dae != null && Number.isFinite(r.dae))?.dae ?? null;
-  const irrigationMm = rows.reduce((s, r) => s + Math.max(r.irrigationGrossMm, 0), 0);
-  const rainMm = rows.reduce((s, r) => s + Math.max(r.rainMm, 0), 0);
-  const effectiveIrrigationMm = rows.reduce((s, r) => s + Math.max(r.effectiveIrrigationMm, 0), 0);
-  const etcMm = rows.reduce((s, r) => s + Math.max(r.etcMm, 0), 0);
-  const etpMm = rows.reduce((s, r) => s + Math.max(r.etcPotentialMm ?? r.etcMm, 0), 0);
-  return {
-    daysManaged,
-    daysPlanted: lastDae,
-    irrigationMm,
-    rainMm,
-    effectiveIrrigationMm,
-    effectiveIrrigationPct: irrigationMm > 0 ? (effectiveIrrigationMm / irrigationMm) * 100 : null,
-    etpMm,
-    etcMm,
-    stressIndexPct: etpMm > 0 ? (1 - etcMm / etpMm) * 100 : null,
-  };
-}
-
 export function cumulativeIrrigationMm(rows: ManagementReportRow[]): number[] {
   let acc = 0;
   return rows.map((r) => {
@@ -300,10 +163,10 @@ export function seriesValue(
     case "irrig": return row.irrigationGrossMm;
     case "irrigRec": return row.recommendedGrossMm;
     case "irrigAcum": return extras.cumulativeIrrigation ?? row.irrigationGrossMm;
-    case "umidade": return availableWaterPct(row.armMm, row.cadMm);
+    case "umidade": return row.moisturePctCc;
     case "cc": return 100;
-    case "pmp": return 0;
-    case "seg": return safetyAvailableWaterPct(row.safetyMoistureMm, row.cadMm);
+    case "pmp": return row.pmpPctCc;
+    case "seg": return row.safetyPctCc;
     case "cad": return row.cadMm;
     case "afd": return row.afdMm;
     case "arm": return row.armMm;
@@ -316,7 +179,6 @@ export function seriesValue(
     case "ky": return row.ky;
     case "rootdepth": return row.rootDepthM;
     case "fase": return extras.phaseChanged ? 1 : null;
-    case "excesso": return row.surplusMm > 0 ? row.surplusMm : null;
     case "chuva": return row.rainMm;
     case "etc": return row.etcMm;
     case "eto": return row.etoMm;
@@ -331,9 +193,8 @@ export function seriesValue(
 }
 
 export function seriesHasData(key: ManejoSeriesKey, rows: ManagementReportRow[]): boolean {
-  if (key === "cc" || key === "pmp") return rows.length > 0;
+  if (key === "cc") return rows.length > 0;
   if (key === "fase") return rows.some((r, i) => i > 0 && r.phase !== rows[i - 1].phase);
-  if (key === "excesso") return rows.some((r) => r.surplusMm > 0);
   const cum = key === "irrigAcum" ? cumulativeIrrigationMm(rows) : [];
   return rows.some((r, i) => {
     const v = seriesValue(key, r, {
@@ -349,10 +210,9 @@ export function formatSeriesValue(key: ManejoSeriesKey, row: ManagementReportRow
   const v = seriesValue(key, row, extras);
   if (v == null || !Number.isFinite(v)) return "—";
   if (key === "sensorial") return `nota ${v}`;
-  if (key === "excesso") return `${formatPtNumber(v, 1)} mm`;
   if (key === "kc" || key === "p" || key === "ks" || key === "kl" || key === "ky") return v.toFixed(2);
-  if (def.axis === "pct") return `${formatPtNumber(v, 1)} %CC`;
-  if (def.axis === "mm") return `${formatPtNumber(v, 1)} mm`;
+  if (def.axis === "pct") return `${v.toFixed(0)}% da CC`;
+  if (def.axis === "mm") return `${v.toFixed(1)} mm`;
   if (key === "dap") return `${v.toFixed(0)} d`;
   if (key === "rootdepth") return `${v.toFixed(2)} m`;
   return `${v.toFixed(1)}${def.unit ? ` ${def.unit}` : ""}`;

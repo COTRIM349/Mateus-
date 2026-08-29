@@ -10,7 +10,6 @@ import {
   OperationalInputError,
 } from "./pivot-engine-operational";
 import type { PivotEngineInput } from "./pivot-engine-v2";
-import { resolveClimateSeriesWindow } from "@/modules/weather/services/operational-weather";
 
 function baseInput(): PivotEngineInput {
   return {
@@ -220,27 +219,5 @@ describe("pivot-engine-operational", () => {
       daysToAfd: 0,
       atOrBeyondAfd: true,
     });
-  });
-
-  it("aceita a série recuada quando só o dia corrente ainda não tem ETo", () => {
-    const input = {
-      ...baseInput(),
-      dateStart: "2026-01-01",
-      dateEnd: "2026-01-02",
-      weatherByDate: {
-        "2026-01-01": { et0: 5, precipitation: 0 },
-      },
-    };
-    expect(diagnoseOperationalInput(input).code).toBe("missing_weather");
-    const window = resolveClimateSeriesWindow(input.dateStart, input.dateEnd, input.weatherByDate, "2026-01-02");
-    expect(window.blockingMessage).toBeNull();
-    expect(window.seriesEnd).toBe("2026-01-01");
-    expect(diagnoseOperationalInput({ ...input, dateEnd: window.seriesEnd })).toEqual({
-      operational: true,
-      code: null,
-      message: null,
-      date: null,
-    });
-    expect(computePivotBalanceSeries({ ...input, dateEnd: window.seriesEnd })).toHaveLength(1);
   });
 });

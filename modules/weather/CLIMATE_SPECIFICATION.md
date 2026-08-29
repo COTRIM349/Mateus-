@@ -113,38 +113,35 @@ Cada variável tem um **uso agronômico** documentado:
 
 ---
 
-## 2. ETo canônica e liberação operacional {#2-eto-oficial}
+## 2. ETo em validação {#2-eto-oficial}
 
-**Regra fundamental:** a ETo canônica da plataforma é calculada internamente
-por **FAO-56 Penman-Monteith**. Valores de ETo fornecidos por Open-Meteo,
-Meteoblue ou qualquer outro provedor existem somente para comparação e auditoria.
+**Regra fundamental:** enquanto não houver validação por estação física local,
+nenhuma ETo é classificada como oficial ou liberada automaticamente para uso
+operacional. `internallyCalculatedEtoMm` e `providerReferenceEtoMm` permanecem
+apenas como referências de auditoria.
 
-**Contrato operacional:**
+**Contrato:**
 
-- Estado: `ETO_OPERATIONAL_STATUS = "quality_gated"`.
-- Método canônico: `fao_56_penman_monteith`.
-- Campo canônico: `internallyCalculatedEtoMm`.
-- A liberação diária é automática quando a leitura:
-  1. possui as variáveis essenciais;
-  2. passa nas faixas físicas e validações de coerência;
-  3. tem `data_quality = "ok"`;
-  4. vem de observação/manual ou de origem de modelo explicitamente confiável;
-  5. passa pelo resolver diário, que grava `operational_approved = true`.
-- Não é necessário clique manual diário para uma fonte já homologada pelas
-  regras acima. Exceções, dados incompletos e divergências permanecem
-  bloqueados ou em revisão.
-- Validação contra estação física local continua recomendada para calibração,
-  avaliação de viés e aumento de confiança, mas não é um bloqueio absoluto
-  quando a estação física não está disponível.
-- `providerReferenceEtoMm` existe apenas para:
-  1. `diagnostic` — verificar consistência entre modelo Cotrim e provider;
-  2. `ui_comparison` — comparação visual;
-  3. `audit` — comparação histórica.
+- Estado operacional: `ETO_OPERATIONAL_STATUS = "validation_blocked"`.
+- O método interno de auditoria continua sendo **FAO-56 Penman-Monteith**
+  (Allen et al., 1998), mas não recebe o rótulo de ETo oficial.
+- `providerReferenceEtoMm` **existe apenas para**:
+  1. `diagnostic` — verificar consistência entre modelo Cotrim e provider
+  2. `ui_comparison` — mostrar as duas ETo lado a lado em tela de análise
+  3. `audit` — comparação histórica
 - `providerReferenceEtoMm` **NUNCA** pode alimentar:
-  - `water_balance`;
-  - `irrigation_recommendation`.
-- Quando faltar variável essencial, `internallyCalculatedEtoMm = null`.
-  Ausência nunca é convertida silenciosamente em zero.
+  - `water_balance` (motor de balanço hídrico)
+  - `irrigation_recommendation` (motor de recomendação)
+- Quando faltar variável essencial (§1.1), `internallyCalculatedEtoMm = null`
+  e `qualityStatus = "missing"`. **Não gerar valor enganoso.**
+- Toda estimativa (Tmean derivada, P via elevação, u2 a partir de u10)
+  entra em `estimatedFields` do resultado; qualidade cai para `estimated`.
+
+**Divergência C3** (Apêndice C): a UI atualmente usa
+`?? provider ?? 0` como fallback de exibição. **Esta spec autoriza a UI
+a exibir `providerReferenceEtoMm` para comparação**, mas **proíbe** o `?? 0`
+(deve exibir `—` ou `null`). Correção do código legado fica para etapa
+própria de limpeza da UI.
 
 ---
 
@@ -394,7 +391,7 @@ Testes: `config/climateSpecification.test.ts` (29 testes).
 
 ## 12. Governança e versionamento {#12-governanca}
 
-- **Versão atual:** `2.0.0` — SemVer `MAJOR.MINOR.PATCH`.
+- **Versão:** SemVer `MAJOR.MINOR.PATCH`.
 - **PATCH:** correção de redação, sem mudança normativa.
 - **MINOR:** adição retro-compatível (novo campo opcional, novo provider,
   nova regra que não invalida integração existente).
@@ -409,9 +406,8 @@ Testes: `config/climateSpecification.test.ts` (29 testes).
 
 ### Changelog
 
-- **v2.0.0** — 2026-08 — fechamento climático diário: ETo interna FAO-56 passa a ser canônica e liberada por quality gate; ETo de provedor fica somente em auditoria/comparação; rotina diária automatizada.
 - **v1.0.0** — 2026-08 (Etapa 4 / Sprint 12) — versão inicial: fundação,
-  ETo em validação, matriz de prioridade, contrato com balanço,
+  ETo oficial, matriz de prioridade, contrato com balanço,
   divergências C1/C2/C3 documentadas.
 
 ---
