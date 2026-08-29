@@ -45,6 +45,13 @@ interface PivotSoilLayer {
   cad_mm: number | null;
 }
 
+interface LayerDraft {
+  thickness_m: string;
+  field_capacity_pct: string;
+  wilting_point_pct: string;
+  bulk_density_g_cm3: string;
+}
+
 interface SoilListRow {
   pivot: PivotRow;
   profile: PivotSoil | null;
@@ -81,6 +88,70 @@ function nullableNumber(value: FormDataEntryValue | null) {
   if (!text) return null;
   const parsed = Number(text);
   return Number.isFinite(parsed) ? parsed : null;
+}
+
+function draftNumber(value: string) {
+  const text = value.trim().replace(",", ".");
+  if (!text) return null;
+  const parsed = Number(text);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function makeLayerDraft(layer: PivotSoilLayer): LayerDraft {
+  return {
+    thickness_m: layer.thickness_m == null ? "" : String(layer.thickness_m),
+    field_capacity_pct:
+      layer.field_capacity_pct == null ? "" : String(layer.field_capacity_pct),
+    wilting_point_pct:
+      layer.wilting_point_pct == null ? "" : String(layer.wilting_point_pct),
+    bulk_density_g_cm3:
+      layer.bulk_density_g_cm3 == null ? "" : String(layer.bulk_density_g_cm3),
+  };
+}
+
+function calculateDraftMetrics(draft: LayerDraft | undefined, unit: CcPmpUnit) {
+  if (!draft || !unit) return { dta: null, cad: null };
+
+  const thickness = draftNumber(draft.thickness_m);
+  const cc = draftNumber(draft.field_capacity_pct);
+  const pmp = draftNumber(draft.wilting_point_pct);
+  const density = draftNumber(draft.bulk_density_g_cm3);
+
+  if (thickness == null || cc == null || pmp == null || cc <= pmp) {
+    return { dta: null, cad: null };
+  }
+
+  if (unit === "gravimetric_pct" && density == null) {
+    return { dta: null, cad: null };
+  }
+
+  const dta =
+    unit === "gravimetric_pct"
+      ? ((cc - pmp) * (density as number)) / 10
+      : (cc - pmp) / 10;
+
+  return {
+    dta,
+    cad: dta * thickness * 100,
+  };
+}
+
+function layerDepthLabel(layer: PivotSoilLayer, orderedLayers: PivotSoilLayer[]) {
+  const sorted = [...orderedLayers].sort((a, b) => a.layer_number - b.layer_number);
+  let startCm = 0;
+
+  for (const current of sorted) {
+    const thicknessCm = (current.thickness_m ?? 0.2) * 100;
+    const endCm = startCm + thicknessCm;
+
+    if (current.id === layer.id) {
+      return `${Math.round(startCm)}–${Math.round(endCm)} cm`;
+    }
+
+    startCm = endCm;
+  }
+
+  return "Não informado";
 }
 
 export default function SolosPage() {
@@ -364,6 +435,13 @@ function SoilDetail({
   );
   const [unit, setUnit] = useState<CcPmpUnit>(profile?.cc_pmp_unit ?? null);
   const [layers, setLayers] = useState<PivotSoilLayer[]>(initialLayers);
+  const [layerDrafts, setLayerDrafts] = useState<Record<string, LayerDraft>>(
+    Object.fromEntries(initialLayers.map((layer) => [layer.id, makeLayerDraft(layer)]))
+  );
+  const [layersDirty, setLayersDirty] = useState(false);
+  const [savingInlineLayers, setSavingInlineLayers] = useState(false);
+  const [layerMessage, setLayerMessage] = useState("");
+  const [changingUnit, setChangingUnit] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileError, setProfileError] = useState("");
@@ -376,6 +454,10 @@ function SoilDetail({
 
   useEffect(() => {
     setLayers(initialLayers);
+    setLayerDrafts(
+      Object.fromEntries(initialLayers.map((layer) => [layer.id, makeLayerDraft(layer)]))
+    );
+    setLayersDirty(false);
   }, [initialLayers]);
 
   const refreshLayers = useCallback(async () => {
@@ -388,7 +470,12 @@ function SoilDetail({
       .order("layer_number");
 
     if (!result.error) {
-      setLayers((result.data ?? []) as PivotSoilLayer[]);
+      const refreshed = (result.data ?? []) as PivotSoilLayer[];
+      setLayers(refreshed);
+      setLayerDrafts(
+        Object.fromEntries(refreshed.map((layer) => [layer.id, makeLayerDraft(layer)]))
+      );
+      setLayersDirty(false);
     }
   }, [pivot.id, supabase]);
 
@@ -408,7 +495,6 @@ function SoilDetail({
     const payload = {
       soil_class: soilClass.trim() || null,
       infiltration_rate_mm_h: vibNumber,
-      cc_pmp_unit: unit,
     };
 
     const result = await supabase
@@ -428,63 +514,265 @@ function SoilDetail({
     setSavingProfile(false);
   };
 
+  const updateLayerDraft = (
+    layerId: string,
+    field: keyof LayerDraft,
+    value: string
+  ) => {
+    setLayerDrafts((current) => ({
+      ...current,
+      [layerId]: {
+        ...(current[layerId] ?? {
+          thickness_m: "",
+          field_capacity_pct: "",
+          wilting_point_pct: "",
+          bulk_density_g_cm3: "",
+        }),
+        [field]: value,
+      },
+    }));
+    setLayersDirty(true);
+    setLayerMessage("");
+    setLayerError("");
+  };
+
+  const persistLayerDrafts = async (showMessage = true) => {
+    if (layers.length === 0) return true;
+
+    const payload = [];
+
+    for (const layer of layers) {
+      const draft = layerDrafts[layer.id] ?? makeLayerDraft(layer);
+      const thickness = draftNumber(draft.thickness_m);
+      const fieldCapacity = draftNumber(draft.field_capacity_pct);
+      const wiltingPoint = draftNumber(draft.wilting_point_pct);
+      const bulkDensity = draftNumber(draft.bulk_density_g_cm3);
+
+      if (thickness != null && thickness <= 0) {
+        setLayerError(`Camada ${layer.layer_number}: a espessura deve ser maior que zero.`);
+        return false;
+      }
+
+      if (bulkDensity != null && bulkDensity <= 0) {
+        setLayerError(
+          `Camada ${layer.layer_number}: a densidade aparente deve ser maior que zero.`
+        );
+        return false;
+      }
+
+      if (
+        fieldCapacity != null &&
+        wiltingPoint != null &&
+        fieldCapacity <= wiltingPoint
+      ) {
+        setLayerError(
+          `Camada ${layer.layer_number}: a Capacidade de Campo deve ser maior que o Ponto de Murchamento.`
+        );
+        return false;
+      }
+
+      payload.push({
+        id: layer.id,
+        pivot_id: layer.pivot_id,
+        layer_number: layer.layer_number,
+        thickness_m: thickness,
+        field_capacity_pct: fieldCapacity,
+        wilting_point_pct: wiltingPoint,
+        bulk_density_g_cm3: bulkDensity,
+      });
+    }
+
+    setSavingInlineLayers(true);
+    setLayerError("");
+    setLayerMessage("");
+
+    const result = await supabase
+      .from("pivot_soil_layers")
+      .upsert(payload, { onConflict: "id" });
+
+    if (result.error) {
+      setLayerError(result.error.message);
+      setSavingInlineLayers(false);
+      return false;
+    }
+
+    await refreshLayers();
+    await onChanged();
+    setSavingInlineLayers(false);
+    setLayersDirty(false);
+
+    if (showMessage) {
+      setLayerMessage("Alterações das camadas salvas.");
+    }
+
+    return true;
+  };
+
+  const handleUnitChange = async (nextUnit: CcPmpUnit) => {
+    if (nextUnit === unit) return;
+
+    setProfileError("");
+    setProfileMessage("");
+    setLayerError("");
+    setLayerMessage("");
+
+    if (layersDirty) {
+      const saved = await persistLayerDrafts(false);
+      if (!saved) return;
+    }
+
+    if (nextUnit == null) {
+      const hasCcPmp = layers.some(
+        (layer) =>
+          layer.field_capacity_pct != null || layer.wilting_point_pct != null
+      );
+
+      if (hasCcPmp) {
+        setProfileError(
+          "Com CC/PMP preenchidos, escolha % em peso ou % volumétrica. A unidade não pode ficar vazia."
+        );
+        return;
+      }
+
+      setChangingUnit(true);
+      const result = await supabase
+        .from("pivot_soils")
+        .update({ cc_pmp_unit: null })
+        .eq("pivot_id", pivot.id);
+
+      if (result.error) {
+        setProfileError(result.error.message);
+        setChangingUnit(false);
+        return;
+      }
+
+      setUnit(null);
+      await refreshLayers();
+      await onChanged();
+      setChangingUnit(false);
+      return;
+    }
+
+    setChangingUnit(true);
+    const result = await supabase.rpc("set_pivot_soil_cc_pmp_unit", {
+      p_pivot_id: pivot.id,
+      p_new_unit: nextUnit,
+    });
+
+    if (result.error) {
+      setProfileError(result.error.message);
+      setChangingUnit(false);
+      return;
+    }
+
+    setUnit(nextUnit);
+    await refreshLayers();
+    await onChanged();
+    setProfileMessage(
+      nextUnit === "volumetric_pct"
+        ? "Unidade alterada para % volumétrica. CC e PMP foram convertidos automaticamente pela densidade aparente de cada camada."
+        : "Unidade alterada para % em peso. CC e PMP foram convertidos automaticamente pela densidade aparente de cada camada."
+    );
+    setChangingUnit(false);
+  };
+
   const layerColumns: Column<PivotSoilLayer>[] = [
     {
       header: "Camada",
-      render: (row) => <span className="font-semibold">{row.layer_number}</span>,
+      render: (row) => (
+        <div>
+          <p className="font-semibold">Camada {row.layer_number}</p>
+          <p className="text-xs text-graphite-400 dark:text-gray-500">
+            {layerDepthLabel(row, layers)}
+          </p>
+        </div>
+      ),
     },
     {
       header: "Espessura (m)",
-      align: "right",
-      render: (row) => formatNumber(row.thickness_m, 2),
+      render: (row) => (
+        <input
+          aria-label={`Espessura da camada ${row.layer_number}`}
+          type="number"
+          min="0.001"
+          step="0.01"
+          value={layerDrafts[row.id]?.thickness_m ?? ""}
+          onChange={(event) =>
+            updateLayerDraft(row.id, "thickness_m", event.target.value)
+          }
+          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+        />
+      ),
     },
     {
       header: "CC (%)",
-      align: "right",
-      render: (row) => formatNumber(row.field_capacity_pct, 1),
+      render: (row) => (
+        <input
+          aria-label={`Capacidade de Campo da camada ${row.layer_number}`}
+          type="number"
+          step="0.001"
+          value={layerDrafts[row.id]?.field_capacity_pct ?? ""}
+          onChange={(event) =>
+            updateLayerDraft(row.id, "field_capacity_pct", event.target.value)
+          }
+          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+        />
+      ),
     },
     {
       header: "PMP (%)",
-      align: "right",
-      render: (row) => formatNumber(row.wilting_point_pct, 1),
+      render: (row) => (
+        <input
+          aria-label={`Ponto de Murchamento da camada ${row.layer_number}`}
+          type="number"
+          step="0.001"
+          value={layerDrafts[row.id]?.wilting_point_pct ?? ""}
+          onChange={(event) =>
+            updateLayerDraft(row.id, "wilting_point_pct", event.target.value)
+          }
+          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+        />
+      ),
     },
     {
       header: "Densidade aparente (g/cm³)",
-      align: "right",
-      render: (row) => formatNumber(row.bulk_density_g_cm3, 2),
+      render: (row) => (
+        <input
+          aria-label={`Densidade aparente da camada ${row.layer_number}`}
+          type="number"
+          min="0.01"
+          step="0.001"
+          value={layerDrafts[row.id]?.bulk_density_g_cm3 ?? ""}
+          onChange={(event) =>
+            updateLayerDraft(row.id, "bulk_density_g_cm3", event.target.value)
+          }
+          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+        />
+      ),
     },
     {
       header: "DTA (mm/cm)",
       align: "right",
-      render: (row) =>
-        row.dta_mm_cm == null ? "Não calculado" : formatNumber(row.dta_mm_cm, 3),
+      render: (row) => {
+        const metrics = calculateDraftMetrics(layerDrafts[row.id], unit);
+        return metrics.dta == null ? "Não calculado" : formatNumber(metrics.dta, 3);
+      },
     },
     {
       header: "CAD (mm)",
       align: "right",
-      render: (row) =>
-        row.cad_mm == null ? "Não calculado" : formatNumber(row.cad_mm, 2),
+      render: (row) => {
+        const metrics = calculateDraftMetrics(layerDrafts[row.id], unit);
+        return metrics.cad == null ? "Não calculado" : formatNumber(metrics.cad, 2);
+      },
     },
     {
-      header: "Ações",
+      header: "Ação",
       align: "right",
       render: (row) => (
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => {
-              setEditingLayer(row);
-              setLayerError("");
-              setLayerModalOpen(true);
-            }}
-          >
-            Editar
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(row)}>
-            Excluir
-          </Button>
-        </div>
+        <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(row)}>
+          Excluir
+        </Button>
       ),
     },
   ];
@@ -639,8 +927,9 @@ function SoilDetail({
               label="Unidade de CC e PMP"
               value={unit ?? ""}
               onChange={(event) =>
-                setUnit((event.target.value || null) as CcPmpUnit)
+                void handleUnitChange((event.target.value || null) as CcPmpUnit)
               }
+              disabled={changingUnit}
               options={[
                 { value: "", label: "Não informado" },
                 { value: "gravimetric_pct", label: "% em peso" },
@@ -677,18 +966,28 @@ function SoilDetail({
               </h2>
               <p className="mt-1 text-xs text-graphite-400 dark:text-gray-500">
                 Unidade atual: {unit ? UNIT_LABELS[unit] : "Não informado"}.
-                DTA e CAD são calculados automaticamente por camada.
+                Ao trocar entre % em peso e % volumétrica, CC e PMP são convertidos
+                automaticamente usando a densidade aparente de cada camada.
               </p>
             </div>
-            <Button
-              onClick={() => {
-                setEditingLayer(null);
-                setLayerError("");
-                setLayerModalOpen(true);
-              }}
-            >
-              Adicionar camada
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={!layersDirty || savingInlineLayers}
+                onClick={() => void persistLayerDrafts(true)}
+              >
+                {savingInlineLayers ? "Salvando..." : "Salvar alterações"}
+              </Button>
+              <Button
+                onClick={() => {
+                  setEditingLayer(null);
+                  setLayerError("");
+                  setLayerModalOpen(true);
+                }}
+              >
+                Adicionar camada
+              </Button>
+            </div>
           </div>
 
           <div className="grid gap-3 sm:grid-cols-3">
@@ -717,6 +1016,11 @@ function SoilDetail({
               {layerError}
             </p>
           )}
+          {layerMessage && (
+            <p className="text-sm text-green-700 dark:text-green-400">
+              {layerMessage}
+            </p>
+          )}
 
           {layers.length === 0 ? (
             <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
@@ -730,12 +1034,12 @@ function SoilDetail({
 
       <div className="rounded-xl border border-gray-100 bg-gray-50/70 p-4 text-xs text-graphite-500 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-gray-400">
         <p className="font-medium text-graphite-700 dark:text-gray-300">
-          Cálculo por camada
+          Perfil padrão
         </p>
         <p className="mt-1">
-          % em peso: DTA = ((CC − PMP) × densidade aparente) ÷ 10.
-          % volumétrica: DTA = (CC − PMP) ÷ 10.
-          CAD = DTA × espessura da camada em cm.
+          Camada 1: 0–20 cm · Camada 2: 20–40 cm · Camada 3: 40–60 cm.
+          Os intervalos exibidos acompanham a espessura cadastrada. DTA e CAD
+          são recalculados automaticamente conforme os valores editados.
         </p>
       </div>
 
