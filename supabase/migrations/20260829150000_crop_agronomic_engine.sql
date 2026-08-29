@@ -29,6 +29,8 @@ CREATE TABLE IF NOT EXISTS agronomic_sources (
   experimental_location TEXT,
   methodology TEXT,
   notes TEXT,
+  active BOOLEAN NOT NULL DEFAULT true,
+  archived_at TIMESTAMPTZ,
   created_by UUID REFERENCES users(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -42,7 +44,7 @@ CREATE TABLE IF NOT EXISTS phenology_scales (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   culture_id UUID NOT NULL REFERENCES cultures(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
-  source_id UUID REFERENCES agronomic_sources(id) ON DELETE SET NULL,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   active BOOLEAN NOT NULL DEFAULT true,
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -76,7 +78,7 @@ ALTER TABLE cultures ADD COLUMN IF NOT EXISTS lower_base_temperature_c DOUBLE PR
 ALTER TABLE cultures ADD COLUMN IF NOT EXISTS upper_base_temperature_c DOUBLE PRECISION;
 ALTER TABLE cultures ADD COLUMN IF NOT EXISTS degree_day_method TEXT DEFAULT 'simple_average';
 ALTER TABLE cultures ADD COLUMN IF NOT EXISTS thermal_parameters_source_id UUID
-  REFERENCES agronomic_sources(id) ON DELETE SET NULL;
+  REFERENCES agronomic_sources(id) ON DELETE RESTRICT;
 
 COMMENT ON COLUMN cultures.lower_base_temperature_c IS
   'Tb bibliográfica/referencial da espécie. Nunca substitui silenciosamente valor específico da cultivar ou calibração local.';
@@ -113,7 +115,7 @@ ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS calibration_status TEXT N
     'nao_calibrada','em_coleta','calibracao_parcial','calibrada_localmente'
   ));
 ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS data_source_id UUID
-  REFERENCES agronomic_sources(id) ON DELETE SET NULL;
+  REFERENCES agronomic_sources(id) ON DELETE RESTRICT;
 ALTER TABLE culture_varieties ADD COLUMN IF NOT EXISTS data_confidence TEXT NOT NULL DEFAULT 'nao_validada'
   CHECK (data_confidence IN ('alta','media','baixa','nao_validada'));
 
@@ -155,7 +157,7 @@ CREATE TABLE IF NOT EXISTS agronomic_parameter_values (
   numeric_value DOUBLE PRECISION,
   text_value TEXT,
   unit TEXT,
-  source_id UUID REFERENCES agronomic_sources(id) ON DELETE SET NULL,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   confidence TEXT NOT NULL DEFAULT 'nao_validada'
     CHECK (confidence IN ('alta','media','baixa','nao_validada')),
   validation_status TEXT NOT NULL DEFAULT 'draft'
@@ -192,7 +194,7 @@ CREATE TABLE IF NOT EXISTS cultivar_phenology_targets (
   gdd_expected DOUBLE PRECISION,
   dae_calibrated DOUBLE PRECISION,
   gdd_calibrated DOUBLE PRECISION,
-  source_id UUID REFERENCES agronomic_sources(id) ON DELETE SET NULL,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   confidence TEXT NOT NULL DEFAULT 'nao_validada'
     CHECK (confidence IN ('alta','media','baixa','nao_validada')),
   validation_status TEXT NOT NULL DEFAULT 'draft'
@@ -220,7 +222,7 @@ CREATE TABLE IF NOT EXISTS kc_curves (
   )),
   axis_type TEXT NOT NULL CHECK (axis_type IN ('DAE','GDA','PHENOLOGY_PROGRESS')),
   eto_reference_method TEXT,
-  source_id UUID REFERENCES agronomic_sources(id) ON DELETE SET NULL,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   confidence TEXT NOT NULL DEFAULT 'nao_validada'
     CHECK (confidence IN ('alta','media','baixa','nao_validada')),
   validation_status TEXT NOT NULL DEFAULT 'draft'
@@ -240,7 +242,7 @@ CREATE TABLE IF NOT EXISTS kc_anchor_points (
   stage_id UUID REFERENCES phenology_stages(id) ON DELETE SET NULL,
   x_value DOUBLE PRECISION NOT NULL,
   kc_value DOUBLE PRECISION NOT NULL CHECK (kc_value BETWEEN 0 AND 2.5),
-  source_id UUID REFERENCES agronomic_sources(id) ON DELETE SET NULL,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   confidence TEXT NOT NULL DEFAULT 'nao_validada'
     CHECK (confidence IN ('alta','media','baixa','nao_validada')),
   notes TEXT,
@@ -264,7 +266,7 @@ CREATE TABLE IF NOT EXISTS root_depth_curves (
     'bibliographic','manufacturer','regional','local_calibrated','legacy_study','provisional'
   )),
   axis_type TEXT NOT NULL CHECK (axis_type IN ('DAE','GDA','PHENOLOGY_PROGRESS')),
-  source_id UUID REFERENCES agronomic_sources(id) ON DELETE SET NULL,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   confidence TEXT NOT NULL DEFAULT 'nao_validada'
     CHECK (confidence IN ('alta','media','baixa','nao_validada')),
   validation_status TEXT NOT NULL DEFAULT 'draft'
@@ -284,7 +286,7 @@ CREATE TABLE IF NOT EXISTS root_depth_anchor_points (
   stage_id UUID REFERENCES phenology_stages(id) ON DELETE SET NULL,
   x_value DOUBLE PRECISION NOT NULL,
   root_depth_m DOUBLE PRECISION NOT NULL CHECK (root_depth_m > 0 AND root_depth_m <= 5),
-  source_id UUID REFERENCES agronomic_sources(id) ON DELETE SET NULL,
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
   confidence TEXT NOT NULL DEFAULT 'nao_validada'
     CHECK (confidence IN ('alta','media','baixa','nao_validada')),
   notes TEXT,
