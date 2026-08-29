@@ -38,6 +38,8 @@ import {
   rebuildPhaseTimeline,
   type CultureKind,
 } from "@/modules/culture/services/culture-phases";
+import { CultureAgronomyTab } from "@/modules/culture/components/CultureAgronomyTab";
+import { CultureCalibrationTab } from "@/modules/culture/components/CultureCalibrationTab";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -131,7 +133,9 @@ interface HistoryEntry {
 const cultureTabs = [
   { id: "cadastro", label: "Cadastro" },
   { id: "variedades", label: "Variedades" },
+  { id: "agronomia", label: "Agronomia" },
   { id: "fases", label: "Fases Fenológicas" },
+  { id: "calibracao", label: "Calibração" },
   { id: "associacao", label: "Associação" },
   { id: "historico", label: "Histórico" },
 ];
@@ -166,7 +170,9 @@ export default function CulturasPage() {
           />
         )}
         {activeTab === "variedades" && <div className="animate-in"><VarietiesTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "agronomia" && <div className="animate-in"><CultureAgronomyTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fases" && <div className="animate-in"><PhasesTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "calibracao" && <div className="animate-in"><CultureCalibrationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTabComponent selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
       </div>
@@ -435,7 +441,7 @@ function CulturesTab({
                 step="0.1"
                 min="0"
                 max="30"
-                placeholder="Ex: algodão 10"
+                placeholder="Ex.: valor de literatura com fonte"
                 defaultValue={editing?.basal_temperature_c ?? ""}
               />
             </div>
@@ -941,7 +947,7 @@ function PhasesTab({
       ) : (
         <>
           <p className="mb-4 text-[11px] text-graphite-400 dark:text-gray-500">
-            A duração (dias) é a linha do tempo editável. O DAP de cada fase é calculado na sequência — não interpola Kc no motor ainda (Etapa E).
+            A duração (dias) organiza a linha do tempo. O motor interpola o Kc diariamente, de forma linear entre kc_start e kc_end; os modelos são referências iniciais, não parâmetros oficiais de cultivar.
           </p>
           {formError && !modalOpen && (
             <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>
