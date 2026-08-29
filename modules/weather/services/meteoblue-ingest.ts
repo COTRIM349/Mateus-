@@ -2,8 +2,9 @@
 // Serviço de ingestão meteoblue
 // ----------------------------------------------------------------------------
 // Grava observações/forecast da meteoblue em weather_readings com
-// origin='meteoblue'. A ETo FAO é recebida diretamente do pacote agro-day;
-// não é recalculada por este serviço. Nunca altera weather_daily_selection.
+// origin='meteoblue'. As variáveis meteorológicas alimentam o mesmo motor
+// interno FAO-56 da plataforma; a ETo do pacote agro-day fica só como
+// referência de auditoria. Nunca altera weather_daily_selection.
 // ============================================================================
 
 import type { SupabaseClient } from "@supabase/supabase-js";
