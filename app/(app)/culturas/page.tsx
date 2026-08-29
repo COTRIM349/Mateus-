@@ -28,7 +28,7 @@ import { AgronomicKcTab } from "@/modules/culture/components/AgronomicKcTab";
 import { AgronomicRootWaterTab } from "@/modules/culture/components/AgronomicRootWaterTab";
 import { AgronomicDegreeDayTab } from "@/modules/culture/components/AgronomicDegreeDayTab";
 import { HydricSensitivityTab } from "@/modules/culture/components/HydricSensitivityTab";
-import { AgronomicCalibrationTab } from "@/modules/culture/components/AgronomicCalibrationTab";
+import { CultureCalibrationTab } from "@/modules/culture/components/CultureCalibrationTab";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -106,7 +106,7 @@ export default function CulturasPage() {
         {activeTab === "raiz" && <div className="animate-in"><AgronomicRootWaterTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "graus-dia" && <div className="animate-in"><AgronomicDegreeDayTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "sensibilidade" && <div className="animate-in"><HydricSensitivityTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
-        {activeTab === "calibracao" && <div className="animate-in"><AgronomicCalibrationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "calibracao" && <div className="animate-in"><CultureCalibrationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fontes" && <div className="animate-in"><AgronomicSourcesTab /></div>}
         {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTabComponent selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
