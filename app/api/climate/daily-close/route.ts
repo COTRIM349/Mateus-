@@ -141,9 +141,9 @@ export async function GET(request: Request) {
       .order("date", { ascending: false }),
     supabase
       .from("climate_ingestion_runs")
-      .select("provider,status,rows_inserted,rows_updated,rows_skipped,error_message,duration_ms,created_at")
+      .select("provider,status,rows_inserted,rows_updated,rows_skipped,error_message,duration_ms,run_at")
       .eq("farm_id", farmId)
-      .order("created_at", { ascending: false })
+      .order("run_at", { ascending: false })
       .limit(1),
   ]);
 
