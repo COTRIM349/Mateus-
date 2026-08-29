@@ -100,6 +100,7 @@ export function ClimateDailyCloseAdmin() {
       return;
     }
     const controller = new AbortController();
+    setData(null);
     setLoading(true);
     setError(null);
 
