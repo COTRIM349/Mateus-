@@ -27,7 +27,6 @@ SELECT
   l.id,
   l.pivot_id,
   l.layer_number,
-  l.soil_class,
   l.thickness_m,
   l.field_capacity_pct,
   l.wilting_point_pct,
@@ -59,6 +58,7 @@ SELECT
     ELSE NULL
   END AS cad_mm,
   l.created_at,
-  l.updated_at
+  l.updated_at,
+  l.soil_class
 FROM pivot_soil_layers l
 JOIN pivot_soils ps ON ps.pivot_id = l.pivot_id;
