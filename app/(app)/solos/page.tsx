@@ -27,6 +27,7 @@ interface PivotRow {
 interface PivotSoil {
   pivot_id: string;
   farm_id: string;
+  soil_class: string | null;
   infiltration_rate_mm_h: number | null;
   cc_pmp_unit: CcPmpUnit;
 }
