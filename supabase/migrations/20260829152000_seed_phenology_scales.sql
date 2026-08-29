@@ -167,4 +167,37 @@ BEGIN
       description=EXCLUDED.description,
       source_id=EXCLUDED.source_id;
   END IF;
+
+-- Janelas padrão apenas para AGRUPAMENTO de calibração; são configuráveis e
+-- não carregam qualquer duração fenológica ou parâmetro agronômico.
+  IF soy_crop IS NOT NULL THEN
+    INSERT INTO planting_windows(culture_id,cultivar_id,name,start_month_day,end_month_day,active,notes)
+    SELECT soy_crop,NULL,v.name,v.start_md,v.end_md,true,
+      'Janela operacional padrão para separar calibrações por época de semeadura.'
+    FROM (VALUES
+      ('Setembro','09-01','09-30'),
+      ('Outubro','10-01','10-31'),
+      ('Novembro','11-01','11-30')
+    ) AS v(name,start_md,end_md)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM planting_windows pw
+      WHERE pw.culture_id=soy_crop AND pw.cultivar_id IS NULL AND pw.name=v.name
+    );
+  END IF;
+
+  IF cotton_crop IS NOT NULL THEN
+    INSERT INTO planting_windows(culture_id,cultivar_id,name,start_month_day,end_month_day,active,notes)
+    SELECT cotton_crop,NULL,v.name,v.start_md,v.end_md,true,
+      'Janela operacional padrão para separar calibrações por época de semeadura.'
+    FROM (VALUES
+      ('Novembro','11-01','11-30'),
+      ('Dezembro','12-01','12-31'),
+      ('Janeiro','01-01','01-31'),
+      ('Fevereiro','02-01','02-29')
+    ) AS v(name,start_md,end_md)
+    WHERE NOT EXISTS (
+      SELECT 1 FROM planting_windows pw
+      WHERE pw.culture_id=cotton_crop AND pw.cultivar_id IS NULL AND pw.name=v.name
+    );
+  END IF;
 END $$;
