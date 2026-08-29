@@ -22,6 +22,8 @@ interface DailyCloseRow {
   temperatureMaxC: number | null;
   temperatureMeanC: number | null;
   relativeHumidityPct: number | null;
+  relativeHumidityMinPct: number | null;
+  relativeHumidityMaxPct: number | null;
   windSpeed2mMs: number | null;
   solarRadiationMjM2Day: number | null;
   precipitationMm: number | null;
@@ -205,7 +207,7 @@ export function ClimateDailyCloseAdmin() {
                 <th className="px-3 py-3">Fonte</th>
                 <th className="px-3 py-3">T mín</th>
                 <th className="px-3 py-3">T máx</th>
-                <th className="px-3 py-3">UR</th>
+                <th className="px-3 py-3">UR mín/máx</th>
                 <th className="px-3 py-3">Vento 2 m</th>
                 <th className="px-3 py-3">Radiação</th>
                 <th className="px-3 py-3">Chuva</th>
@@ -229,7 +231,7 @@ export function ClimateDailyCloseAdmin() {
                   </td>
                   <td className="px-3 py-3">{fmt(row.temperatureMinC)} °C</td>
                   <td className="px-3 py-3">{fmt(row.temperatureMaxC)} °C</td>
-                  <td className="px-3 py-3">{fmt(row.relativeHumidityPct, 0)}%</td>
+                  <td className="px-3 py-3">{row.relativeHumidityMinPct !== null || row.relativeHumidityMaxPct !== null ? `${fmt(row.relativeHumidityMinPct, 0)}–${fmt(row.relativeHumidityMaxPct, 0)}%` : `${fmt(row.relativeHumidityPct, 0)}%`}</td>
                   <td className="px-3 py-3">{fmt(row.windSpeed2mMs)} m/s</td>
                   <td className="px-3 py-3">{fmt(row.solarRadiationMjM2Day, 2)} MJ/m²/d</td>
                   <td className="px-3 py-3">{fmt(row.precipitationMm, 2)} mm</td>
