@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import {
   calculatePhotoperiodHours,
   summarizeThermalValues,
+  totalDegreeDays,
+  type DegreeDayMethod,
 } from "@/modules/culture/services/thermal-time";
 
 const MIN_OBSERVATIONS_FOR_APPROVAL = 3;
@@ -19,6 +21,15 @@ interface Variety {
   id: string;
   name: string;
   calibration_status: string | null;
+  basal_temperature_c: number | null;
+  upper_temperature_c: number | null;
+  degree_day_method: DegreeDayMethod | null;
+}
+
+interface CultureThermalConfig {
+  basal_temperature_c: number | null;
+  upper_temperature_c: number | null;
+  degree_day_method: DegreeDayMethod | null;
 }
 
 interface Marker {
@@ -102,6 +113,7 @@ export function CultureCalibrationTab({
 }) {
   const supabase = useMemo(() => createClient(), []);
   const [varieties, setVarieties] = useState<Variety[]>([]);
+  const [cultureThermal, setCultureThermal] = useState<CultureThermalConfig | null>(null);
   const [markers, setMarkers] = useState<Marker[]>([]);
   const [parcels, setParcels] = useState<Parcel[]>([]);
   const [pivots, setPivots] = useState<Pivot[]>([]);
@@ -152,10 +164,15 @@ export function CultureCalibrationTab({
   );
 
   async function loadCultureData(cultureId: string) {
-    const [varietyResult, markerResult, parcelResult] = await Promise.all([
+    const [cultureResult, varietyResult, markerResult, parcelResult] = await Promise.all([
+      supabase
+        .from("cultures")
+        .select("basal_temperature_c,upper_temperature_c,degree_day_method")
+        .eq("id", cultureId)
+        .single(),
       supabase
         .from("culture_varieties")
-        .select("id,name,calibration_status")
+        .select("id,name,calibration_status,basal_temperature_c,upper_temperature_c,degree_day_method")
         .eq("culture_id", cultureId)
         .eq("active", true)
         .order("name"),
@@ -172,6 +189,7 @@ export function CultureCalibrationTab({
         .eq("status", "ativa"),
     ]);
 
+    setCultureThermal((cultureResult.data ?? null) as CultureThermalConfig | null);
     const nextVarieties = (varietyResult.data ?? []) as Variety[];
     const nextMarkers = (markerResult.data ?? []) as Marker[];
     const nextParcels = (parcelResult.data ?? []) as Parcel[];
@@ -225,6 +243,7 @@ export function CultureCalibrationTab({
   useEffect(() => {
     if (!selectedCultureId) {
       setVarieties([]);
+      setCultureThermal(null);
       setMarkers([]);
       setParcels([]);
       setPivots([]);
@@ -279,6 +298,78 @@ export function CultureCalibrationTab({
     setSaving(false);
   }
 
+  async function calculateGddFromSelectedClimate(input: {
+    farmId: string;
+    referenceDate: string;
+    observedDate: string;
+    dae: number;
+  }): Promise<{ gdd: number | null; reason: string | null }> {
+    const variety = varieties.find((item) => item.id === selectedVarietyId);
+    const baseTemperatureC =
+      variety?.basal_temperature_c ?? cultureThermal?.basal_temperature_c ?? null;
+    const method =
+      variety?.degree_day_method ?? cultureThermal?.degree_day_method ?? "simple_mean";
+    const upperTemperatureC =
+      variety?.upper_temperature_c ?? cultureThermal?.upper_temperature_c ?? null;
+
+    if (baseTemperatureC == null) {
+      return { gdd: null, reason: "Tb não definida para cultura/cultivar." };
+    }
+    if (method === "simple_mean_capped" && upperTemperatureC == null) {
+      return { gdd: null, reason: "Temperatura superior não definida para o método capped." };
+    }
+
+    const { data: selections, error: selectionError } = await supabase
+      .from("weather_daily_selection")
+      .select("date,selected_reading_id")
+      .eq("farm_id", input.farmId)
+      .gte("date", input.referenceDate)
+      .lte("date", input.observedDate)
+      .order("date");
+
+    if (selectionError || !selections) {
+      return { gdd: null, reason: "Falha ao ler o fechamento climático diário." };
+    }
+
+    const expectedDays = input.dae + 1;
+    const readingIds = selections
+      .map((row) => row.selected_reading_id as string | null)
+      .filter((id): id is string => Boolean(id));
+
+    if (selections.length < expectedDays || readingIds.length !== selections.length) {
+      return {
+        gdd: null,
+        reason: `Clima diário incompleto: ${selections.length}/${expectedDays} dias selecionados.`,
+      };
+    }
+
+    const { data: readings, error: readingError } = await supabase
+      .from("weather_readings")
+      .select("id,date,temp_min,temp_max")
+      .in("id", readingIds);
+
+    if (readingError || !readings || readings.length !== readingIds.length) {
+      return { gdd: null, reason: "Leituras climáticas selecionadas incompletas." };
+    }
+
+    const temperatures = readings
+      .map((row) => ({
+        date: String(row.date),
+        tminC: Number(row.temp_min),
+        tmaxC: Number(row.temp_max),
+      }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    return {
+      gdd: totalDegreeDays(temperatures, {
+        baseTemperatureC,
+        upperTemperatureC,
+        method,
+      }),
+      reason: null,
+    };
+  }
+
   async function saveObservation(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!selectedCultureId || !selectedMarkerId || !selectedParcelId) return;
@@ -298,6 +389,15 @@ export function CultureCalibrationTab({
     const referenceDate = parcel.emergence_date ?? parcel.planting_date;
     const dae = dateDiffDays(referenceDate, observedDate);
     const gddRaw = String(fd.get("gdd_accumulated") ?? "").trim();
+    const climateGdd =
+      gddRaw === ""
+        ? await calculateGddFromSelectedClimate({
+            farmId: pivot.farm_id,
+            referenceDate,
+            observedDate,
+            dae,
+          })
+        : { gdd: Number(gddRaw), reason: null };
     const photoperiod =
       pivot.latitude != null
         ? calculatePhotoperiodHours(observedDate, Number(pivot.latitude))
@@ -311,7 +411,7 @@ export function CultureCalibrationTab({
       marker_id: selectedMarkerId,
       observed_date: observedDate,
       dae,
-      gdd_accumulated: gddRaw === "" ? null : Number(gddRaw),
+      gdd_accumulated: climateGdd.gdd,
       photoperiod_hours: photoperiod,
       quality: "campo",
       notes: String(fd.get("observation_notes") ?? "").trim() || null,
@@ -326,7 +426,7 @@ export function CultureCalibrationTab({
         new_values: payload,
       });
       setMessage(
-        `Observação registrada: DAE ${dae}${photoperiod == null ? "" : ` · fotoperíodo ${photoperiod.toFixed(2)} h`}.`,
+        `Observação registrada: DAE ${dae}${climateGdd.gdd == null ? "" : ` · GDA ${climateGdd.gdd.toFixed(1)} °C·dia`}${photoperiod == null ? "" : ` · fotoperíodo ${photoperiod.toFixed(2)} h`}.${climateGdd.reason ? ` Aviso: ${climateGdd.reason}` : ""}`,
       );
       await loadCalibrationData(selectedCultureId);
     } else {
@@ -590,7 +690,7 @@ export function CultureCalibrationTab({
                       type="number"
                       step="0.1"
                       min="0"
-                      placeholder="Preencher quando calculado com clima validado"
+                      placeholder="Opcional: vazio = calcular pelo fechamento climático validado"
                     />
                   </div>
                   <TextArea
