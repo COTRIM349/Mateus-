@@ -31,13 +31,7 @@ import {
   type CulturePhase,
   type CultureValidation,
 } from "@/modules/culture/services";
-import {
-  buildPhasesFromTemplate,
-  inferCultureKind,
-  insertPayloadFromTimeline,
-  rebuildPhaseTimeline,
-  type CultureKind,
-} from "@/modules/culture/services/culture-phases";
+import { rebuildPhaseTimeline } from "@/modules/culture/services/culture-phases";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -116,7 +110,6 @@ interface AssignmentRow {
   id: string;
   pivot_name: string;
   season_name: string;
-  soil_name: string;
   crop_stage: string;
   planting_date: string;
 }
@@ -155,7 +148,7 @@ export default function CulturasPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader titulo="Culturas" descricao="Motor de cultura — coeficientes, fases fenológicas e sistema radicular" />
+      <PageHeader titulo="Culturas" descricao="Motor agronômico — fenologia, Kc, graus-dia, rastreabilidade e calibração" />
       <Tabs tabs={cultureTabs} activeTab={activeTab} onChange={setActiveTab} />
       <div className="mt-6">
         {activeTab === "cadastro" && (
@@ -679,10 +672,8 @@ function PhasesTab({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [warnings, setWarnings] = useState<CultureValidation[]>([]);
-  const [templateTarget, setTemplateTarget] = useState<Exclude<CultureKind, "outro"> | null>(null);
 
   const selectedCulture = cultures.find((c) => c.id === selectedCultureId);
-  const suggestedKind = selectedCulture ? inferCultureKind(selectedCulture.name) : "outro";
 
   const fetchPhases = useCallback(async () => {
     if (!selectedCultureId) { setPhases([]); return; }
@@ -854,43 +845,6 @@ function PhasesTab({
     );
   };
 
-  const applyTemplate = async (kind: Exclude<CultureKind, "outro">) => {
-    if (!selectedCultureId || !selectedCulture) return;
-    setSaving(true);
-    setFormError("");
-    try {
-      if (phases.length > 0) {
-        const { error: delErr } = await supabase
-          .from("culture_phases")
-          .delete()
-          .eq("culture_id", selectedCultureId);
-        if (delErr) throw new Error(delErr.message);
-      }
-      const rows = buildPhasesFromTemplate(kind, selectedCulture.cycle_days);
-      const payload = insertPayloadFromTimeline(selectedCultureId, rows);
-      const { error } = await supabase.from("culture_phases").insert(payload);
-      if (error) throw new Error(error.message);
-      await supabase.from("culture_history").insert({
-        culture_id: selectedCultureId,
-        change_type: "fase_add",
-        description: `Modelo ${kind === "soja" ? "soja" : "algodão"} aplicado (${rows.length} fases, ${rows.reduce((s, p) => s + p.duration_days, 0)} dias)`,
-      });
-      setTemplateTarget(null);
-      fetchPhases();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao aplicar modelo");
-    }
-    setSaving(false);
-  };
-
-  const requestTemplate = (kind: Exclude<CultureKind, "outro">) => {
-    if (phases.length > 0) {
-      setTemplateTarget(kind);
-      return;
-    }
-    void applyTemplate(kind);
-  };
-
   const handleDelete = async () => {
     if (!deleteTarget || !selectedCultureId) return;
     setSaving(true);
@@ -924,15 +878,7 @@ function PhasesTab({
           />
         </div>
         {selectedCultureId && (
-          <>
-            <Button variant="secondary" type="button" onClick={() => requestTemplate("soja")}>
-              Aplicar modelo soja
-            </Button>
-            <Button variant="secondary" type="button" onClick={() => requestTemplate("algodao")}>
-              Aplicar modelo algodão
-            </Button>
-            <Button onClick={() => { setEditing(null); setModalOpen(true); setWarnings([]); }}>Nova fase</Button>
-          </>
+          <Button onClick={() => { setEditing(null); setModalOpen(true); setWarnings([]); }}>Nova fase</Button>
         )}
       </div>
 
@@ -940,9 +886,9 @@ function PhasesTab({
         <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para gerenciar fases fenológicas.</p></Card>
       ) : (
         <>
-          <p className="mb-4 text-[11px] text-graphite-400 dark:text-gray-500">
-            A duração (dias) é a linha do tempo editável. O DAP de cada fase é calculado na sequência — não interpola Kc no motor ainda (Etapa E).
-          </p>
+          <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800 dark:border-amber-900/50 dark:bg-amber-900/20 dark:text-amber-300">
+            Nenhum parâmetro agronômico é preenchido automaticamente. Kc, duração, raiz e p devem manter fonte e status de validação. Dados legados permanecem preservados apenas para auditoria até serem validados.
+          </div>
           {formError && !modalOpen && (
             <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3.5 text-sm text-red-600 dark:bg-red-900/20 dark:text-red-400">{formError}</p>
           )}
@@ -978,8 +924,7 @@ function PhasesTab({
               <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
             ) : phases.length === 0 ? (
               <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-                Nenhuma fase cadastrada. Aplique o modelo soja ou algodão, ou adicione fases manualmente.
-                {suggestedKind !== "outro" && ` Esta cultura parece ${suggestedKind === "soja" ? "soja" : "algodão"}.`}
+                Nenhuma fase validada cadastrada. Cadastre uma fase com sua respectiva fonte ou utilize uma referência da cultura devidamente rastreada.
               </p>
             ) : (
               <Table columns={columns} data={phases} getKey={(r) => r.id} />
@@ -1152,15 +1097,6 @@ function PhasesTab({
         confirmLabel="Excluir"
         loading={saving}
       />
-      <ConfirmDialog
-        open={!!templateTarget}
-        onClose={() => setTemplateTarget(null)}
-        onConfirm={() => { if (templateTarget) void applyTemplate(templateTarget); }}
-        title={templateTarget === "algodao" ? "Aplicar modelo algodão" : "Aplicar modelo soja"}
-        message="Isso substitui as fases atuais desta cultura. Parcelas com estádio manual perdem a referência (voltam ao automático pelo DAP). Continuar?"
-        confirmLabel="Substituir fases"
-        loading={saving}
-      />
     </>
   );
 }
@@ -1186,7 +1122,7 @@ function AssociationTab({
     // Sprint 13 · Etapa 6 — só parcelas ativas nesta cultura.
     const { data } = await supabase
       .from("pivot_crop_assignments")
-      .select("id, crop_stage, planting_date, pivots(name), seasons(name), soils(name)")
+      .select("id, crop_stage, planting_date, pivots(name), seasons(name)")
       .eq("culture_id", selectedCultureId)
       .eq("active", true)
       .or("status.is.null,status.eq.ativa");
@@ -1196,7 +1132,6 @@ function AssociationTab({
           id: d.id,
           pivot_name: (d.pivots as unknown as { name: string })?.name ?? "—",
           season_name: (d.seasons as unknown as { name: string })?.name ?? "—",
-          soil_name: (d.soils as unknown as { name: string })?.name ?? "—",
           crop_stage: d.crop_stage,
           planting_date: d.planting_date,
         }))
@@ -1214,7 +1149,6 @@ function AssociationTab({
   const columns: Column<AssignmentRow>[] = [
     { header: "Pivô", render: (r) => <span className="font-medium">{r.pivot_name}</span> },
     { header: "Safra", render: (r) => r.season_name },
-    { header: "Solo", render: (r) => r.soil_name },
     { header: "Estágio", render: (r) => stageLabels[r.crop_stage] ?? r.crop_stage },
     { header: "Plantio", render: (r) => new Date(r.planting_date + "T12:00:00").toLocaleDateString("pt-BR") },
   ];
