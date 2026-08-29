@@ -97,7 +97,7 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
           <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Doze métodos exibidos separadamente</p>
         </div>
         <span className="w-fit rounded-full bg-amber-50 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
-          {eto.quality === "model_unvalidated" ? "Quality gate diário" : "Aguardando dados"}
+          {eto.quality === "model_unvalidated" ? "Estimativa não validada" : "Aguardando dados"}
         </span>
       </div>
 
@@ -106,7 +106,7 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
           <div className="rounded-2xl bg-emerald-50 p-4 dark:bg-emerald-500/[0.08]">
             <p className="text-[10px] font-bold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">Penman-Monteith FAO-56</p>
             <p className="mt-2 text-[30px] font-black leading-none tabular-nums text-emerald-800 dark:text-emerald-200">{formatNumber(eto.todayMm)} <span className="text-[11px] font-semibold">mm</span></p>
-            <p className="mt-2 text-[9px] text-emerald-700/75 dark:text-emerald-300/75">Cotrim · cálculo interno FAO-56</p>
+            <p className="mt-2 text-[9px] text-emerald-700/75 dark:text-emerald-300/75">Open-Meteo</p>
           </div>
           <div className="rounded-2xl bg-amber-50 p-4 dark:bg-amber-500/[0.08]">
             <p className="text-[10px] font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Hargreaves-Samani</p>
@@ -188,7 +188,7 @@ export function EtoSummaryCard({ eto }: { eto: ClimateDashboardResponse["eto"] }
         </div>
 
         <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-[10px] font-semibold leading-relaxed text-amber-800 dark:bg-amber-900/20 dark:text-amber-300">
-          ETo operacional: somente Penman-Monteith FAO-56 interno quando o fechamento diário estiver aprovado. Os demais métodos são diagnósticos.
+          Comparação diagnóstica. Nenhum método entra automaticamente em irrigação ou balanço hídrico.
         </p>
 
         <div className="mt-5 grid grid-cols-2 gap-x-5 border-t border-gray-100 pt-5 dark:border-white/[0.06]">

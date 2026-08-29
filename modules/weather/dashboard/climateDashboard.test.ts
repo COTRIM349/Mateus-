@@ -41,7 +41,6 @@ function reading(date: string, eto: number | null, importedAt = `${date}T20:00:0
     solar_radiation: 20,
     precipitation: 0,
     et0_source: eto,
-    et0_calculated: eto,
     imported_at: importedAt,
   };
 }
@@ -59,7 +58,6 @@ function forecast(overrides: Partial<ClimateForecastInput>): ClimateForecastInpu
     precipitation: 0,
     precipitation_probability: 10,
     et0_source: 5,
-    et0_calculated: 5,
     ...overrides,
   };
 }

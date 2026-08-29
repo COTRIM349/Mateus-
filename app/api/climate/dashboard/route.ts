@@ -246,14 +246,13 @@ export async function GET(request: Request) {
     currentConsensusResult,
     currentCandidatesResult,
     hourlyOpenMeteoResult,
-    dailySelectionResult,
     publicObservationResults,
     nasaPowerReference,
     nasaPowerClimatology,
   ] = await Promise.all([
     supabase
       .from("weather_readings")
-      .select("date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, et0_source, et0_calculated, imported_at")
+      .select("date, temp_max, temp_min, temp_mean, humidity, wind_speed, solar_radiation, precipitation, et0_source, imported_at")
       .eq("station_id", station.id)
       .gte("date", historyStart)
       .lte("date", today)
@@ -261,7 +260,7 @@ export async function GET(request: Request) {
       .order("imported_at", { ascending: false }),
     supabase
       .from("weather_forecasts")
-      .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source, et0_calculated")
+      .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source")
       .eq("station_id", station.id)
       .gte("target_date", today)
       .order("issued_at", { ascending: false })
@@ -269,7 +268,7 @@ export async function GET(request: Request) {
     meteoblueStation
       ? supabase
           .from("weather_forecasts")
-          .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source, et0_calculated")
+          .select("id, issued_at, target_date, temp_max, temp_min, humidity, wind_speed, solar_radiation, precipitation, precipitation_probability, et0_source")
           .eq("station_id", meteoblueStation.id)
           .eq("provider", "meteoblue")
           .gte("target_date", today)
@@ -324,12 +323,6 @@ export async function GET(request: Request) {
           .order("fetched_at", { ascending: false })
           .limit(300)
       : emptyResult,
-    supabase
-      .from("weather_daily_selection")
-      .select("operational_approved, quality_used, reason, selected_at")
-      .eq("farm_id", farmId)
-      .eq("date", today)
-      .limit(1),
     publicObservationsPromise,
     nasaPowerPromise,
     nasaPowerClimatologyPromise,
@@ -344,20 +337,12 @@ export async function GET(request: Request) {
     currentConsensusResult.error,
     currentCandidatesResult.error,
     hourlyOpenMeteoResult.error,
-    dailySelectionResult.error,
   ].find(Boolean);
   if (queryError) {
     return NextResponse.json({ error: queryError.message }, { status: 422 });
   }
 
   const readings = (readingsResult.data ?? []) as ClimateReadingInput[];
-  const todaySelection = (dailySelectionResult.data?.[0] ?? null) as {
-    operational_approved?: boolean | null;
-    quality_used?: string | null;
-    reason?: string | null;
-    selected_at?: string | null;
-  } | null;
-  const dailyOperationalApproved = Boolean(todaySelection?.operational_approved);
   const forecasts = ensureDailyForecastWindow(
     (forecastsResult.data ?? []) as ClimateForecastInput[],
     today,
@@ -388,7 +373,7 @@ export async function GET(request: Request) {
   const etoHargreavesSamani = buildEtoSummary(
     readings.map((reading) => ({
       ...reading,
-      et0_calculated: hargreavesValue(
+      et0_source: hargreavesValue(
         reading.date,
         reading.temp_min,
         reading.temp_max,
@@ -478,7 +463,7 @@ export async function GET(request: Request) {
   const buildCalculatedSummary = (method: keyof NonNullable<ReturnType<typeof calculateFullMethods>>) =>
     buildEtoSummary(readings.map((reading) => ({
       ...reading,
-      et0_calculated: readingMethodValues.get(reading)?.[method] ?? null,
+      et0_source: readingMethodValues.get(reading)?.[method] ?? null,
     })), today);
   const etoAsceEwri = buildCalculatedSummary("asceEwri");
   const etoPriestleyTaylor = buildCalculatedSummary("priestleyTaylor");
@@ -750,7 +735,7 @@ export async function GET(request: Request) {
       quality: eto.todayMm === null && etoHargreavesSamani.todayMm === null
         ? "missing"
         : "model_unvalidated",
-      sourceLabel: "Penman-Monteith FAO-56 calculado internamente pela Cotrim",
+      sourceLabel: "Penman-Monteith recebido do Open-Meteo",
       hargreavesSamani: {
         ...etoHargreavesSamani,
         method: "Hargreaves-Samani 1985",
@@ -827,12 +812,10 @@ export async function GET(request: Request) {
       },
     },
     validation: {
-      mode: dailyOperationalApproved ? "operational" : "validation",
-      operationalUse: dailyOperationalApproved ? "allowed" : "blocked",
-      confidence: dailyOperationalApproved ? "medium" : "low",
-      message: dailyOperationalApproved
-        ? "Fechamento diário aprovado pelas regras automáticas de qualidade; ETo interna FAO-56 disponível para o manejo."
-        : (todaySelection?.reason ?? "Fechamento diário ainda não aprovado para a data."),
+      mode: "validation",
+      operationalUse: "blocked",
+      confidence: "low",
+      message: "Dados de modelo em validação. Não usar automaticamente para balanço hídrico, recomendação ou programação de irrigação.",
       latitude: virtualStation?.latitude ?? station.latitude,
       longitude: virtualStation?.longitude ?? station.longitude,
       elevationM: virtualStation?.elevation_m ?? station.altitude,
@@ -844,12 +827,11 @@ export async function GET(request: Request) {
     dailyForecast: forecasts.map((forecast) => {
       const meteoblueForecast = meteoblueForecastByDate.get(forecast.target_date) ?? null;
       const merged = mergeDailyForecastFields(forecast, meteoblueForecast);
-      const canonicalEtoMm = forecast.et0_calculated ?? meteoblueForecast?.et0_calculated ?? null;
-      const meteoblueDeltaMm = canonicalEtoMm != null && meteoblueForecast?.et0_source != null
-        ? meteoblueForecast.et0_source - canonicalEtoMm
+      const meteoblueDeltaMm = forecast.et0_source != null && meteoblueForecast?.et0_source != null
+        ? meteoblueForecast.et0_source - forecast.et0_source
         : null;
-      const meteoblueDeltaPct = meteoblueDeltaMm != null && canonicalEtoMm != null && canonicalEtoMm !== 0
-        ? (meteoblueDeltaMm / canonicalEtoMm) * 100
+      const meteoblueDeltaPct = meteoblueDeltaMm != null && forecast.et0_source != null && forecast.et0_source !== 0
+        ? (meteoblueDeltaMm / forecast.et0_source) * 100
         : null;
       return {
       id: forecast.id,
@@ -867,10 +849,14 @@ export async function GET(request: Request) {
       precipitationMeteoblueMm: meteoblueForecast?.precipitation ?? null,
       precipitationProbabilityMeteobluePct: meteoblueForecast?.precipitation_probability ?? null,
       solarRadiationMeteoblueMjM2Day: meteoblueForecast?.solar_radiation ?? null,
-      etoMm: canonicalEtoMm,
+      etoMm: forecast.et0_source,
       etoMeteoblueMm: meteoblueForecast?.et0_source ?? null,
-      etoOperationalMm: canonicalEtoMm,
-      etoOperationalSource: canonicalEtoMm != null ? "cotrim_fao56" : null,
+      etoOperationalMm: meteoblueForecast?.et0_source ?? forecast.et0_source ?? null,
+      etoOperationalSource: meteoblueForecast?.et0_source != null
+        ? "meteoblue_fao"
+        : forecast.et0_source != null
+          ? "open_meteo_pm_fao56"
+          : null,
       etoMeteoblueIssuedAt: meteoblueForecast?.issued_at ?? null,
       etoMeteoblueDeltaMm: meteoblueDeltaMm,
       etoMeteoblueDeltaPct: meteoblueDeltaPct,

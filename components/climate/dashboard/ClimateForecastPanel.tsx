@@ -87,8 +87,8 @@ function DailyForecast({
               <p className="mt-1 text-[18px] font-black tabular-nums text-brand-800 dark:text-brand-300">
                 {formatNumber(day.etoOperationalMm)} mm
               </p>
-              {day.etoOperationalSource === "cotrim_fao56" ? (
-                <p className="mt-1 text-[9px] font-semibold text-emerald-700 dark:text-emerald-300">FAO-56 · cálculo Cotrim</p>
+              {day.etoOperationalSource === "open_meteo_pm_fao56" ? (
+                <p className="mt-1 text-[9px] font-semibold text-amber-700 dark:text-amber-300">PM FAO-56 · fallback</p>
               ) : null}
             </div>
           </article>
@@ -116,7 +116,7 @@ function DailyForecast({
         </table>
       </div>
     </details>
-    <p className="mt-4 text-center text-[10px] text-graphite-400 dark:text-gray-500">APIs climáticas · fechamento diário automático · ETo calculada internamente</p>
+    <p className="mt-4 text-center text-[10px] text-graphite-400 dark:text-gray-500">Meteoblue Basic + Agro + Solar · atualização 06:15 e 18:15 · modelo em validação</p>
     </>
   );
 }
@@ -191,10 +191,10 @@ export function ClimateForecastPanel({
       <div className="flex flex-col gap-3 border-b border-gray-100 px-6 py-4 xl:flex-row xl:items-center xl:justify-between dark:border-white/[0.06]">
         <div>
           <h2 className="text-[18px] font-black text-graphite-900 dark:text-white">Previsão de 7 dias</h2>
-          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Previsão multifuente · ETo interna FAO-56</p>
+          <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">Meteoblue Basic + Agro + Solar · modelo em validação</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="rounded-xl bg-brand-700 px-4 py-2.5 text-[11px] font-extrabold text-white shadow-sm">ETo: Cotrim FAO-56</span>
+          <span className="rounded-xl bg-brand-700 px-4 py-2.5 text-[11px] font-extrabold text-white shadow-sm">ETo: Meteoblue FAO</span>
           <span className="rounded-lg border border-amber-300 px-3 py-2 text-[10px] font-bold text-amber-700 dark:border-amber-700 dark:text-amber-300">Sem estação local</span>
           <a href="#eto-audit" className="rounded-lg px-3 py-2 text-[11px] font-extrabold text-graphite-700 transition-colors hover:bg-gray-100 hover:text-brand-700 dark:text-gray-300 dark:hover:bg-white/[0.05]">Auditoria →</a>
         </div>

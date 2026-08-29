@@ -28,7 +28,7 @@ import { OPEN_METEO_FALLBACK_TIMEZONE } from "@/modules/weather/providers/openMe
 describe("Climate Specification — versão e integridade", () => {
   it("versão segue o formato SemVer x.y.z", () => {
     expect(CLIMATE_SPEC_VERSION).toMatch(/^\d+\.\d+\.\d+$/);
-    expect(CLIMATE_SPEC_VERSION).toBe("2.0.0");
+    expect(CLIMATE_SPEC_VERSION).toBe("1.0.0");
   });
   it("snapshot CLIMATE_SPECIFICATION expõe todas as seções obrigatórias", () => {
     expect(CLIMATE_SPECIFICATION.version).toBe(CLIMATE_SPEC_VERSION);
@@ -104,10 +104,10 @@ describe("Climate Specification — timezone fallback", () => {
 // ── ETo oficial × provider ─────────────────────────────────────────────────
 
 describe("Climate Specification — política de validação da ETo", () => {
-  it("libera somente a ETo interna FAO-56 após o quality gate diário", () => {
-    expect(ETO_OPERATIONAL_STATUS).toBe("quality_gated");
-    expect(OFFICIAL_ETO_METHOD).toBe("fao_56_penman_monteith");
-    expect(OFFICIAL_ETO_FIELD).toBe("internallyCalculatedEtoMm");
+  it("não libera ETo oficial sem validação local", () => {
+    expect(ETO_OPERATIONAL_STATUS).toBe("validation_blocked");
+    expect(OFFICIAL_ETO_METHOD).toBeNull();
+    expect(OFFICIAL_ETO_FIELD).toBeNull();
     expect(PROVIDER_ETO_FIELD).toBe("providerReferenceEtoMm");
   });
   it("providerEto é permitido apenas para diagnóstico, comparação e auditoria", () => {

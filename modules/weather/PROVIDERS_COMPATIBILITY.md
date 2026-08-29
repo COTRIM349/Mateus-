@@ -92,35 +92,39 @@ payload (Open-Meteo faz best-match automático) — registrar `null`.
 
 ---
 
-## 2. Meteoblue · integrado como fonte diária secundária
+## 2. Meteoblue · legado (ingestão paralela, sem Rs)
 
 | Item | Valor |
 |---|---|
-| Previsão | ✅ via packages `basic-day + agro-day + solar-day` |
-| Resolução temporal | diária |
+| Previsão | ⚠️ (via package `basic-day`) |
+| Histórico | ⚠️ |
+| Resolução temporal | diário (no plano básico) |
+| Resolução espacial | ~4 km (varia por pacote) |
 | Autenticação | **requer** `METEOBLUE_API_KEY` |
-| Uso operacional | ✅ fallback após quality gate, prioridade inferior ao Open-Meteo |
+| Custo | por pacote; comercial |
 
-### Variáveis integradas
+### Variáveis (via `modules/weather/providers/meteoblue.ts` legado)
 
 | Variável | Status | Notas |
 |---|---|---|
-| Temperatura min/max/mean | ✅ | pacote basic-day |
-| Umidade média | ✅ | fallback permitido para cálculo de ea |
-| Vento | ✅ | km/h → m/s; tratado como referência a 10 m e ajustado para 2 m pelo motor FAO-56 |
-| Precipitação | ✅ | usada no resolver diário |
-| Pressão ao nível do mar | ⚠️ | preservada como referência, mas **não** usada como pressão de superfície |
-| Radiação solar | ✅ | `solar-day`; GHI diário normalizado para MJ/m²/dia |
-| ETo do provedor | ✅ | apenas auditoria/comparação |
-| ETo interna Cotrim | ✅ | FAO-56 Penman-Monteith com o mesmo motor canônico do Open-Meteo |
+| Temperatura min/max/mean | ⚠️ | disponível no `basic-day` |
+| Umidade média | ⚠️ | idem |
+| Vento (km/h) | ⚠️ | convertido para m/s no legado (**sem** ajuste 10m→2m — bug conhecido no legado) |
+| Precipitação | ⚠️ | idem |
+| Pressão (sea level, hPa) | ⚠️ | não persistida hoje |
+| Radiação solar | ❌ | **não fornecida** no plano básico → não permite ETo interna |
+| ETo (`providerReferenceEtoMm`) | ❌ | não retornado |
 
-### Regras
+### Limitações conhecidas
 
-- A ETo operacional nunca é copiada do campo de referência da Meteoblue.
-- Sem radiação, vento, umidade, temperatura ou altitude/pressão suficiente,
-  a ETo interna fica `null` ou degradada.
-- O resolver diário usa Meteoblue somente quando a leitura passa por qualidade
-  e como fallback de uma fonte de maior prioridade.
+- Sem radiação → `internallyCalculatedEtoMm = null`.
+- Legado converte km/h → m/s **sem** ajuste 10m→2m: quando migrar para a
+  nova camada, usar `adjustWindToTwoMeters(kmhToMs(u), 10)`.
+
+### Uso recomendado
+
+- Comparação secundária.
+- Se um pacote com radiação for adquirido, promover a fonte de radiação.
 
 ---
 

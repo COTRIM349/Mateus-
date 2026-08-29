@@ -80,7 +80,6 @@ export interface ManagementReportRow {
   rainMm: number;
   effectiveRainMm: number;
   irrigationGrossMm: number;
-  effectiveIrrigationMm: number;
   recommendedGrossMm: number;
   fieldCapacity: number | null;
   wiltingPoint: number | null;
@@ -91,8 +90,6 @@ export interface ManagementReportRow {
   moisturePctCc: number;
   safetyPctCc: number;
   pmpPctCc: number;
-  surplusMm: number;
-  etcPotentialMm: number | null;
   rootDepthM: number;
   sensoryNote: number | null;
   tmax: number | null;
@@ -112,13 +109,11 @@ export interface StoredBalanceForReport {
   precipitation: number;
   effective_precipitation: number;
   applied_depth: number;
-  effective_irrigation?: number | null;
   cad: number;
   afd: number;
   soil_storage: number;
   gross_depth: number;
   net_depth?: number;
-  surplus?: number | null;
   ks?: number | null;
   kl?: number | null;
   ky?: number | null;
@@ -260,9 +255,6 @@ export function buildManagementRows(input: ManagementBuildInput): ManagementRepo
       rainMm: b.precipitation ?? 0,
       effectiveRainMm: b.effective_precipitation ?? 0,
       irrigationGrossMm: irrigation,
-      effectiveIrrigationMm: b.effective_irrigation != null && Number.isFinite(b.effective_irrigation)
-        ? b.effective_irrigation
-        : irrigation,
       recommendedGrossMm: b.gross_depth ?? 0,
       fieldCapacity: cc,
       wiltingPoint: pmp,
@@ -273,8 +265,6 @@ export function buildManagementRows(input: ManagementBuildInput): ManagementRepo
       moisturePctCc: moisture,
       safetyPctCc: safetyPctCcForDisplay(b.safety_pct_cc, cad, afd),
       pmpPctCc: pmpPctCcForDisplay(cc, pmp),
-      surplusMm: b.surplus ?? 0,
-      etcPotentialMm: b.etc_potential != null && Number.isFinite(b.etc_potential) ? b.etc_potential : null,
       rootDepthM: b.root_depth ?? 0,
       sensoryNote: pivotId ? (notes.get(`${pivotId}|${b.date}`) ?? null) : null,
       tmax: wx?.tmax ?? null,
@@ -327,7 +317,6 @@ export function managementRowFromBalance(
     rainMm: r.precipitation,
     effectiveRainMm: r.effectivePrecipitation,
     irrigationGrossMm: r.irrigationApplied,
-    effectiveIrrigationMm: r.effectiveIrrigation ?? r.irrigationApplied,
     recommendedGrossMm: r.grossDepth,
     fieldCapacity: cc,
     wiltingPoint: pmp,
@@ -338,8 +327,6 @@ export function managementRowFromBalance(
     moisturePctCc: moisturePctCcForDisplay(r.moisturePctCc, arm, cad),
     safetyPctCc: safetyPctCcForDisplay(r.safetyPctCc, cad, afd),
     pmpPctCc: pmpPctCcForDisplay(cc, pmp),
-    surplusMm: r.surplus ?? 0,
-    etcPotentialMm: r.etcPotential != null && Number.isFinite(r.etcPotential) ? r.etcPotential : null,
     rootDepthM: r.rootDepth,
     sensoryNote: extras.sensoryNote ?? null,
     tmax: extras.weather?.tmax ?? null,
