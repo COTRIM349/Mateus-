@@ -19,11 +19,11 @@ import { useAuth } from "@/components/providers";
 import {
   CROP_STAGES,
   CULTURE_GROUPS,
-  CULTURE_STATUSES,
-  MATURITY_TYPES,
+  CULTURE_STATUSES
 } from "@/constants/brazil";
 import { createClient } from "@/lib/supabase/client";
 import { AgronomicSourcesTab } from "@/modules/culture/components/AgronomicSourcesTab";
+import { AgronomicCultivarsTab } from "@/modules/culture/components/AgronomicCultivarsTab";
 import {
   interpolateKc,
   interpolateRootDepth,
@@ -66,17 +66,6 @@ interface Culture {
   kc_constant: boolean | null;
   // Sprint 14 · Etapa 5 — Kl como função selecionável
   kl_function: string | null;
-}
-
-interface Variety {
-  id: string;
-  culture_id: string;
-  name: string;
-  company: string | null;
-  maturity: string;
-  cycle_days: number | null;
-  observations: string | null;
-  active: boolean;
 }
 
 interface PhaseRow {
@@ -160,7 +149,7 @@ export default function CulturasPage() {
             onCulturesChange={setCultures}
           />
         )}
-        {activeTab === "variedades" && <div className="animate-in"><VarietiesTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "variedades" && <div className="animate-in"><AgronomicCultivarsTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fases" && <div className="animate-in"><PhasesTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fontes" && <div className="animate-in"><AgronomicSourcesTab /></div>}
         {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
@@ -486,174 +475,6 @@ function CulturesTab({
 }
 
 // ── Variedades ────────────────────────────────────────────────────────────
-
-function VarietiesTab({
-  selectedCultureId,
-  onSelectCulture,
-  cultures,
-}: {
-  selectedCultureId: string | null;
-  onSelectCulture: (id: string | null) => void;
-  cultures: Culture[];
-}) {
-  const supabase = createClient();
-  const [varieties, setVarieties] = useState<Variety[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [editing, setEditing] = useState<Variety | null>(null);
-  const [deleteTarget, setDeleteTarget] = useState<Variety | null>(null);
-  const [saving, setSaving] = useState(false);
-  const [formError, setFormError] = useState("");
-
-  const fetchVarieties = useCallback(async () => {
-    if (!selectedCultureId) { setVarieties([]); return; }
-    setLoading(true);
-    const { data } = await supabase
-      .from("culture_varieties")
-      .select("*")
-      .eq("culture_id", selectedCultureId)
-      .eq("active", true)
-      .order("name");
-    if (data) setVarieties(data as Variety[]);
-    setLoading(false);
-  }, [selectedCultureId, supabase]);
-
-  useEffect(() => { fetchVarieties(); }, [fetchVarieties]);
-
-  const maturityLabels: Record<string, string> = Object.fromEntries(
-    MATURITY_TYPES.map((m) => [m.value, m.label])
-  );
-
-  const columns: Column<Variety>[] = [
-    { header: "Cultivar", render: (r) => <span className="font-medium">{r.name}</span> },
-    { header: "Empresa", render: (r) => r.company ?? "—" },
-    { header: "Maturação", render: (r) => maturityLabels[r.maturity] ?? r.maturity },
-    { header: "Ciclo (dias)", render: (r) => r.cycle_days ?? "—", align: "right" },
-    {
-      header: "Ações",
-      align: "right",
-      render: (r) => (
-        <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setModalOpen(true); }}>Editar</Button>
-          <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Excluir</Button>
-        </div>
-      ),
-    },
-  ];
-
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    if (!selectedCultureId) return;
-    setSaving(true);
-    setFormError("");
-    const fd = new FormData(e.currentTarget);
-    const payload = {
-      culture_id: selectedCultureId,
-      name: fd.get("name") as string,
-      company: (fd.get("company") as string) || null,
-      maturity: fd.get("maturity") as string,
-      cycle_days: fd.get("cycle_days") ? Number(fd.get("cycle_days")) : null,
-      observations: (fd.get("observations") as string) || null,
-    };
-    try {
-      if (editing) {
-        const { error } = await supabase.from("culture_varieties").update(payload).eq("id", editing.id);
-        if (error) throw new Error(error.message);
-        await supabase.from("culture_history").insert({
-          culture_id: selectedCultureId, change_type: "variedade_edit",
-          description: `Variedade "${payload.name}" editada`,
-        });
-      } else {
-        const { error } = await supabase.from("culture_varieties").insert(payload);
-        if (error) throw new Error(error.message);
-        await supabase.from("culture_history").insert({
-          culture_id: selectedCultureId, change_type: "variedade_add",
-          description: `Variedade "${payload.name}" adicionada`,
-        });
-      }
-      setModalOpen(false);
-      setEditing(null);
-      fetchVarieties();
-    } catch (err) {
-      setFormError(err instanceof Error ? err.message : "Erro ao salvar");
-    }
-    setSaving(false);
-  };
-
-  const handleDelete = async () => {
-    if (!deleteTarget || !selectedCultureId) return;
-    setSaving(true);
-    await supabase.from("culture_varieties").update({ active: false }).eq("id", deleteTarget.id);
-    await supabase.from("culture_history").insert({
-      culture_id: selectedCultureId, change_type: "variedade_del",
-      description: `Variedade "${deleteTarget.name}" removida`,
-    });
-    setDeleteTarget(null);
-    setSaving(false);
-    fetchVarieties();
-  };
-
-  return (
-    <>
-      <div className="mb-4 flex flex-wrap items-end gap-4">
-        <div className="min-w-[220px]">
-          <Select
-            id="culture_select_var"
-            name="culture_select_var"
-            label="Cultura"
-            options={cultures.map((c) => ({ value: c.id, label: c.name }))}
-            value={selectedCultureId ?? ""}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSelectCulture(e.target.value || null)}
-          />
-        </div>
-        {selectedCultureId && (
-          <Button onClick={() => { setEditing(null); setModalOpen(true); }}>Nova variedade</Button>
-        )}
-      </div>
-
-      {!selectedCultureId ? (
-        <Card><p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Selecione uma cultura para gerenciar variedades.</p></Card>
-      ) : (
-        <Card>
-          {loading ? (
-            <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
-          ) : varieties.length === 0 ? (
-            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma variedade cadastrada.</p>
-          ) : (
-            <Table columns={columns} data={varieties} getKey={(r) => r.id} />
-          )}
-        </Card>
-      )}
-
-      <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar variedade" : "Nova variedade"}>
-        <form onSubmit={handleSubmit} className="space-y-5">
-          <Input id="name" name="name" label="Cultivar" placeholder="BRS 388" required defaultValue={editing?.name} />
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="company" name="company" label="Empresa" placeholder="Embrapa" defaultValue={editing?.company ?? ""} />
-            <Select id="maturity" name="maturity" label="Ciclo de maturação" options={[...MATURITY_TYPES]} required defaultValue={editing?.maturity ?? "medio"} />
-            <Input id="cycle_days" name="cycle_days" label="Ciclo (dias)" type="number" defaultValue={editing?.cycle_days ?? ""} />
-          </div>
-          <TextArea id="observations" name="observations" label="Observações" defaultValue={editing?.observations ?? ""} />
-          {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
-          <div className="flex justify-end gap-3 pt-4">
-            <Button variant="secondary" type="button" onClick={() => { setModalOpen(false); setEditing(null); }}>Cancelar</Button>
-            <Button type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Button>
-          </div>
-        </form>
-      </Modal>
-
-      <ConfirmDialog
-        open={!!deleteTarget}
-        onClose={() => setDeleteTarget(null)}
-        onConfirm={handleDelete}
-        title="Excluir variedade"
-        message={`Deseja excluir a variedade "${deleteTarget?.name}"?`}
-        confirmLabel="Excluir"
-        loading={saving}
-      />
-    </>
-  );
-}
 
 // ── Fases Fenológicas ─────────────────────────────────────────────────────
 
