@@ -155,9 +155,9 @@ export interface ClimateDashboardResponse {
     };
   };
   validation: {
-    mode: "validation";
-    operationalUse: "blocked";
-    confidence: "low";
+    mode: "validation" | "operational";
+    operationalUse: "blocked" | "allowed";
+    confidence: "low" | "medium" | "high";
     message: string;
     latitude: number | null;
     longitude: number | null;
