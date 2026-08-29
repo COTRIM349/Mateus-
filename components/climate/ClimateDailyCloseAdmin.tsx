@@ -42,7 +42,7 @@ interface DailyCloseResponse {
     rows_skipped?: number | null;
     error_message?: string | null;
     duration_ms?: number | null;
-    created_at?: string | null;
+    run_at?: string | null;
   } | null;
   rows: DailyCloseRow[];
 }
@@ -248,7 +248,7 @@ export function ClimateDailyCloseAdmin() {
           <div>
             <h3 className="text-sm font-bold text-graphite-900 dark:text-white">Última coleta automática</h3>
             <p className="mt-1 text-xs text-graphite-400">
-              {data?.lastIngestion?.created_at ? fmtDate(data.lastIngestion.created_at) : "Ainda não registrada"}
+              {data?.lastIngestion?.run_at ? fmtDate(data.lastIngestion.run_at) : "Ainda não registrada"}
               {data?.lastIngestion?.provider ? ` · ${data.lastIngestion.provider}` : ""}
             </p>
           </div>
