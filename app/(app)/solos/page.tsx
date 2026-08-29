@@ -472,8 +472,6 @@ function SoilDetail({
   const [savingProfile, setSavingProfile] = useState(false);
   const [profileMessage, setProfileMessage] = useState("");
   const [profileError, setProfileError] = useState("");
-  const [pendingSoilClass, setPendingSoilClass] = useState<string | null>(null);
-  const [applyingSoilClass, setApplyingSoilClass] = useState(false);
 
   const [layerModalOpen, setLayerModalOpen] = useState(false);
   const [editingLayer, setEditingLayer] = useState<PivotSoilLayer | null>(null);
@@ -541,35 +539,6 @@ function SoilDetail({
     await onChanged();
     setProfileMessage("Cadastro salvo.");
     setSavingProfile(false);
-  };
-
-  const applySoilClass = async () => {
-    if (!pendingSoilClass) return;
-
-    setApplyingSoilClass(true);
-    setProfileError("");
-    setProfileMessage("");
-    setLayerError("");
-    setLayerMessage("");
-
-    const result = await supabase.rpc("apply_pivot_soil_class_reference", {
-      p_pivot_id: pivot.id,
-      p_soil_class: pendingSoilClass,
-    });
-
-    if (result.error) {
-      setProfileError(result.error.message);
-      setApplyingSoilClass(false);
-      setPendingSoilClass(null);
-      return;
-    }
-
-    setSoilClass(pendingSoilClass);
-    setPendingSoilClass(null);
-    await refreshLayers();
-    await onChanged();
-    setProfileMessage("Classe alterada. CC, PMP e densidade foram atualizados e continuam editáveis.");
-    setApplyingSoilClass(false);
   };
 
   const updateLayerDraft = (
@@ -884,11 +853,7 @@ function SoilDetail({
               id="soil_class"
               label="Classe do solo"
               value={soilClass}
-              onChange={(event) => {
-                const nextClass = event.target.value;
-                if (!nextClass || nextClass === soilClass) return;
-                setPendingSoilClass(nextClass);
-              }}
+              onChange={(event) => setSoilClass(event.target.value)}
               options={[
                 { value: "", label: "Não informado" },
                 ...SOIL_CLASS_OPTIONS.map((soilClassOption) => ({
@@ -1227,16 +1192,6 @@ function SoilDetail({
           </div>
         </form>
       </Modal>
-
-      <ConfirmDialog
-        open={!!pendingSoilClass}
-        onClose={() => setPendingSoilClass(null)}
-        onConfirm={applySoilClass}
-        title="Alterar classe do solo"
-        message={`Alterar para "${pendingSoilClass ?? ""}" vai substituir CC, PMP e densidade aparente das camadas pelos valores de referência desta classe. Depois, os campos continuam editáveis.`}
-        confirmLabel="Alterar classe"
-        loading={applyingSoilClass}
-      />
 
       <ConfirmDialog
         open={!!deleteTarget}
