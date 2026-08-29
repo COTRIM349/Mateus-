@@ -742,11 +742,6 @@ function SoilDetail({
     setUnit(nextUnit);
     await refreshLayers();
     await onChanged();
-    setProfileMessage(
-      nextUnit === "volumetric_pct"
-        ? "Unidade alterada para % volumétrica. CC e PMP foram convertidos automaticamente pela densidade aparente de cada camada."
-        : "Unidade alterada para % em peso. CC e PMP foram convertidos automaticamente pela densidade aparente de cada camada."
-    );
     setChangingUnit(false);
   };
 
@@ -1207,16 +1202,6 @@ function SoilDetail({
             </div>
           </div>
         )}
-      </section>
-
-      <section className="flex gap-3 rounded-2xl border border-gray-200 bg-white px-5 py-4 text-sm text-graphite-500 dark:border-white/[0.10] dark:bg-white/[0.02] dark:text-gray-400">
-        <span className="mt-0.5 shrink-0 text-graphite-400 dark:text-gray-500">
-          <InfoIcon />
-        </span>
-        <div className="space-y-1">
-          <p>DTA média do perfil é calculada com base no CAD total e na profundidade total do solo.</p>
-          <p>CAD da camada = DTA × espessura da camada.</p>
-        </div>
       </section>
 
       <Modal
