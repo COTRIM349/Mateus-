@@ -541,6 +541,32 @@ CREATE INDEX IF NOT EXISTS idx_kc_calibration_obs_cultivar
 COMMENT ON TABLE kc_calibration_observations IS
   'ETc observada independentemente para calibração de Kc. Nível D não autoriza chamar o resultado de Kc calibrado.';
 
+CREATE TABLE IF NOT EXISTS kc_calibration_points (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  calibration_run_id UUID NOT NULL REFERENCES agronomic_calibration_runs(id) ON DELETE CASCADE,
+  culture_id UUID NOT NULL REFERENCES cultures(id) ON DELETE CASCADE,
+  cultivar_id UUID NOT NULL REFERENCES culture_varieties(id) ON DELETE CASCADE,
+  stage_id UUID REFERENCES phenology_stages(id) ON DELETE SET NULL,
+  planting_window_id UUID REFERENCES planting_windows(id) ON DELETE SET NULL,
+  axis_type TEXT NOT NULL CHECK (axis_type IN ('DAE','GDA','PHENOLOGY_PROGRESS')),
+  x_value DOUBLE PRECISION NOT NULL,
+  kc_value DOUBLE PRECISION NOT NULL CHECK (kc_value >= 0 AND kc_value <= 2.5),
+  source_id UUID NOT NULL REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
+  confidence TEXT NOT NULL DEFAULT 'nao_validada'
+    CHECK (confidence IN ('alta','media','baixa','nao_validada')),
+  approved BOOLEAN NOT NULL DEFAULT false,
+  approved_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  approved_at TIMESTAMPTZ,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_kc_calibration_points_cultivar
+  ON kc_calibration_points(cultivar_id, stage_id, approved);
+
+COMMENT ON TABLE kc_calibration_points IS
+  'Pontos locais de Kc derivados de ETc observada independentemente. Uma curva operacional só deve ser criada com conjunto suficiente de pontos aprovados.';
+
 -- ── LEGADO ─────────────────────────────────────────────────────────────────
 
 CREATE TABLE IF NOT EXISTS legacy_agronomic_data (
@@ -618,7 +644,7 @@ BEGIN
   FOREACH t IN ARRAY ARRAY[
     'agronomic_sources','phenology_scales','phenology_stages','planting_windows',
     'agronomic_parameter_values','cultivar_phenology_targets','kc_curves','kc_anchor_points',
-    'root_depth_curves','root_depth_anchor_points','hydric_sensitivity_stages','legacy_agronomic_data'
+    'root_depth_curves','root_depth_anchor_points','hydric_sensitivity_stages','kc_calibration_points','legacy_agronomic_data'
   ]
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'authenticated_read_' || t, t);
