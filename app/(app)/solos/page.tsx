@@ -707,106 +707,6 @@ function SoilDetail({
     setChangingUnit(false);
   };
 
-  const layerColumns: Column<PivotSoilLayer>[] = [
-    {
-      header: "Camada",
-      render: (row) => (
-        <span className="font-semibold">Camada {row.layer_number}</span>
-      ),
-    },
-    {
-      header: "Tipo de solo",
-      render: (row) => (
-        <select
-          aria-label={`Tipo de solo da camada ${row.layer_number}`}
-          value={layerDrafts[row.id]?.soil_class ?? ""}
-          onChange={(event) =>
-            updateLayerDraft(row.id, "soil_class", event.target.value)
-          }
-          className="min-w-[180px] rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-        >
-          <option value="">Não informado</option>
-          {SOIL_CLASS_OPTIONS.map((soilClassOption) => (
-            <option key={soilClassOption} value={soilClassOption}>
-              {soilClassOption}
-            </option>
-          ))}
-        </select>
-      ),
-    },
-    {
-      header: "Espessura",
-      render: (row) => (
-        <span className="font-medium text-graphite-800 dark:text-gray-200">
-          {layerDepthLabel(row, layers)}
-        </span>
-      ),
-    },
-    {
-      header: "CC (%)",
-      render: (row) => (
-        <input
-          aria-label={`Capacidade de Campo da camada ${row.layer_number}`}
-          type="number"
-          step="0.001"
-          value={layerDrafts[row.id]?.field_capacity_pct ?? ""}
-          onChange={(event) =>
-            updateLayerDraft(row.id, "field_capacity_pct", event.target.value)
-          }
-          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-        />
-      ),
-    },
-    {
-      header: "PMP (%)",
-      render: (row) => (
-        <input
-          aria-label={`Ponto de Murchamento da camada ${row.layer_number}`}
-          type="number"
-          step="0.001"
-          value={layerDrafts[row.id]?.wilting_point_pct ?? ""}
-          onChange={(event) =>
-            updateLayerDraft(row.id, "wilting_point_pct", event.target.value)
-          }
-          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-        />
-      ),
-    },
-    {
-      header: "Densidade aparente (g/cm³)",
-      render: (row) => (
-        <input
-          aria-label={`Densidade aparente da camada ${row.layer_number}`}
-          type="number"
-          min="0.01"
-          step="0.001"
-          value={layerDrafts[row.id]?.bulk_density_g_cm3 ?? ""}
-          onChange={(event) =>
-            updateLayerDraft(row.id, "bulk_density_g_cm3", event.target.value)
-          }
-          className="w-28 rounded-lg border border-gray-200 bg-white px-2.5 py-2 text-right text-sm outline-none focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
-        />
-      ),
-    },
-    {
-      header: "CAD (mm)",
-      align: "right",
-      render: (row) => {
-        const metrics = calculateDraftMetrics(layerDrafts[row.id], unit);
-        return metrics.cad == null ? "Não calculado" : formatNumber(metrics.cad, 2);
-      },
-    },
-    {
-      header: "Ação",
-      align: "right",
-      render: (row) => (
-        <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(row)}>
-          Excluir
-        </Button>
-      ),
-    },
-  ];
-
   const liveLayerMetrics = layers.map((layer) => ({
     layer,
     ...calculateDraftMetrics(layerDrafts[layer.id], unit),
@@ -1017,11 +917,11 @@ function SoilDetail({
       </Card>
 
       <Card>
-        <div className="space-y-4">
+        <div className="space-y-5">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="text-base font-semibold text-graphite-900 dark:text-white">
-                Camadas do solo
+                Perfil do solo
               </h2>
             </div>
             <div className="flex flex-wrap gap-2">
@@ -1044,37 +944,37 @@ function SoilDetail({
             </div>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
-              <p className="text-xs text-graphite-400 dark:text-gray-500">Camadas</p>
-              <div className="mt-2 space-y-1 text-sm font-semibold text-graphite-900 dark:text-white">
-                {layers.length === 0 ? (
-                  <p>Não informado</p>
-                ) : (
-                  [...layers]
-                    .sort((a, b) => a.layer_number - b.layer_number)
-                    .map((layer) => (
-                      <p key={layer.id}>Camada {layer.layer_number}</p>
-                    ))
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
-              <p className="text-xs text-graphite-400 dark:text-gray-500">
-                DTA média do perfil (mm/cm)
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                Profundidade
               </p>
-              <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
-                {dtaProfileAverage == null
-                  ? "Não calculado"
-                  : formatNumber(dtaProfileAverage, 3)}
+              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
+                {profileDepthCm == null ? "—" : `${Math.round(profileDepthCm)} cm`}
               </p>
             </div>
-
-            <div className="rounded-xl border border-gray-100 p-4 dark:border-white/[0.08]">
-              <p className="text-xs text-graphite-400 dark:text-gray-500">CAD total do perfil</p>
-              <p className="mt-1 text-lg font-semibold text-graphite-900 dark:text-white">
-                {cadTotal == null ? "Não calculado" : `${formatNumber(cadTotal, 2)} mm`}
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                Camadas
+              </p>
+              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
+                {layers.length}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                DTA média
+              </p>
+              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
+                {dtaProfileAverage == null ? "—" : `${formatNumber(dtaProfileAverage, 3)} mm/cm`}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-white/[0.08] dark:bg-white/[0.03]">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                CAD do perfil
+              </p>
+              <p className="mt-1 text-xl font-bold text-graphite-900 dark:text-white">
+                {cadTotal == null ? "—" : `${formatNumber(cadTotal, 2)} mm`}
               </p>
             </div>
           </div>
@@ -1095,7 +995,125 @@ function SoilDetail({
               Nenhuma camada foi fornecida para este pivô.
             </p>
           ) : (
-            <Table columns={layerColumns} data={layers} getKey={(row) => row.id} />
+            <div className="space-y-3">
+              {[...layers]
+                .sort((a, b) => a.layer_number - b.layer_number)
+                .map((layer) => {
+                  const draft = layerDrafts[layer.id] ?? makeLayerDraft(layer);
+                  const metrics = calculateDraftMetrics(draft, unit);
+
+                  return (
+                    <div
+                      key={layer.id}
+                      className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.08] dark:bg-white/[0.02]"
+                    >
+                      <div className="grid gap-4 xl:grid-cols-[170px_minmax(180px,1.3fr)_repeat(3,minmax(120px,0.8fr))_120px_70px] xl:items-end">
+                        <div>
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                            Camada {layer.layer_number}
+                          </p>
+                          <p className="mt-1 text-lg font-bold text-graphite-900 dark:text-white">
+                            {layerDepthLabel(layer, layers)}
+                          </p>
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                            Tipo de solo
+                          </label>
+                          <select
+                            aria-label={`Tipo de solo da camada ${layer.layer_number}`}
+                            value={draft.soil_class}
+                            onChange={(event) =>
+                              updateLayerDraft(layer.id, "soil_class", event.target.value)
+                            }
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+                          >
+                            <option value="">Não informado</option>
+                            {SOIL_CLASS_OPTIONS.map((soilClassOption) => (
+                              <option key={soilClassOption} value={soilClassOption}>
+                                {soilClassOption}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                            CC (%)
+                          </label>
+                          <input
+                            aria-label={`Capacidade de Campo da camada ${layer.layer_number}`}
+                            type="number"
+                            step="0.001"
+                            value={draft.field_capacity_pct}
+                            onChange={(event) =>
+                              updateLayerDraft(layer.id, "field_capacity_pct", event.target.value)
+                            }
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-right text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                            PMP (%)
+                          </label>
+                          <input
+                            aria-label={`Ponto de Murchamento da camada ${layer.layer_number}`}
+                            type="number"
+                            step="0.001"
+                            value={draft.wilting_point_pct}
+                            onChange={(event) =>
+                              updateLayerDraft(layer.id, "wilting_point_pct", event.target.value)
+                            }
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-right text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="mb-2 block text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                            Densidade
+                          </label>
+                          <input
+                            aria-label={`Densidade aparente da camada ${layer.layer_number}`}
+                            type="number"
+                            min="0.01"
+                            step="0.001"
+                            value={draft.bulk_density_g_cm3}
+                            onChange={(event) =>
+                              updateLayerDraft(layer.id, "bulk_density_g_cm3", event.target.value)
+                            }
+                            className="w-full rounded-xl border border-gray-200 bg-white px-3 py-2.5 text-right text-sm outline-none transition focus:border-brand-500 dark:border-white/[0.08] dark:bg-white/[0.04]"
+                          />
+                          <p className="mt-1 text-[10px] text-graphite-400 dark:text-gray-500">
+                            g/cm³
+                          </p>
+                        </div>
+
+                        <div className="rounded-xl bg-brand-50 px-3 py-2.5 text-right dark:bg-brand-900/20">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide text-brand-600 dark:text-brand-300">
+                            CAD
+                          </p>
+                          <p className="mt-0.5 text-base font-bold text-brand-700 dark:text-brand-200">
+                            {metrics.cad == null ? "—" : formatNumber(metrics.cad, 2)}
+                          </p>
+                          <p className="text-[10px] text-brand-500 dark:text-brand-400">mm</p>
+                        </div>
+
+                        <div className="flex xl:justify-end">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setDeleteTarget(layer)}
+                          >
+                            Excluir
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
           )}
         </div>
       </Card>
