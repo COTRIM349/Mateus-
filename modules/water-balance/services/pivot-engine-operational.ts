@@ -139,7 +139,7 @@ export function diagnoseOperationalInput(input: PivotEngineInput): OperationalIn
     return {
       operational: false,
       code: "invalid_phase_coverage",
-      message: "Parâmetros agronômicos diários ausentes e fases legadas incompletas: o balanço não inventa Kc, raiz ou p.",
+      message: "Fases da cultura incompletas ou inválidas e parâmetros agronômicos diários ausentes: o balanço não inventa Kc, raiz ou p.",
       date: null,
     };
   }
