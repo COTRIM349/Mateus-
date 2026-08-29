@@ -4,6 +4,7 @@ import {
   DEFAULT_CENTER_PIVOT_KL,
   SOIL_UNITS,
   calculateADTFromLayers,
+  cadAfdFromMoistureUnit,
   clipLayersToRootDepth,
   resolveLayerKl,
   soilProfileIsUsable,
@@ -102,5 +103,20 @@ describe("CAD recortada pela profundidade radicular Z", () => {
         effective_depth: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe("cadAfdFromMoistureUnit", () => {
+  it("grava % em peso e aplica Da só na DTA", () => {
+    const r = cadAfdFromMoistureUnit({
+      cc: 12.4,
+      pmp: 6.3,
+      bulkDensity: 1.82,
+      depthStartCm: 0,
+      depthEndCm: 20,
+      unit: "gravimetric_percent",
+    });
+    expect(r.missing).toEqual([]);
+    expect(r.cadMm).toBeCloseTo(22.204, 2);
   });
 });

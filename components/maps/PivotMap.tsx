@@ -105,7 +105,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
       if (!pivot.latitude || !pivot.longitude) continue;
       const latlng: L.LatLngExpression = [pivot.latitude, pivot.longitude];
       const isHighlighted = pivot.id === highlightId;
-      const baseColor = pivot.color ?? MAP_HYDRIC_COLORS.green;
+      const baseColor = pivot.color ?? MAP_HYDRIC_COLORS.lightGreen;
       const tooltip = pivot.statusLabel
         ? `${pivot.name} · ${pivot.statusLabel}`
         : pivot.name;

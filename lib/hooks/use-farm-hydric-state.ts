@@ -104,7 +104,7 @@ export function useFarmHydricState(): FarmHydricState {
     const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes] = await Promise.all([
       cultureIds.length ? supabase.from("cultures").select("id, name, root_depth, depletion_factor, kl, ks_function, ky").in("id", cultureIds) : Promise.resolve({ data: [] }),
       cultureIds.length ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order") : Promise.resolve({ data: [] }),
-      soilIds.length ? supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").in("id", soilIds) : Promise.resolve({ data: [] }),
+      soilIds.length ? supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth, moisture_unit").in("id", soilIds) : Promise.resolve({ data: [] }),
       soilIds.length
         ? supabase
             .from("soil_layers")
@@ -117,8 +117,17 @@ export function useFarmHydricState(): FarmHydricState {
       supabase.from("weather_stations").select("id").eq("farm_id", activeFarmId).eq("active", true),
     ]);
 
+    let soilsData: Array<Record<string, unknown>> = (soilsRes.data ?? []) as Array<Record<string, unknown>>;
+    if (soilsData.length === 0 && soilIds.length > 0 && "error" in soilsRes && soilsRes.error) {
+      const fallback = await supabase
+        .from("soils")
+        .select("id, name, field_capacity, wilting_point, bulk_density, effective_depth")
+        .in("id", soilIds);
+      soilsData = (fallback.data ?? []) as Array<Record<string, unknown>>;
+    }
+
     const cultureMap = new Map((culturesRes.data ?? []).map((c: Record<string, unknown>) => [c.id as string, c]));
-    const soilMap = new Map((soilsRes.data ?? []).map((s: Record<string, unknown>) => [s.id as string, s]));
+    const soilMap = new Map((soilsData as Array<Record<string, unknown>>).map((s) => [s.id as string, s]));
     const seasonMap = new Map((seasonsRes.data ?? []).map((s: Record<string, unknown>) => [s.id as string, s.name as string]));
     const varietyMap = new Map((varietiesRes.data ?? []).map((v: Record<string, unknown>) => [v.id as string, v.name as string]));
     const layersBySoil = new Map<string, SoilProfileLayer[]>();
@@ -232,6 +241,7 @@ export function useFarmHydricState(): FarmHydricState {
           parcelName: assignment ? ((assignment.name as string | null) ?? null) : null,
           current: null,
           history: [],
+          projection: [],
         });
       };
 
@@ -287,6 +297,9 @@ export function useFarmHydricState(): FarmHydricState {
               depletion_factor: (assignment.depletion_factor as number) ?? null,
               kl_override: (assignment.kl_override as number) ?? null,
               ks_function_override: (assignment.ks_function_override as string) ?? null,
+              fd_mode: ((assignment.fd_mode as "fixed" | "auto") ?? "fixed"),
+              initial_moisture_is_cc: (assignment.initial_moisture_is_cc as boolean | null) ?? true,
+              initial_soil_moisture_pct: (assignment.initial_soil_moisture_pct as number | null) ?? null,
             },
             culture: {
               root_depth: (culture.root_depth as number) ?? 0.3,
@@ -302,6 +315,7 @@ export function useFarmHydricState(): FarmHydricState {
               bulk_density: soil.bulk_density as number,
               effective_depth: (soil.effective_depth as number) ?? 0.6,
               layers: effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
+              moistureUnit: ((soil.moisture_unit as "gravimetric_percent" | "volumetric_percent" | "m3_m3") ?? "m3_m3"),
             },
             pivot: {
               efficiency: (pivot.efficiency as number) ?? 0.85,

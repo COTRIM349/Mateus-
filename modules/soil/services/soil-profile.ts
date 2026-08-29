@@ -1,9 +1,9 @@
 /**
  * Perfil físico do solo no pivô (Etapa B).
  *
- * CC e PMP entram em base volumétrica (cm³/cm³). Densidade aparente (g/cm³)
- * é informativa: a CAD volumétrica NÃO multiplica Da. Conversão gravimétrica
- * só ocorre por chamada explícita a {@link volumetricFromGravimetric}.
+ * CC e PMP são gravados na unidade escolhida (gravimétrica %, volumétrica %
+ * ou m³/m³). A fórmula de DTA muda no motor — densidade só entra na forma
+ * gravimétrica. Conversão θv = θg × Da permanece disponível para legado.
  *
  * KL padrão em pivô central com molhamento total = 1. Este módulo calcula o
  * KL ponderado; não aplica KL à ETc (isso é Etapa E).
@@ -11,6 +11,7 @@
 
 import { roundTo } from "@/utils/math";
 import { calculateLayerCAD, type LayerParams } from "./soil.service";
+import { calculateRootZoneStorage, type MoistureUnit } from "@/modules/water-balance/agronomy";
 
 export const SOIL_UNITS = {
   fieldCapacity: "cm³/cm³",
@@ -152,4 +153,31 @@ export function soilProfileIsUsable(
     );
   }
   return homogeneous.field_capacity > homogeneous.wilting_point && homogeneous.effective_depth > 0;
+}
+
+/**
+ * CTA/CRA na unidade cadastrada. Não converte gravimetria em volumétrica.
+ */
+export function cadAfdFromMoistureUnit(input: {
+  cc: number;
+  pmp: number;
+  bulkDensity: number | null;
+  depthStartCm: number;
+  depthEndCm: number;
+  unit: MoistureUnit;
+  fd?: number;
+}): { cadMm: number | null; afdMm: number | null; missing: string[] } {
+  const zone = calculateRootZoneStorage({
+    layers: [{
+      depthStartCm: input.depthStartCm,
+      depthEndCm: input.depthEndCm,
+      cc: input.cc,
+      pmp: input.pmp,
+      bulkDensity: input.bulkDensity,
+    }],
+    unit: input.unit,
+    zrCm: Math.max(input.depthEndCm, 0),
+    fd: input.fd ?? 0.5,
+  });
+  return { cadMm: zone.cta.value, afdMm: zone.cra.value, missing: zone.missing };
 }

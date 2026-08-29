@@ -6,65 +6,50 @@ import {
   MAP_HYDRIC_NEED_IRRIGATE,
   MAP_HYDRIC_NO_IRRIGATE,
   MAP_HYDRIC_STATUS_CONFIG,
-  MAP_HYDRIC_THRESHOLDS,
 } from "./map-hydric-status";
 
-describe("classifyWaterStatus", () => {
-  const cad = 100;
-  const afd = 50;
-  const safety = 50;
+describe("classifyWaterStatus — 6 cores FAO-56", () => {
+  const cad = 66.61;
+  const afd = 33.31;
 
   it("marca incompleto sem CAD ou ARM", () => {
     expect(classifyWaterStatus({ armMm: 40, cadMm: 0, afdMm: 20 })).toBe("incompleto");
     expect(classifyWaterStatus({ armMm: null, cadMm: cad, afdMm: afd })).toBe("incompleto");
   });
 
-  it("azul quando ARM está na capacidade de campo", () => {
-    expect(classifyWaterStatus({ armMm: 99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
-      .toBe("capacidade_campo");
+  it("azul quando Dr ≈ 0 (capacidade de campo)", () => {
+    expect(classifyWaterStatus({ armMm: 66.5, cadMm: cad, afdMm: afd })).toBe("capacidade_campo");
   });
 
-  it("verde quando está abaixo da CC e acima da segurança", () => {
-    expect(classifyWaterStatus({ armMm: 85, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
-      .toBe("boa_umidade");
+  it("verde escuro na ótima umidade", () => {
+    expect(classifyWaterStatus({ armMm: 56, cadMm: cad, afdMm: afd })).toBe("otima");
   });
 
-  it("amarelo abaixo da segurança com água no solo", () => {
-    expect(classifyWaterStatus({ armMm: 40, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
-      .toBe("atencao");
+  it("verde claro na boa umidade", () => {
+    expect(classifyWaterStatus({ armMm: 46, cadMm: cad, afdMm: afd })).toBe("boa");
   });
 
-  it("vermelho no déficit hídrico", () => {
-    expect(classifyWaterStatus({ armMm: 0, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
-      .toBe("deficit_hidrico");
+  it("laranja no alerta (Dr próximo da CRA)", () => {
+    expect(classifyWaterStatus({ armMm: 36.91, cadMm: cad, afdMm: afd })).toBe("alerta");
   });
 
-  it("respeita limiares parametrizados", () => {
-    expect(
-      classifyWaterStatus({
-        armMm: 90,
-        cadMm: cad,
-        afdMm: afd,
-        safetyMoistureMm: safety,
-        thresholds: { ...MAP_HYDRIC_THRESHOLDS, fieldCapacityRatio: 0.9 },
-      }),
-    ).toBe("capacidade_campo");
+  it("vermelho no estresse (Dr > CRA, Ks < 1)", () => {
+    expect(classifyWaterStatus({ armMm: 26.61, cadMm: cad, afdMm: afd })).toBe("estresse");
   });
 
-  it("agrupa irrigar / não irrigar como nas plataformas de manejo", () => {
-    expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "boa_umidade", "incompleto"]);
-    expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["atencao", "deficit_hidrico"]);
-    expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(4);
+  it("preto no déficit severo", () => {
+    expect(classifyWaterStatus({ armMm: 10, cadMm: cad, afdMm: afd })).toBe("severo");
+  });
+
+  it("agrupa irrigar / não irrigar e paleta de 6 cores", () => {
+    expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "otima", "boa", "incompleto"]);
+    expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["alerta", "estresse", "severo"]);
+    expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(6);
     expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.blue);
-    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.label).toBe("CC 100%");
-    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.green);
-    expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe(MAP_HYDRIC_COLORS.yellow);
-    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe(MAP_HYDRIC_COLORS.red);
-    expect(Object.values(MAP_HYDRIC_COLORS).slice(0, 4)).toEqual([
-      "#2196F3",
-      "#4CAF50",
-      "#FFC107",
-      "#F44336",
-    ]);
+    expect(MAP_HYDRIC_STATUS_CONFIG.otima.color).toBe(MAP_HYDRIC_COLORS.darkGreen);
+    expect(MAP_HYDRIC_STATUS_CONFIG.boa.color).toBe(MAP_HYDRIC_COLORS.lightGreen);
+    expect(MAP_HYDRIC_STATUS_CONFIG.alerta.color).toBe(MAP_HYDRIC_COLORS.orange);
+    expect(MAP_HYDRIC_STATUS_CONFIG.estresse.color).toBe(MAP_HYDRIC_COLORS.red);
+    expect(MAP_HYDRIC_STATUS_CONFIG.severo.color).toBe(MAP_HYDRIC_COLORS.black);
   });
 });

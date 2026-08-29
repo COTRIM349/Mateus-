@@ -76,6 +76,12 @@ export interface DailyBalanceRow extends WaterBalanceResult {
   armStartMm?: number;
   drStartMm?: number;
   depletionAtStart?: number;
+  fd?: number | null;
+  deepPercolationMm?: number;
+  runoffMm?: number;
+  agronomicStatus?: string;
+  ksFormula?: string;
+  zrMethod?: string;
 }
 
 export interface BalanceSummary {

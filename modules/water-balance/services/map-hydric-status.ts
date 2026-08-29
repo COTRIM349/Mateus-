@@ -1,100 +1,109 @@
 /**
- * Classificação hídrica do mapa (única fonte).
+ * Classificação hídrica do mapa — mesma escala agronômica do motor FAO-56.
  *
- * O frontend NÃO escolhe cor. Consome `classifyWaterStatus()` a partir do
- * ARM/CAD/AFD já calculados pelo motor de balanço.
- *
- * Quatro cores operacionais — azul, verde, amarelo, vermelho — no recorte
- * clássico de manejo (Agrosmart Aqua e similares). Cinza (`incompleto`) é
- * ficha sem dado, não condição hídrica.
- *
- * O gatilho de irrigação (`classifyHydricStatus`) permanece independente
- * (verde/amarelo/vermelho/cinza pela AFD).
+ * O frontend NÃO escolhe cor. Consome o status derivado de Dr, CTA, CRA e Ks.
+ * Limiares explícitos em AGRONOMIC_STATUS_THRESHOLDS — nenhum corte escondido.
  */
 
-export type MapHydricStatus =
-  | "capacidade_campo"
-  | "boa_umidade"
-  | "atencao"
-  | "deficit_hidrico"
-  | "incompleto";
+import {
+  AGRONOMIC_STATUS_CONFIG,
+  AGRONOMIC_STATUS_THRESHOLDS,
+  calculateKsFromDr,
+  classifyAgronomicStatus,
+  type AgronomicStatus,
+} from "../agronomy";
 
-export interface MapHydricThresholds {
-  /** ARM/CAD ≥ este valor → capacidade de campo (azul). */
-  fieldCapacityRatio: number;
-}
+export type MapHydricStatus = AgronomicStatus;
 
-export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
-  fieldCapacityRatio: 0.98,
-};
+export const MAP_HYDRIC_THRESHOLDS = AGRONOMIC_STATUS_THRESHOLDS;
 
-/**
- * Paleta única do mapa hídrico.
- * Azul / verde / amarelo / vermelho na mesma escala (Material 500).
- * Anel, preenchimento, legenda e badge usam estes hex — não misturar Tailwind 400/500/600.
- */
 export const MAP_HYDRIC_COLORS = {
-  blue: "#2196F3",
-  green: "#4CAF50",
-  yellow: "#FFC107",
-  red: "#F44336",
-  gray: "#9E9E9E",
+  blue: AGRONOMIC_STATUS_CONFIG.capacidade_campo.color,
+  darkGreen: AGRONOMIC_STATUS_CONFIG.otima.color,
+  lightGreen: AGRONOMIC_STATUS_CONFIG.boa.color,
+  orange: AGRONOMIC_STATUS_CONFIG.alerta.color,
+  red: AGRONOMIC_STATUS_CONFIG.estresse.color,
+  black: AGRONOMIC_STATUS_CONFIG.severo.color,
+  gray: AGRONOMIC_STATUS_CONFIG.incompleto.color,
 } as const;
 
 export const MAP_HYDRIC_STATUS_CONFIG: Record<
   MapHydricStatus,
-  { label: string; color: string; onColor: string; bgClass: string }
+  { label: string; color: string; onColor: string; bgClass: string; description: string }
 > = {
   capacidade_campo: {
-    label: "CC 100%",
+    label: "Capacidade de campo",
     color: MAP_HYDRIC_COLORS.blue,
     onColor: "#ffffff",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+    description: AGRONOMIC_STATUS_CONFIG.capacidade_campo.description,
   },
-  boa_umidade: {
-    label: "Umidade ideal",
-    color: MAP_HYDRIC_COLORS.green,
+  otima: {
+    label: "Ótima umidade",
+    color: MAP_HYDRIC_COLORS.darkGreen,
     onColor: "#ffffff",
-    bgClass: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
+    bgClass: "bg-green-900/20 text-green-900 dark:bg-green-900/40 dark:text-green-200",
+    description: AGRONOMIC_STATUS_CONFIG.otima.description,
   },
-  atencao: {
-    label: "Umidade de atenção",
-    color: MAP_HYDRIC_COLORS.yellow,
+  boa: {
+    label: "Boa umidade",
+    color: MAP_HYDRIC_COLORS.lightGreen,
     onColor: "#111827",
-    bgClass: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300",
+    bgClass: "bg-lime-100 text-lime-800 dark:bg-lime-900/30 dark:text-lime-300",
+    description: AGRONOMIC_STATUS_CONFIG.boa.description,
   },
-  deficit_hidrico: {
-    label: "Déficit hídrico",
+  alerta: {
+    label: "Alerta",
+    color: MAP_HYDRIC_COLORS.orange,
+    onColor: "#111827",
+    bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300",
+    description: AGRONOMIC_STATUS_CONFIG.alerta.description,
+  },
+  estresse: {
+    label: "Estresse hídrico",
     color: MAP_HYDRIC_COLORS.red,
     onColor: "#ffffff",
     bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+    description: AGRONOMIC_STATUS_CONFIG.estresse.description,
+  },
+  severo: {
+    label: "Déficit hídrico severo",
+    color: MAP_HYDRIC_COLORS.black,
+    onColor: "#ffffff",
+    bgClass: "bg-zinc-900 text-white dark:bg-black dark:text-gray-100",
+    description: AGRONOMIC_STATUS_CONFIG.severo.description,
   },
   incompleto: {
-    label: "Dados indisponíveis",
+    label: "Dado ausente",
     color: MAP_HYDRIC_COLORS.gray,
     onColor: "#111827",
     bgClass: "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400",
+    description: AGRONOMIC_STATUS_CONFIG.incompleto.description,
   },
 };
 
-/** Sem irrigar agora — azul / verde / sem dado. */
+/** Sem irrigar agora — perfil cheio / confortável / sem dado. */
 export const MAP_HYDRIC_NO_IRRIGATE: MapHydricStatus[] = [
   "capacidade_campo",
-  "boa_umidade",
+  "otima",
+  "boa",
   "incompleto",
 ];
 
-/** Precisa irrigar — amarelo / vermelho. */
+/** Precisa irrigar — alerta, estresse ou déficit severo. */
 export const MAP_HYDRIC_NEED_IRRIGATE: MapHydricStatus[] = [
-  "atencao",
-  "deficit_hidrico",
+  "alerta",
+  "estresse",
+  "severo",
 ];
 
 export const MAP_HYDRIC_LEGEND_ORDER: MapHydricStatus[] = [
   "capacidade_campo",
-  "boa_umidade",
-  "atencao",
-  "deficit_hidrico",
+  "otima",
+  "boa",
+  "alerta",
+  "estresse",
+  "severo",
 ];
 
 export interface ClassifyWaterStatusInput {
@@ -102,21 +111,14 @@ export interface ClassifyWaterStatusInput {
   cadMm: number | null;
   afdMm: number | null;
   safetyMoistureMm?: number | null;
-  thresholds?: Partial<MapHydricThresholds>;
+  ks?: number | null;
 }
 
 /**
- * Classifica a condição hídrica do solo para o mapa.
- *
- * - Azul: ARM ≈ CAD — 100% da capacidade de campo (não é excesso).
- * - Verde: abaixo da CC e acima da umidade de segurança (CAD − AFD) — Ks = 1.
- * - Amarelo: abaixo da segurança, ainda com água (ARM > 0).
- * - Vermelho: ARM ≤ 0 — déficit.
- *
- * Sem CAD/ARM válidos → `incompleto` (não é cor operacional).
+ * Classifica a condição hídrica a partir de ARM/CTA/CRA (equivalente a Dr).
+ * Mesma regra do motor: não usa um valor digitado à mão.
  */
 export function classifyWaterStatus(input: ClassifyWaterStatusInput): MapHydricStatus {
-  const t = { ...MAP_HYDRIC_THRESHOLDS, ...input.thresholds };
   const arm = input.armMm;
   const cad = input.cadMm;
 
@@ -124,16 +126,13 @@ export function classifyWaterStatus(input: ClassifyWaterStatusInput): MapHydricS
     return "incompleto";
   }
 
-  const fill = arm / cad;
-  const afd = input.afdMm != null && Number.isFinite(input.afdMm) && input.afdMm > 0
+  const dr = Math.max(cad - arm, 0);
+  const cra = input.afdMm != null && Number.isFinite(input.afdMm) && input.afdMm > 0
     ? input.afdMm
-    : cad * 0.5;
-  const safety = input.safetyMoistureMm != null && Number.isFinite(input.safetyMoistureMm)
-    ? Math.max(input.safetyMoistureMm, 0)
-    : Math.max(cad - afd, 0);
+    : null;
+  const ks = input.ks != null && Number.isFinite(input.ks)
+    ? input.ks
+    : calculateKsFromDr({ ctaMm: cad, craMm: cra, drMm: dr }).value;
 
-  if (fill >= t.fieldCapacityRatio) return "capacidade_campo";
-  if (arm >= safety) return "boa_umidade";
-  if (arm > 0) return "atencao";
-  return "deficit_hidrico";
+  return classifyAgronomicStatus({ drMm: dr, ctaMm: cad, craMm: cra, ks });
 }

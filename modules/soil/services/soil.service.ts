@@ -142,6 +142,7 @@ export function validateSoil(soil: {
   clay_pct: number;
   effective_depth: number;
   infiltration_rate: number;
+  moisture_unit?: "gravimetric_percent" | "volumetric_percent" | "m3_m3";
 }): SoilValidation[] {
   const issues: SoilValidation[] = [];
 
@@ -154,7 +155,13 @@ export function validateSoil(soil: {
   }
 
   if (soil.bulk_density <= 0) {
-    issues.push({ field: "bulk_density", level: "error", message: "Densidade deve ser positiva" });
+    issues.push({
+      field: "bulk_density",
+      level: "error",
+      message: soil.moisture_unit === "gravimetric_percent"
+        ? "Dado ausente: Da (densidade aparente) é obrigatória para CC/PMP em % em peso"
+        : "Densidade deve ser positiva",
+    });
   }
 
   const granSum = soil.sand_pct + soil.silt_pct + soil.clay_pct;
@@ -181,13 +188,13 @@ export function validateSoil(soil: {
     }
   }
 
-  if (isValidTexture(soil.texture) && soil.field_capacity > 0) {
+  if (isValidTexture(soil.texture) && soil.field_capacity > 0 && (soil.moisture_unit ?? "m3_m3") === "m3_m3") {
     const [ccMin, ccMax] = TEXTURE_CC_RANGES[soil.texture];
     if (soil.field_capacity < ccMin || soil.field_capacity > ccMax) {
       issues.push({
         field: "field_capacity",
         level: "warning",
-        message: `CC ${soil.field_capacity} fora do esperado para ${soil.texture} (${ccMin}–${ccMax})`,
+        message: `CC ${soil.field_capacity} fora do esperado para ${soil.texture} (${ccMin}–${ccMax} m³/m³)`,
       });
     }
   }

@@ -62,20 +62,33 @@ export function SoilReservoirPanel({
             <thead>
               <tr className="text-graphite-400 dark:text-gray-500">
                 <th className="pb-2 pr-4 font-semibold">Camada</th>
+                <th className="pb-2 pr-4 font-semibold">Explorada</th>
                 <th className="pb-2 pr-4 font-semibold">DTA</th>
-                <th className="pb-2 font-semibold">CAD</th>
+                <th className="pb-2 pr-4 font-semibold">CTA</th>
+                <th className="pb-2 font-semibold">ARM*</th>
               </tr>
             </thead>
             <tbody>
-              {summary.layers.map((l) => (
-                <tr key={l.label} className="border-t border-gray-100 dark:border-white/[0.06]">
-                  <td className="py-2 pr-4 tabular-nums">{l.label}</td>
-                  <td className="py-2 pr-4 tabular-nums">{l.dtaMmPerCm.toFixed(2)} mm/cm</td>
-                  <td className="py-2 tabular-nums">{l.cadMm.toFixed(1)} mm</td>
-                </tr>
-              ))}
+              {summary.layers.map((l) => {
+                const armTotal = drMm != null ? Math.max(summary.cadMm - drMm, 0) : null;
+                const armLayer = armTotal != null && summary.cadMm > 0
+                  ? l.cadMm * (armTotal / summary.cadMm)
+                  : null;
+                return (
+                  <tr key={l.label} className="border-t border-gray-100 dark:border-white/[0.06]">
+                    <td className="py-2 pr-4 tabular-nums">{l.label}</td>
+                    <td className="py-2 pr-4 tabular-nums">{l.exploredCm.toFixed(0)} cm</td>
+                    <td className="py-2 pr-4 tabular-nums">{l.dtaMmPerCm.toFixed(2)} mm/cm</td>
+                    <td className="py-2 pr-4 tabular-nums">{l.cadMm.toFixed(1)} mm</td>
+                    <td className="py-2 tabular-nums">{armLayer != null ? `${armLayer.toFixed(1)} mm` : "—"}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
+          <p className="mt-2 text-[10px] text-graphite-400">
+            * ARM por camada é a partição proporcional à CTA (reservatório único FAO-56). Não é um balanço independente por horizonte.
+          </p>
         </div>
       )}
 

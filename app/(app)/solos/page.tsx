@@ -24,13 +24,11 @@ import {
   calculateAFD,
   validateSoil,
   validateLayers,
-  calculateLayerCAD,
-  calculateLayerAFD,
-  calculateTotalCADFromLayers,
-  volumetricFromGravimetric,
+  cadAfdFromMoistureUnit,
   DEFAULT_CENTER_PIVOT_KL,
   type SoilValidation,
 } from "@/modules/soil/services";
+import { MOISTURE_UNIT_LABEL, type MoistureUnit } from "@/modules/water-balance/agronomy";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -52,6 +50,7 @@ interface Soil {
   afd: number | null;
   observations: string | null;
   active: boolean;
+  moisture_unit?: "gravimetric_percent" | "volumetric_percent" | "m3_m3";
 }
 
 interface SoilLayer {
@@ -177,12 +176,20 @@ function SoilsTab({
     },
     { header: "Nome", render: (r) => <span className="font-medium">{r.name}</span> },
     { header: "Textura", render: (r) => textureLabels[r.texture] ?? r.texture },
-    { header: "CC (cm³/cm³)", render: (r) => r.field_capacity.toFixed(3), align: "right" },
-    { header: "PMP (cm³/cm³)", render: (r) => r.wilting_point.toFixed(3), align: "right" },
+    { header: "Unidade", render: (r) => MOISTURE_UNIT_LABEL[r.moisture_unit ?? "m3_m3"] },
+    { header: "CC", render: (r) => r.field_capacity.toFixed(3), align: "right" },
+    { header: "PMP", render: (r) => r.wilting_point.toFixed(3), align: "right" },
     {
       header: "CAD (mm)",
       render: (r) => {
-        const cad = r.cad ?? calculateCAD({ field_capacity: r.field_capacity, wilting_point: r.wilting_point, effective_depth: r.effective_depth });
+        const cad = cadAfdFromMoistureUnit({
+          cc: r.field_capacity,
+          pmp: r.wilting_point,
+          bulkDensity: r.bulk_density,
+          depthStartCm: 0,
+          depthEndCm: r.effective_depth * 100,
+          unit: r.moisture_unit ?? "m3_m3",
+        }).cadMm ?? r.cad ?? calculateCAD({ field_capacity: r.field_capacity, wilting_point: r.wilting_point, effective_depth: r.effective_depth });
         return cad.toFixed(1);
       },
       align: "right",
@@ -190,8 +197,14 @@ function SoilsTab({
     {
       header: "AFD (mm)",
       render: (r) => {
-        const cad = r.cad ?? calculateCAD({ field_capacity: r.field_capacity, wilting_point: r.wilting_point, effective_depth: r.effective_depth });
-        const afd = r.afd ?? calculateAFD(cad);
+        const afd = cadAfdFromMoistureUnit({
+          cc: r.field_capacity,
+          pmp: r.wilting_point,
+          bulkDensity: r.bulk_density,
+          depthStartCm: 0,
+          depthEndCm: r.effective_depth * 100,
+          unit: r.moisture_unit ?? "m3_m3",
+        }).afdMm ?? r.afd ?? calculateAFD(r.cad ?? calculateCAD({ field_capacity: r.field_capacity, wilting_point: r.wilting_point, effective_depth: r.effective_depth }));
         return afd.toFixed(1);
       },
       align: "right",
@@ -226,6 +239,7 @@ function SoilsTab({
     const infiltrationRate = Number(fd.get("infiltration_rate"));
     const texture = fd.get("texture") as string;
 
+    const moistureUnit = ((fd.get("moisture_unit") as string) || "m3_m3") as MoistureUnit;
     const issues = validateSoil({
       texture,
       field_capacity: fieldCapacity,
@@ -236,6 +250,7 @@ function SoilsTab({
       clay_pct: clayPct,
       effective_depth: effectiveDepth,
       infiltration_rate: infiltrationRate,
+      moisture_unit: moistureUnit,
     });
 
     const errors = issues.filter((i) => i.level === "error");
@@ -247,8 +262,21 @@ function SoilsTab({
     }
     setWarnings(issues.filter((i) => i.level === "warning"));
 
-    const cad = calculateCAD({ field_capacity: fieldCapacity, wilting_point: wiltingPoint, effective_depth: effectiveDepth });
-    const afd = calculateAFD(cad);
+    const zoneCad = cadAfdFromMoistureUnit({
+      cc: fieldCapacity,
+      pmp: wiltingPoint,
+      bulkDensity,
+      depthStartCm: 0,
+      depthEndCm: effectiveDepth * 100,
+      unit: moistureUnit,
+    });
+    if (zoneCad.cadMm == null) {
+      setFormError(`Dado ausente: ${zoneCad.missing.join(", ") || "CTA"}`);
+      setSaving(false);
+      return;
+    }
+    const cad = zoneCad.cadMm;
+    const afd = zoneCad.afdMm ?? cad * 0.5;
 
     const payload = {
       farm_id: activeFarmId!,
@@ -266,6 +294,7 @@ function SoilsTab({
       cad,
       afd,
       observations: (fd.get("observations") as string) || null,
+      moisture_unit: moistureUnit,
     };
 
     try {
@@ -364,8 +393,20 @@ function SoilsTab({
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Input id="bulk_density" name="bulk_density" label="Densidade (g/cm³)" type="number" step="0.01" required defaultValue={editing?.bulk_density} placeholder="1.30" />
-            <Input id="field_capacity" name="field_capacity" label="Capacidade de campo (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.field_capacity} placeholder="0.380" />
-            <Input id="wilting_point" name="wilting_point" label="Ponto de murcha (cm³/cm³)" type="number" step="0.001" required defaultValue={editing?.wilting_point} placeholder="0.180" />
+            <Select
+              id="moisture_unit"
+              name="moisture_unit"
+              label="Unidade de CC e PMP"
+              required
+              defaultValue={editing?.moisture_unit ?? "m3_m3"}
+              options={[
+                { value: "m3_m3", label: "m³/m³ (cm³/cm³)" },
+                { value: "volumetric_percent", label: "% volumétrica" },
+                { value: "gravimetric_percent", label: "% em peso (gravimétrica) — usa Da" },
+              ]}
+            />
+            <Input id="field_capacity" name="field_capacity" label="Capacidade de campo (na unidade escolhida)" type="number" step="0.001" required defaultValue={editing?.field_capacity} placeholder="12.4 ou 0.226" />
+            <Input id="wilting_point" name="wilting_point" label="Ponto de murcha (mesma unidade)" type="number" step="0.001" required defaultValue={editing?.wilting_point} placeholder="6.3 ou 0.115" />
             <Input id="infiltration_rate" name="infiltration_rate" label="Infiltração (mm/h)" type="number" step="0.1" required defaultValue={editing?.infiltration_rate} placeholder="25.0" />
             <Input id="hydraulic_conductivity" name="hydraulic_conductivity" label="Condutividade hidráulica (mm/h)" type="number" step="0.01" defaultValue={editing?.hydraulic_conductivity ?? ""} />
             <Input id="effective_depth" name="effective_depth" label="Profundidade efetiva (m)" type="number" step="0.01" required defaultValue={editing?.effective_depth ?? 0.6} />
@@ -423,7 +464,7 @@ function LayersTab({
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
   const [layerWarnings, setLayerWarnings] = useState<SoilValidation[]>([]);
-  const [entryUnit, setEntryUnit] = useState<"volumetric" | "gravimetric">("volumetric");
+  const [entryUnit, setEntryUnit] = useState<MoistureUnit>("m3_m3");
 
   useEffect(() => {
     if (!activeFarmId) return;
@@ -451,14 +492,24 @@ function LayersTab({
   useEffect(() => { fetchLayers(); }, [fetchLayers]);
 
   const selectedSoil = soils.find((s) => s.id === selectedSoilId);
+  const soilUnit: MoistureUnit = selectedSoil?.moisture_unit ?? "m3_m3";
+
+  useEffect(() => {
+    if (selectedSoil?.moisture_unit) setEntryUnit(selectedSoil.moisture_unit);
+  }, [selectedSoil?.moisture_unit]);
 
   const totalCAD = layers.length > 0
-    ? calculateTotalCADFromLayers(layers.map((l) => ({
-        depth_start: l.depth_start,
-        depth_end: l.depth_end,
-        field_capacity: l.field_capacity,
-        wilting_point: l.wilting_point,
-      })))
+    ? layers.reduce((sum, l) => {
+        const r = cadAfdFromMoistureUnit({
+          cc: l.field_capacity,
+          pmp: l.wilting_point,
+          bulkDensity: l.bulk_density,
+          depthStartCm: l.depth_start,
+          depthEndCm: l.depth_end,
+          unit: soilUnit,
+        });
+        return sum + (r.cadMm ?? 0);
+      }, 0)
     : null;
 
   const textureLabels: Record<string, string> = Object.fromEntries(
@@ -469,8 +520,8 @@ function LayersTab({
     { header: "Camada (cm)", render: (r) => <span className="font-medium">{r.depth_start}–{r.depth_end} <span className="text-graphite-400">({r.depth_end - r.depth_start} cm)</span></span> },
     { header: "Textura", render: (r) => textureLabels[r.texture] ?? r.texture },
     { header: "Da (g/cm³)", render: (r) => r.bulk_density.toFixed(2), align: "right" },
-    { header: "CC (cm³/cm³)", render: (r) => r.field_capacity.toFixed(3), align: "right" },
-    { header: "PMP (cm³/cm³)", render: (r) => r.wilting_point.toFixed(3), align: "right" },
+    { header: "CC", render: (r) => r.field_capacity.toFixed(3), align: "right" },
+    { header: "PMP", render: (r) => r.wilting_point.toFixed(3), align: "right" },
     {
       header: "KL",
       render: (r) => (r.kl == null ? `${DEFAULT_CENTER_PIVOT_KL.toFixed(2)}*` : r.kl.toFixed(2)),
@@ -479,16 +530,30 @@ function LayersTab({
     {
       header: "CAD (mm)",
       render: (r) => {
-        const cad = calculateLayerCAD({ depth_start: r.depth_start, depth_end: r.depth_end, field_capacity: r.field_capacity, wilting_point: r.wilting_point });
-        return cad.toFixed(1);
+        const cad = cadAfdFromMoistureUnit({
+          cc: r.field_capacity,
+          pmp: r.wilting_point,
+          bulkDensity: r.bulk_density,
+          depthStartCm: r.depth_start,
+          depthEndCm: r.depth_end,
+          unit: soilUnit,
+        }).cadMm;
+        return cad != null ? cad.toFixed(1) : "Dado ausente";
       },
       align: "right",
     },
     {
       header: "AFD (mm)",
       render: (r) => {
-        const afd = calculateLayerAFD({ depth_start: r.depth_start, depth_end: r.depth_end, field_capacity: r.field_capacity, wilting_point: r.wilting_point });
-        return afd.toFixed(1);
+        const afd = cadAfdFromMoistureUnit({
+          cc: r.field_capacity,
+          pmp: r.wilting_point,
+          bulkDensity: r.bulk_density,
+          depthStartCm: r.depth_start,
+          depthEndCm: r.depth_end,
+          unit: soilUnit,
+        }).afdMm;
+        return afd != null ? afd.toFixed(1) : "Dado ausente";
       },
       align: "right",
     },
@@ -515,17 +580,13 @@ function LayersTab({
     const depthStart = Number(fd.get("depth_start"));
     const depthEnd = Number(fd.get("depth_end"));
     const bulkDensity = Number(fd.get("bulk_density"));
-    let fieldCapacity = Number(fd.get("field_capacity"));
-    let wiltingPoint = Number(fd.get("wilting_point"));
-    if (entryUnit === "gravimetric") {
-      if (!Number.isFinite(bulkDensity) || bulkDensity <= 0) {
-        setFormError("Densidade aparente é obrigatória para converter % em peso (θv = θg × Da).");
-        setSaving(false);
-        return;
-      }
-      const toFraction = (v: number) => (v > 1 ? v / 100 : v);
-      fieldCapacity = volumetricFromGravimetric(toFraction(fieldCapacity), bulkDensity);
-      wiltingPoint = volumetricFromGravimetric(toFraction(wiltingPoint), bulkDensity);
+    const fieldCapacity = Number(fd.get("field_capacity"));
+    const wiltingPoint = Number(fd.get("wilting_point"));
+    const unit = entryUnit;
+    if (unit === "gravimetric_percent" && (!Number.isFinite(bulkDensity) || bulkDensity <= 0)) {
+      setFormError("Dado ausente: densidade aparente (Da) é obrigatória para CC/PMP em % em peso.");
+      setSaving(false);
+      return;
     }
 
     const newLayer = { depth_start: depthStart, depth_end: depthEnd, field_capacity: fieldCapacity, wilting_point: wiltingPoint };
@@ -543,8 +604,21 @@ function LayersTab({
     }
     setLayerWarnings(issues.filter((i) => i.level === "warning"));
 
-    const cad = calculateLayerCAD(newLayer);
-    const afd = calculateLayerAFD(newLayer);
+    const zone = cadAfdFromMoistureUnit({
+      cc: fieldCapacity,
+      pmp: wiltingPoint,
+      bulkDensity,
+      depthStartCm: depthStart,
+      depthEndCm: depthEnd,
+      unit,
+    });
+    if (zone.cadMm == null) {
+      setFormError(`Dado ausente: ${zone.missing.join(", ") || "CTA da camada"}`);
+      setSaving(false);
+      return;
+    }
+    const cad = zone.cadMm;
+    const afd = zone.afdMm ?? 0;
     const klRaw = String(fd.get("kl") ?? "").trim();
     const kl = klRaw === "" ? null : Number(klRaw);
     if (kl != null && (Number.isNaN(kl) || kl < 0 || kl > 1)) {
@@ -569,6 +643,7 @@ function LayersTab({
       sand_pct: fd.get("sand_pct") ? Number(fd.get("sand_pct")) : null,
       silt_pct: fd.get("silt_pct") ? Number(fd.get("silt_pct")) : null,
       clay_pct: fd.get("clay_pct") ? Number(fd.get("clay_pct")) : null,
+      moisture_unit: unit,
     };
 
     try {
@@ -649,7 +724,9 @@ function LayersTab({
               <div>
                 <p className="text-xs text-graphite-400 dark:text-gray-500">CAD total das camadas (mm)</p>
                 <p className="text-sm font-semibold text-graphite-900 dark:text-white">{totalCAD.toFixed(1)} mm</p>
-                <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">Volumétrica: (CC−PMP)×espessura. O motor recorta pela profundidade da raiz.</p>
+                <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
+                  Fórmula conforme unidade do perfil ({MOISTURE_UNIT_LABEL[soilUnit]}). O motor recorta pela profundidade da raiz.
+                </p>
               </div>
               <div>
                 <p className="text-xs text-graphite-400 dark:text-gray-500">Camadas</p>
@@ -677,12 +754,13 @@ function LayersTab({
         <form onSubmit={handleSubmit} className="space-y-5">
           <Select
             id="entry_unit"
-            label="Unidade de CC e PMP"
+            label="Unidade de CC e PMP desta camada"
             value={entryUnit}
-            onChange={(e) => setEntryUnit(e.target.value as "volumetric" | "gravimetric")}
+            onChange={(e) => setEntryUnit((e.target.value || "m3_m3") as MoistureUnit)}
             options={[
-              { value: "volumetric", label: "% volumétrica (cm³/cm³) — padrão do motor" },
-              { value: "gravimetric", label: "% em peso (g/g) — converte θv = θg × Da ao salvar" },
+              { value: "m3_m3", label: "m³/m³ (cm³/cm³)" },
+              { value: "volumetric_percent", label: "% volumétrica" },
+              { value: "gravimetric_percent", label: "% em peso (gravimétrica) — DTA usa Da" },
             ]}
           />
           <div className="grid gap-4 sm:grid-cols-2">
@@ -690,8 +768,8 @@ function LayersTab({
             <Input id="depth_end" name="depth_end" label="Fim (cm)" type="number" min="1" required defaultValue={editing?.depth_end ?? (layers.length > 0 ? layers[layers.length - 1].depth_end + 20 : 20)} />
             <Select id="texture" name="texture" label="Textura / classe" options={[...SOIL_TEXTURES]} required defaultValue={editing?.texture ?? selectedSoil?.texture ?? "franco"} />
             <Input id="bulk_density" name="bulk_density" label="Densidade aparente (g/cm³)" type="number" step="0.01" required defaultValue={editing?.bulk_density ?? selectedSoil?.bulk_density} />
-            <Input id="field_capacity" name="field_capacity" label={entryUnit === "gravimetric" ? "CC (% em peso)" : "CC volumétrica (cm³/cm³)"} type="number" step="0.001" required defaultValue={editing?.field_capacity ?? selectedSoil?.field_capacity} placeholder={entryUnit === "gravimetric" ? "0.124" : "0.380"} />
-            <Input id="wilting_point" name="wilting_point" label={entryUnit === "gravimetric" ? "PMP (% em peso)" : "PMP volumétrico (cm³/cm³)"} type="number" step="0.001" required defaultValue={editing?.wilting_point ?? selectedSoil?.wilting_point} placeholder={entryUnit === "gravimetric" ? "0.063" : "0.180"} />
+            <Input id="field_capacity" name="field_capacity" label={entryUnit === "gravimetric_percent" ? "CC (% em peso)" : entryUnit === "volumetric_percent" ? "CC (% volumétrica)" : "CC (m³/m³)"} type="number" step="0.001" required defaultValue={editing?.field_capacity ?? selectedSoil?.field_capacity} placeholder={entryUnit === "gravimetric_percent" ? "12.4" : entryUnit === "volumetric_percent" ? "22.4" : "0.226"} />
+            <Input id="wilting_point" name="wilting_point" label={entryUnit === "gravimetric_percent" ? "PMP (% em peso)" : entryUnit === "volumetric_percent" ? "PMP (% volumétrica)" : "PMP (m³/m³)"} type="number" step="0.001" required defaultValue={editing?.wilting_point ?? selectedSoil?.wilting_point} placeholder={entryUnit === "gravimetric_percent" ? "6.3" : entryUnit === "volumetric_percent" ? "11.1" : "0.115"} />
             <Input id="sand_pct" name="sand_pct" label="Areia (%)" type="number" step="0.1" min="0" max="100" defaultValue={editing?.sand_pct ?? ""} />
             <Input id="silt_pct" name="silt_pct" label="Silte (%)" type="number" step="0.1" min="0" max="100" defaultValue={editing?.silt_pct ?? ""} />
             <Input id="clay_pct" name="clay_pct" label="Argila (%)" type="number" step="0.1" min="0" max="100" defaultValue={editing?.clay_pct ?? ""} />
@@ -700,7 +778,7 @@ function LayersTab({
           </div>
           <TextArea id="observations" name="observations" label="Observações da camada" defaultValue={editing?.observations ?? ""} placeholder="Textura local, restrição de raiz, pedregosidade..." />
           <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-            CC e PMP são volumétricos (cm³/cm³). Se o laboratório informou % em massa, converta θv = θg × Da antes de cadastrar. KL = 1 em pivô central com molhamento total; não aplicar outro valor às cegas.
+            CC e PMP são gravados na unidade escolhida, sem conversão silenciosa. Em % em peso, DTA = ((CC − PMP) × Da) / 10. Em % volumétrica, DTA = (CC − PMP) / 10. Em m³/m³, DTA = (CC − PMP) × 10. Densidade não entra duas vezes. KL = 1 em pivô central com molhamento total.
           </p>
           {layerWarnings.length > 0 && (
             <div className="rounded-xl border border-yellow-200 bg-yellow-50 p-3.5 dark:border-yellow-900/50 dark:bg-yellow-900/20">

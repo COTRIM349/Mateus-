@@ -37,7 +37,24 @@ import {
   safetyPercentOfFieldCapacity,
   scaleArmToNewCad,
 } from "./soil-water-balance";
-import { classifyWaterStatus, type MapHydricStatus } from "./map-hydric-status";
+import { type MapHydricStatus } from "./map-hydric-status";
+import {
+  ENGINE_VERSION,
+  calculateKsFromDr,
+  calculateRootZoneStorage,
+  classifyAgronomicStatus,
+  calculateAdjustedFd,
+  calculateIrrigationRequirement,
+  estimateDaysToCra,
+  initialDrFromMoisture,
+  interpretKs,
+  projectWaterBalance,
+  type AgronomicLayerInput,
+  type AgronomicStatus,
+  type FdMode,
+  type MoistureUnit,
+  type ProjectionDayResult,
+} from "../agronomy";
 
 // ── Status hídrico (3 níveis + sem dados) ────────────────────────────────
 
@@ -105,6 +122,9 @@ export interface EngineAssignment {
   depletion_factor: number | null;
   kl_override?: number | null;
   ks_function_override?: string | null;
+  initial_moisture_is_cc?: boolean | null;
+  initial_soil_moisture_pct?: number | null;
+  fd_mode?: FdMode | null;
 }
 
 export interface EngineCulture {
@@ -120,8 +140,10 @@ export interface EngineSoil {
   wilting_point: number;
   bulk_density: number;
   effective_depth: number;
-  /** Camadas do perfil do pivô (cm, CC/PMP volumétricos). Se presentes, ADT recorta em Z. */
+  /** Camadas do perfil do pivô. Se presentes, CTA recorta em Zr. */
   layers?: SoilProfileLayer[];
+  /** Unidade de CC/PMP. Default m³/m³ (cadastro legado). */
+  moistureUnit?: MoistureUnit;
 }
 
 export interface EnginePivot {
@@ -133,6 +155,9 @@ export interface EnginePivot {
 export interface EngineWeatherDay {
   et0: number;
   precipitation: number;
+  kind?: "observed" | "forecast";
+  source?: string | null;
+  updatedAt?: string | null;
 }
 
 export interface PivotEngineInput {
@@ -147,6 +172,8 @@ export interface PivotEngineInput {
   irrigationByDate: Record<string, number>;
   dateStart: string;
   dateEnd: string;
+  /** Previsão (ETo/chuva) — nunca mistura com o realizado. */
+  weatherForecastByDate?: Record<string, EngineWeatherDay>;
 }
 
 export interface BalanceDay {
@@ -205,6 +232,22 @@ export interface BalanceDay {
   recommendedVolume: number;
   estimatedIrrigationTime: number;
   recommendationReason: string;
+  agronomicStatus: AgronomicStatus;
+  dtaMmPerCm: number | null;
+  fdOriginal: number | null;
+  fdAdjusted: number | null;
+  etcForFd: number | null;
+  zrMethod: string;
+  zrMaxCm: number | null;
+  deepPercolationMm: number;
+  runoffMm: number;
+  ksFormula: string;
+  ksInterpretation: string;
+  engineVersion: string;
+  missingParams: string[];
+  daysToCra: number | null;
+  daysToCraNote: string | null;
+  dailyCapacityMm: number | null;
 }
 
 // ── Recomendação de irrigação (itens 12 e 13) ────────────────────────────
@@ -269,9 +312,33 @@ function buildRecommendation(
   return { shouldIrrigate, netDepth, grossDepth, volume, time, reason };
 }
 
+function agronomicLayersFromSoil(soil: EngineSoil): AgronomicLayerInput[] {
+  if (soil.layers && soil.layers.length > 0) {
+    return soil.layers.map((layer) => ({
+      depthStartCm: layer.depth_start,
+      depthEndCm: layer.depth_end,
+      cc: layer.field_capacity,
+      pmp: layer.wilting_point,
+      bulkDensity: layer.bulk_density ?? soil.bulk_density,
+    }));
+  }
+  return [
+    {
+      depthStartCm: 0,
+      depthEndCm: Math.max(soil.effective_depth, 0) * 100,
+      cc: soil.field_capacity,
+      pmp: soil.wilting_point,
+      bulkDensity: soil.bulk_density,
+    },
+  ];
+}
+
 // ── Série diária do balanço (motor) ──────────────────────────────────────
 
-export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
+export function computePivotBalance(input: PivotEngineInput): {
+  series: BalanceDay[];
+  projection: ProjectionDayResult[];
+} {
   const { assignment, culture, phases, soil, pivot, weatherByDate, irrigationByDate, dateStart, dateEnd } = input;
 
   const startMs = new Date(dateStart + "T00:00:00").getTime();
@@ -308,30 +375,63 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const phaseId = phases.length > 0 ? identifyPhase(phases, dae) : null;
     const phaseName = phaseId?.phase.name ?? "—";
     const pFactor = resolveDepletionFactor(assignment, phaseId?.phase.depletion_factor, culture.depletion_factor);
-
-    const adt = hasSoil
-      ? soil.layers && soil.layers.length > 0
-        ? calculateADTFromLayers(soil.layers, rootDepth)
-        : calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth)
-      : 0;
-    const afd = calculateAFD(adt, pFactor);
-    const { fieldCapacity, wiltingPoint } = profileCcPmp(
-      soil,
-      soil.layers,
-      rootDepth,
-    );
+    const moistureUnit: MoistureUnit = soil.moistureUnit ?? "m3_m3";
+    const zrMethod = phases.length > 0 ? "interpolação por estádio/DAE" : "Zr da cultura";
+    const zrMaxM = custom && assignment.max_root_depth != null ? assignment.max_root_depth : culture.root_depth;
+    const missingParams: string[] = [];
+    if (phases.length === 0) missingParams.push("fases fenológicas (Kc interpolado; usado 1 até cadastro)");
 
     const weather = weatherByDate[date] ?? { et0: 0, precipitation: 0 };
+    if (!(date in weatherByDate) || weather.et0 <= 0) missingParams.push(`ETo em ${date}`);
+
+    const zone = calculateRootZoneStorage({
+      layers: agronomicLayersFromSoil(soil),
+      unit: moistureUnit,
+      zrCm: rootDepth * 100,
+      zrMaxCm: zrMaxM * 100,
+      zrMethod,
+      fd: pFactor,
+    });
+    missingParams.push(...zone.missing);
+
+    const adt = zone.cta.value != null
+      ? roundTo(zone.cta.value, 2)
+      : hasSoil
+        ? soil.layers && soil.layers.length > 0
+          ? calculateADTFromLayers(soil.layers, rootDepth)
+          : calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth)
+        : 0;
 
     const kl = resolveManejoKl({
       parcelOverride: assignment.kl_override,
       phaseKl: phaseId?.phase.kl,
       cultureKl: culture.kl,
     });
+    const etcPotentialRaw = Math.max(weather.et0 * kc * kl, 0);
+    const fdAdj = calculateAdjustedFd({
+      mode: assignment.fd_mode ?? "fixed",
+      pTable: pFactor,
+      etcPotentialMm: etcPotentialRaw,
+    });
+    const pUsed = fdAdj.pAdjusted.value ?? pFactor;
+    const afd = calculateAFD(adt, pUsed);
+    const { fieldCapacity, wiltingPoint } = profileCcPmp(
+      soil,
+      soil.layers,
+      rootDepth,
+    );
 
     const armStart =
       previousStorage == null
-        ? adt
+        ? (() => {
+            const init = initialDrFromMoisture({
+              ctaMm: adt,
+              atFieldCapacity: assignment.initial_moisture_is_cc ?? true,
+              moisturePct: assignment.initial_soil_moisture_pct ?? null,
+            });
+            missingParams.push(...init.missing);
+            return roundTo(Math.max(adt - init.drMm, 0), 2);
+          })()
         : scaleArmToNewCad(previousStorage, previousCad ?? adt, adt);
     const startDeficit = adt > 0 ? Math.max(adt - armStart, 0) : 0;
     const startDepletion = adt > 0 ? startDeficit / adt : 0;
@@ -340,9 +440,16 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       phaseId?.phase.ks_function,
       culture.ks_function,
     );
-    const ks = roundTo(calculateKs(startDepletion, pFactor, ksFunctionForEtc(ksConfigured), null), 3);
+    const ksFn = ksFunctionForEtc(ksConfigured);
+    const ksTrace = calculateKsFromDr({ ctaMm: adt, craMm: afd, drMm: startDeficit });
+    const ks = ksFn === "none"
+      ? 1
+      : ksFn === "linear"
+        ? roundTo(ksTrace.value ?? 1, 3)
+        : roundTo(calculateKs(startDepletion, pUsed, ksFn, null), 3);
+    const ksFormula = ksFn === "none" ? "Ks = 1 (função none)" : ksTrace.formula;
 
-    const etcPotential = roundTo(Math.max(weather.et0 * kc * kl, 0), 2);
+    const etcPotential = roundTo(etcPotentialRaw, 2);
     const etc = roundTo(etcPotential * ks, 2);
     const kcAdjusted = roundTo(kc * kl * ks, 3);
     const ky = resolvePhaseKy(phaseId?.phase.ky, culture.ky);
@@ -366,18 +473,21 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const depletion = adt > 0 ? roundTo(deficit / adt, 3) : 0;
     const safetyMm = safetyMoistureMm(adt, afd);
     const moisturePctCc = moisturePercentOfFieldCapacity(storage, adt, fieldCapacity, wiltingPoint);
-    const safetyPctCc = safetyPercentOfFieldCapacity(fieldCapacity, wiltingPoint, pFactor);
+    const safetyPctCc = safetyPercentOfFieldCapacity(fieldCapacity, wiltingPoint, pUsed);
     const status: HydricStatus = dataOk ? classifyHydricStatus(deficit, afd) : "cinza";
-    const mapStatus: MapHydricStatus = dataOk
-      ? classifyWaterStatus({
-          armMm: storage,
-          cadMm: adt,
-          afdMm: afd,
-          safetyMoistureMm: safetyMm,
-        })
+    const agronomicStatus: AgronomicStatus = dataOk
+      ? classifyAgronomicStatus({ drMm: deficit, ctaMm: adt, craMm: afd, ks })
       : "incompleto";
+    const mapStatus: MapHydricStatus = agronomicStatus;
 
     const rec = buildRecommendation(deficit, afd, status, efficiency, pivot.area, pivot.flow_rate);
+    const irrReq = calculateIrrigationRequirement({
+      drMm: deficit,
+      efficiency,
+      areaHa: pivot.area,
+      flowRateM3h: pivot.flow_rate,
+    });
+    const uniqueMissing = Array.from(new Set(missingParams.filter(Boolean)));
 
     rows.push({
       date,
@@ -422,13 +532,84 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       recommendedVolume: rec.volume,
       estimatedIrrigationTime: rec.time,
       recommendationReason: rec.reason,
+      agronomicStatus,
+      dtaMmPerCm: zone.dtaMean.value != null ? roundTo(zone.dtaMean.value, 4) : null,
+      fdOriginal: fdAdj.pOriginal.value,
+      fdAdjusted: pUsed,
+      etcForFd: fdAdj.etcUsedMm.value,
+      zrMethod,
+      zrMaxCm: zrMaxM * 100,
+      deepPercolationMm: surplus,
+      runoffMm: roundTo(Math.max(registeredRain - (step.peScs ?? effectivePrecipitation), 0), 2),
+      ksFormula,
+      ksInterpretation: interpretKs(ks),
+      engineVersion: ENGINE_VERSION,
+      missingParams: uniqueMissing,
+      daysToCra: null,
+      daysToCraNote: null,
+      dailyCapacityMm: irrReq.dailyCapacityMm.value,
     });
 
     previousStorage = storage;
     previousCad = adt;
   }
 
-  return rows;
+  let projection: ProjectionDayResult[] = [];
+  if (rows.length > 0) {
+    const last = rows[rows.length - 1];
+    const forecastDays = Object.entries(input.weatherForecastByDate ?? {})
+      .filter(([d]) => d > last.date)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(0, 7)
+      .map(([date, w]) => {
+        const dae = Math.max(0, Math.floor((new Date(date + "T00:00:00").getTime() - daeRefMs) / 86400000));
+        const kcF = phases.length > 0 ? interpolateKc(phases, dae) : last.kc;
+        const zr = computeRootDepth({
+          phases,
+          dae,
+          cultureRootDepth: culture.root_depth,
+          initialRootDepth: custom ? assignment.initial_root_depth : null,
+          maxRootDepth: custom ? assignment.max_root_depth : null,
+        });
+        const phaseF = phases.length > 0 ? identifyPhase(phases, dae) : null;
+        const pF = resolveDepletionFactor(assignment, phaseF?.phase.depletion_factor, culture.depletion_factor);
+        return {
+          date,
+          et0Mm: w.et0 > 0 ? w.et0 : null,
+          rainMm: w.precipitation,
+          kc: kcF,
+          kl: last.kl,
+          zrCm: zr * 100,
+          zrMaxCm: (custom && assignment.max_root_depth != null ? assignment.max_root_depth : culture.root_depth) * 100,
+          zrMethod: last.zrMethod,
+          pTable: pF,
+          fdMode: assignment.fd_mode ?? "fixed" as const,
+          plannedIrrigationGrossMm: 0,
+          efficiency,
+          kind: "forecast" as const,
+        };
+      });
+    projection = projectWaterBalance({
+      drStartMm: last.deficit,
+      layers: agronomicLayersFromSoil(soil),
+      unit: soil.moistureUnit ?? "m3_m3",
+      days: forecastDays,
+    });
+    const days = estimateDaysToCra({
+      drMm: last.deficit,
+      craMm: last.afd,
+      projected: projection,
+      etcFallbackMm: last.etc > 0 ? last.etc : last.etcPotential,
+    });
+    last.daysToCra = days.days;
+    last.daysToCraNote = days.note;
+  }
+
+  return { series: rows, projection };
+}
+
+export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
+  return computePivotBalance(input).series;
 }
 
 // ── Estado atual do pivô (último dia da série) ───────────────────────────
@@ -455,6 +636,8 @@ export interface PivotHydricState {
   parcelName: string | null;
   current: BalanceDay | null;
   history: BalanceDay[];
+  /** Previsão — nunca mistura com o realizado. */
+  projection: ProjectionDayResult[];
 }
 
 export interface PivotIdentity {
@@ -481,7 +664,7 @@ export function computePivotCurrentState(
   identity: PivotIdentity,
   input: PivotEngineInput,
 ): PivotHydricState {
-  const history = computePivotBalanceSeries(input);
+  const { series: history, projection } = computePivotBalance(input);
   return {
     ...identity,
     plantingDate: identity.plantingDate ?? null,
@@ -493,6 +676,7 @@ export function computePivotCurrentState(
     parcelName: identity.parcelName ?? null,
     current: history.length > 0 ? history[history.length - 1] : null,
     history,
+    projection,
   };
 }
 

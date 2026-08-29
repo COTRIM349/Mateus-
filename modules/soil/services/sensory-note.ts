@@ -68,9 +68,11 @@ export interface SensoryRecordDraft {
   note: number;
   depthCm: number;
   notes: string | null;
+  /** Umidade medida em % — calibração. Nunca alimenta o motor automaticamente. */
+  measuredMoisturePct?: number | null;
 }
 
-/** Payload persistido: nota bruta, sem moisture_pct e sem alimentar o motor. */
+/** Payload persistido: nota bruta, sem substituir o balanço calculado. */
 export function buildSensoryInsert(draft: SensoryRecordDraft): {
   farm_id: string;
   pivot_id: string;
@@ -80,6 +82,7 @@ export function buildSensoryInsert(draft: SensoryRecordDraft): {
   note: number;
   depth_cm: number;
   notes: string | null;
+  measured_moisture_pct: number | null;
   use_in_balance: false;
   layer_1_moisture_pct: null;
   layer_2_moisture_pct: null;
@@ -94,6 +97,7 @@ export function buildSensoryInsert(draft: SensoryRecordDraft): {
     note: draft.note,
     depth_cm: draft.depthCm,
     notes: draft.notes,
+    measured_moisture_pct: draft.measuredMoisturePct ?? null,
     use_in_balance: false,
     layer_1_moisture_pct: null,
     layer_2_moisture_pct: null,

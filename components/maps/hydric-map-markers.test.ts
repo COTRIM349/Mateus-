@@ -29,13 +29,14 @@ function stub(partial: Partial<PivotHydricState>): PivotHydricState {
     parcelName: null,
     current: {
       date: "2026-08-21",
-      mapStatus: "boa_umidade",
+      mapStatus: "otima",
       deficit: 10,
     } as PivotHydricState["current"],
     history: [
-      { date: "2026-08-20", mapStatus: "atencao", deficit: 40 } as NonNullable<PivotHydricState["current"]>,
-      { date: "2026-08-21", mapStatus: "boa_umidade", deficit: 10 } as NonNullable<PivotHydricState["current"]>,
+      { date: "2026-08-20", mapStatus: "alerta", deficit: 40 } as NonNullable<PivotHydricState["current"]>,
+      { date: "2026-08-21", mapStatus: "otima", deficit: 10 } as NonNullable<PivotHydricState["current"]>,
     ],
+    projection: [],
     ...partial,
   } as PivotHydricState;
 }
@@ -51,7 +52,7 @@ describe("toHydricMapMarkers", () => {
   it("pinta o círculo com a cor do status do motor", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].color).toBe("#4CAF50");
+    expect(markers[0].color).toBe("#1B5E20");
     expect(markers[0].radiusMeters).toBe(500);
     expect(markers[0].id).toBe("parcela-1");
   });
@@ -73,8 +74,8 @@ describe("toHydricMapMarkers", () => {
 
   it("recolore pelo dia escolhido no histórico", () => {
     const markers = toHydricMapMarkers([stub({})], "2026-08-20");
-    expect(markers[0].color).toBe("#FFC107");
-    expect(mapStatusOf(stub({}), "2026-08-20")).toBe("atencao");
+    expect(markers[0].color).toBe("#FB8C00");
+    expect(mapStatusOf(stub({}), "2026-08-20")).toBe("alerta");
   });
 
   it("não inventa marcador sem coordenada", () => {
@@ -85,11 +86,11 @@ describe("toHydricMapMarkers", () => {
 describe("countMapStatuses", () => {
   it("conta só parcelas ativas", () => {
     const counts = countMapStatuses([
-      stub({ parcelId: null, current: { mapStatus: "atencao" } as PivotHydricState["current"] }),
-      stub({ pivotId: "p2", current: { mapStatus: "boa_umidade" } as PivotHydricState["current"] }),
+      stub({ parcelId: null, current: { mapStatus: "alerta" } as PivotHydricState["current"] }),
+      stub({ pivotId: "p2", current: { mapStatus: "otima" } as PivotHydricState["current"] }),
     ]);
-    expect(counts.atencao).toBeUndefined();
-    expect(counts.boa_umidade).toBe(1);
+    expect(counts.alerta).toBeUndefined();
+    expect(counts.otima).toBe(1);
   });
 });
 
@@ -101,13 +102,13 @@ describe("hydricMapDates", () => {
 });
 
 describe("hydricDemandSummary", () => {
-  it("conta amarelo e vermelho como demanda", () => {
+  it("conta alerta e estresse como demanda", () => {
     const summary = hydricDemandSummary([
       stub({}),
       stub({
         pivotId: "p2",
         pivotName: "P02",
-        current: { date: "2026-08-21", mapStatus: "deficit_hidrico", deficit: 80 } as PivotHydricState["current"],
+        current: { date: "2026-08-21", mapStatus: "estresse", deficit: 80 } as PivotHydricState["current"],
         history: [],
       }),
     ]);

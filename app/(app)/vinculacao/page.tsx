@@ -59,6 +59,7 @@ interface Assignment {
   max_root_depth: number | null;
   irrigation_efficiency: number | null;
   depletion_factor: number | null;
+  fd_mode: "fixed" | "auto" | null;
   notes: string | null;
   active: boolean;
   // Sprint 13 · Etapa 5 — parcela rica
@@ -158,6 +159,7 @@ interface FormState {
   max_root_depth: string;
   irrigation_efficiency: string;
   depletion_factor: string;
+  fd_mode: "fixed" | "auto";
   notes: string;
   current_phase_id: string;
   management_start_date: string;
@@ -194,6 +196,7 @@ const EMPTY_FORM: FormState = {
   max_root_depth: "",
   irrigation_efficiency: "",
   depletion_factor: "",
+  fd_mode: "fixed",
   notes: "",
   current_phase_id: "auto",
   management_start_date: "",
@@ -366,6 +369,7 @@ export default function VinculacaoPage() {
       max_root_depth: a.max_root_depth != null ? String(a.max_root_depth) : "",
       irrigation_efficiency: a.irrigation_efficiency != null ? String(Math.round(a.irrigation_efficiency * 100)) : "",
       depletion_factor: a.depletion_factor != null ? String(a.depletion_factor) : "",
+      fd_mode: a.fd_mode === "auto" ? "auto" : "fixed",
       notes: a.notes ?? "",
       current_phase_id: a.current_phase_id ?? "auto",
       management_start_date: a.management_start_date ?? "",
@@ -585,6 +589,7 @@ export default function VinculacaoPage() {
       max_root_depth: custom && form.max_root_depth ? Number(form.max_root_depth) : null,
       irrigation_efficiency: custom && form.irrigation_efficiency ? Number(form.irrigation_efficiency) / 100 : null,
       depletion_factor: custom && form.depletion_factor ? Number(form.depletion_factor) : null,
+      fd_mode: form.fd_mode,
       current_phase_id: form.current_phase_id && form.current_phase_id !== "auto" ? form.current_phase_id : null,
       management_start_date: form.management_start_date || null,
       management_end_date: form.management_end_date || null,
@@ -1133,6 +1138,21 @@ export default function VinculacaoPage() {
                     />
                     Solo em Capacidade de Campo no início
                   </label>
+                </div>
+                <div className="mt-4">
+                  <Select
+                    id="fd_mode"
+                    label="Fator de disponibilidade (FD / p)"
+                    value={form.fd_mode}
+                    onChange={(e) => patch({ fd_mode: e.target.value === "auto" ? "auto" : "fixed" })}
+                    options={[
+                      { value: "fixed", label: "FD fixo (p de tabela / cadastro)" },
+                      { value: "auto", label: "FD automático FAO-56: p + 0,04×(5 − ETc pot)" },
+                    ]}
+                  />
+                  <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
+                    FD é parâmetro de manejo (CRA = CTA × FD). Não confundir com Ks, calculado da depleção atual.
+                  </p>
                 </div>
               </fieldset>
 

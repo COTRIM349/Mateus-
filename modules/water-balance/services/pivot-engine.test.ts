@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { calculateADT, computePivotBalanceSeries, type PivotEngineInput } from "./pivot-engine";
+import { calculateADT, computePivotBalance, computePivotBalanceSeries, type PivotEngineInput } from "./pivot-engine";
 import { moisturePercentOfFieldCapacity, safetyMoistureMm } from "./soil-water-balance";
 import { calculateEffectivePrecipitation } from "@/modules/weather/services";
 
@@ -98,7 +98,7 @@ describe("computePivotBalanceSeries — Ks, KL e Ky (Etapa E)", () => {
     expect(series[0].kl).toBe(1);
     expect(series[0].etcPotential).toBe(5);
     expect(series[0].etc).toBe(5);
-    expect(series[0].mapStatus).toBe("boa_umidade");
+    expect(series[0].mapStatus).toBe("otima");
     expect(series[0].etcFormula).toContain("ETo × Kc × KL × Ks");
   });
 
@@ -231,6 +231,25 @@ describe("computePivotBalanceSeries — núcleo do solo (Etapa F)", () => {
     expect(series[0].storage).toBe(25);
     expect(series[1].adt).toBe(32.4);
     expect(series[1].storage).toBe(28);
+  });
+});
+
+describe("computePivotBalance — previsão isolada do realizado", () => {
+  it("projeção não altera Dr realizado e marca origem forecast", () => {
+    const { series, projection } = computePivotBalance(
+      sampleInput({
+        weatherByDate: { "2026-01-01": { et0: 5, precipitation: 0 } },
+        weatherForecastByDate: {
+          "2026-01-02": { et0: 6, precipitation: 0, kind: "forecast" },
+          "2026-01-03": { et0: 5.5, precipitation: 10, kind: "forecast" },
+        },
+      }),
+    );
+    expect(series).toHaveLength(1);
+    expect(series[0].deficit).toBeGreaterThan(0);
+    expect(projection.length).toBe(2);
+    expect(projection.every((d) => d.kind === "forecast")).toBe(true);
+    expect(series[0].daysToCra).not.toBeNull();
   });
 });
 

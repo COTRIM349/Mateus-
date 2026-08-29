@@ -1,22 +1,17 @@
 /**
  * Reservatório de solo — DTA / CAD (CTA) / AFD (CRA) e validação de Ks por Dr.
- *
- * Equivalências operacionais:
- *   DTA (mm/cm) ≈ (θCC − θPMP) × 10   [θ volumétrico cm³/cm³]
- *   CAD (mm)    ≈ CTA = DTA × Z(cm)   [Z em cm no método clássico; motor usa Z em m × 1000]
- *   AFD (mm)    ≈ CRA = CAD × p
  */
 
 import { roundTo } from "@/utils/math";
-import { calculateKs } from "@/modules/assignment/services/parcel-motor-adapter";
-import {
-  calculateADT,
-  calculateAFD,
-} from "./pivot-engine";
 import {
   calculateADTFromLayers,
   type SoilProfileLayer,
 } from "@/modules/soil/services";
+import {
+  calculateKsFromDr,
+  calculateRootZoneStorage,
+  type MoistureUnit,
+} from "../agronomy";
 
 export const DTA_FORMULA_VOLUMETRIC = "DTA = (CC − PMP) × 10 mm/cm";
 export const CAD_FORMULA = "CAD = (CC − PMP) × Z × 1000 mm";
@@ -27,6 +22,7 @@ export interface SoilReservoirLayerSummary {
   label: string;
   depthStartCm: number;
   depthEndCm: number;
+  exploredCm: number;
   dtaMmPerCm: number;
   cadMm: number;
 }
@@ -54,16 +50,13 @@ export function dtaFromGravimetricPercent(
   pmpPercent: number,
   bulkDensity: number,
 ): number {
-  const diff = (ccPercent - pmpPercent) / 100;
-  return roundTo(Math.max(diff * bulkDensity * 10, 0), 4);
+  return roundTo(Math.max(((ccPercent - pmpPercent) * bulkDensity) / 10, 0), 4);
 }
 
 /** Ks FAO-56 eq. 84 com Dr em mm (depleção no início do dia). */
 export function ksFromDrMm(cadMm: number, afdMm: number, drMm: number): number {
-  if (cadMm <= 0) return 1;
-  const p = afdMm > 0 && cadMm > 0 ? afdMm / cadMm : 0.5;
-  const depletionFraction = Math.min(Math.max(drMm / cadMm, 0), 1);
-  return roundTo(calculateKs(depletionFraction, p, "linear", null), 3);
+  const ks = calculateKsFromDr({ ctaMm: cadMm, craMm: afdMm, drMm });
+  return roundTo(ks.value ?? 1, 3);
 }
 
 export function summarizeSoilReservoir(input: {
@@ -73,54 +66,54 @@ export function summarizeSoilReservoir(input: {
   rootDepthM: number;
   pFactor: number;
   layers?: SoilProfileLayer[];
+  moistureUnit?: MoistureUnit;
+  bulkDensity?: number | null;
 }): SoilReservoirSummary {
-  const rootDepthM = Math.max(input.rootDepthM, 0);
-  const pFactor = Math.min(Math.max(input.pFactor, 0), 1);
-  const usesLayers = input.layers != null && input.layers.length > 0;
+  const unit = input.moistureUnit ?? "m3_m3";
+  const zone = calculateRootZoneStorage({
+    layers: (input.layers ?? []).map((layer) => ({
+      depthStartCm: layer.depth_start,
+      depthEndCm: layer.depth_end,
+      cc: layer.field_capacity,
+      pmp: layer.wilting_point,
+      bulkDensity: layer.bulk_density ?? input.bulkDensity,
+    })),
+    unit,
+    zrCm: input.rootDepthM * 100,
+    zrMaxCm: input.effectiveDepthM * 100,
+    zrMethod: "Zr efetiva no dia",
+    fd: input.pFactor,
+    homogeneous: {
+      cc: input.fieldCapacity,
+      pmp: input.wiltingPoint,
+      bulkDensity: input.bulkDensity,
+      effectiveDepthCm: input.effectiveDepthM * 100,
+    },
+  });
 
-  let cadMm: number;
-  let layerSummaries: SoilReservoirLayerSummary[] = [];
-
-  if (usesLayers && input.layers) {
-    const clippedLayers = input.layers;
-    cadMm = calculateADTFromLayers(clippedLayers, rootDepthM);
-    for (const layer of clippedLayers) {
-      if (layer.depth_end <= layer.depth_start) continue;
-      if (layer.depth_start >= rootDepthM * 100) continue;
-      const endCm = Math.min(layer.depth_end, rootDepthM * 100);
-      const thickCm = endCm - layer.depth_start;
-      const dta = dtaFromVolumetric(layer.field_capacity, layer.wilting_point);
-      layerSummaries.push({
-        label: `${layer.depth_start}–${endCm} cm`,
-        depthStartCm: layer.depth_start,
-        depthEndCm: endCm,
-        dtaMmPerCm: dta,
-        cadMm: roundTo(dta * thickCm, 2),
-      });
-    }
-  } else {
-    cadMm = calculateADT(
-      input.fieldCapacity,
-      input.wiltingPoint,
-      rootDepthM,
-      input.effectiveDepthM,
-    );
-  }
-
-  const afdMm = calculateAFD(cadMm, pFactor);
-  const dtaMmPerCm = usesLayers && layerSummaries.length > 0
-    ? roundTo(cadMm / (rootDepthM * 100), 4)
-    : dtaFromVolumetric(input.fieldCapacity, input.wiltingPoint);
+  const cadMm = zone.cta.value ?? 0;
+  const afdMm = zone.cra.value ?? 0;
 
   return {
-    dtaMmPerCm,
-    cadMm,
-    afdMm,
-    pFactor,
-    rootDepthM: roundTo(rootDepthM, 3),
-    rootDepthCm: roundTo(rootDepthM * 100, 1),
+    dtaMmPerCm: zone.dtaMean.value ?? 0,
+    cadMm: roundTo(cadMm, 2),
+    afdMm: roundTo(afdMm, 2),
+    pFactor: input.pFactor,
+    rootDepthM: roundTo(input.rootDepthM, 3),
+    rootDepthCm: roundTo(input.rootDepthM * 100, 1),
     safetyMm: roundTo(Math.max(cadMm - afdMm, 0), 2),
-    layers: layerSummaries,
-    usesLayers,
+    layers: zone.layers
+      .filter((l) => l.exploredCm > 0)
+      .map((l) => ({
+        label: l.label,
+        depthStartCm: l.depthStartCm,
+        depthEndCm: l.depthEndCm,
+        exploredCm: l.exploredCm,
+        dtaMmPerCm: l.dta.value ?? 0,
+        cadMm: roundTo(l.cta.value ?? 0, 2),
+      })),
+    usesLayers: (input.layers?.length ?? 0) > 0,
   };
 }
+
+export { calculateADTFromLayers };

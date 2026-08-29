@@ -12,7 +12,28 @@ describe("soil-reservoir", () => {
     expect(dtaFromGravimetricPercent(12.4, 6.3, 1.82)).toBe(1.1102);
   });
 
-  it("CAD 66,61 mm com Z=60 cm e três camadas de 20 cm", () => {
+  it("CAD 66,61 mm em % em peso sem converter para volumétrico", () => {
+    const layers = [
+      { depth_start: 0, depth_end: 20, field_capacity: 12.4, wilting_point: 6.3, bulk_density: 1.82 },
+      { depth_start: 20, depth_end: 40, field_capacity: 12.2, wilting_point: 6.1, bulk_density: 1.82 },
+      { depth_start: 40, depth_end: 60, field_capacity: 12.2, wilting_point: 6.1, bulk_density: 1.82 },
+    ];
+    const s = summarizeSoilReservoir({
+      fieldCapacity: 12.4,
+      wiltingPoint: 6.3,
+      effectiveDepthM: 0.6,
+      rootDepthM: 0.6,
+      pFactor: 0.5,
+      layers,
+      moistureUnit: "gravimetric_percent",
+      bulkDensity: 1.82,
+    });
+    expect(s.cadMm).toBe(66.61);
+    expect(s.afdMm).toBe(33.31);
+    expect(s.layers[0].exploredCm).toBe(20);
+  });
+
+  it("CAD 66,61 mm com Z=60 cm e três camadas de 20 cm (m³/m³)", () => {
     const layers = [
       { depth_start: 0, depth_end: 20, field_capacity: 0.22568, wilting_point: 0.11466, bulk_density: 1.82 },
       { depth_start: 20, depth_end: 40, field_capacity: 0.22204, wilting_point: 0.11102, bulk_density: 1.82 },
@@ -26,8 +47,8 @@ describe("soil-reservoir", () => {
       pFactor: 0.5,
       layers,
     });
-    expect(s.cadMm).toBe(66.6);
-    expect(s.afdMm).toBe(33.3);
+    expect(s.cadMm).toBe(66.61);
+    expect(s.afdMm).toBe(33.31);
     expect(s.layers.length).toBe(3);
     expect(s.layers[0].cadMm).toBe(22.2);
   });

@@ -33,6 +33,7 @@ interface Reading {
   layer_2_note: number | null;
   layer_3_note: number | null;
   notes: string | null;
+  measured_moisture_pct?: number | null;
 }
 
 interface PivotLite { id: string; name: string }
@@ -46,6 +47,7 @@ interface FormState {
   note: string;
   depth_cm: string;
   notes: string;
+  measured_moisture_pct: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
@@ -61,6 +63,7 @@ const EMPTY_FORM: FormState = {
   note: "",
   depth_cm: "20",
   notes: "",
+  measured_moisture_pct: "",
 };
 
 function formatObserved(r: Reading): string {
@@ -156,6 +159,7 @@ export default function SensorialSoloPage() {
       note: String(resolveSensoryNote(r) ?? ""),
       depth_cm: r.depth_cm != null ? String(r.depth_cm) : "20",
       notes: r.notes ?? "",
+      measured_moisture_pct: r.measured_moisture_pct != null ? String(r.measured_moisture_pct) : "",
     });
     setFormError("");
     setModalOpen(true);
@@ -188,6 +192,7 @@ export default function SensorialSoloPage() {
       note,
       depthCm: depth as number,
       notes: form.notes || null,
+      measuredMoisturePct: form.measured_moisture_pct ? Number(form.measured_moisture_pct) : null,
     });
 
     setSaving(true);
@@ -244,6 +249,7 @@ export default function SensorialSoloPage() {
       },
     },
     { header: "Profundidade", render: (r) => r.depth_cm != null ? `${r.depth_cm} cm` : "—" },
+    { header: "θ medida", render: (r) => r.measured_moisture_pct != null ? `${r.measured_moisture_pct.toFixed(1)}%` : "—" },
     { header: "Observação", render: (r) => <span className="text-xs text-graphite-500 dark:text-gray-400">{r.notes ?? "—"}</span> },
     {
       header: "Ações",
@@ -386,6 +392,16 @@ export default function SensorialSoloPage() {
               required
               value={form.depth_cm}
               onChange={(e) => patch({ depth_cm: e.target.value })}
+            />
+            <Input
+              id="measured_moisture_pct"
+              label="Umidade medida (%) — opcional, não substitui o balanço"
+              type="number"
+              min={0}
+              max={100}
+              step={0.1}
+              value={form.measured_moisture_pct}
+              onChange={(e) => patch({ measured_moisture_pct: e.target.value })}
             />
           </div>
 

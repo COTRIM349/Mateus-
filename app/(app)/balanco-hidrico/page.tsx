@@ -16,7 +16,7 @@ import { useAuth } from "@/components/providers";
 import { createClient } from "@/lib/supabase/client";
 import {
   calculateSummary,
-  computePivotBalanceSeries,
+  computePivotBalance,
   assessBalanceReadiness,
   summarizeSoilReservoir,
   WATER_STATUS_CONFIG,
@@ -30,6 +30,7 @@ import {
   type BalanceReadinessResult,
   type SoilReservoirSummary,
 } from "@/modules/water-balance/services";
+import { AGRONOMIC_STATUS_CONFIG, type ProjectionDayResult } from "@/modules/water-balance/agronomy";
 import {
   assembleWeatherByDate,
   classifyMissingClimateDays,
@@ -49,6 +50,9 @@ import {
 } from "@/modules/soil/services";
 import { BalanceReadinessPanel } from "@/components/water-balance/BalanceReadinessPanel";
 import { SoilReservoirPanel } from "@/components/water-balance/SoilReservoirPanel";
+import { AgronomicDecisionBoard, type DecisionSnapshot } from "@/components/water-balance/AgronomicDecisionBoard";
+import { WaterBalanceCharts, ProjectionTable } from "@/components/water-balance/WaterBalanceCharts";
+import { irrigationPriority } from "@/modules/water-balance/agronomy";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
@@ -119,6 +123,10 @@ interface CropAssignment {
   depletion_factor: number | null;
   kl_override: number | null;
   ks_function_override: string | null;
+  fd_mode?: "fixed" | "auto" | null;
+  culture_variety_id?: string | null;
+  initial_moisture_is_cc?: boolean | null;
+  initial_soil_moisture_pct?: number | null;
   active: boolean;
 }
 
@@ -140,6 +148,7 @@ interface Soil {
   wilting_point: number;
   bulk_density: number;
   effective_depth: number;
+  moisture_unit?: "gravimetric_percent" | "volumetric_percent" | "m3_m3";
 }
 
 interface WeatherReading {
@@ -182,6 +191,9 @@ export default function BalancoHidricoPage() {
   const [soilLayers, setSoilLayers] = useState<SoilProfileLayer[]>([]);
   const [phases, setPhases] = useState<CulturePhase[]>([]);
   const [balanceRows, setBalanceRows] = useState<DailyBalanceRow[]>([]);
+  const [projectionDays, setProjectionDays] = useState<ProjectionDayResult[]>([]);
+  const [varietyName, setVarietyName] = useState<string | null>(null);
+  const [decisionSnapshot, setDecisionSnapshot] = useState<DecisionSnapshot | null>(null);
   const [loading, setLoading] = useState(false);
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
@@ -260,9 +272,9 @@ export default function BalancoHidricoPage() {
       const effectiveSoilId =
         (pivotSoil as { soil_id: string | null } | null)?.soil_id ?? a.soil_id;
 
-      const [{ data: cultureData }, { data: soilData }, { data: phaseData }, { data: layerData }] = await Promise.all([
+      const [{ data: cultureData }, soilQuery, { data: phaseData }, { data: layerData }, varietyQuery] = await Promise.all([
         supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor, kl, ks_function, ky").eq("id", a.culture_id).single(),
-        supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", effectiveSoilId).single(),
+        supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth, moisture_unit").eq("id", effectiveSoilId).single(),
         supabase.from("culture_phases").select("*").eq("culture_id", a.culture_id).order("phase_order"),
         effectiveSoilId
           ? supabase
@@ -271,12 +283,26 @@ export default function BalancoHidricoPage() {
               .eq("soil_id", effectiveSoilId)
               .order("depth_start")
           : Promise.resolve({ data: [] }),
+        a.culture_variety_id
+          ? supabase.from("culture_varieties").select("name").eq("id", a.culture_variety_id).single()
+          : Promise.resolve({ data: null }),
       ]);
+
+      let soilData: Soil | null = (soilQuery.data as Soil | null) ?? null;
+      if (!soilData && soilQuery.error && effectiveSoilId) {
+        const fallback = await supabase
+          .from("soils")
+          .select("id, name, field_capacity, wilting_point, bulk_density, effective_depth")
+          .eq("id", effectiveSoilId)
+          .single();
+        soilData = (fallback.data as Soil | null) ?? null;
+      }
 
       setCulture(cultureData as Culture | null);
       setSoil(soilData as Soil | null);
       setSoilLayers(mapDbLayersToProfile(layerData ?? []));
       setPhases((phaseData ?? []) as CulturePhase[]);
+      setVarietyName((varietyQuery.data as { name?: string } | null)?.name ?? null);
 
       if (a.planting_date) {
         const start = a.planting_date;
@@ -295,6 +321,7 @@ export default function BalancoHidricoPage() {
     setCalculating(true);
     setError("");
     setClimateNotice("");
+    setProjectionDays([]);
 
     try {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
@@ -401,7 +428,7 @@ export default function BalancoHidricoPage() {
         engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precipitation };
       }
 
-      const series = computePivotBalanceSeries({
+      const { series, projection } = computePivotBalance({
         assignment: {
           id: assignment.id,
           planting_date: assignment.planting_date,
@@ -413,6 +440,9 @@ export default function BalancoHidricoPage() {
           depletion_factor: assignment.depletion_factor,
           kl_override: assignment.kl_override,
           ks_function_override: assignment.ks_function_override,
+          fd_mode: assignment.fd_mode ?? "fixed",
+          initial_moisture_is_cc: assignment.initial_moisture_is_cc ?? true,
+          initial_soil_moisture_pct: assignment.initial_soil_moisture_pct ?? null,
         },
         culture: {
           root_depth: culture.root_depth,
@@ -428,12 +458,31 @@ export default function BalancoHidricoPage() {
           bulk_density: soil.bulk_density,
           effective_depth: soil.effective_depth,
           layers: soilLayers,
+          moistureUnit: soil.moisture_unit ?? "m3_m3",
         },
         pivot: { efficiency: pivot.efficiency, area: pivot.area, flow_rate: pivot.flow_rate },
         weatherByDate: engineWeatherByDate,
         irrigationByDate,
         dateStart,
         dateEnd: seriesEnd,
+        weatherForecastByDate: await (async () => {
+          const { data: forecasts } = await supabase
+            .from("weather_forecasts")
+            .select("target_date, et0_calculated, et0_source, precipitation")
+            .eq("farm_id", activeFarmId!)
+            .gt("target_date", seriesEnd)
+            .order("target_date")
+            .limit(14);
+          const out: Record<string, { et0: number; precipitation: number; kind: "forecast" }> = {};
+          for (const row of forecasts ?? []) {
+            const date = row.target_date as string;
+            if (out[date]) continue;
+            const et0 = (row.et0_calculated as number | null) ?? (row.et0_source as number | null);
+            if (et0 == null) continue;
+            out[date] = { et0, precipitation: (row.precipitation as number) ?? 0, kind: "forecast" };
+          }
+          return out;
+        })(),
       });
 
       // adapta a saída do motor ao formato de exibição da tela
@@ -477,6 +526,12 @@ export default function BalancoHidricoPage() {
         armStartMm: d.armStartMm,
         drStartMm: d.drStartMm,
         depletionAtStart: d.depletionAtStart,
+        fd: d.fdAdjusted,
+        deepPercolationMm: d.deepPercolationMm,
+        runoffMm: d.runoffMm,
+        agronomicStatus: d.agronomicStatus,
+        ksFormula: d.ksFormula,
+        zrMethod: d.zrMethod,
       }));
 
       // fator p real usado pelo motor (afd / adt)
@@ -485,6 +540,76 @@ export default function BalancoHidricoPage() {
       );
 
       setBalanceRows(rows);
+      setProjectionDays(projection);
+
+      const last = series[series.length - 1];
+      if (last) {
+        const margin = last.afd - last.deficit;
+        const daysNote = last.daysToCraNote ?? "";
+        const just =
+          last.agronomicStatus === "alerta" || last.agronomicStatus === "estresse" || last.agronomicStatus === "severo"
+            ? `Depleção atual de ${last.deficit.toFixed(1)} mm para CRA de ${last.afd.toFixed(1)} mm. ${
+                last.etc > 0
+                  ? `Considerando ETc de ${last.etc.toFixed(1)} mm/dia, a parcela poderá ultrapassar a CRA em aproximadamente ${
+                      last.daysToCra != null ? last.daysToCra.toFixed(1) : ((margin / last.etc).toFixed(1))
+                    } dia(s).`
+                  : daysNote
+              }`
+            : last.recommendationReason;
+        setDecisionSnapshot({
+          parcelName: assignment.id,
+          cultureName: culture.name,
+          varietyName,
+          plantingDate: assignment.planting_date,
+          dae: last.dae,
+          phase: last.phase,
+          pivotName: pivot.name,
+          areaHa: pivot.area,
+          et0: last.et0,
+          kc: last.kc,
+          etcPotential: last.etcPotential,
+          etcAdjusted: last.etc,
+          ks: last.ks,
+          ksFormula: last.ksFormula,
+          ksInterpretation: last.ksInterpretation,
+          ctaMm: last.adt,
+          craMm: last.afd,
+          fd: last.fdAdjusted,
+          fdMode: assignment.fd_mode ?? "fixed",
+          drMm: last.deficit,
+          armMm: last.storage,
+          zrCm: last.rootDepth * 100,
+          zrMethod: last.zrMethod,
+          rain24h: last.precipitation,
+          irrigation24h: last.irrigation,
+          netMm: last.recommendedNetDepth,
+          grossMm: last.recommendedGrossDepth,
+          volumeM3: last.recommendedVolume,
+          runtimeH: last.estimatedIrrigationTime,
+          daysToCra: last.daysToCra,
+          daysToCraNote: last.daysToCraNote,
+          status: last.agronomicStatus,
+          priority: irrigationPriority({
+            status: last.agronomicStatus,
+            daysToCra: last.daysToCra,
+            ks: last.ks,
+            ky: last.ky,
+          }),
+          justification: just,
+          missing: last.missingParams,
+          engineVersion: last.engineVersion,
+          calculationMemory: [
+            last.ksFormula,
+            last.etcFormula,
+            last.peFormula,
+            last.balanceFormula,
+            `DTA ${last.dtaMmPerCm ?? "—"} mm/cm · CTA ${last.adt} mm · FD ${last.fdAdjusted} · CRA ${last.afd} mm`,
+            `Zr ${last.rootDepth * 100} cm (${last.zrMethod}) · Zr máx ${last.zrMaxCm ?? "—"} cm`,
+            `Dr₀ ${last.drStartMm} mm → Dr ${last.deficit} mm · ARM ${last.storage} mm · DP ${last.deepPercolationMm} mm`,
+            last.ksInterpretation,
+          ],
+        });
+      }
 
       // 6. Persiste o resultado do motor em water_balances (item 14)
       if (series.length > 0) {
@@ -530,18 +655,50 @@ export default function BalancoHidricoPage() {
           safety_pct_cc: d.safetyPctCc,
           pe_formula: d.peFormula,
           balance_formula: d.balanceFormula,
+          dr_start_mm: d.drStartMm,
+          dr_end_mm: d.deficit,
+          dta_mm_per_cm: d.dtaMmPerCm,
+          fd_original: d.fdOriginal,
+          fd_adjusted: d.fdAdjusted,
+          etc_for_fd: d.etcForFd,
+          zr_method: d.zrMethod,
+          zr_max_cm: d.zrMaxCm,
+          deep_percolation_mm: d.deepPercolationMm,
+          runoff_mm: d.runoffMm,
+          ks_formula: d.ksFormula,
+          agronomic_status: d.agronomicStatus,
+          engine_version: d.engineVersion,
+          missing_params: d.missingParams,
+          data_kind: "observed",
+          days_to_cra: d.daysToCra,
+          days_to_cra_note: d.daysToCraNote,
         }));
 
-        await supabase
+        const { error: upsertError } = await supabase
           .from("water_balances")
           .upsert(upsertData, { onConflict: "pivot_crop_assignment_id,date" });
+        if (upsertError) {
+          const slim = upsertData.map((row) => {
+            const copy = { ...row } as Record<string, unknown>;
+            for (const key of [
+              "dr_start_mm", "dr_end_mm", "dta_mm_per_cm", "fd_original", "fd_adjusted",
+              "etc_for_fd", "zr_method", "zr_max_cm", "deep_percolation_mm", "runoff_mm",
+              "ks_formula", "agronomic_status", "engine_version", "missing_params",
+              "data_kind", "days_to_cra", "days_to_cra_note",
+            ]) {
+              delete copy[key];
+            }
+            return copy;
+          });
+          await supabase.from("water_balances").upsert(slim, { onConflict: "pivot_crop_assignment_id,date" });
+        }
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
       setCalculating(false);
     }
-  }, [assignment, culture, soil, soilLayers, phases, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
+  }, [assignment, culture, soil, soilLayers, phases, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase, varietyName]);
 
   // Pré-checagem de clima operacional (dias com ETo disponível após sync automático)
   useEffect(() => {
@@ -697,6 +854,8 @@ export default function BalancoHidricoPage() {
       rootDepthM,
       pFactor,
       layers: soilLayers.length > 0 ? soilLayers : undefined,
+      moistureUnit: soil.moisture_unit ?? "m3_m3",
+      bulkDensity: soil.bulk_density,
     });
   }, [assignment, culture, soil, phases, soilLayers]);
 
@@ -989,13 +1148,15 @@ export default function BalancoHidricoPage() {
           <BalanceReadinessPanel result={readiness} loading={climateCheckLoading} />
           <SoilReservoirPanel
             summary={soilReservoirSummary}
-            drMm={lastBalanceRow?.drStartMm}
+            drMm={lastBalanceRow?.deficit ?? lastBalanceRow?.drStartMm}
             ks={lastBalanceRow?.ks}
             ky={lastBalanceRow?.ky}
             yieldRisk={lastBalanceRow?.yieldRisk}
           />
         </div>
       )}
+
+      {decisionSnapshot && <AgronomicDecisionBoard snapshot={decisionSnapshot} />}
 
       <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
 
@@ -1005,6 +1166,7 @@ export default function BalancoHidricoPage() {
             <BalanceTab
               panel={activeTab}
               rows={balanceRows}
+              projection={projectionDays}
               summary={summary}
               loading={loading || calculating}
               head={centroHead}
@@ -1096,6 +1258,7 @@ const VERDICT: Record<WaterStatus, { label: string; color: string; irrigar: bool
 function BalanceTab({
   panel,
   rows,
+  projection,
   summary,
   loading,
   head,
@@ -1104,6 +1267,7 @@ function BalanceTab({
 }: {
   panel: "grafico" | "dados" | "decisao";
   rows: DailyBalanceRow[];
+  projection: ProjectionDayResult[];
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
   head: CentroHead;
@@ -1132,7 +1296,7 @@ function BalanceTab({
     : rows;
 
   const exportCsv = () => {
-    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "DrIni", "DepIni%", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "CAD", "AFD", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "FD", "Ky", "Risco", "DrIni", "DepIni%", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "CAD", "AFD", "ARM", "DrFim", "DP", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
     const lines = filteredRows.map((r) => {
       const entr = soilInflowMm(r);
       const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
@@ -1143,12 +1307,14 @@ function BalanceTab({
       return [
         r.date, r.phase, r.kc.toFixed(2), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
         r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1),
+        r.fd != null ? r.fd.toFixed(2) : "",
         r.ky != null ? r.ky.toFixed(2) : "", r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "",
         (r.drStartMm ?? 0).toFixed(1), depIni,
         r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1),
         (r.effectiveIrrigation ?? r.irrigationApplied).toFixed(1),
         entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1),
         r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
+        r.deficit.toFixed(1), (r.deepPercolationMm ?? r.surplus).toFixed(1),
         (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1), pctCc.toFixed(1),
         sens != null ? String(sens) : "",
         depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label,
@@ -1211,8 +1377,11 @@ function BalanceTab({
     { header: "Saídas", render: (r) => <span className="text-amber-600 dark:text-amber-400">{r.etc.toFixed(1)}</span> },
     { header: "Saldo", render: (r) => { const s = soilInflowMm(r) - r.etc; return <span className={s >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{s >= 0 ? "+" : ""}{s.toFixed(1)}</span>; } },
     { header: "CAD", render: (r) => r.cad.toFixed(1) },
+    { header: "FD", render: (r) => r.fd != null ? r.fd.toFixed(2) : "—" },
     { header: "AFD", render: (r) => r.afd.toFixed(1) },
     { header: "ARM", render: (r) => <span title={r.balanceFormula}>{r.storedWater.toFixed(1)}</span> },
+    { header: "Dr fim", render: (r) => r.deficit.toFixed(1) },
+    { header: "DP", render: (r) => (r.deepPercolationMm ?? r.surplus).toFixed(1) },
     { header: "Seg.", render: (r) => (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1) },
     { header: "% CC", render: (r) => `${moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad).toFixed(0)}` },
     { header: "Sens.", render: (r) => sensoryByDate[r.date] != null ? <span className="font-semibold text-violet-600 dark:text-violet-400">{sensoryByDate[r.date]}</span> : "—" },
@@ -1221,11 +1390,18 @@ function BalanceTab({
     {
       header: "Status",
       render: (r) => {
+        const agro = r.agronomicStatus && r.agronomicStatus in AGRONOMIC_STATUS_CONFIG
+          ? AGRONOMIC_STATUS_CONFIG[r.agronomicStatus as keyof typeof AGRONOMIC_STATUS_CONFIG]
+          : null;
         const cfg = WATER_STATUS_CONFIG[r.waterStatus];
         return (
-          <span className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${cfg.bgClass}`}>
+          <span
+            className={`inline-flex items-center gap-1 rounded-lg px-2 py-0.5 text-xs font-medium ${agro ? "" : cfg.bgClass}`}
+            style={agro ? { backgroundColor: `${agro.color}22`, color: agro.color } : undefined}
+            title={r.ksFormula}
+          >
             <span className="h-1.5 w-1.5 rounded-full bg-current" />
-            {cfg.label}
+            {agro?.label ?? cfg.label}
           </span>
         );
       },
@@ -1260,7 +1436,9 @@ function BalanceTab({
         </div>
         <div className="flex min-h-[min(72vh,calc(100vh-14rem))] flex-col lg:flex-row">
           <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />
-          <div className="min-w-0 flex-1 p-3 sm:p-4">
+          <div className="min-w-0 flex-1 space-y-4 p-3 sm:p-4">
+            <WaterBalanceCharts rows={rows} projection={projection} />
+            <ProjectionTable projection={projection} />
             <ManejoChart rows={manejoRows} visible={visible} />
           </div>
         </div>
