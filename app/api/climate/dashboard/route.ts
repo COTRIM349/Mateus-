@@ -844,7 +844,7 @@ export async function GET(request: Request) {
     dailyForecast: forecasts.map((forecast) => {
       const meteoblueForecast = meteoblueForecastByDate.get(forecast.target_date) ?? null;
       const merged = mergeDailyForecastFields(forecast, meteoblueForecast);
-      const canonicalEtoMm = forecast.et0_calculated ?? null;
+      const canonicalEtoMm = forecast.et0_calculated ?? meteoblueForecast?.et0_calculated ?? null;
       const meteoblueDeltaMm = canonicalEtoMm != null && meteoblueForecast?.et0_source != null
         ? meteoblueForecast.et0_source - canonicalEtoMm
         : null;
