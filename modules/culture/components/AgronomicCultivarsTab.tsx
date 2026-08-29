@@ -59,6 +59,15 @@ const GROWTH_HABIT_OPTIONS = [
   { value: "determinado", label: "Determinado" },
   { value: "semideterminado", label: "Semideterminado" },
   { value: "indeterminado", label: "Indeterminado" },
+  { value: "desconhecido", label: "Desconhecido" },
+];
+
+const PHOTOPERIOD_OPTIONS = [
+  { value: "", label: "Sem informação" },
+  { value: "baixa", label: "Baixa" },
+  { value: "media", label: "Média" },
+  { value: "alta", label: "Alta" },
+  { value: "desconhecida", label: "Desconhecida" },
 ];
 
 const CONFIDENCE_OPTIONS = [
@@ -70,7 +79,7 @@ const CONFIDENCE_OPTIONS = [
 
 const CALIBRATION_LABELS: Record<string, string> = {
   nao_calibrada: "Não calibrada",
-  em_coleta: "Em coleta",
+  em_calibracao: "Em calibração",
   calibracao_parcial: "Calibração parcial",
   calibrada_localmente: "Calibrada localmente",
 };
@@ -371,11 +380,11 @@ export function AgronomicCultivarsTab({
                 ]}
                 defaultValue={editing?.long_juvenile_period == null ? "" : editing.long_juvenile_period ? "sim" : "nao"}
               />
-              <Input
+              <Select
                 id="photoperiod_sensitivity"
                 name="photoperiod_sensitivity"
                 label="Sensibilidade fotoperiódica"
-                placeholder="Sem informação"
+                options={PHOTOPERIOD_OPTIONS}
                 defaultValue={editing?.photoperiod_sensitivity ?? ""}
               />
             </div>
