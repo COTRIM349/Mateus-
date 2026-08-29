@@ -79,8 +79,8 @@ export interface EngineAssignment {
 }
 
 export interface EngineCulture {
-  root_depth: number;
-  depletion_factor: number;
+  root_depth: number | null;
+  depletion_factor: number | null;
   kl?: number | null;
   ks_function?: string | null;
   ky?: number | null;
@@ -108,6 +108,19 @@ export interface EngineWeatherDay {
   precipitation: number;
 }
 
+export interface AgronomicDayInput {
+  /** Kc potencial diário. Nunca incorporar Ks neste valor. */
+  kc: number;
+  /** Profundidade radicular resolvida pelo domínio de cultura. */
+  rootDepthM: number;
+  /** p base resolvido pelo domínio de cultura; o ajuste diário por ETc continua no motor operacional. */
+  depletionFractionP: number;
+  /** Estádio efetivo (observado prevalece sobre previsto) apenas para rastreabilidade/exibição. */
+  stageName?: string | null;
+  /** Metadados de origem do conjunto diário. */
+  origin?: Record<string, unknown> | null;
+}
+
 export interface PivotEngineInput {
   assignment: EngineAssignment;
   culture: EngineCulture;
@@ -122,6 +135,11 @@ export interface PivotEngineInput {
   initialStorageMm?: number | null;
   /** CAD correspondente ao ARM persistido anterior. */
   initialCadMm?: number | null;
+  /**
+   * Parâmetros agronômicos diários rastreáveis.
+   * Não contém CAD/CC/PMP: solo permanece responsabilidade do motor hídrico.
+   */
+  agronomicByDate?: Record<string, AgronomicDayInput>;
 }
 
 export interface BalanceDay {
@@ -238,17 +256,29 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
   for (const date of dates) {
     const ms = new Date(`${date}T00:00:00Z`).getTime();
     const dae = Math.max(0, Math.floor((ms - daeRefMs) / 86400000));
-    const kc = phases.length > 0 ? interpolateKc(phases, dae) : 1;
-    const rootDepth = computeRootDepth({
+    const agronomic = input.agronomicByDate?.[date] ?? null;
+    const phaseId = phases.length > 0 ? identifyPhase(phases, dae) : null;
+
+    const legacyKc = phases.length > 0 ? interpolateKc(phases, dae) : null;
+    const kc = agronomic?.kc ?? legacyKc;
+    if (kc == null || !Number.isFinite(kc) || kc < 0 || kc > 2.5) return [];
+
+    const legacyCultureRoot = culture.root_depth
+      ?? (phaseId?.phase.root_depth_end ?? phaseId?.phase.root_depth_start ?? 0);
+    const rootDepth = agronomic?.rootDepthM ?? computeRootDepth({
       phases,
       dae,
-      cultureRootDepth: culture.root_depth,
+      cultureRootDepth: legacyCultureRoot,
       initialRootDepth: custom ? assignment.initial_root_depth : null,
       maxRootDepth: custom ? assignment.max_root_depth : null,
     });
-    const phaseId = phases.length > 0 ? identifyPhase(phases, dae) : null;
-    const phaseName = phaseId?.phase.name ?? "—";
-    const pFactor = resolveDepletionFactor(assignment, phaseId?.phase.depletion_factor, culture.depletion_factor);
+    if (!Number.isFinite(rootDepth) || rootDepth <= 0) return [];
+
+    const phaseName = agronomic?.stageName ?? phaseId?.phase.name ?? "—";
+    const legacyP = culture.depletion_factor ?? phaseId?.phase.depletion_factor ?? null;
+    const pFactor = agronomic?.depletionFractionP
+      ?? (legacyP == null ? null : resolveDepletionFactor(assignment, phaseId?.phase.depletion_factor, legacyP));
+    if (pFactor == null || !Number.isFinite(pFactor) || pFactor <= 0 || pFactor >= 1) return [];
     const adt = soil.layers && soil.layers.length > 0
       ? calculateADTFromLayers(soil.layers, rootDepth)
       : calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth);
