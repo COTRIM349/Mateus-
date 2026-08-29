@@ -11,7 +11,7 @@ export function ClimateStatusBar({ status }: { status: ClimateDashboardResponse[
       <span>{status.consensusLabel}</span>
       <span>{status.qualityLabel}</span>
       <span>Modo validação</span>
-      <span>Uso operacional bloqueado</span>
+      <span>Aprovar em Clima libera balanço e programação</span>
       <span>{formatRelativeUpdate(status.updatedAt)}</span>
     </div>
   );

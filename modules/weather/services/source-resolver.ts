@@ -204,7 +204,18 @@ async function persistSelection(
   supabase: SupabaseClient,
   r: DailySelectionResult,
 ): Promise<void> {
-  const payload = {
+  const { data: existing } = await supabase
+    .from("weather_daily_selection")
+    .select("selected_reading_id, operational_approved")
+    .eq("farm_id", r.farm_id)
+    .eq("date", r.date)
+    .maybeSingle();
+
+  const readingChanged =
+    existing?.selected_reading_id != null &&
+    existing.selected_reading_id !== r.selected_reading_id;
+
+  const payload: Record<string, unknown> = {
     farm_id: r.farm_id,
     date: r.date,
     selected_station_id: r.selected_station_id,
@@ -216,6 +227,14 @@ async function persistSelection(
     fallback_used: r.fallback_used,
     selected_at: new Date().toISOString(),
   };
+
+  if (readingChanged) {
+    payload.operational_approved = false;
+    payload.approved_at = null;
+    payload.approved_by = null;
+    payload.approval_note = null;
+  }
+
   await supabase
     .from("weather_daily_selection")
     .upsert(payload, { onConflict: "farm_id,date" });

@@ -30,6 +30,7 @@ import {
   type BalanceReadinessResult,
   type SoilReservoirSummary,
 } from "@/modules/water-balance/services";
+import { operationalEtoMm } from "@/modules/weather/services/operational-eto";
 import { identifyPhase, type CulturePhase } from "@/modules/culture/services";
 import {
   computeRootDepth,
@@ -141,6 +142,7 @@ interface WeatherReading {
   id: string;
   date: string;
   et0_source: number | null;
+  et0_calculated: number | null;
   precipitation: number;
   station_id: string;
 }
@@ -305,7 +307,7 @@ export default function BalancoHidricoPage() {
         const [wrRes, dsRes] = await Promise.all([
           supabase
             .from("weather_readings")
-            .select("id, date, et0_source, precipitation, station_id")
+            .select("id, date, et0_source, et0_calculated, precipitation, station_id")
             .in("station_id", stationIds)
             .gte("date", dateStart)
             .lte("date", dateEnd)
@@ -361,7 +363,8 @@ export default function BalancoHidricoPage() {
       const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
       selectedIdByDate.forEach((readingId, date) => {
         const r = readingsById.get(readingId);
-        if (r?.et0_source != null) weatherByDate[date] = { et0: r.et0_source, precip: r.precipitation };
+        const et0 = r ? operationalEtoMm(r) : null;
+        if (et0 != null) weatherByDate[date] = { et0, precip: r!.precipitation };
       });
 
       const missingApprovedDates = datesInRange(dateStart, dateEnd)

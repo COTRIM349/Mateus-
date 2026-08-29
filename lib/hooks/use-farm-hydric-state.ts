@@ -14,6 +14,7 @@ import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
 import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { parcelManagedAreaHa } from "@/modules/assignment/services/parcel-geometry";
+import { operationalEtoMm } from "@/modules/weather/services/operational-eto";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -142,10 +143,7 @@ export function useFarmHydricState(): FarmHydricState {
       phasesByCulture.get(cid)!.push(p);
     }
 
-    // clima da fazenda (ET0 e chuva por data)
-    // Prioridade: leitura apontada por weather_daily_selection (se houver
-    // registro para a data). Fallback: qualquer leitura de estação ativa
-    // com et0 > 0 (compatibilidade com dados antigos).
+    // clima da fazenda — somente dias com seleção aprovada para uso operacional
     const stationIds = (stationsRes.data ?? []).map((s: { id: string }) => s.id);
     const weatherByDate: Record<string, EngineWeatherDay> = {};
 
@@ -153,13 +151,14 @@ export function useFarmHydricState(): FarmHydricState {
       const [selectionRes, readingsRes] = await Promise.all([
         supabase
           .from("weather_daily_selection")
-          .select("date, selected_reading_id")
+          .select("date, selected_reading_id, operational_approved")
           .eq("farm_id", activeFarmId)
+          .eq("operational_approved", true)
           .gte("date", dateStart)
           .lte("date", dateEnd),
         supabase
           .from("weather_readings")
-          .select("id, date, et0_calculated, precipitation, station_id")
+          .select("id, date, et0_calculated, et0_source, precipitation, station_id")
           .in("station_id", stationIds)
           .gte("date", dateStart)
           .lte("date", dateEnd)
@@ -168,33 +167,23 @@ export function useFarmHydricState(): FarmHydricState {
 
       const readingsById = new Map<string, { date: string; et0: number; precipitation: number }>();
       for (const r of readingsRes.data ?? []) {
+        const et0 = operationalEtoMm({
+          et0_calculated: r.et0_calculated as number | null,
+          et0_source: r.et0_source as number | null,
+        });
+        if (et0 == null) continue;
         readingsById.set(r.id as string, {
           date: r.date as string,
-          et0: (r.et0_calculated as number) ?? 0,
+          et0,
           precipitation: (r.precipitation as number) ?? 0,
         });
       }
 
-      const preferredReadingByDate = new Map<string, string>();
       for (const s of selectionRes.data ?? []) {
-        if (s.selected_reading_id) {
-          preferredReadingByDate.set(s.date as string, s.selected_reading_id as string);
-        }
-      }
-
-      // 1) aplica seleção explícita
-      preferredReadingByDate.forEach((readingId, date) => {
-        const r = readingsById.get(readingId);
-        if (r) weatherByDate[date] = { et0: r.et0, precipitation: r.precipitation };
-      });
-
-      // 2) fallback para datas sem seleção
-      for (const r of readingsRes.data ?? []) {
-        const d = r.date as string;
-        if (weatherByDate[d]) continue;
-        const et0 = (r.et0_calculated as number) ?? 0;
-        if (et0 > 0 || !(d in weatherByDate)) {
-          weatherByDate[d] = { et0, precipitation: (r.precipitation as number) ?? 0 };
+        if (!s.selected_reading_id || s.operational_approved !== true) continue;
+        const r = readingsById.get(s.selected_reading_id as string);
+        if (r) {
+          weatherByDate[s.date as string] = { et0: r.et0, precipitation: r.precipitation };
         }
       }
     }

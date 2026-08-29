@@ -9,6 +9,7 @@ import { ClimateForecastPanel } from "./ClimateForecastPanel";
 import { ClimateProviderComparison } from "./ClimateProviderComparison";
 import { ClimateStatusBar } from "./ClimateStatusBar";
 import { ClimateSourceHealth } from "./ClimateSourceHealth";
+import { ClimateOperationalPanel } from "./ClimateOperationalPanel";
 import { PublicWeatherReferences } from "./PublicWeatherReferences";
 
 export function ClimateDashboard() {
@@ -71,6 +72,7 @@ export function ClimateDashboard() {
 
   return (
     <div className="space-y-4">
+      <ClimateOperationalPanel />
       <ClimateCurrentMetrics current={data.current} />
       <ClimateForecastPanel daily={data.dailyForecast} hourly={data.hourlyForecast} timezone={data.timezone} today={data.localDate} />
       <details className="rounded-2xl border border-gray-100 bg-white px-5 py-4 shadow-card dark:border-white/[0.06] dark:bg-graphite-800 dark:shadow-dark-card">
