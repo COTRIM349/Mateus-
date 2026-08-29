@@ -36,6 +36,10 @@ import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modul
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
+import {
+  assembleWeatherByDate,
+  resolveClimateSeriesWindow,
+} from "@/modules/weather/services/operational-weather";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -141,6 +145,7 @@ interface WeatherReading {
   id: string;
   date: string;
   et0_calculated: number | null;
+  et0_source: number | null;
   precipitation: number;
   station_id: string;
 }
@@ -232,6 +237,7 @@ export default function BalancoHidricoPage() {
   const [dateEnd, setDateEnd] = useState("");
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState("");
+  const [climateNotice, setClimateNotice] = useState("");
 
   // Lançamento tab
   const [lancDate, setLancDate] = useState("");
@@ -355,6 +361,7 @@ export default function BalancoHidricoPage() {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
     setCalculating(true);
     setError("");
+    setClimateNotice("");
     setBalanceRows([]);
 
     try {
@@ -383,30 +390,49 @@ export default function BalancoHidricoPage() {
 
       const stationIds = (stations ?? []).map((s: { id: string }) => s.id);
 
-      let weatherReadings: WeatherReading[] = [];
-      const selectedIdByDate = new Map<string, string>();
-      if (stationIds.length > 0) {
+      const loadClimate = async () => {
+        if (stationIds.length === 0) return assembleWeatherByDate([], []);
         const [wrRes, dsRes] = await Promise.all([
           supabase
             .from("weather_readings")
-            .select("id, date, et0_calculated, precipitation, station_id")
+            .select("id, date, et0_calculated, et0_source, precipitation, station_id")
             .in("station_id", stationIds)
             .gte("date", calculationStart)
             .lte("date", dateEnd)
             .order("date"),
           supabase
             .from("weather_daily_selection")
-            .select("date, selected_reading_id, operational_approved")
+            .select("date, selected_reading_id")
             .eq("farm_id", activeFarmId!)
             .gte("date", calculationStart)
             .lte("date", dateEnd),
         ]);
-        weatherReadings = (wrRes.data ?? []) as WeatherReading[];
-        for (const s of dsRes.data ?? []) {
-          if (s.selected_reading_id && s.operational_approved === true) {
-            selectedIdByDate.set(s.date as string, s.selected_reading_id as string);
-          }
+        return assembleWeatherByDate(
+          (wrRes.data ?? []) as WeatherReading[],
+          (dsRes.data ?? []) as Array<{ date: string; selected_reading_id: string | null }>,
+        );
+      };
+
+      let assembledWeather = await loadClimate();
+      let climateWindow = resolveClimateSeriesWindow(calculationStart, dateEnd, assembledWeather);
+      if (climateWindow.historicalMissing.length > 0 || climateWindow.openMissing.length > 0) {
+        const pastDays = Math.max(1, Math.min(datesInRange(calculationStart, dateEnd).length, 92));
+        try {
+          await fetch("/api/climate/sync-farm", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              farmId: activeFarmId,
+              pastDays,
+              forecastDays: 7,
+              ensureVirtual: true,
+            }),
+          });
+        } catch {
+          // A sincronização é best-effort: se falhar, o recuo da série ainda vale.
         }
+        assembledWeather = await loadClimate();
+        climateWindow = resolveClimateSeriesWindow(calculationStart, dateEnd, assembledWeather);
       }
 
       // 2. Get irrigation events for the selected parcel. Eventos antigos sem
@@ -446,18 +472,10 @@ export default function BalancoHidricoPage() {
         depth_mm: ev.depth_mm,
       })));
 
-      // 3. Build weather lookup by date
-      //    Somente leituras explicitamente aprovadas para uso operacional.
-      //    Não existe fallback automático para dados de modelo.
-      const weatherByDate: Record<string, { et0: number; precip: number }> = {};
-      const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
-      selectedIdByDate.forEach((readingId, date) => {
-        const r = readingsById.get(readingId);
-        if (r?.et0_calculated != null) weatherByDate[date] = { et0: r.et0_calculated, precip: r.precipitation };
-      });
+      // 3. Clima automático: ETo calculada ou de modelo, sem exigir aprovação.
+      const weatherByDate = assembledWeather;
 
-      // Chuva manual é a observação local preferida, mas só substitui P em um
-      // dia que já possui ETo operacional aprovada.
+      // Chuva manual é a observação local preferida e substitui P no dia que já tem ETo.
       const { data: manualRainRows } = await supabase
         .from("manual_rainfall_entries")
         .select("date,precipitation_mm")
@@ -468,23 +486,22 @@ export default function BalancoHidricoPage() {
         const current = weatherByDate[row.date as string];
         const rain = Number(row.precipitation_mm);
         if (current && Number.isFinite(rain) && rain >= 0) {
-          weatherByDate[row.date as string] = { ...current, precip: rain };
+          weatherByDate[row.date as string] = { ...current, precipitation: rain };
         }
       }
 
-      const missingApprovedDates = datesInRange(calculationStart, dateEnd)
-        .filter((date) => !weatherByDate[date]);
-      if (missingApprovedDates.length > 0) {
-        const sample = missingApprovedDates.slice(0, 3).join(", ");
-        throw new Error(
-          `Balanço bloqueado: ${missingApprovedDates.length} dia(s) sem dado climático aprovado (${sample}${missingApprovedDates.length > 3 ? ", …" : ""}). A ETo de modelo está em validação.`,
-        );
+      climateWindow = resolveClimateSeriesWindow(calculationStart, dateEnd, weatherByDate);
+      if (climateWindow.blockingMessage) {
+        throw new Error(climateWindow.blockingMessage);
+      }
+      if (climateWindow.notice) {
+        setClimateNotice(climateWindow.notice);
       }
 
       // 5. Motor central do balanço hídrico (fonte única de cálculo)
       const engineWeatherByDate: Record<string, { et0: number; precipitation: number }> = {};
       for (const [d, w] of Object.entries(weatherByDate)) {
-        engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precip };
+        engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precipitation };
       }
 
       const series = computePivotBalanceSeries({
@@ -524,7 +541,7 @@ export default function BalancoHidricoPage() {
         weatherByDate: engineWeatherByDate,
         irrigationByDate,
         dateStart: calculationStart,
-        dateEnd,
+        dateEnd: climateWindow.seriesEnd,
       });
       if (series.length === 0) {
         throw new Error("Balanço bloqueado: valide condição inicial, solo, fases/Kc e eficiência de aplicação.");
@@ -610,7 +627,6 @@ export default function BalancoHidricoPage() {
         .from("weather_daily_selection")
         .select("selected_station_id")
         .eq("farm_id", activeFarmId)
-        .eq("operational_approved", true)
         .lte("date", dateEnd)
         .order("date", { ascending: false })
         .limit(1)
@@ -863,6 +879,11 @@ export default function BalancoHidricoPage() {
           </p>
         )}
         {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
+        {climateNotice && !error && (
+          <p role="status" className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+            {climateNotice}
+          </p>
+        )}
         {assignment && !hydricAnchor && (
           <HydricInitialConditionForm
             farmId={activeFarmId}
@@ -872,6 +893,7 @@ export default function BalancoHidricoPage() {
               setHydricAnchor(anchor);
               setBalanceRows([]);
               setError("");
+              setClimateNotice("");
               setDateStart(addDaysIso(anchor.effectiveDate, 1));
             }}
           />
