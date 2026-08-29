@@ -34,7 +34,7 @@ import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, 
 import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
-import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
+import { ManejoChartWorkspace } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
 import {
   assembleWeatherByDate,
@@ -1015,6 +1015,7 @@ function BalanceTab({
 }) {
   const [visible, setVisible] = useState<Record<ManejoSeriesKey, boolean>>(() => initialManejoVisibility());
   const toggleSeries = (k: ManejoSeriesKey) => setVisible((v) => ({ ...v, [k]: !v[k] }));
+  const resetSeries = () => setVisible(initialManejoVisibility());
   const manejoRows = useMemo(
     () => rows.map((r) => managementRowFromBalance(r, {
       sensoryNote: sensoryByDate[r.date] ?? null,
@@ -1157,29 +1158,15 @@ function BalanceTab({
   }
 
   if (panel === "grafico") {
+    const chartTitle = `${head.pivotName ?? "Pivô"}${head.cultureName ? ` - ${head.cultureName}` : ""}`;
     return (
-      <Card className="overflow-hidden p-0">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 dark:border-white/[0.06]">
-          <div>
-            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">
-              {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
-            </p>
-            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
-              {pctCc.toFixed(0)}% da CC · ARM {arm.toFixed(1)} mm · {classificacao.label}
-            </p>
-          </div>
-          <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-bold" style={{ color: verdict.color, background: `${verdict.color}18` }}>
-            <span className="h-2 w-2 rounded-full" style={{ background: verdict.color }} />
-            {verdict.label}
-          </span>
-        </div>
-        <div className="flex min-h-[min(72vh,calc(100vh-14rem))] flex-col lg:flex-row">
-          <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />
-          <div className="min-w-0 flex-1 p-3 sm:p-4">
-            <ManejoChart rows={manejoRows} visible={visible} />
-          </div>
-        </div>
-      </Card>
+      <ManejoChartWorkspace
+        title={chartTitle}
+        rows={manejoRows}
+        visible={visible}
+        onToggle={toggleSeries}
+        onReset={resetSeries}
+      />
     );
   }
 

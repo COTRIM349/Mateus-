@@ -15,10 +15,18 @@ import {
   MANEJO_CHART_LAYOUT,
   MANEJO_DEFAULT_ON,
   MANEJO_GROUPS,
+  availableWaterPct,
+  formatManejoDate,
+  formatSeriesValue,
   initialManejoVisibility,
   isDefaultManejoSubset,
+  mmAxisMax,
+  mmAxisTicks,
   phaseRanges,
+  safetyAvailableWaterPct,
   seriesValue,
+  stepAfterPath,
+  summarizeManejoKpis,
 } from "./manejo-chart";
 import { groupByParcel, groupByPeriod, summarizeOperational } from "./operational-reports";
 import { REPORT_TYPE_CONFIG, calculateReportKPIs } from "./reports.service";
@@ -147,7 +155,7 @@ describe("gráfico central de manejo", () => {
   it("tem os quatro grupos e não liga todas as séries por padrão", () => {
     expect(MANEJO_GROUPS.map((g) => g.cat)).toEqual(["Irrigação", "Solo", "Cultura", "Clima"]);
     expect(isDefaultManejoSubset()).toBe(true);
-    expect(MANEJO_DEFAULT_ON).toEqual(["umidade", "cc", "seg", "arm", "irrig", "chuva", "etc", "sensorial", "fase"]);
+    expect(MANEJO_DEFAULT_ON).toEqual(["umidade", "cc", "seg", "pmp", "irrig", "chuva", "sensorial", "excesso"]);
     const vis = initialManejoVisibility();
     const on = Object.values(vis).filter(Boolean).length;
     expect(on).toBe(MANEJO_DEFAULT_ON.length);
@@ -156,7 +164,10 @@ describe("gráfico central de manejo", () => {
     expect(vis.kc).toBe(false);
     expect(vis.cc).toBe(true);
     expect(vis.seg).toBe(true);
-    expect(vis.fase).toBe(true);
+    expect(vis.pmp).toBe(true);
+    expect(vis.fase).toBe(false);
+    expect(vis.arm).toBe(false);
+    expect(vis.etc).toBe(false);
   });
 
   it("recorte do gráfico é alto o bastante para ser o protagonista da tela", () => {
@@ -176,6 +187,68 @@ describe("gráfico central de manejo", () => {
       { phase: "Desenvolvimento", start: 2, end: 3 },
       { phase: "Adulto", start: 4, end: 4 },
     ]);
+  });
+
+  it("eixo %CC do gráfico usa água disponível (PM = 0, CC = 100)", () => {
+    const day = buildManagementRows({
+      balances: [balance()],
+      assignments: [{ id: "parcela-soja", pivot_id: "p31", name: "Pivô 31 · Soja", culture_id: "soy" }],
+      pivots: [{ id: "p31", name: "Pivô 31" }],
+      cultures: [{ id: "soy", name: "Soja" }],
+      events: [],
+      sensory: [],
+    })[0];
+    expect(availableWaterPct(66.61, 66.61)).toBe(100);
+    expect(availableWaterPct(0, 66.61)).toBe(0);
+    expect(availableWaterPct(33.305, 66.61)).toBeCloseTo(50, 5);
+    expect(safetyAvailableWaterPct(33.305, 66.61)).toBeCloseTo(50, 5);
+    expect(seriesValue("pmp", day)).toBe(0);
+    expect(seriesValue("cc", day)).toBe(100);
+    expect(seriesValue("umidade", day)).toBeCloseTo(availableWaterPct(40, 54), 5);
+    expect(seriesValue("seg", day)).toBeCloseTo(safetyAvailableWaterPct(27, 54), 5);
+    expect(formatSeriesValue("umidade", day)).toContain("%CC");
+    expect(formatManejoDate("2026-04-04")).toBe("04/04/2026");
+  });
+
+  it("eixo mm parte de 75 e sobe em passos de 15", () => {
+    expect(mmAxisMax([12, 10, 0])).toBe(75);
+    expect(mmAxisMax([75])).toBe(75);
+    expect(mmAxisMax([76])).toBe(90);
+    expect(mmAxisMax([82, 10])).toBe(90);
+    expect(mmAxisTicks(75)).toEqual([0, 15, 30, 45, 60, 75]);
+  });
+
+  it("linha de segurança é desenhada em degrau (step-after)", () => {
+    expect(stepAfterPath([])).toBe("");
+    expect(stepAfterPath([{ x: 10, y: 20 }])).toBe("M 10 20");
+    expect(stepAfterPath([{ x: 10, y: 20 }, { x: 40, y: 50 }, { x: 70, y: 50 }])).toBe("M 10 20 H 40 V 50 H 70 V 50");
+  });
+
+  it("KPIs somam lâminas e calculam índice de stress = (1 − ETc/ETp) × 100", () => {
+    const sample = buildManagementRows({
+      balances: [
+        balance({ date: "2026-01-10", etc: 200, etc_potential: 220, applied_depth: 100, effective_irrigation: 90, precipitation: 200, surplus: 4 }),
+        balance({ date: "2026-01-11", etc: 211.56, etc_potential: 221.62, applied_depth: 228.78, effective_irrigation: 208.98, precipitation: 348.74, surplus: 0 }),
+      ],
+      assignments: [{ id: "parcela-soja", pivot_id: "p31", name: "Pivô 31 · Soja", culture_id: "soy" }],
+      pivots: [{ id: "p31", name: "Pivô 31" }],
+      cultures: [{ id: "soy", name: "Soja" }],
+      events: [],
+      sensory: [],
+    });
+    expect(sample[0].surplusMm).toBe(4);
+    expect(sample[0].effectiveIrrigationMm).toBe(90);
+    expect(seriesValue("excesso", sample[0])).toBe(4);
+    expect(seriesValue("excesso", sample[1])).toBeNull();
+    const kpis = summarizeManejoKpis(sample);
+    expect(kpis.daysManaged).toBe(2);
+    expect(kpis.irrigationMm).toBeCloseTo(328.78, 2);
+    expect(kpis.rainMm).toBeCloseTo(548.74, 2);
+    expect(kpis.effectiveIrrigationMm).toBeCloseTo(298.98, 2);
+    expect(kpis.effectiveIrrigationPct).toBeCloseTo(90.94, 2);
+    expect(kpis.etcMm).toBeCloseTo(411.56, 2);
+    expect(kpis.etpMm).toBeCloseTo(441.62, 2);
+    expect(kpis.stressIndexPct).toBeCloseTo(6.81, 2);
   });
 });
 
@@ -260,14 +333,21 @@ describe("telas de relatórios e gráfico", () => {
 
   it("balanço abre gráfico, dados e decisão em abas, sem mapa na página", () => {
     const src = readFileSync(join(process.cwd(), "app/(app)/balanco-hidrico/page.tsx"), "utf8");
+    const chartSrc = readFileSync(join(process.cwd(), "components/charts/ManejoChart.tsx"), "utf8");
     expect(src).toContain('id: "grafico"');
     expect(src).toContain('id: "dados"');
     expect(src).toContain('id: "decisao"');
     expect(src).toContain('panel: "grafico" | "dados" | "decisao"');
-    expect(src).toContain("ManejoSeriesPicker");
+    expect(src).toContain("ManejoChartWorkspace");
     expect(src).toContain("initialManejoVisibility");
     expect(src).toContain("managementRowFromBalance");
-    expect(src).toContain("min-h-[min(72vh,calc(100vh-14rem))]");
+    expect(chartSrc).toContain("ManejoSeriesPicker");
+    expect(chartSrc).toContain("min-h-[min(72vh,calc(100vh-14rem))]");
+    expect(chartSrc).toContain("Dias Manejados");
+    expect(chartSrc).toContain("Índice de Stress");
+    expect(chartSrc).toContain("MANEJO_VIEW_OPTIONS");
+    const catalog = readFileSync(join(process.cwd(), "modules/reports/services/manejo-chart.ts"), "utf8");
+    expect(catalog).toContain("Umidade do Solo (%CC)");
     expect(src).toContain("Dados do balanço");
     expect(src).toContain("Totais do período");
     expect(src).not.toContain("Mapa Operacional");
