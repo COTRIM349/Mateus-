@@ -433,6 +433,10 @@ CREATE TABLE IF NOT EXISTS agronomic_calibration_runs (
   cultivar_id UUID NOT NULL REFERENCES culture_varieties(id) ON DELETE CASCADE,
   farm_id UUID REFERENCES farms(id) ON DELETE CASCADE,
   planting_window_id UUID REFERENCES planting_windows(id) ON DELETE SET NULL,
+  stage_id UUID REFERENCES phenology_stages(id) ON DELETE SET NULL,
+  min_observations_required INTEGER CHECK (
+    min_observations_required IS NULL OR min_observations_required >= 1
+  ),
   status TEXT NOT NULL DEFAULT 'draft'
     CHECK (status IN ('draft','review','approved','rejected')),
   n_observations INTEGER NOT NULL DEFAULT 0 CHECK (n_observations >= 0),
@@ -474,6 +478,49 @@ CREATE TABLE IF NOT EXISTS base_temperature_candidates (
   rank_order INTEGER,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ── OBSERVAÇÕES PARA CALIBRAÇÃO DE Kc ─────────────────────────────────────
+
+CREATE TABLE IF NOT EXISTS kc_calibration_observations (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  assignment_id UUID NOT NULL REFERENCES pivot_crop_assignments(id) ON DELETE CASCADE,
+  cultivar_id UUID REFERENCES culture_varieties(id) ON DELETE SET NULL,
+  observation_start DATE NOT NULL,
+  observation_end DATE NOT NULL,
+  stage_id UUID REFERENCES phenology_stages(id) ON DELETE SET NULL,
+  dae DOUBLE PRECISION,
+  accumulated_gdd DOUBLE PRECISION,
+  eto_mm DOUBLE PRECISION NOT NULL CHECK (eto_mm > 0),
+  etc_observed_mm DOUBLE PRECISION NOT NULL CHECK (etc_observed_mm >= 0),
+  kc_observed DOUBLE PRECISION GENERATED ALWAYS AS (
+    CASE WHEN eto_mm > 0 THEN etc_observed_mm / eto_mm ELSE NULL END
+  ) STORED,
+  observation_level TEXT NOT NULL CHECK (
+    observation_level IN ('A','B','C','D')
+  ),
+  etc_method TEXT NOT NULL,
+  ks_mean DOUBLE PRECISION CHECK (ks_mean IS NULL OR (ks_mean BETWEEN 0 AND 1)),
+  precipitation_mm DOUBLE PRECISION,
+  irrigation_mm DOUBLE PRECISION,
+  capillary_rise_mm DOUBLE PRECISION,
+  runoff_mm DOUBLE PRECISION,
+  deep_percolation_mm DOUBLE PRECISION,
+  storage_change_mm DOUBLE PRECISION,
+  data_quality_status TEXT NOT NULL DEFAULT 'review'
+    CHECK (data_quality_status IN ('accepted','review','excluded')),
+  exclusion_reasons TEXT[],
+  source_id UUID REFERENCES agronomic_sources(id) ON DELETE RESTRICT,
+  observer_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (observation_end >= observation_start)
+);
+
+CREATE INDEX IF NOT EXISTS idx_kc_calibration_obs_cultivar
+  ON kc_calibration_observations(cultivar_id, observation_start, data_quality_status);
+
+COMMENT ON TABLE kc_calibration_observations IS
+  'ETc observada independentemente para calibração de Kc. Nível D não autoriza chamar o resultado de Kc calibrado.';
 
 -- ── LEGADO ─────────────────────────────────────────────────────────────────
 
@@ -574,7 +621,7 @@ DECLARE
   t TEXT;
 BEGIN
   FOREACH t IN ARRAY ARRAY[
-    'field_phenology_observations','daily_thermal_time','daily_crop_state'
+    'field_phenology_observations','daily_thermal_time','daily_crop_state','kc_calibration_observations'
   ]
   LOOP
     EXECUTE format('DROP POLICY IF EXISTS %I ON %I', 'farm_access_' || t, t);
