@@ -25,6 +25,7 @@ import { createClient } from "@/lib/supabase/client";
 import { AgronomicSourcesTab } from "@/modules/culture/components/AgronomicSourcesTab";
 import { AgronomicCultivarsTab } from "@/modules/culture/components/AgronomicCultivarsTab";
 import { AgronomicPhenologyTab } from "@/modules/culture/components/AgronomicPhenologyTab";
+import { AgronomicKcTab } from "@/modules/culture/components/AgronomicKcTab";
 import {
   interpolateKc,
   interpolateRootDepth,
@@ -116,6 +117,7 @@ const cultureTabs = [
   { id: "cadastro", label: "Geral" },
   { id: "variedades", label: "Cultivares" },
   { id: "fases", label: "Fenologia" },
+  { id: "kc", label: "Kc e ETc" },
   { id: "fontes", label: "Fontes" },
   { id: "associacao", label: "Parcelas" },
   { id: "historico", label: "Histórico" },
@@ -152,6 +154,7 @@ export default function CulturasPage() {
         )}
         {activeTab === "variedades" && <div className="animate-in"><AgronomicCultivarsTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fases" && <div className="animate-in"><AgronomicPhenologyTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
+        {activeTab === "kc" && <div className="animate-in"><AgronomicKcTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "fontes" && <div className="animate-in"><AgronomicSourcesTab /></div>}
         {activeTab === "associacao" && <div className="animate-in"><AssociationTab selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
         {activeTab === "historico" && <div className="animate-in"><HistoryTabComponent selectedCultureId={selectedCultureId} onSelectCulture={setSelectedCultureId} cultures={cultures} /></div>}
