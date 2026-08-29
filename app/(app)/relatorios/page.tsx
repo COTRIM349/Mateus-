@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button, Card, EmptyState, Input, Select, StatCard, Table, Tabs, type Column } from "@/components/ui";
-import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
+import { ManejoChartWorkspace } from "@/components/charts/ManejoChart";
 import { PrerequisiteNotice } from "@/components/onboarding";
 import { useAuth } from "@/components/providers";
 import { createClient } from "@/lib/supabase/client";
@@ -356,7 +356,7 @@ function TabRelatorios({
           description="Calcule o balanço hídrico, registre irrigação e notas sensoriais. O relatório de manejo nasce desses registros — não de um painel executivo."
         />
       ) : selectedType === "manejo" ? (
-        <ManejoPreview rows={rows} chartRows={chartRows} visible={visible} onToggle={(k) => setVisible((v) => ({ ...v, [k]: !v[k] }))} totals={totals} />
+        <ManejoPreview rows={rows} chartRows={chartRows} visible={visible} onToggle={(k) => setVisible((v) => ({ ...v, [k]: !v[k] }))} onReset={() => setVisible(initialManejoVisibility())} totals={totals} />
       ) : (
         <GroupPreview
           type={selectedType}
@@ -372,12 +372,13 @@ function TabRelatorios({
 }
 
 function ManejoPreview({
-  rows, chartRows, visible, onToggle, totals,
+  rows, chartRows, visible, onToggle, onReset, totals,
 }: {
   rows: ManagementReportRow[];
   chartRows: ManagementReportRow[];
   visible: Record<ManejoSeriesKey, boolean>;
   onToggle: (k: ManejoSeriesKey) => void;
+  onReset: () => void;
   totals: ReturnType<typeof summarizeOperational>;
 }) {
   const columns: Column<ManagementReportRow>[] = [
@@ -416,26 +417,20 @@ function ManejoPreview({
         <MiniKPI label="% da CC" value={`${formatNumber(totals.avgMoisturePctCc, 0)}%`} />
       </div>
 
-      <Card className="p-0">
-        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-6 py-4 dark:border-white/[0.06]">
-          <div>
-            <p className="text-[15px] font-bold text-graphite-900 dark:text-white">Gráfico de manejo</p>
-            <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
-              Séries em Irrigação, Solo, Cultura e Clima. Padrão: umidade, CC, segurança, ARM, irrigação, chuva, ETc e nota sensorial.
-            </p>
-          </div>
-        </div>
-        {chartRows.length === 0 ? (
+      <p className="sr-only">Gráfico de manejo</p>
+      {chartRows.length === 0 ? (
+        <Card className="p-0">
           <p className="px-6 py-10 text-center text-sm text-gray-400">Selecione um pivô ou parcela para o gráfico temporal.</p>
-        ) : (
-          <div className="flex min-h-[min(68vh,720px)] flex-col lg:flex-row">
-            <ManejoSeriesPicker rows={chartRows} visible={visible} onToggle={onToggle} />
-            <div className="min-w-0 flex-1 p-3 sm:p-5">
-              <ManejoChart rows={chartRows} visible={visible} />
-            </div>
-          </div>
-        )}
-      </Card>
+        </Card>
+      ) : (
+        <ManejoChartWorkspace
+          title={`${chartRows[0].pivotName}${chartRows[0].cultureName ? ` - ${chartRows[0].cultureName}` : ""}`}
+          rows={chartRows}
+          visible={visible}
+          onToggle={onToggle}
+          onReset={onReset}
+        />
+      )}
 
       <Card>
         <h3 className="mb-4 text-sm font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">

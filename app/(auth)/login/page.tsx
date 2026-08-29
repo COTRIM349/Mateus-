@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { DEMO_LOGIN, DEMO_LOGIN_LABEL } from "@/lib/auth/demo-login";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -15,24 +16,31 @@ export default function LoginPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const signIn = async (nextEmail: string, nextPassword: string, nextPath: string) => {
     setError("");
     setLoading(true);
-
     const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+      email: nextEmail,
+      password: nextPassword,
     });
-
     if (authError) {
       setError("E-mail ou senha inválidos.");
       setLoading(false);
       return;
     }
-
-    router.push("/");
+    router.push(nextPath);
     router.refresh();
+  };
+
+  const handleLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await signIn(email, password, "/");
+  };
+
+  const handleDemo = async () => {
+    setEmail(DEMO_LOGIN.email);
+    setPassword(DEMO_LOGIN.password);
+    await signIn(DEMO_LOGIN.email, DEMO_LOGIN.password, "/balanco-hidrico");
   };
 
   return (
@@ -85,7 +93,16 @@ export default function LoginPage() {
         </Button>
       </form>
 
-      <div className="mt-8 text-center">
+      <div className="mt-4">
+        <Button type="button" variant="secondary" className="w-full" disabled={loading} onClick={handleDemo}>
+          {DEMO_LOGIN_LABEL}
+        </Button>
+        <p className="mt-3 text-center text-[11px] leading-relaxed text-graphite-400 dark:text-gray-500">
+          Acesso viewer · {DEMO_LOGIN.email} · senha {DEMO_LOGIN.password}
+        </p>
+      </div>
+
+      <div className="mt-6 text-center">
         <Link
           href="/recuperar-senha"
           className="text-sm font-medium text-brand-600 transition-colors hover:text-brand-700 dark:text-brand-400"
