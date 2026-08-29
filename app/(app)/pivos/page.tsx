@@ -12,7 +12,6 @@ import {
   Modal,
   Tabs,
   ConfirmDialog,
-  TextArea,
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -94,11 +93,6 @@ interface ProdModule {
   name: string;
 }
 
-interface Soil {
-  id: string;
-  name: string;
-}
-
 interface PumpHouseLite {
   id: string;
   name: string;
@@ -129,9 +123,9 @@ export default function PivosPage() {
   });
 
   const [modules, setModules] = useState<ProdModule[]>([]);
-  const [soils, setSoils] = useState<Soil[]>([]);
+  const [pivotSoilClasses, setPivotSoilClasses] = useState<Record<string, string>>({});
+  const [editingSoilClass, setEditingSoilClass] = useState("");
   const [pumpHouses, setPumpHouses] = useState<PumpHouseLite[]>([]);
-  const [soilId, setSoilId] = useState<string>("");
   const [pumpHouseId, setPumpHouseId] = useState<string>("");
   const [waterSource, setWaterSource] = useState<string>("");
   const [towerCount, setTowerCount] = useState<number | null>(null);
@@ -169,12 +163,16 @@ export default function PivosPage() {
       .order("name")
       .then(({ data: mods }) => { if (mods) setModules(mods); });
     supabase
-      .from("soils")
-      .select("id, name")
+      .from("pivot_soils")
+      .select("pivot_id, soil_class")
       .eq("farm_id", activeFarmId)
-      .eq("active", true)
-      .order("name")
-      .then(({ data: sls }) => { if (sls) setSoils(sls); });
+      .then(({ data: rows }) => {
+        const next: Record<string, string> = {};
+        for (const row of rows ?? []) {
+          next[row.pivot_id as string] = (row.soil_class as string | null) ?? "";
+        }
+        setPivotSoilClasses(next);
+      });
     supabase
       .from("pump_houses")
       .select("id, name")
@@ -190,11 +188,6 @@ export default function PivosPage() {
     () => new Map(modules.map((m) => [m.id, m.name])),
     [modules]
   );
-  const soilMap = useMemo(
-    () => new Map(soils.map((s) => [s.id, s.name])),
-    [soils]
-  );
-
   const openNew = () => {
     setEditing(null);
     setActiveTab("geral");
@@ -205,7 +198,7 @@ export default function PivosPage() {
       motorEff: 88, installedKw: null, cuc: 85, applicationEff: 85, specificCons: null,
     });
     setEnergyCost(null);
-    setSoilId("");
+    setEditingSoilClass("");
     setPumpHouseId("");
     setWaterSource("");
     setTowerCount(null);
@@ -235,7 +228,7 @@ export default function PivosPage() {
       specificCons: pivot.specific_consumption,
     });
     setEnergyCost(pivot.energy_cost);
-    setSoilId(pivot.soil_id ?? "");
+    setEditingSoilClass(pivotSoilClasses[pivot.id] ?? "");
     setWaterSource(pivot.water_source ?? "");
     setTowerCount(pivot.tower_count);
     setLengthM(pivot.length_m);
@@ -254,6 +247,15 @@ export default function PivosPage() {
       .maybeSingle()
       .then(({ data: link }) => {
         if (link?.pump_house_id) setPumpHouseId(link.pump_house_id as string);
+      });
+
+    supabase
+      .from("pivot_soils")
+      .select("soil_class")
+      .eq("pivot_id", pivot.id)
+      .maybeSingle()
+      .then(({ data: soil }) => {
+        setEditingSoilClass((soil?.soil_class as string | null) ?? "");
       });
   };
 
@@ -316,7 +318,7 @@ export default function PivosPage() {
       longitude: Number(fd.get("longitude")) || 0,
       energyCost,
       costPerMm: numOrNull("cost_per_mm"),
-      soilId: soilId || null,
+      soilId: editing?.soil_id ?? null,
       towerCount,
       lengthM,
       technicalNotes: technicalNotes.trim() || null,
@@ -392,7 +394,7 @@ export default function PivosPage() {
       ),
     },
     { header: "Módulo", render: (r) => r.module_id ? moduleMap.get(r.module_id) ?? "—" : "—" },
-    { header: "Solo", render: (r) => r.soil_id ? soilMap.get(r.soil_id) ?? "—" : "—" },
+    { header: "Classe do solo", render: (r) => pivotSoilClasses[r.id] || "Não informado" },
     { header: "Área (ha)", render: (r) => r.area?.toLocaleString("pt-BR"), align: "right" },
     { header: "Vazão (m³/h)", render: (r) => r.flow_rate?.toLocaleString("pt-BR"), align: "right" },
     {
@@ -470,16 +472,12 @@ export default function PivosPage() {
               <TabGeral
                 editing={editing}
                 modules={modules}
-                soils={soils}
-                soilId={soilId}
-                onSoilChange={setSoilId}
+                soilClass={editingSoilClass}
                 pumpHouses={pumpHouses}
                 pumpHouseId={pumpHouseId}
                 onPumpHouseChange={setPumpHouseId}
                 waterSource={waterSource}
                 onWaterSourceChange={setWaterSource}
-                technicalNotes={technicalNotes}
-                onTechnicalNotesChange={setTechnicalNotes}
               />
             </div>
             <div className={activeTab === "caracteristicas" ? "" : "hidden"}>
@@ -564,29 +562,21 @@ export default function PivosPage() {
 function TabGeral({
   editing,
   modules,
-  soils,
-  soilId,
-  onSoilChange,
+  soilClass,
   pumpHouses,
   pumpHouseId,
   onPumpHouseChange,
   waterSource,
   onWaterSourceChange,
-  technicalNotes,
-  onTechnicalNotesChange,
 }: {
   editing: Pivot | null;
   modules: ProdModule[];
-  soils: Soil[];
-  soilId: string;
-  onSoilChange: (v: string) => void;
+  soilClass: string;
   pumpHouses: PumpHouseLite[];
   pumpHouseId: string;
   onPumpHouseChange: (v: string) => void;
   waterSource: string;
   onWaterSourceChange: (v: string) => void;
-  technicalNotes: string;
-  onTechnicalNotesChange: (v: string) => void;
 }) {
   return (
     <div className="space-y-5">
@@ -634,43 +624,14 @@ function TabGeral({
         />
       </div>
 
-      <fieldset className="rounded-xl border border-brand-100 bg-brand-50/30 p-4 dark:border-brand-800/30 dark:bg-brand-900/10">
-        <legend className="px-2 text-sm font-semibold text-brand-700 dark:text-brand-400">
-          Solo dominante do pivô
-        </legend>
-        <div className="grid gap-3 sm:grid-cols-[1fr_auto]">
-          <Select
-            id="soil_id"
-            label="Solo"
-            value={soilId}
-            onChange={(e: React.ChangeEvent<HTMLSelectElement>) => onSoilChange(e.target.value)}
-            options={[
-              { value: "", label: "— sem solo definido —" },
-              ...soils.map((s) => ({ value: s.id, label: s.name })),
-            ]}
-          />
-          <a
-            href="/solos"
-            className="self-end whitespace-nowrap rounded-lg border border-gray-200 px-3 py-2 text-sm text-graphite-700 hover:border-brand-500 hover:text-brand-700 dark:border-white/[0.08] dark:text-gray-300"
-          >
-            Cadastrar solo →
-          </a>
-        </div>
-        <p className="mt-2 text-xs text-graphite-500 dark:text-gray-400">
-          O solo é o perfil físico deste equipamento (Fazenda → Pivô → solo). Cadastre camadas
-          (profundidade, textura, CC, PMP, densidade e KL) em Solos. A parcela não define o solo.
-        </p>
-      </fieldset>
-
-      <TextArea
-        id="technical_notes"
-        name="technical_notes"
-        label="Observações técnicas"
-        rows={3}
-        value={technicalNotes}
-        onChange={(e) => onTechnicalNotesChange(e.target.value)}
-        placeholder="Bomba, filtros, particularidades do equipamento..."
-      />
+      <div className="max-w-md">
+        <Input
+          id="pivot_soil_class"
+          label="Classe do solo"
+          value={soilClass || "Não informado"}
+          disabled
+        />
+      </div>
     </div>
   );
 }
