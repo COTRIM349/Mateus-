@@ -73,6 +73,13 @@ CREATE TABLE IF NOT EXISTS phenology_stages (
 CREATE INDEX IF NOT EXISTS idx_phenology_stages_scale_order
   ON phenology_stages(scale_id, stage_order);
 
+-- Campos agronômicos legados deixam de ser obrigatórios no cadastro mestre.
+-- Seus valores existentes são preservados, porém novos cadastros não precisam
+-- inventar Kc, raiz, p ou ciclo para existir.
+ALTER TABLE cultures ALTER COLUMN root_depth DROP NOT NULL;
+ALTER TABLE cultures ALTER COLUMN depletion_factor DROP NOT NULL;
+ALTER TABLE cultures ALTER COLUMN cycle_days DROP NOT NULL;
+
 ALTER TABLE cultures ADD COLUMN IF NOT EXISTS phenology_scale_id UUID
   REFERENCES phenology_scales(id) ON DELETE SET NULL;
 ALTER TABLE cultures ADD COLUMN IF NOT EXISTS lower_base_temperature_c DOUBLE PRECISION;
