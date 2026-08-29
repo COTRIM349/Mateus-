@@ -57,6 +57,7 @@ export async function GET(request: Request) {
       const runs = await ingestFarmClimate(supabase, farmId, {
         pastDays: 3,
         forecastDays: 7,
+        providers: ["open_meteo"],
       });
 
       const selections = await resolveDailyRange(
