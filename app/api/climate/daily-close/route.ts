@@ -19,6 +19,8 @@ interface ReadingRow {
   temp_min: number | null;
   temp_mean: number | null;
   humidity: number | null;
+  humidity_min: number | null;
+  humidity_max: number | null;
   wind_speed: number | null;
   solar_radiation: number | null;
   precipitation: number | null;
@@ -126,7 +128,7 @@ export async function GET(request: Request) {
   const [readingsResult, selectionsResult, ingestionResult] = await Promise.all([
     supabase
       .from("weather_readings")
-      .select("id,station_id,date,temp_max,temp_min,temp_mean,humidity,wind_speed,solar_radiation,precipitation,et0_calculated,et0_source,data_quality,data_kind,origin,imported_at")
+      .select("id,station_id,date,temp_max,temp_min,temp_mean,humidity,humidity_min,humidity_max,wind_speed,solar_radiation,precipitation,et0_calculated,et0_source,data_quality,data_kind,origin,imported_at")
       .in("station_id", stationIds)
       .gte("date", startDate)
       .lte("date", today)
@@ -201,6 +203,8 @@ export async function GET(request: Request) {
       temperatureMaxC: reading?.temp_max ?? null,
       temperatureMeanC: reading?.temp_mean ?? null,
       relativeHumidityPct: reading?.humidity ?? null,
+      relativeHumidityMinPct: reading?.humidity_min ?? null,
+      relativeHumidityMaxPct: reading?.humidity_max ?? null,
       windSpeed2mMs: reading?.wind_speed ?? null,
       solarRadiationMjM2Day: reading?.solar_radiation ?? null,
       precipitationMm: reading?.precipitation ?? null,
