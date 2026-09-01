@@ -47,3 +47,21 @@ CLIMA → ETo → Kc → ETc → CHUVA ÚTIL → NECESSIDADE LÍQUIDA → LÂMIN
       → VOLUME DO PIVÔ → HORAS DO PIVÔ → DEMANDA DA CASA DE BOMBA
       → DEMANDA ACUMULADA DO TRECHO → CAPACIDADE HIDRÁULICA → GARGALO
 ```
+
+## Validação
+
+O arquivo gerado é recalculado no LibreOffice antes de ser entregue
+(`recalc.py`): **90.089 fórmulas, zero erros**. Se o recálculo falhar dizendo
+que o arquivo não pôde ser carregado, falta o filtro de Calc:
+
+```bash
+apt-get install -y libreoffice-calc
+```
+
+Testes de sensibilidade feitos no arquivo entregue:
+
+| Alteração | Efeito esperado | Efeito obtido |
+|---|---|---|
+| Eficiência 85% → 75% | volume × 85/75 | 18.079.237 → 20.489.802 m³ ✔ |
+| Fator de chuva útil 0,80 → 0,50 | volume sobe | 18.079.237 → 23.992.098 m³ ✔ |
+| Horas 21 → 16 h/dia | volume igual; utilização inalterada enquanto a vazão dos pivôs for derivada das horas | confirmado ✔ |
