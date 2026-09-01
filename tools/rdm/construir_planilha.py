@@ -1288,25 +1288,15 @@ def aba_dashboard(wb, D, AX, RPS, RP, RCP, BC):
     linha += 4
     ws.cell(row=linha, column=2, value="RESPOSTA DO MODELO").style = "secao"
     ws.cell(row=linha + 1, column=2,
-            value='="Com a rotacao planejada, ETo, Kc, chuva util e "&HORAS_OPERACAO_DIA&" h/dia: "&'
-                  'IF(COUNTIF(CAPACIDADE_21H!$G$%d:$G$%d,">"&LIMITE_CRITICO)=0,'
-                  '"o sistema RDM ATENDE toda a safra. Maior utilizacao do sistema: "&'
-                  'TEXT(%s,"0.0%%")&" na semana "&'
-                  'INDEX(CAPACIDADE_21H!$B$%d:$B$%d,MATCH(MAX(CAPACIDADE_21H!$G$%d:$G$%d),'
-                  'CAPACIDADE_21H!$G$%d:$G$%d,0))&".",'
-                  '"o sistema NAO atende "&COUNTIF(CAPACIDADE_21H!$G$%d:$G$%d,">"&LIMITE_CRITICO)&'
-                  '" semana(s). Gargalo na semana "&'
-                  'INDEX(CAPACIDADE_21H!$B$%d:$B$%d,MATCH(MAX(CAPACIDADE_21H!$G$%d:$G$%d),'
-                  'CAPACIDADE_21H!$G$%d:$G$%d,0))&", pivo "&'
-                  'INDEX(CAPACIDADE_21H!$O$%d:$O$%d,MATCH(MAX(CAPACIDADE_21H!$G$%d:$G$%d),'
-                  'CAPACIDADE_21H!$G$%d:$G$%d,0))&", casa "&'
-                  'INDEX(CAPACIDADE_21H!$R$%d:$R$%d,MATCH(MAX(CAPACIDADE_21H!$G$%d:$G$%d),'
-                  'CAPACIDADE_21H!$G$%d:$G$%d,0))&", trecho "&'
-                  'INDEX(CAPACIDADE_21H!$U$%d:$U$%d,MATCH(MAX(CAPACIDADE_21H!$G$%d:$G$%d),'
-                  'CAPACIDADE_21H!$G$%d:$G$%d,0))&".")'
-                  % (ci, cf, linha_aux(17), ci, cf, ci, cf, ci, cf, ci, cf,
-                     ci, cf, ci, cf, ci, cf, ci, cf, ci, cf, ci, cf,
-                     ci, cf, ci, cf, ci, cf, ci, cf, ci, cf, ci, cf)).style = "aviso"
+            value='="GESTAO DE AGUA - "&IF(PAINEL_GESTAO!$F$15=0,'
+                  '"a captacao atende o consumo nas 7 casas o ano todo.",'
+                  '"a captacao NAO acompanha o consumo em "&PAINEL_GESTAO!$F$15&'
+                  '" casa(s). A mais critica e "&PAINEL_GESTAO!$F$18&", com "&'
+                  'TEXT(PAINEL_GESTAO!$F$17,"#,##0")&" m3 faltantes na safra. Detalhe em PAINEL_GESTAO.")&'
+                  '"   |   PIVOS EM 21 h/dia - cabem com folga: utilizacao maxima de "&'
+                  'TEXT(MAX(PLANEJAMENTO_SEMANAL!$AD$%d:$AD$%d),"0.0%%")&'
+                  '". O gargalo da RDM esta na captacao/reservatorio, nao nas horas de pivo."'
+                  % (RPS["ini"], RPS["fim"])).style = "aviso"
     ws.merge_cells(start_row=linha + 1, start_column=2, end_row=linha + 2, end_column=17)
     ws.row_dimensions[linha + 1].height = 30
     nota(ws, linha + 4,
@@ -1590,6 +1580,9 @@ def aba_leiame(wb, D):
             "CLIMA_ETo_CHUVA: ETo e chuva, dia a dia.",
         ]),
         ("ONDE LER O RESULTADO", [
+            "PAINEL_GESTAO: o coracao do modelo de gestao de agua - em quais casas e dias vai faltar agua, "
+            "quanto falta e o que fazer (escalonar plantio, ajustar captacao, priorizar pivos).",
+            "BALANCO_DIARIO: o balanco dia a dia do reservatorio de cada casa que alimenta o painel.",
             "DASHBOARD_RDM: os indicadores executivos da safra e a resposta direta sobre as 21 h/dia.",
             "BALANCO_CASAS: por casa de bomba, entrada (captacao), consumo (pivos) e nivel do "
             "reservatorio semana a semana - mostra onde a captacao nao acompanha o consumo.",
@@ -1635,8 +1628,8 @@ def aba_leiame(wb, D):
                     "(cultura, cultivar, plantio e colheita), filtrada em FAZENDA = RDM e tipo Irrigado.", 8)
 
 
-ORDEM_ABAS = ["LEIA-ME", "DASHBOARD_RDM", "CAPACIDADE_21H", "TOP10_SEMANAS", "RESUMO_CASAS",
-              "BALANCO_CASAS", "GRAFICO_CASAS", "RESUMO_TRECHOS", "MAPA_CALOR", "GRAFICOS", "GRAFICO_TRECHOS", "BALANCO_CULTURA",
+ORDEM_ABAS = ["LEIA-ME", "DASHBOARD_RDM", "PAINEL_GESTAO", "CAPACIDADE_21H", "TOP10_SEMANAS", "RESUMO_CASAS",
+              "BALANCO_CASAS", "BALANCO_DIARIO", "GRAFICO_CASAS", "RESUMO_TRECHOS", "MAPA_CALOR", "GRAFICOS", "GRAFICO_TRECHOS", "BALANCO_CULTURA",
               "BALANCO_PIVO", "PLANEJAMENTO_SEMANAL", "CADASTRO_PIVOS", "CADASTRO_CASAS_BOMBA",
               "CADASTRO_TRECHOS_CANAL", "PARAMETROS_CULTURAS", "ROTACAO_RDM", "CLIMA_ETo_CHUVA",
               "SEMANAS", "PARAMETROS_GERAIS", "AUX_MATRIZES", "MEMORIA_CALCULO", "PENDENCIAS_CADASTRO"]
@@ -1661,6 +1654,8 @@ def main(caminho_json, saida):
     aba_resumo_casas(wb, D, AX)
     BC = aba_balanco_casas(wb, D, AX, RC, RS)
     aba_grafico_casas(wb, D, AX, BC)
+    BD = aba_balanco_diario(wb, D, AX, RC, RCL)
+    aba_painel_gestao(wb, D, AX, RC, BD)
     aba_resumo_trechos(wb, D, AX)
     aba_mapa_calor(wb, D, AX)
     RCP = aba_capacidade(wb, D, AX, RS)
@@ -1836,6 +1831,158 @@ def aba_grafico_casas(wb, D, AX, BC):
         ch.set_categories(cats)
         ws.add_chart(ch, "B%d" % linha_anc)
         linha_anc += 17
+
+# ========================================================= BALANCO_DIARIO
+def aba_balanco_diario(wb, D, AX, RC, RCL):
+    """Coracao do modelo de gestao de agua: balanco DIARIO do reservatorio de
+    cada casa de bomba. Captacao (18 h) entra, consumo dos pivos (21 h) sai, e o
+    nivel do reservatorio e projetado dia a dia. E aqui que se enxerga o dia exato
+    em que a agua falta - o que a media semanal esconde."""
+    ws = wb.create_sheet("BALANCO_DIARIO")
+    est.cabecalho_pagina(ws, "BALANCO DIARIO DO RESERVATORIO POR CASA DE BOMBA",
+                         "Captacao (entrada, 18 h/dia) x consumo dos pivos (saida) x nivel do reservatorio, dia a "
+                         "dia. Reservatorio comeca cheio. Celula de deficit em vermelho = a captacao mais a reserva "
+                         "nao cobriram o consumo daquele dia: FALTA DE AGUA.", "X")
+    casas = AX["casas"]
+    ncasa = len(casas)
+    ci = RC["ini"]
+    nsem = AX["nsem"]
+    ult = gcl(2 + nsem)
+    dias = AX["nsem"] * 7
+
+    def capt(i):
+        return "CADASTRO_CASAS_BOMBA!$I$%d*HORAS_CAPTACAO_DIA" % (ci + i)
+
+    def cap(i):
+        return "CADASTRO_CASAS_BOMBA!$O$%d" % (ci + i)
+
+    def dem_semana(i, semcell):
+        vol_row = AX["VOL_CASA"]["ini"] + i
+        return "INDEX(AUX_MATRIZES!$C$%d:$%s$%d,MIN(N_SEMANAS,MAX(1,%s)))" % (vol_row, ult, vol_row, semcell)
+
+    # cabecalho: 3 colunas por casa (demanda, nivel, deficit)
+    cab1, cab2, dat = 5, 6, 7
+    ws.cell(row=cab1, column=2, value="Data").style = "cabecalho"
+    ws.cell(row=cab2, column=2, value="").style = "cabecalho"
+    ws.cell(row=cab1, column=3, value="Sem").style = "cabecalho"
+    ws.cell(row=cab2, column=3, value="").style = "cabecalho"
+    ws.column_dimensions["B"].width = 12
+    ws.column_dimensions["C"].width = 6
+    for i, casa in enumerate(casas):
+        base = 4 + 3 * i
+        ws.merge_cells(start_row=cab1, start_column=base, end_row=cab1, end_column=base + 2)
+        c = ws.cell(row=cab1, column=base,
+                    value='=%s&"  (capt "&TEXT(%s,"#,##0")&" m3/d - cap "&TEXT(%s,"#,##0")&" m3)"'
+                          % ("CADASTRO_CASAS_BOMBA!$B$%d" % (ci + i), capt(i), cap(i)))
+        c.style = "cabecalho"
+        for j, t in enumerate(("Consumo m3/d", "Nivel m3", "Deficit m3/d")):
+            ws.cell(row=cab2, column=base + j, value=t).style = "cabecalho"
+            ws.column_dimensions[gcl(base + j)].width = 12
+    ws.row_dimensions[cab1].height = 26
+    ws.row_dimensions[cab2].height = 24
+
+    for t in range(dias):
+        r = dat + t
+        ws.cell(row=r, column=2, value="=DATA_INICIO_SAFRA+%d" % t).style = "data"
+        ws.cell(row=r, column=3, value="=MIN(N_SEMANAS,MAX(1,INT(($B%d-DATA_INICIO_SAFRA)/DIAS_POR_SEMANA)+1))" % r
+                ).style = "num0"
+        for i in range(ncasa):
+            base = 4 + 3 * i
+            dcol, ncol, fcol = gcl(base), gcl(base + 1), gcl(base + 2)
+            dem = "%s/DIAS_POR_SEMANA" % dem_semana(i, "$C%d" % r)
+            ws.cell(row=r, column=base, value="=%s" % dem).style = "num0"
+            prev = cap(i) if t == 0 else "%s%d" % (ncol, r - 1)
+            ws.cell(row=r, column=base + 1,
+                    value="=MIN(%s,MAX(0,%s+%s-%s%d))" % (cap(i), prev, capt(i), dcol, r)).style = "num0"
+            ws.cell(row=r, column=base + 2,
+                    value="=MAX(0,%s%d-%s-%s)" % (dcol, r, capt(i), prev)).style = "num0"
+    fim = dat + dias - 1
+    for i in range(ncasa):
+        base = 4 + 3 * i
+        ncol, fcol = gcl(base + 1), gcl(base + 2)
+        ws.conditional_formatting.add("%s%d:%s%d" % (ncol, dat, ncol, fim), ColorScaleRule(
+            start_type="num", start_value=0, start_color="F8696B",
+            mid_type="percentile", mid_value=50, mid_color="FFEB9C",
+            end_type="max", end_color="C6EFCE"))
+        ws.conditional_formatting.add("%s%d:%s%d" % (fcol, dat, fcol, fim), CellIsRule(
+            operator="greaterThan", formula=["0"],
+            fill=est.PatternFill("solid", fgColor=est.VERMELHO_PEND)))
+    ws.freeze_panes = "D%d" % dat
+    return {"dat": dat, "fim": fim, "ncasa": ncasa}
+
+
+# ========================================================== PAINEL_GESTAO
+def aba_painel_gestao(wb, D, AX, RC, BD):
+    """Onde e quando vai faltar agua - e o que fazer. Le o balanco diario e
+    transforma em decisao: dias de deficit por casa, primeiro dia critico, volume
+    faltante, horas extras de captacao necessarias e recomendacao."""
+    ws = wb.create_sheet("PAINEL_GESTAO")
+    est.cabecalho_pagina(ws, "PAINEL DE GESTAO DE AGUA  -  onde e quando vai faltar",
+                         "Diagnostico por casa de bomba, a partir do balanco diario do reservatorio. Responde: em "
+                         "quais casas e dias a captacao nao acompanha o consumo, quanto falta e o que fazer.", "N")
+    casas = AX["casas"]
+    ci = RC["ini"]
+    dat, fim = BD["dat"], BD["fim"]
+
+    escrever_tabela(ws, ["Casa de bomba", "Captacao (m3/dia)", "Consumo de pico (m3/dia)",
+                         "Dias com falta de agua", "Primeiro dia de falta", "Ultimo dia de falta",
+                         "Volume total faltante (m3)", "Maior falta em um dia (m3)",
+                         "Horas extras de captacao no pico (h/dia)", "Vazao adicional necessaria (m3/h)",
+                         "Situacao", "Recomendacao"],
+                    [14, 15, 17, 15, 15, 15, 16, 16, 18, 17, 20, 60])
+    for i, casa in enumerate(casas):
+        r = DAT + i
+        base = 4 + 3 * i
+        dcol, fcol = gcl(base), gcl(base + 2)
+        rng_def = "BALANCO_DIARIO!$%s$%d:$%s$%d" % (fcol, dat, fcol, fim)
+        rng_dem = "BALANCO_DIARIO!$%s$%d:$%s$%d" % (dcol, dat, dcol, fim)
+        rng_dat = "BALANCO_DIARIO!$B$%d:$B$%d" % (dat, fim)
+        ws.cell(row=r, column=2, value="=CADASTRO_CASAS_BOMBA!$B$%d" % (ci + i)).style = "rotulo"
+        ws.cell(row=r, column=3, value="=CADASTRO_CASAS_BOMBA!$I$%d*HORAS_CAPTACAO_DIA" % (ci + i)).style = "num0"
+        ws.cell(row=r, column=4, value="=MAX(%s)" % rng_dem).style = "num0"
+        ws.cell(row=r, column=5, value='=COUNTIF(%s,">0")' % rng_def).style = "num0"
+        ws.cell(row=r, column=6,
+                value='=IFERROR(INDEX(%s,MATCH(1,INDEX(--(%s>0),0),0)),"-")' % (rng_dat, rng_def)).style = "data"
+        ws.cell(row=r, column=7,
+                value='=IFERROR(LOOKUP(2,1/(%s>0),%s),"-")' % (rng_def, rng_dat)).style = "data"
+        ws.cell(row=r, column=8, value="=SUM(%s)" % rng_def).style = "num0"
+        ws.cell(row=r, column=9, value="=MAX(%s)" % rng_def).style = "num0"
+        ws.cell(row=r, column=10,
+                value="=IFERROR($I%d/CADASTRO_CASAS_BOMBA!$I$%d,0)" % (r, ci + i)).style = "num1"
+        ws.cell(row=r, column=11, value="=IFERROR($I%d/HORAS_CAPTACAO_DIA,0)" % r).style = "num0"
+        ws.cell(row=r, column=12,
+                value='=IF($E%d=0,"OK - captacao cobre o consumo",'
+                      'IF($E%d<=7,"ATENCAO - falta pontual","CRITICO - falta recorrente"))' % (r, r)).style = "texto"
+        ws.cell(row=r, column=13,
+                value='=IF($E%d=0,"Sem acao: a captacao atende o consumo o ano todo.",'
+                      '"Falta em "&$E%d&" dia(s), pico de "&TEXT($I%d,"#,##0")&" m3/dia (~"&TEXT($J%d,"0.0")&'
+                      '" h extras de captacao ou +"&TEXT($K%d,"#,##0")&" m3/h). Alternativas: escalonar plantio '
+                      'para afastar o pico, reduzir simultaneidade nesta casa, ampliar horas/vazao de captacao ou '
+                      'priorizar os pivos criticos.")' % (r, r, r, r, r)).style = "texto"
+        ws.row_dimensions[r].height = 42
+    fim_p = DAT + len(casas) - 1
+    for txt, cor in (("OK", est.VERDE_OK), ("ATENCAO", "FFEB9C"), ("CRITICO", est.VERMELHO_PEND)):
+        ws.conditional_formatting.add("L%d:L%d" % (DAT, fim_p), CellIsRule(
+            operator="beginsWith", formula=['"%s"' % txt],
+            fill=est.PatternFill("solid", fgColor=cor)))
+    linha = fim_p + 2
+    ws.cell(row=linha, column=2, value="RESUMO DA RDM").style = "secao"
+    for j, (rot, form, fmt) in enumerate((
+            ("Casas com falta de agua", '=COUNTIF($E$%d:$E$%d,">0")' % (DAT, fim_p), "num0"),
+            ("Total de dias-casa com falta", "=SUM($E$%d:$E$%d)" % (DAT, fim_p), "num0"),
+            ("Volume total faltante na safra (m3)", "=SUM($H$%d:$H$%d)" % (DAT, fim_p), "num0"),
+            ("Casa mais critica",
+             '=IFERROR(INDEX($B$%d:$B$%d,MATCH(MAX($E$%d:$E$%d),$E$%d:$E$%d,0)),"-")'
+             % (DAT, fim_p, DAT, fim_p, DAT, fim_p), "texto"))):
+        ws.cell(row=linha + 1 + j, column=2, value=rot).style = "rotulo"
+        ws.cell(row=linha + 1 + j, column=6, value=form).style = fmt
+    nota(ws, linha + 6,
+         "Como usar para gerir a safra: se uma casa aparece CRITICO, teste no modelo mover a data de plantio dos "
+         "pivos dela (aba ROTACAO_RDM) para afastar o pico de consumo, ou ajuste as horas de captacao "
+         "(PARAMETROS_GERAIS). Todos os numeros deste painel se refazem na hora.", 13)
+
+
+
 
 if __name__ == "__main__":
     main(sys.argv[1], sys.argv[2])

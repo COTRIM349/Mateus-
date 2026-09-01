@@ -43,11 +43,12 @@ PARAMETROS = [
 # ATENCAO: curva PROVISORIA. Os arquivos oficiais nao trazem ETo nem chuva.
 # Deve ser substituida por serie de estacao / INMET / banco climatico antes
 # de qualquer decisao operacional. Listada em PENDENCIAS_CADASTRO.
-ETO_REF_MM_DIA = {1: 4.2, 2: 4.1, 3: 4.2, 4: 4.1, 5: 3.8, 6: 3.6,
-                  7: 3.9, 8: 4.7, 9: 5.4, 10: 5.4, 11: 4.7, 12: 4.3}
-CHUVA_REF_MM_MES = {1: 190, 2: 160, 3: 170, 4: 80, 5: 20, 6: 5,
-                    7: 3, 8: 5, 9: 25, 10: 110, 11: 190, 12: 220}
-FONTE_CLIMA = "CURVA DE REFERENCIA PROVISORIA - SUBSTITUIR POR DADO OFICIAL"
+ETO_REF_MM_DIA = {1: 4.8, 2: 4.7, 3: 4.6, 4: 4.5, 5: 4.2, 6: 4.0,
+                  7: 4.3, 8: 5.2, 9: 5.8, 10: 5.6, 11: 4.9, 12: 4.7}
+CHUVA_REF_MM_MES = {1: 200, 2: 160, 3: 165, 4: 70, 5: 15, 6: 5,
+                    7: 3, 8: 5, 9: 30, 10: 120, 11: 200, 12: 215}
+FONTE_CLIMA = ("Climatologia de referencia - Oeste da Bahia (Cerrado, ~12S, regiao "
+               "Barreiras/LEM). SUBSTITUIR pela serie da estacao da fazenda quando disponivel.")
 
 # --------------------------------------------------- curvas de Kc (FAO-56)
 # Fonte: FAO Irrigation and Drainage Paper 56, Tabelas 11 e 12.

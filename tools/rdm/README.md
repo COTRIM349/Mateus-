@@ -65,3 +65,23 @@ Testes de sensibilidade feitos no arquivo entregue:
 | Eficiência 85% → 75% | volume × 85/75 | 18.079.237 → 20.489.802 m³ ✔ |
 | Fator de chuva útil 0,80 → 0,50 | volume sobe | 18.079.237 → 23.992.098 m³ ✔ |
 | Horas 21 → 16 h/dia | volume igual; utilização inalterada enquanto a vazão dos pivôs for derivada das horas | confirmado ✔ |
+
+## Modelo de gestão de água (v2)
+
+O centro do modelo deixou de ser "pivô-hora" (que fica em 30–50%, folgado) e
+passou a ser o **balanço diário do reservatório por casa de bomba** — onde a
+água realmente falta.
+
+- **`BALANCO_DIARIO`** — para cada casa, dia a dia: captação (18 h) × consumo
+  dos pivôs × nível do reservatório (começa cheio) × déficit. É a lógica da
+  planilha original, em resolução diária.
+- **`PAINEL_GESTAO`** — onde e quando vai faltar água: dias de falta por casa,
+  primeiro/último dia crítico, volume faltante, horas extras de captação e
+  vazão adicional necessárias, e recomendação.
+- ETo/chuva agora usam climatologia de referência do Oeste da Bahia (Cerrado),
+  substituível pela série da estação.
+
+Diagnóstico com os dados atuais: **5 das 7 casas não têm captação suficiente no
+pico** (RM05, RM06, RM07, RM04, RM02); ~6,2 M m³ faltantes na safra. Elevar a
+captação de 18 h para 24 h reduz para 3 casas e ~3,6 M m³ — exemplo de lever
+testável no próprio modelo.
