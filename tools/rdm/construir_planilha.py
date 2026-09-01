@@ -1202,7 +1202,7 @@ def aba_balanco_pivo(wb, D, RPS, RR, RP):
 
 
 # ========================================================== DASHBOARD_RDM
-def aba_dashboard(wb, D, AX, RPS, RP, RCP):
+def aba_dashboard(wb, D, AX, RPS, RP, RCP, BC):
     ws = wb.create_sheet("DASHBOARD_RDM")
     est.cabecalho_pagina(ws, "DASHBOARD RDM  -  planejamento hidrico da safra",
                          "Todos os numeros abaixo sao formulas. Mude plantio, ETo, chuva, Kc, vazao ou horas "
@@ -1264,6 +1264,11 @@ def aba_dashboard(wb, D, AX, RPS, RP, RCP):
          "=COUNTIF(CAPACIDADE_21H!$G$%d:$G$%d,\">\"&LIMITE_CRITICO)" % (ci, cf), "kpiValor", "semanas"),
         ("Horas totais de irrigacao na safra", "=SUM(%s)" % ps("AB"), "kpiValor", "h"),
         ("Deficit total de volume na safra", "=SUM(CAPACIDADE_21H!$H$%d:$H$%d)" % (ci, cf), "kpiValor", "m3"),
+        ("Casas de bomba com captacao insuficiente",
+         '=COUNTIF(BALANCO_CASAS!$K$%d:$K$%d,"CAPTACAO*")' % (BC["resumo_ini"], BC["resumo_fim"]),
+         "kpiValor", "de 7"),
+        ("Consumo total das casas na safra",
+         "=SUM(BALANCO_CASAS!$D$%d:$D$%d)" % (BC["resumo_ini"], BC["resumo_fim"]), "kpiValor", "m3"),
     ]
     linha = 5
     for i, (rot, form, stl, un) in enumerate(kpis):
@@ -1586,6 +1591,9 @@ def aba_leiame(wb, D):
         ]),
         ("ONDE LER O RESULTADO", [
             "DASHBOARD_RDM: os indicadores executivos da safra e a resposta direta sobre as 21 h/dia.",
+            "BALANCO_CASAS: por casa de bomba, entrada (captacao), consumo (pivos) e nivel do "
+            "reservatorio semana a semana - mostra onde a captacao nao acompanha o consumo.",
+            "GRAFICO_CASAS: o mesmo balanco em grafico, uma casa por vez.",
             "CAPACIDADE_21H: semana a semana, nos quatro niveis (pivo, casa, trecho, sistema).",
             "TOP10_SEMANAS: as dez semanas mais criticas da safra, ordenadas automaticamente.",
             "RESUMO_CASAS e RESUMO_TRECHOS: matrizes semana a semana, com indicador selecionavel.",
@@ -1628,7 +1636,7 @@ def aba_leiame(wb, D):
 
 
 ORDEM_ABAS = ["LEIA-ME", "DASHBOARD_RDM", "CAPACIDADE_21H", "TOP10_SEMANAS", "RESUMO_CASAS",
-              "RESUMO_TRECHOS", "MAPA_CALOR", "GRAFICOS", "GRAFICO_TRECHOS", "BALANCO_CULTURA",
+              "BALANCO_CASAS", "GRAFICO_CASAS", "RESUMO_TRECHOS", "MAPA_CALOR", "GRAFICOS", "GRAFICO_TRECHOS", "BALANCO_CULTURA",
               "BALANCO_PIVO", "PLANEJAMENTO_SEMANAL", "CADASTRO_PIVOS", "CADASTRO_CASAS_BOMBA",
               "CADASTRO_TRECHOS_CANAL", "PARAMETROS_CULTURAS", "ROTACAO_RDM", "CLIMA_ETo_CHUVA",
               "SEMANAS", "PARAMETROS_GERAIS", "AUX_MATRIZES", "MEMORIA_CALCULO", "PENDENCIAS_CADASTRO"]
@@ -1651,13 +1659,15 @@ def main(caminho_json, saida):
     RPS = aba_planejamento(wb, D, RP, RR, RPC, RS)
     AX = aba_aux(wb, D, RPS, RS, RC, RT)
     aba_resumo_casas(wb, D, AX)
+    BC = aba_balanco_casas(wb, D, AX, RC, RS)
+    aba_grafico_casas(wb, D, AX, BC)
     aba_resumo_trechos(wb, D, AX)
     aba_mapa_calor(wb, D, AX)
     RCP = aba_capacidade(wb, D, AX, RS)
     aba_top10(wb, D, AX, RCP)
     aba_balanco_cultura(wb, D, RPS, RR)
     aba_balanco_pivo(wb, D, RPS, RR, RP)
-    aba_dashboard(wb, D, AX, RPS, RP, RCP)
+    aba_dashboard(wb, D, AX, RPS, RP, RCP, BC)
     aba_graficos(wb, D, AX, RS)
     aba_memoria(wb)
     aba_pendencias(wb, D)
@@ -1671,6 +1681,161 @@ def main(caminho_json, saida):
           % (len(wb.sheetnames), len(D["pivos"]), len(D["ciclos"]), len(D["semanas"]),
              RPS["fim"] - RPS["ini"] + 1, len(D["pendencias"])))
 
+
+# ======================================================== BALANCO_CASAS
+def aba_balanco_casas(wb, D, AX, RC, RS):
+    """Balanco de agua por casa de bomba, no estilo da planilha original:
+    entrada (captacao dos pocos) x saida/consumo (demanda dos pivos) x nivel
+    do reservatorio semana a semana."""
+    ws = wb.create_sheet("BALANCO_CASAS")
+    est.cabecalho_pagina(ws, "BALANCO DE AGUA POR CASA DE BOMBA",
+                         "Para cada casa: ENTRADA = captacao dos pocos, SAIDA/CONSUMO = demanda dos pivos ligados "
+                         "a ela, e a projecao do NIVEL DO RESERVATORIO. Premissa (igual a original): alimentacao "
+                         "constante e reservatorio comeca cheio.", "L")
+    nsem = AX["nsem"]
+    casas = AX["casas"]
+    ncasa = len(casas)
+    ci = RC["ini"]                       # linha da primeira casa em CADASTRO_CASAS_BOMBA
+
+    def entrada(i):
+        # volume de captacao/dia (arquivo oficial) x dias da semana
+        return "CADASTRO_CASAS_BOMBA!$J$%d*DIAS_POR_SEMANA" % (ci + i)
+
+    def saida(i, k):
+        return _aux(AX, "VOL_CASA", i, gcl(3 + k))
+
+    def cap(i):
+        return "CADASTRO_CASAS_BOMBA!$O$%d" % (ci + i)
+
+    ws.column_dimensions["B"].width = 30
+    blocos = [
+        ("ENTRADA - Volume de captacao dos pocos (m3/semana)", "entrada", "num0"),
+        ("SAIDA / CONSUMO - Demanda dos pivos da casa (m3/semana)", "saida", "num0"),
+        ("SALDO da semana = entrada - consumo (m3/semana)", "saldo", "num0"),
+        ("NIVEL DO RESERVATORIO ao fim da semana (m3) - comeca cheio", "nivel", "num0"),
+        ("STATUS do abastecimento da casa", "status", "texto"),
+    ]
+    linha = 5
+    anchor_nivel = None
+    pos_saldo = None
+    for titulo, chave, fmt in blocos:
+        ws.cell(row=linha, column=2, value=titulo).style = "secao"
+        ws.cell(row=linha + 1, column=2, value="Casa de bomba").style = "cabecalho"
+        for k in range(nsem):
+            ws.cell(row=linha + 1, column=3 + k, value="=SEMANAS!$B$%d" % (RS["ini"] + k)).style = "cabecalho"
+            ws.column_dimensions[gcl(3 + k)].width = 9
+        ini = linha + 2
+        if chave == "nivel":
+            anchor_nivel = ini
+        if chave == "saldo":
+            pos_saldo = ini
+        for i, casa in enumerate(casas):
+            r = ini + i
+            ws.cell(row=r, column=2, value=casa).style = "rotulo"
+            for k in range(nsem):
+                C = gcl(3 + k)
+                if chave == "entrada":
+                    v = "=%s" % entrada(i)
+                elif chave == "saida":
+                    v = "=%s" % saida(i, k)
+                elif chave == "saldo":
+                    v = "=%s-%s" % (entrada(i), saida(i, k))
+                elif chave == "nivel":
+                    prev = cap(i) if k == 0 else "%s%d" % (gcl(2 + k), r)
+                    # reservatorio: comeca cheio, soma o saldo, limitado entre 0 e a capacidade
+                    v = "=MIN(%s,MAX(0,%s+%s%d))" % (cap(i), prev, gcl(3 + k), pos_saldo + i)
+                else:
+                    niv = "%s%d" % (C, anchor_nivel + i)
+                    sal = "%s%d" % (C, pos_saldo + i)
+                    v = ('=IF(%s<=0,"RESERVATORIO ZERADO - captacao insuficiente",'
+                         'IF(%s<0,"CONSUMINDO RESERVA","OK"))' % (niv, sal))
+                ws.cell(row=r, column=3 + k, value=v).style = fmt
+        faixa = "C%d:%s%d" % (ini, gcl(2 + nsem), ini + ncasa - 1)
+        if chave == "saldo":
+            ws.conditional_formatting.add(faixa, CellIsRule(
+                operator="lessThan", formula=["0"],
+                fill=est.PatternFill("solid", fgColor=est.VERMELHO_PEND)))
+        elif chave == "nivel":
+            ws.conditional_formatting.add(faixa, ColorScaleRule(
+                start_type="num", start_value=0, start_color="F8696B",
+                mid_type="percentile", mid_value=50, mid_color="FFEB9C",
+                end_type="max", end_color="C6EFCE"))
+        elif chave == "status":
+            for txt, cor in (("OK", est.VERDE_OK), ("CONSUMINDO", "FFEB9C"),
+                             ("RESERVATORIO", est.VERMELHO_PEND)):
+                ws.conditional_formatting.add(faixa, CellIsRule(
+                    operator="beginsWith", formula=['"%s"' % txt],
+                    fill=est.PatternFill("solid", fgColor=cor)))
+        linha = ini + ncasa + 2
+
+    # ---- resumo por casa
+    ws.cell(row=linha, column=2, value="RESUMO DA SAFRA POR CASA DE BOMBA").style = "secao"
+    linha += 1
+    cabs = ["Casa de bomba", "Entrada total (m3)", "Consumo total (m3)", "Saldo da safra (m3)",
+            "Capacidade do reservatorio (m3)", "Consumo medio (m3/semana)",
+            "Entrada media (m3/semana)", "Semanas consumindo reserva", "Semanas com reservatorio zerado",
+            "Situacao"]
+    larg = [16, 16, 16, 16, 18, 17, 17, 15, 16, 40]
+    for j, (h, w) in enumerate(zip(cabs, larg)):
+        ws.cell(row=linha, column=2 + j, value=h).style = "cabecalho"
+        ws.column_dimensions[gcl(2 + j)].width = w
+    ent_ini = 7
+    sai_ini = ent_ini + ncasa + 4
+    sal_ini = sai_ini + ncasa + 4
+    niv_ini = sal_ini + ncasa + 4
+    sta_ini = niv_ini + ncasa + 4
+    fim_col = gcl(2 + nsem)
+    for i, casa in enumerate(casas):
+        r = linha + 1 + i
+        ws.cell(row=r, column=2, value=casa).style = "rotulo"
+        ws.cell(row=r, column=3, value="=SUM(C%d:%s%d)" % (ent_ini + i, fim_col, ent_ini + i)).style = "num0"
+        ws.cell(row=r, column=4, value="=SUM(C%d:%s%d)" % (sai_ini + i, fim_col, sai_ini + i)).style = "num0"
+        ws.cell(row=r, column=5, value="=$C%d-$D%d" % (r, r)).style = "num0"
+        ws.cell(row=r, column=6, value="=%s" % cap(i)).style = "num0"
+        ws.cell(row=r, column=7, value="=IFERROR($D%d/N_SEMANAS,0)" % r).style = "num0"
+        ws.cell(row=r, column=8, value="=IFERROR($C%d/N_SEMANAS,0)" % r).style = "num0"
+        ws.cell(row=r, column=9, value="=COUNTIF(C%d:%s%d,\"<0\")" % (sal_ini + i, fim_col, sal_ini + i)
+                ).style = "num0"
+        ws.cell(row=r, column=10, value="=COUNTIF(C%d:%s%d,0)" % (niv_ini + i, fim_col, niv_ini + i)
+                ).style = "num0"
+        ws.cell(row=r, column=11,
+                value='=IF($J%d>0,"CAPTACAO INSUFICIENTE - reservatorio zera em "&$J%d&" semana(s)",'
+                      'IF($E%d>=0,"OK - captacao cobre o consumo da safra",'
+                      '"ATENCAO - consumo da safra supera a captacao, sustentado pela reserva"))'
+                      % (r, r, r)).style = "texto"
+    fim = linha + ncasa
+    nota(ws, fim + 2,
+         "ENTRADA = Volume de captacao/dia da casa (arquivo oficial RDM) x dias por semana. CONSUMO = demanda "
+         "de todos os pivos ligados a casa. O nivel do reservatorio comeca cheio, soma o saldo de cada semana e "
+         "fica limitado entre zero e a capacidade cadastrada. 'Reservatorio zerado' = a captacao mais a reserva "
+         "nao cobrem o consumo daquela semana.", 11)
+    return {"ent_ini": ent_ini, "sai_ini": sai_ini, "niv_ini": niv_ini,
+            "resumo_ini": linha + 1, "resumo_fim": linha + ncasa}
+
+
+# =================================================== GRAFICO_BALANCO_CASAS
+def aba_grafico_casas(wb, D, AX, BC):
+    ws = wb.create_sheet("GRAFICO_CASAS")
+    est.cabecalho_pagina(ws, "GRAFICO - Balanco de agua por casa de bomba",
+                         "Uma casa por grafico: ENTRADA (captacao) x CONSUMO (demanda dos pivos) x NIVEL do "
+                         "reservatorio, semana a semana. Onde o consumo supera a entrada, o reservatorio cai.",
+                         "N")
+    nsem = AX["nsem"]
+    origem = wb["BALANCO_CASAS"]
+    linha_anc = 5
+    for i, casa in enumerate(AX["casas"]):
+        ch = LineChart()
+        ch.title = "%s - Entrada x Consumo x Nivel do reservatorio" % casa
+        ch.y_axis.title = "m3"
+        ch.x_axis.title = "Semana da safra"
+        ch.height, ch.width = 8, 30
+        cats = Reference(origem, min_col=3, max_col=2 + nsem, min_row=BC["ent_ini"] - 1)
+        for base in (BC["ent_ini"], BC["sai_ini"], BC["niv_ini"]):
+            ref = Reference(origem, min_col=2, max_col=2 + nsem, min_row=base + i)
+            ch.append(Series(ref, title_from_data=True))
+        ch.set_categories(cats)
+        ws.add_chart(ch, "B%d" % linha_anc)
+        linha_anc += 17
 
 if __name__ == "__main__":
     main(sys.argv[1], sys.argv[2])
