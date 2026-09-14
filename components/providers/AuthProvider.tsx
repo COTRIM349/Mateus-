@@ -2,6 +2,13 @@
 
 import { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  DEFAULT_FARM_TIMEZONE,
+  buildOperationalFarmAccess,
+  selectInitialFarmId,
+  type FarmAccess,
+  type FarmAccessRow,
+} from "./farm-access";
 import type { User } from "@supabase/supabase-js";
 
 interface UserProfile {
@@ -13,12 +20,6 @@ interface UserProfile {
   role: "admin" | "manager" | "operator" | "viewer";
 }
 
-interface FarmAccess {
-  id: string;
-  name: string;
-  timezone: string;
-  isDefault: boolean;
-}
 
 interface AuthContextType {
   user: User | null;
@@ -30,8 +31,6 @@ interface AuthContextType {
   setActiveFarm: (farmId: string) => void;
   signOut: () => Promise<void>;
 }
-
-const DEFAULT_FARM_TIMEZONE = "America/Sao_Paulo";
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
@@ -98,7 +97,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           .single(),
         supabase
           .from("user_farm_access")
-          .select("farm_id, is_default, farms(id, name, timezone)")
+          .select("farm_id, is_default, farms(id, name, timezone, active, latitude, longitude)")
           .eq("user_id", userId),
       ]);
 
@@ -117,26 +116,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const farmData = farmRes.data;
       if (farmData) {
-        const accessList: FarmAccess[] = farmData.map((f) => {
-          const farm = f.farms as unknown as { id: string; name: string; timezone: string | null };
-          return {
-            id: farm.id,
-            name: farm.name,
-            timezone: farm.timezone || DEFAULT_FARM_TIMEZONE,
-            isDefault: f.is_default,
-          };
-        });
+        // Defesa em profundidade: acesso cadastrado não torna uma fazenda
+        // automaticamente apta ao manejo. Apenas fazendas ativas e com
+        // coordenadas geográficas válidas entram no contexto operacional.
+        const accessList = buildOperationalFarmAccess(
+          farmData as unknown as FarmAccessRow[],
+        );
         setFarms(accessList);
 
         const stored =
           typeof window !== "undefined"
             ? localStorage.getItem("cotrim_active_farm")
             : null;
-        const validStored = accessList.find((f) => f.id === stored);
-        const defaultFarm = accessList.find((f) => f.isDefault);
-        setActiveFarmId(
-          validStored?.id ?? defaultFarm?.id ?? accessList[0]?.id ?? null,
-        );
+        const selectedFarmId = selectInitialFarmId(accessList, stored);
+        setActiveFarmId(selectedFarmId);
+
+        if (typeof window !== "undefined") {
+          if (selectedFarmId) {
+            localStorage.setItem("cotrim_active_farm", selectedFarmId);
+          } else {
+            localStorage.removeItem("cotrim_active_farm");
+          }
+        }
       }
 
       stepTiming("loadProfile", started);
@@ -217,6 +218,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [supabase, loadProfile]);
 
   const setActiveFarm = (farmId: string) => {
+    if (!farms.some((farm) => farm.id === farmId)) {
+      // Não permite restaurar por código/localStorage uma fazenda que foi
+      // desativada ou bloqueada por coordenadas inválidas.
+      console.warn("[auth] seleção de fazenda operacional inválida bloqueada");
+      return;
+    }
     setActiveFarmId(farmId);
     if (typeof window !== "undefined") {
       localStorage.setItem("cotrim_active_farm", farmId);

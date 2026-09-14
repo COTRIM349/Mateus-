@@ -23,6 +23,26 @@ const BR_LAT_RANGE = { min: -34, max: 6 };
 const BR_LON_RANGE = { min: -74, max: -33 };
 
 /**
+ * Validação numérica usada fora de formulários (autenticação, jobs e guards).
+ * Rejeita null, strings, NaN, infinito e valores fora dos limites geográficos.
+ */
+export function isCoordinateValueValid(value: unknown, kind: CoordKind): value is number {
+  if (typeof value !== "number" || !Number.isFinite(value)) return false;
+  const range = kind === "latitude" ? LAT_RANGE : LON_RANGE;
+  return value >= range.min && value <= range.max;
+}
+
+export function hasValidGeographicCoordinates(
+  latitude: unknown,
+  longitude: unknown,
+): boolean {
+  return (
+    isCoordinateValueValid(latitude, "latitude") &&
+    isCoordinateValueValid(longitude, "longitude")
+  );
+}
+
+/**
  * Normaliza o texto de entrada substituindo vírgula por ponto e removendo
  * espaços em volta. Não remove sinais nem outros caracteres — para que
  * "-14,6491 " → "-14.6491".
