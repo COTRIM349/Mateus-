@@ -214,25 +214,26 @@ export function useFarmHydricState(): FarmHydricState {
         });
       }
 
-      const startByAssignment = new Map<string, { dateStart: string; anchor: Anchor | null }>();
+      const startByAssignment = new Map<string, { dateStart: string; anchor: Anchor | null; assumeFieldCapacity: boolean }>();
       for (const assignment of assignments) {
         const id = assignment.id as string;
         const anchor = latestAnchorByAssignment.get(id) ?? null;
         if (anchor) {
           const nextDay = addDays(anchor.effectiveDate, 1);
           if (nextDay <= dateEnd && daysBetween(nextDay, dateEnd) <= MAX_RECALC_DAYS) {
-            startByAssignment.set(id, { dateStart: nextDay, anchor });
+            startByAssignment.set(id, { dateStart: nextDay, anchor, assumeFieldCapacity: false });
           }
           continue;
         }
 
         const managementStart = ((assignment.management_start_date as string | null) ?? (assignment.planting_date as string));
+        if (!(managementStart <= dateEnd && daysBetween(managementStart, dateEnd) <= MAX_RECALC_DAYS)) continue;
         const initialIsCc = assignment.initial_moisture_is_cc === true;
         const initialPct = assignment.initial_soil_moisture_pct == null ? null : Number(assignment.initial_soil_moisture_pct);
         const hasLegacyInitial = initialIsCc || (initialPct != null && Number.isFinite(initialPct));
-        if (hasLegacyInitial && managementStart <= dateEnd && daysBetween(managementStart, dateEnd) <= MAX_RECALC_DAYS) {
-          startByAssignment.set(id, { dateStart: managementStart, anchor: null });
-        }
+        // Modelo Irriger/FAO-56: sem âncora nem condição inicial cadastrada,
+        // assume capacidade de campo (depleção zero) no início do ciclo.
+        startByAssignment.set(id, { dateStart: managementStart, anchor: null, assumeFieldCapacity: !hasLegacyInitial });
       }
 
       const starts = Array.from(startByAssignment.values()).map((v) => v.dateStart);
@@ -385,9 +386,9 @@ export function useFarmHydricState(): FarmHydricState {
               depletion_factor:(assignment.depletion_factor as number|null) ?? null,
               kl_override:(assignment.kl_override as number|null) ?? null,
               ks_function_override:(assignment.ks_function_override as string|null) ?? null,
-              initial_soil_moisture_pct:anchor ? anchor.moistureValue : ((assignment.initial_soil_moisture_pct as number|null) ?? null),
+              initial_soil_moisture_pct:anchor ? anchor.moistureValue : (start.assumeFieldCapacity ? null : ((assignment.initial_soil_moisture_pct as number|null) ?? null)),
               initial_moisture_unit:anchor ? anchor.moistureUnit : ((assignment.initial_moisture_unit as InitialMoistureUnit|null) ?? "field_capacity_fraction"),
-              initial_moisture_is_cc:anchor ? anchor.isFieldCapacity : ((assignment.initial_moisture_is_cc as boolean|null) ?? null),
+              initial_moisture_is_cc:anchor ? anchor.isFieldCapacity : (start.assumeFieldCapacity ? true : ((assignment.initial_moisture_is_cc as boolean|null) ?? null)),
               deficit_irrigation:(assignment.deficit_irrigation as boolean) ?? false,
               stress_point_irrigation:(assignment.stress_point_irrigation as boolean) ?? false,
             },
