@@ -15,7 +15,7 @@ describe("pivôs elegíveis para o balanço hídrico", () => {
       { pivot_id: null, active: true, status: "ativa" },
     ];
 
-    expect([...activeParcelPivotIds(rows)]).toEqual(["pv-01", "pv-legado"]);
+    expect(Array.from(activeParcelPivotIds(rows))).toEqual(["pv-01", "pv-legado"]);
   });
 
   it("remove duplicidade de parcelas e preserva a ordem dos pivôs", () => {
