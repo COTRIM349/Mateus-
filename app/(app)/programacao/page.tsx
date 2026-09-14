@@ -13,6 +13,7 @@ import {
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
+import { useFarmHydricState } from "@/lib/hooks";
 import { createClient } from "@/lib/supabase/client";
 import {
   calculateDynamicCAD,
@@ -22,6 +23,15 @@ import {
   WATER_STATUS_CONFIG,
   type WaterStatus,
 } from "@/modules/water-balance/services";
+import type { HydricStatus } from "@/modules/water-balance/services/pivot-engine-v2";
+
+// Estado hídrico do motor (verde/amarelo/vermelho/cinza) → status operacional.
+const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
+  verde: "ideal",
+  amarelo: "atencao",
+  vermelho: "deficit_critico",
+  cinza: "ideal",
+};
 import {
   interpolateKc,
   interpolateRootDepth,
@@ -92,14 +102,6 @@ interface Soil {
   effective_depth: number;
 }
 
-interface BalanceRow {
-  soil_storage: number;
-  deficit: number;
-  etc: number;
-  et0: number;
-  water_status: WaterStatus;
-}
-
 interface StoredRecommendation {
   id: string;
   pivot_id: string;
@@ -137,6 +139,15 @@ const TABS = [
 export default function ProgramacaoPage() {
   const { activeFarmId, profile } = useAuth();
   const supabase = createClient();
+
+  // Estado hídrico ao vivo (mesmo motor do Balanço e das telas operacionais).
+  // Substitui a leitura de water_balances (que nunca é gravada) — sem inventar
+  // estado "ideal" quando falta balanço.
+  const { states: hydricStates } = useFarmHydricState();
+  const hydricByPivot = useMemo(
+    () => new Map(hydricStates.map((s) => [s.pivotId, s])),
+    [hydricStates],
+  );
 
   const [activeTab, setActiveTab] = useState("central");
   const [pivots, setPivots] = useState<Pivot[]>([]);
@@ -229,19 +240,15 @@ export default function ProgramacaoPage() {
       const cropPhase = phaseId?.phase.name ?? pca.crop_stage;
       const basePFactor = phaseId?.phase.depletion_factor ?? culture.depletion_factor;
 
-      const { data: balanceData } = await supabase
-        .from("water_balances")
-        .select("soil_storage, deficit, etc, et0, water_status")
-        .eq("pivot_crop_assignment_id", pca.id)
-        .order("date", { ascending: false })
-        .limit(1)
-        .single();
-
-      const cad = calculateDynamicCAD(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth);
       const pAdj = adjustDepletionFactor(basePFactor, 0);
-      const afd = calculateDynamicAFD(cad, pAdj);
+      const cadFallback = calculateDynamicCAD(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth);
+      const afdFallback = calculateDynamicAFD(cadFallback, pAdj);
 
-      const bal = balanceData as BalanceRow | null;
+      // Estado hídrico ATUAL vem do motor ao vivo (mesmo do Balanço), não de
+      // water_balances (nunca gravada). Sem balanço válido → não inventa "ideal":
+      // o pivô fica de fora da recomendação até haver dado real.
+      const current = hydricByPivot.get(pivot.id)?.current ?? null;
+      if (!current) return null;
 
       return {
         pivotId: pivot.id,
@@ -253,17 +260,17 @@ export default function ProgramacaoPage() {
         fieldCapacity: soil.field_capacity,
         wiltingPoint: soil.wilting_point,
         effectiveSoilDepth: soil.effective_depth,
-        storedWater: bal?.soil_storage ?? cad,
-        cad,
-        afd,
-        deficit: bal?.deficit ?? 0,
-        etc: bal?.etc ?? 0,
-        et0: bal?.et0 ?? 0,
-        kc,
-        rootDepth,
-        depletionFactor: pAdj,
-        waterStatus: (bal?.water_status as WaterStatus) ?? "ideal",
-        cropPhase,
+        storedWater: current.storage,
+        cad: current.adt > 0 ? current.adt : cadFallback,
+        afd: current.afd > 0 ? current.afd : afdFallback,
+        deficit: current.deficit,
+        etc: current.etc,
+        et0: current.et0,
+        kc: current.kc,
+        rootDepth: current.rootDepth,
+        depletionFactor: current.adt > 0 ? current.afd / current.adt : pAdj,
+        waterStatus: HYDRIC_TO_WATER_STATUS[current.status],
+        cropPhase: current.phase ?? cropPhase,
         daysAfterPlant: dap,
         cycleDays: culture.cycle_days,
         forecastPrecip: 0,
@@ -274,7 +281,7 @@ export default function ProgramacaoPage() {
         reservoirAvailable: true,
       };
     },
-    [supabase]
+    [supabase, hydricByPivot]
   );
 
   // Load constraints from DB
