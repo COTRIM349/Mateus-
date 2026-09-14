@@ -4,7 +4,7 @@ import { runClimateOrchestration } from "@/modules/weather/orchestration/climate
 import { ingestFarmClimate } from "@/modules/weather/services/ingestion.service";
 import { resolveDailyRange } from "@/modules/weather/services/source-resolver";
 import { isMeteoblueAgroCronAuthorized } from "../meteoblue-agro/auth";
-import { validFarmCoordinate } from "./guards";
+import { summarizeDailySelections, validFarmCoordinate } from "./guards";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -38,6 +38,9 @@ export async function GET(request: Request) {
     status: "success" | "failed" | "skipped";
     runs?: number;
     selections?: number;
+    approved?: number;
+    blocked?: number;
+    blockedDates?: Array<{ date: string; reason: string }>;
     error?: string;
   }> = [];
 
@@ -64,11 +67,12 @@ export async function GET(request: Request) {
           isoDate(-59),
           isoDate(0),
         );
+        const audit = summarizeDailySelections(selections);
         dailyResults.push({
           farmId,
           status: "success",
           runs: runs.length,
-          selections: selections.length,
+          ...audit,
         });
       } catch (err) {
         dailyResults.push({

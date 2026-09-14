@@ -31,7 +31,10 @@ import {
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
-import { assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
+import {
+  assertParcelAcceptsOperationalLaunch,
+  filterPivotsWithActiveParcel,
+} from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
@@ -220,6 +223,9 @@ export default function BalancoHidricoPage() {
   const [activeTab, setActiveTab] = useState<"grafico" | "dados" | "decisao" | "lancamento">("grafico");
   const [pivots, setPivots] = useState<Pivot[]>([]);
   const [selectedPivotId, setSelectedPivotId] = useState("");
+  const [pivotsLoading, setPivotsLoading] = useState(false);
+  const [pivotsLoadedFarmId, setPivotsLoadedFarmId] = useState<string | null>(null);
+  const [pivotLoadError, setPivotLoadError] = useState("");
   const [assignment, setAssignment] = useState<CropAssignment | null>(null);
   const [culture, setCulture] = useState<Culture | null>(null);
   const [soil, setSoil] = useState<Soil | null>(null);
@@ -242,18 +248,76 @@ export default function BalancoHidricoPage() {
   const [lancSaving, setLancSaving] = useState(false);
   const [lancMsg, setLancMsg] = useState("");
 
-  // Load pivots
+  // O balanço só oferece pivôs que estejam ativos e tenham parcela em manejo.
   useEffect(() => {
-    if (!activeFarmId) return;
-    (async () => {
-      const { data } = await supabase
-        .from("pivots")
-        .select("id, name, area, flow_rate, efficiency, application_efficiency, farm_id, specific_consumption, pump_power, installed_power_kw, motor_efficiency, energy_cost, latitude, longitude")
-        .eq("farm_id", activeFarmId)
-        .eq("active", true)
-        .order("name");
-      setPivots((data ?? []) as Pivot[]);
+    let cancelled = false;
+
+    setPivots([]);
+    setSelectedPivotId("");
+    setPivotsLoadedFarmId(null);
+    setPivotLoadError("");
+    setBalanceRows([]);
+    setDateStart("");
+    setDateEnd("");
+
+    if (!activeFarmId) {
+      setPivotsLoading(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setPivotsLoading(true);
+    void (async () => {
+      try {
+        const { data: pivotData, error: pivotsError } = await supabase
+          .from("pivots")
+          .select("id, name, area, flow_rate, efficiency, application_efficiency, farm_id, specific_consumption, pump_power, installed_power_kw, motor_efficiency, energy_cost, latitude, longitude")
+          .eq("farm_id", activeFarmId)
+          .eq("active", true)
+          .order("name");
+        if (pivotsError) throw pivotsError;
+
+        const farmPivots = (pivotData ?? []) as Pivot[];
+        if (farmPivots.length === 0) {
+          if (!cancelled) setPivotsLoadedFarmId(activeFarmId);
+          return;
+        }
+
+        const { data: activeAssignments, error: assignmentsError } = await supabase
+          .from("pivot_crop_assignments")
+          .select("pivot_id,active,status")
+          .in("pivot_id", farmPivots.map((pivot) => pivot.id))
+          .eq("active", true)
+          .or("status.is.null,status.eq.ativa");
+        if (assignmentsError) throw assignmentsError;
+        if (cancelled) return;
+
+        const eligiblePivots = filterPivotsWithActiveParcel(
+          farmPivots,
+          activeAssignments ?? [],
+        );
+        setPivots(eligiblePivots);
+        setPivotsLoadedFarmId(activeFarmId);
+        setSelectedPivotId((current) => (
+          eligiblePivots.some((pivot) => pivot.id === current)
+            ? current
+            : eligiblePivots[0]?.id ?? ""
+        ));
+      } catch {
+        if (!cancelled) {
+          setPivots([]);
+          setSelectedPivotId("");
+          setPivotLoadError("Não foi possível carregar os pivôs com parcela ativa.");
+        }
+      } finally {
+        if (!cancelled) setPivotsLoading(false);
+      }
     })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [activeFarmId, supabase]);
 
   // Load assignment + culture + soil + phases when pivot changes
@@ -857,9 +921,24 @@ export default function BalancoHidricoPage() {
             </span>
           )}
         </div>
-        {!assignment && selectedPivotId && (
+        {pivotsLoading && (
+          <p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
+            Carregando pivôs com parcela ativa...
+          </p>
+        )}
+        {pivotLoadError && (
+          <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">
+            {pivotLoadError}
+          </p>
+        )}
+        {activeFarmId && pivotsLoadedFarmId === activeFarmId && pivots.length === 0 && !pivotLoadError && (
+          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
+            Nenhum pivô com parcela ativa nesta fazenda.
+          </p>
+        )}
+        {!assignment && selectedPivotId && !pivotsLoading && (
           <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-            Nenhuma parcela ativa encontrada para este pivô.
+            A parcela deste pivô deixou de estar ativa. Atualize a seleção.
           </p>
         )}
         {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
