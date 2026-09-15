@@ -12,7 +12,14 @@ import {
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
-import { mapDbLayersToProfile, type SoilProfileLayer } from "@/modules/soil/services";
+import {
+  buildOperationalPivotSoil,
+  mapDbLayersToProfile,
+  type OperationalPivotSoil,
+  type PivotSoilRegistryLayerRow,
+  type PivotSoilRegistryRow,
+  type SoilProfileLayer,
+} from "@/modules/soil/services";
 import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { parcelManagedAreaHa } from "@/modules/assignment/services/parcel-geometry";
 
@@ -157,16 +164,19 @@ export function useFarmHydricState(): FarmHydricState {
 
       const assignmentIds = assignments.map((a) => a.id as string);
       const cultureIds = Array.from(new Set(assignments.map((a) => a.culture_id as string).filter(Boolean)));
+      const operationalPivotIds = operationalPivots.map((p) => p.id as string);
       const pivotSoilIds = operationalPivots.map((p) => p.soil_id as string).filter(Boolean);
       const soilIds = Array.from(new Set([...pivotSoilIds, ...assignments.map((a) => a.soil_id as string).filter(Boolean)]));
       const seasonIds = Array.from(new Set(assignments.map((a) => a.season_id as string).filter(Boolean)));
       const varietyIds = Array.from(new Set(assignments.map((a) => a.culture_variety_id as string).filter(Boolean)));
 
-      const [culturesRes, phasesRes, soilsRes, layersRes, seasonsRes, varietiesRes, stationsRes, anchorsRes] = await Promise.all([
+      const [culturesRes, phasesRes, soilsRes, layersRes, pivotSoilsRes, pivotSoilLayersRes, seasonsRes, varietiesRes, stationsRes, anchorsRes] = await Promise.all([
         cultureIds.length ? supabase.from("cultures").select("id,name,root_depth,depletion_factor,kl,ks_function,ky").in("id", cultureIds) : Promise.resolve({ data: [] }),
         cultureIds.length ? supabase.from("culture_phases").select("*").in("culture_id", cultureIds).order("phase_order") : Promise.resolve({ data: [] }),
         soilIds.length ? supabase.from("soils").select("id,name,field_capacity,wilting_point,bulk_density,effective_depth").in("id", soilIds) : Promise.resolve({ data: [] }),
         soilIds.length ? supabase.from("soil_layers").select("soil_id,depth_start,depth_end,field_capacity,wilting_point,bulk_density,kl").in("soil_id", soilIds).order("depth_start") : Promise.resolve({ data: [] }),
+        supabase.from("pivot_soils").select("pivot_id,soil_class,cc_pmp_unit").in("pivot_id", operationalPivotIds),
+        supabase.from("pivot_soil_layers").select("pivot_id,layer_number,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3").in("pivot_id", operationalPivotIds).order("layer_number"),
         seasonIds.length ? supabase.from("seasons").select("id,name").in("id", seasonIds) : Promise.resolve({ data: [] }),
         varietyIds.length ? supabase.from("culture_varieties").select("id,name").in("id", varietyIds) : Promise.resolve({ data: [] }),
         supabase.from("weather_stations").select("id").eq("farm_id", activeFarmId).eq("active", true),
@@ -187,6 +197,21 @@ export function useFarmHydricState(): FarmHydricState {
         const list = layersBySoil.get(row.soil_id) ?? [];
         list.push(...mapDbLayersToProfile([row]));
         layersBySoil.set(row.soil_id, list);
+      }
+
+      const fixedLayersByPivot = new Map<string, PivotSoilRegistryLayerRow[]>();
+      for (const layer of (pivotSoilLayersRes.data ?? []) as PivotSoilRegistryLayerRow[]) {
+        const list = fixedLayersByPivot.get(layer.pivot_id) ?? [];
+        list.push(layer);
+        fixedLayersByPivot.set(layer.pivot_id, list);
+      }
+      const fixedSoilByPivot = new Map<string, OperationalPivotSoil>();
+      for (const profile of (pivotSoilsRes.data ?? []) as PivotSoilRegistryRow[]) {
+        const operational = buildOperationalPivotSoil(
+          profile,
+          fixedLayersByPivot.get(profile.pivot_id) ?? [],
+        );
+        if (operational) fixedSoilByPivot.set(profile.pivot_id, operational);
       }
 
       const phasesByCulture = new Map<string, CulturePhase[]>();
@@ -333,7 +358,16 @@ export function useFarmHydricState(): FarmHydricState {
         for (const assignment of pivotAssignments) {
           const culture = cultureMap.get(assignment.culture_id as string) ?? null;
           const effectiveSoilId = (pivot.soil_id as string | null) ?? ((assignment.soil_id as string) || null);
-          const soil = effectiveSoilId ? soilMap.get(effectiveSoilId) ?? null : null;
+          const legacySoil = effectiveSoilId ? soilMap.get(effectiveSoilId) ?? null : null;
+          const soil = fixedSoilByPivot.get(pivot.id as string) ?? (legacySoil ? {
+            id: legacySoil.id as string,
+            name: legacySoil.name as string,
+            field_capacity: Number(legacySoil.field_capacity),
+            wilting_point: Number(legacySoil.wilting_point),
+            bulk_density: legacySoil.bulk_density == null ? null : Number(legacySoil.bulk_density),
+            effective_depth: Number(legacySoil.effective_depth) || 0.6,
+            layers: effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
+          } satisfies OperationalPivotSoil : null);
           const start = startByAssignment.get(assignment.id as string) ?? null;
           if (!culture || !soil || !start) {
             pushIncomplete(pivot, assignment, culture ? culture.name as string : "—", soil ? soil.name as string : null);
@@ -401,11 +435,11 @@ export function useFarmHydricState(): FarmHydricState {
             },
             phases:phasesByCulture.get(assignment.culture_id as string) ?? [],
             soil:{
-              field_capacity:Number(soil.field_capacity),
-              wilting_point:Number(soil.wilting_point),
-              bulk_density:Number(soil.bulk_density),
-              effective_depth:Number(soil.effective_depth)||0.6,
-              layers:effectiveSoilId ? layersBySoil.get(effectiveSoilId) ?? [] : [],
+              field_capacity:soil.field_capacity,
+              wilting_point:soil.wilting_point,
+              bulk_density:soil.bulk_density,
+              effective_depth:soil.effective_depth,
+              layers:soil.layers,
             },
             pivot:{
               application_efficiency:(pivot.application_efficiency as number|null) ?? null,

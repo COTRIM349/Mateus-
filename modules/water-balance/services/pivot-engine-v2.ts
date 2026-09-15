@@ -89,7 +89,7 @@ export interface EngineCulture {
 export interface EngineSoil {
   field_capacity: number;
   wilting_point: number;
-  bulk_density: number;
+  bulk_density: number | null;
   effective_depth: number;
   layers?: SoilProfileLayer[];
 }

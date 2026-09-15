@@ -49,7 +49,7 @@ interface Assignment {
   season_id: string;
   culture_id: string;
   culture_variety_id: string | null;
-  soil_id: string;
+  soil_id: string | null;
   crop_stage: string;
   planting_date: string;
   emergence_date: string | null;
@@ -108,7 +108,7 @@ interface PivotLite {
 }
 interface SeasonLite { id: string; name: string }
 interface CultureLite { id: string; name: string; root_depth: number; depletion_factor: number; cycle_days: number }
-interface SoilLite { id: string; name: string }
+interface PivotSoilLite { pivot_id: string; soil_class: string | null }
 interface VarietyLite { id: string; culture_id: string; name: string; maturity: string | null }
 interface ModuleLite { id: string; name: string }
 interface PhaseLite {
@@ -215,7 +215,7 @@ export default function VinculacaoPage() {
   const [pivots, setPivots] = useState<PivotLite[]>([]);
   const [seasons, setSeasons] = useState<SeasonLite[]>([]);
   const [cultures, setCultures] = useState<CultureLite[]>([]);
-  const [soils, setSoils] = useState<SoilLite[]>([]);
+  const [pivotSoils, setPivotSoils] = useState<PivotSoilLite[]>([]);
   const [varieties, setVarieties] = useState<VarietyLite[]>([]);
   const [modules, setModules] = useState<ModuleLite[]>([]);
   const [culturePhases, setCulturePhases] = useState<PhaseLite[]>([]);
@@ -246,18 +246,18 @@ export default function VinculacaoPage() {
     }
     setLookupsLoading(true);
     (async () => {
-      const [pv, ss, cu, so, va, mo] = await Promise.all([
+      const [pv, ss, cu, ps, va, mo] = await Promise.all([
         supabase.from("pivots").select("id, name, efficiency, soil_id, area, module_id, latitude, longitude, radius, last_tower_radius, overhang_m").eq("farm_id", activeFarmId).eq("active", true).order("name"),
         supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("start_date", { ascending: false }),
         supabase.from("cultures").select("id, name, root_depth, depletion_factor, cycle_days").eq("active", true).order("name"),
-        supabase.from("soils").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
+        supabase.from("pivot_soils").select("pivot_id, soil_class").eq("farm_id", activeFarmId),
         supabase.from("culture_varieties").select("id, culture_id, name, maturity").eq("active", true).order("name"),
         supabase.from("production_modules").select("id, name").eq("farm_id", activeFarmId).eq("active", true).order("name"),
       ]);
       setPivots((pv.data ?? []) as PivotLite[]);
       setSeasons((ss.data ?? []) as SeasonLite[]);
       setCultures((cu.data ?? []) as CultureLite[]);
-      setSoils((so.data ?? []) as SoilLite[]);
+      setPivotSoils((ps.data ?? []) as PivotSoilLite[]);
       setVarieties((va.data ?? []) as VarietyLite[]);
       setModules((mo.data ?? []) as ModuleLite[]);
       setLookupsLoading(false);
@@ -294,10 +294,12 @@ export default function VinculacaoPage() {
   );
 
   const pivotMap = useMemo(() => new Map(pivots.map((p) => [p.id, p.name])), [pivots]);
-  const pivotById = useMemo(() => new Map(pivots.map((p) => [p.id, p])), [pivots]);
   const seasonMap = useMemo(() => new Map(seasons.map((s) => [s.id, s.name])), [seasons]);
   const cultureMap = useMemo(() => new Map(cultures.map((c) => [c.id, c])), [cultures]);
-  const soilMap = useMemo(() => new Map(soils.map((s) => [s.id, s.name])), [soils]);
+  const pivotSoilClassMap = useMemo(
+    () => new Map(pivotSoils.map((soil) => [soil.pivot_id, soil.soil_class])),
+    [pivotSoils],
+  );
   const varietyMap = useMemo(() => new Map(varieties.map((v) => [v.id, v.name])), [varieties]);
 
   const moduleMap = useMemo(() => new Map(modules.map((m) => [m.id, m.name])), [modules]);
@@ -482,7 +484,7 @@ export default function VinculacaoPage() {
       plantedArea: num(form.planted_area),
       pivotId: form.pivot_id,
       pivotArea: pivot?.area ?? 0,
-      pivotSoilId: pivot?.soil_id ?? null,
+      legacyPivotSoilId: pivot?.soil_id ?? null,
       seasonId: form.season_id,
       cultureId: form.culture_id,
       cultureVarietyId: form.culture_variety_id || null,
@@ -546,7 +548,7 @@ export default function VinculacaoPage() {
       plantedArea: num(form.planted_area),
       pivotId: form.pivot_id,
       pivotArea: pivot?.area ?? 0,
-      pivotSoilId: pivot?.soil_id ?? null,
+      legacyPivotSoilId: pivot?.soil_id ?? null,
       seasonId: form.season_id,
       cultureId: form.culture_id,
       cultureVarietyId: form.culture_variety_id || null,
@@ -631,10 +633,7 @@ export default function VinculacaoPage() {
     },
     {
       header: "Solo do pivô",
-      render: (r) => {
-        const pivotSoilId = pivotById.get(r.pivot_id)?.soil_id;
-        return pivotSoilId ? soilMap.get(pivotSoilId) ?? "Solo do pivô" : "—";
-      },
+      render: (r) => pivotSoilClassMap.get(r.pivot_id) || "Não informado",
     },
     {
       header: "Quadrante",
