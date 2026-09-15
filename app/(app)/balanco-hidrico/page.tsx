@@ -239,6 +239,7 @@ export default function BalancoHidricoPage() {
   const [dateEnd, setDateEnd] = useState("");
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
 
   // Lançamento tab
   const [lancDate, setLancDate] = useState("");
@@ -420,6 +421,7 @@ export default function BalancoHidricoPage() {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
     setCalculating(true);
     setError("");
+    setNotice("");
     setBalanceRows([]);
 
     try {
@@ -539,12 +541,46 @@ export default function BalancoHidricoPage() {
         }
       }
 
-      const missingApprovedDates = datesInRange(calculationStart, dateEnd)
-        .filter((date) => !weatherByDate[date]);
-      if (missingApprovedDates.length > 0) {
-        const sample = missingApprovedDates.slice(0, 3).join(", ");
+      // O dia corrente (e dias muito recentes) pode ainda não ter ETo fechada.
+      // Em vez de bloquear tudo, calcula até o ÚLTIMO dia com dado disponível e
+      // apara o rabo faltante. Buraco NO MEIO da série ainda bloqueia (evita
+      // omitir ganhos/perdas de um dia sem dado no meio do balanço).
+      const fmtBr = (iso: string) => iso.split("-").reverse().join("/");
+      const rangeDates = datesInRange(calculationStart, dateEnd);
+      const availableDates = rangeDates.filter((date) => weatherByDate[date]);
+      if (availableDates.length === 0) {
         throw new Error(
-          `Balanço bloqueado: ${missingApprovedDates.length} dia(s) sem dado climático aprovado (${sample}${missingApprovedDates.length > 3 ? ", …" : ""}). A ETo de modelo está em validação.`,
+          "Balanço bloqueado: nenhum dia do período tem ETo disponível. Rode a sincronização climática.",
+        );
+      }
+      const effectiveEnd = availableDates[availableDates.length - 1];
+      const internalMissing = datesInRange(calculationStart, effectiveEnd)
+        .filter((date) => !weatherByDate[date]);
+      if (internalMissing.length > 0) {
+        const sample = internalMissing.slice(0, 3).join(", ");
+        throw new Error(
+          `Balanço bloqueado: ${internalMissing.length} dia(s) sem ETo no meio do período (${sample}${internalMissing.length > 3 ? ", …" : ""}). Rode a sincronização climática.`,
+        );
+      }
+      // Só aparar o rabo se o último dado for RECENTE. Se a sincronização está
+      // atrasada dias/semanas, não usar um dado velho como se fosse atual —
+      // bloqueia e pede sincronização (evita "recomendação de hoje" defasada).
+      const todayIso = new Date().toISOString().slice(0, 10);
+      const targetEnd = dateEnd < todayIso ? dateEnd : todayIso;
+      const MAX_TAIL_LAG_DAYS = 2;
+      const lagDays = Math.max(
+        0,
+        Math.round((Date.parse(`${targetEnd}T12:00:00Z`) - Date.parse(`${effectiveEnd}T12:00:00Z`)) / 86400000),
+      );
+      if (lagDays > MAX_TAIL_LAG_DAYS) {
+        throw new Error(
+          `Balanço bloqueado: sincronização climática atrasada — último dado em ${fmtBr(effectiveEnd)}. Rode a sincronização climática para atualizar.`,
+        );
+      }
+      const tailTrimmed = effectiveEnd < targetEnd;
+      if (tailTrimmed) {
+        setNotice(
+          `Balanço calculado até ${fmtBr(effectiveEnd)} — os dias mais recentes ainda não têm dado climático fechado.`,
         );
       }
 
@@ -591,7 +627,7 @@ export default function BalancoHidricoPage() {
         weatherByDate: engineWeatherByDate,
         irrigationByDate,
         dateStart: calculationStart,
-        dateEnd,
+        dateEnd: effectiveEnd,
       });
       if (series.length === 0) {
         throw new Error("Balanço bloqueado: valide condição inicial, solo, fases/Kc e eficiência de aplicação.");
@@ -651,6 +687,7 @@ export default function BalancoHidricoPage() {
   // persistido não é usado como estado atual nem como seed do ARM.
   useEffect(() => {
     setBalanceRows([]);
+    setNotice("");
   }, [assignment?.id, dateStart, dateEnd]);
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
@@ -945,6 +982,7 @@ export default function BalancoHidricoPage() {
           </p>
         )}
         {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
+        {notice && !error && <p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">{notice}</p>}
         {assignment && !hydricAnchor && (
           showInitialForm ? (
             <HydricInitialConditionForm
@@ -1266,7 +1304,11 @@ function BalanceTab({
         {/* Recomendação de hoje */}
         <Card className="overflow-hidden p-0">
           <div className="bg-gradient-to-br from-forest-800 to-forest-900 p-4 text-white">
-            <p className="text-[10.5px] font-bold uppercase tracking-wide text-brand-300">Recomendação de hoje</p>
+            <p className="text-[10.5px] font-bold uppercase tracking-wide text-brand-300">
+              {last?.date === new Date().toISOString().slice(0, 10)
+                ? "Recomendação de hoje"
+                : `Recomendação · situação de ${fmtDia(last?.date ?? "")}`}
+            </p>
             <p className="mt-1.5 flex items-center gap-2 text-[20px] font-extrabold" style={{ color: "#eafaf1" }}>
               <span className="inline-block h-2.5 w-2.5 rounded-full" style={{ background: verdict.color }} />{verdict.label}
             </p>
