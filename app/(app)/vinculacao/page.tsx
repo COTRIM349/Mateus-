@@ -135,7 +135,6 @@ interface FormState {
   season_id: string;
   culture_id: string;
   culture_variety_id: string;
-  soil_id: string;
   planting_date: string;
   emergence_date: string;
   expected_harvest_date: string;
@@ -173,7 +172,6 @@ const EMPTY_FORM: FormState = {
   season_id: "",
   culture_id: "",
   culture_variety_id: "",
-  soil_id: "",
   planting_date: "",
   emergence_date: "",
   expected_harvest_date: "",
@@ -296,6 +294,7 @@ export default function VinculacaoPage() {
   );
 
   const pivotMap = useMemo(() => new Map(pivots.map((p) => [p.id, p.name])), [pivots]);
+  const pivotById = useMemo(() => new Map(pivots.map((p) => [p.id, p])), [pivots]);
   const seasonMap = useMemo(() => new Map(seasons.map((s) => [s.id, s.name])), [seasons]);
   const cultureMap = useMemo(() => new Map(cultures.map((c) => [c.id, c])), [cultures]);
   const soilMap = useMemo(() => new Map(soils.map((s) => [s.id, s.name])), [soils]);
@@ -345,7 +344,6 @@ export default function VinculacaoPage() {
       season_id: a.season_id,
       culture_id: a.culture_id,
       culture_variety_id: a.culture_variety_id ?? a.variety_id ?? "",
-      soil_id: a.soil_id,
       planting_date: a.planting_date ?? "",
       emergence_date: a.emergence_date ?? "",
       expected_harvest_date: a.expected_harvest_date ?? "",
@@ -442,14 +440,10 @@ export default function VinculacaoPage() {
 
   const patch = (changes: Partial<FormState>) => setForm((f) => ({ ...f, ...changes }));
 
-  // Sprint 14 · Etapa 4 — quando escolhe o pivô, herda o solo dele.
-  // Solo deixa de ser campo editável da parcela.
+  // O formulário escolhe somente o pivô. O solo nunca entra no estado da
+  // parcela: validação e persistência leem diretamente o vínculo do equipamento.
   const handlePivotChange = (pivot_id: string) => {
-    const pivot = pivots.find((p) => p.id === pivot_id);
-    patch({
-      pivot_id,
-      soil_id: pivot?.soil_id ?? "",
-    });
+    patch({ pivot_id });
   };
 
   const handleCultureChange = (culture_id: string) => {
@@ -488,7 +482,7 @@ export default function VinculacaoPage() {
       plantedArea: num(form.planted_area),
       pivotId: form.pivot_id,
       pivotArea: pivot?.area ?? 0,
-      pivotSoilId: form.soil_id || pivot?.soil_id || null,
+      pivotSoilId: pivot?.soil_id ?? null,
       seasonId: form.season_id,
       cultureId: form.culture_id,
       cultureVarietyId: form.culture_variety_id || null,
@@ -552,7 +546,7 @@ export default function VinculacaoPage() {
       plantedArea: num(form.planted_area),
       pivotId: form.pivot_id,
       pivotArea: pivot?.area ?? 0,
-      pivotSoilId: form.soil_id || pivot?.soil_id || null,
+      pivotSoilId: pivot?.soil_id ?? null,
       seasonId: form.season_id,
       cultureId: form.culture_id,
       cultureVarietyId: form.culture_variety_id || null,
@@ -635,7 +629,13 @@ export default function VinculacaoPage() {
         </div>
       ),
     },
-    { header: "Solo", render: (r) => soilMap.get(r.soil_id) ?? "—" },
+    {
+      header: "Solo do pivô",
+      render: (r) => {
+        const pivotSoilId = pivotById.get(r.pivot_id)?.soil_id;
+        return pivotSoilId ? soilMap.get(pivotSoilId) ?? "Solo do pivô" : "—";
+      },
+    },
     {
       header: "Quadrante",
       render: (r) => formatParcelAngles(r.start_angle_deg, r.end_angle_deg),
@@ -736,9 +736,7 @@ export default function VinculacaoPage() {
         ? { title: "Cadastre uma safra primeiro", description: "É necessário ter uma safra para vincular a cultura ao ciclo produtivo.", actionLabel: "Ir para Fazendas", actionHref: "/fazendas" }
         : cultures.length === 0
           ? { title: "Cadastre uma cultura primeiro", description: "A vinculação precisa de uma cultura com suas fases fenológicas.", actionLabel: "Ir para Culturas", actionHref: "/culturas" }
-          : soils.length === 0
-            ? { title: "Cadastre um solo primeiro", description: "O solo define a capacidade de água disponível. A partir da Sprint 14, o solo é vinculado ao pivô (equipamento) e todas as parcelas dele herdam.", actionLabel: "Ir para Solos", actionHref: "/solos" }
-            : null
+          : null
     : null;
 
   if (prerequisite) {
@@ -850,19 +848,6 @@ export default function VinculacaoPage() {
                   value={form.planting_date}
                   onChange={(e) => patch({ planting_date: e.target.value })}
                 />
-                <div>
-                  <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
-                    Perfil de solo (do pivô)
-                  </label>
-                  <div className="flex h-10 items-center rounded-lg border border-dashed border-brand-200 bg-brand-50/40 px-3 text-sm dark:border-brand-800/40 dark:bg-brand-900/10">
-                    {form.soil_id
-                      ? <span className="font-medium text-graphite-900 dark:text-white">{soilMap.get(form.soil_id) ?? form.soil_id}</span>
-                      : form.pivot_id
-                        ? <span className="text-amber-700 dark:text-amber-400">Pivô sem solo — <a href="/solos" className="underline">associe em Solos</a></span>
-                        : <span className="text-graphite-400 dark:text-gray-500">Selecione um pivô primeiro</span>}
-                  </div>
-                  <input type="hidden" name="soil_id" value={form.soil_id} />
-                </div>
                 <Input
                   id="kl_override" label="KL (0–1, vazio = 1)" type="number" step="0.01" min="0" max="1"
                   value={form.kl_override}

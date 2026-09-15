@@ -85,11 +85,13 @@ describe("validatePlantedArea", () => {
 });
 
 describe("validateParcelCycle", () => {
-  it("exige pivô, safra, cultura, solo do pivô e plantio", () => {
+  it("exige pivô, safra, cultura, solo fixo do pivô e plantio", () => {
     expect(validateParcelCycle(draft({ pivotId: "" }))).toMatch(/pivô/);
     expect(validateParcelCycle(draft({ seasonId: "" }))).toMatch(/safra/);
     expect(validateParcelCycle(draft({ cultureId: "" }))).toMatch(/cultura/);
-    expect(validateParcelCycle(draft({ pivotSoilId: null }))).toMatch(/solo/);
+    expect(validateParcelCycle(draft({ pivotSoilId: null }))).toBe(
+      "O pivô selecionado não possui solo operacional cadastrado no próprio equipamento.",
+    );
     expect(validateParcelCycle(draft({ plantingDate: "" }))).toMatch(/plantio/);
   });
 
@@ -159,6 +161,12 @@ describe("buildParcelInsertRow", () => {
     expect(row.start_angle_deg).toBeNull();
     expect(row.end_angle_deg).toBeNull();
     expect(row).not.toHaveProperty("id");
+  });
+
+  it("não permite persistir uma escolha de solo independente do pivô", () => {
+    expect(() => buildParcelInsertRow(draft({ pivotSoilId: null }))).toThrow(
+      "Parcela exige solo do pivô.",
+    );
   });
 });
 
