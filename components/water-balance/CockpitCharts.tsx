@@ -262,9 +262,10 @@ export function ReservatorioChart({
           </g>
         </>
       )}
-      {/* cruzamento previsto com o limite */}
+      {/* cruzamento previsto com o limite — no ponto do ARM projetado do dia
+          que o motor classifica como crítico (não na linha fixa de referência). */}
       {crossIdx > todayIndex && points[crossIdx].storageAbs != null && (
-        <circle cx={x(crossIdx)} cy={y(safetyMm)} r={4} fill="#ca8a04" stroke="#fff" strokeWidth={1.4} />
+        <circle cx={x(crossIdx)} cy={y(points[crossIdx].storageAbs!)} r={4} fill="#dc2626" stroke="#fff" strokeWidth={1.4} />
       )}
 
       {/* rótulos X */}

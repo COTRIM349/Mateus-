@@ -765,36 +765,34 @@ export default function BalancoHidricoPage() {
       // vêm do motor por data, e não de parâmetros congelados do último dia.
       let projRows: DailyBalanceRow[] = [];
       try {
-        // Estação operacional (mesma fonte do ETo aprovado); sem ela, nível fazenda.
-        const { data: latestSel } = await supabase
-          .from("weather_daily_selection")
-          .select("selected_station_id")
-          .eq("farm_id", activeFarmId!)
-          .eq("operational_approved", true)
-          .not("selected_station_id", "is", null)
-          .order("date", { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        const opStationId = (latestSel as { selected_station_id: string | null } | null)?.selected_station_id ?? null;
-        let fq = supabase
+        // Seleção da previsão por PRIORIDADE DE PROVEDOR (precipitação forecast:
+        // open_meteo → meteoblue, CLIMATE_SPECIFICATION §prioridades), não pela
+        // estação observada — que pode ser Davis/INMET/in-field, sem previsão.
+        const { data: fcData } = await supabase
           .from("weather_forecasts")
-          .select("target_date, issued_at, et0_calculated, precipitation")
+          .select("target_date, issued_at, et0_calculated, precipitation, provider")
           .eq("farm_id", activeFarmId!)
           .gt("target_date", effectiveEnd)
           .order("issued_at", { ascending: false });
-        if (opStationId) fq = fq.eq("station_id", opStationId);
-        const { data: fcData } = await fq;
-        // Emissão mais recente COMPLETA por data. Uma linha só é aceita quando
-        // ETo calculada E precipitação são válidas — previsão com chuva ausente
-        // não vira "0 mm real"; deixa uma emissão mais antiga completa preencher
-        // a data (ou encerra o prefixo contíguo, sem inventar solo seco).
-        const byDate = new Map<string, { et0: number; precip: number }>();
-        for (const row of (fcData ?? []) as Array<{ target_date: string; et0_calculated: number | null; precipitation: number | null }>) {
-          if (byDate.has(row.target_date)) continue;
-          const et0 = row.et0_calculated; // C3: nunca usar et0_source (referência do provedor) no balanço.
+        const providerRank = (p: string | null) => {
+          const k = (p ?? "").toLowerCase().replace(/[^a-z]/g, "");
+          return k.includes("openmeteo") ? 0 : k.includes("meteoblue") ? 1 : 2;
+        };
+        const FORECAST_FRESH_MS = 24 * 3600 * 1000; // forecast além de 24h = stale (spec)
+        const now = Date.now();
+        // Por data: linha COMPLETA (ETo calculada E chuva válidas), FRESCA (<24h),
+        // do melhor provedor; empate de provedor resolve pela emissão mais nova
+        // (linhas já vêm issued_at desc). ETo sempre calculada; nunca et0_source.
+        const byDate = new Map<string, { et0: number; precip: number; rank: number }>();
+        for (const row of (fcData ?? []) as Array<{ target_date: string; issued_at: string; et0_calculated: number | null; precipitation: number | null; provider: string | null }>) {
+          const et0 = row.et0_calculated;
           if (et0 == null || !Number.isFinite(Number(et0)) || Number(et0) < 0) continue;
           if (row.precipitation == null || !Number.isFinite(Number(row.precipitation)) || Number(row.precipitation) < 0) continue;
-          byDate.set(row.target_date, { et0: Number(et0), precip: Number(row.precipitation) });
+          const issued = Date.parse(row.issued_at);
+          if (!Number.isFinite(issued) || now - issued > FORECAST_FRESH_MS) continue; // descarta previsão velha
+          const rank = providerRank(row.provider);
+          const cur = byDate.get(row.target_date);
+          if (!cur || rank < cur.rank) byDate.set(row.target_date, { et0: Number(et0), precip: Number(row.precipitation), rank });
         }
         const projWeather: Record<string, { et0: number; precipitation: number }> = { ...engineWeatherByDate };
         let cursor = addDaysIso(effectiveEnd, 1);
@@ -1908,10 +1906,11 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   const projByOffset = new Map<number, DailyBalanceRow>();
   for (const p of future) projByOffset.set(daysBetweenIso(last.date, p.date), p);
   const wanted = [1, 2, 3, 5, 7];
-  const projTable: Array<{ date: string; arm: number; offset: number; status: WaterStatus }> = [
-    { date: last.date, arm: last.storedWater, offset: 0, status: last.waterStatus },
-    ...wanted.map((d) => { const r = projByOffset.get(d); return r ? { date: r.date, arm: r.storedWater, offset: d, status: r.waterStatus } : null; })
-      .filter((p): p is { date: string; arm: number; offset: number; status: WaterStatus } => p != null),
+  type ProjRow = { date: string; arm: number; offset: number; status: WaterStatus; cad: number };
+  const projTable: ProjRow[] = [
+    { date: last.date, arm: last.storedWater, offset: 0, status: last.waterStatus, cad: last.cad },
+    ...wanted.map((d) => { const r = projByOffset.get(d); return r ? { date: r.date, arm: r.storedWater, offset: d, status: r.waterStatus, cad: r.cad } : null; })
+      .filter((p): p is ProjRow => p != null),
   ];
 
   return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, crossIndexReserv, projTable, future, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: future.length > 0 };
@@ -2099,7 +2098,7 @@ function Cockpit({
                   <span>Dia</span><span>Data</span><span className="text-right">ARM (mm)</span>
                 </div>
                 {series.projTable.map((p) => {
-                  const pct = cad > 0 ? clampN((p.arm / cad) * 100, 0, 100) : 0;
+                  const pct = p.cad > 0 ? clampN((p.arm / p.cad) * 100, 0, 100) : 0;
                   // Cor = status do motor daquele dia (limiares por data), não
                   // uma comparação contra CAD/AFD do último dia observado.
                   const col = p.status === "ideal" || p.status === "saturado" ? "#16a34a" : p.status === "atencao" ? "#eab308" : "#dc2626";
