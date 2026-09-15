@@ -172,7 +172,7 @@ export function validateParcelCycle(draft: ParcelCycleDraft): string | null {
   if (!draft.seasonId) return "Selecione a safra.";
   if (!draft.cultureId) return "Selecione a cultura.";
   if (!draft.pivotSoilId) {
-    return "O pivô selecionado não tem solo cadastrado. Associe um perfil em Cadastros → Solos ou na ficha do pivô.";
+    return "O pivô selecionado não possui solo operacional cadastrado no próprio equipamento.";
   }
   if (!draft.plantingDate) return "Informe a data de plantio.";
   if (draft.emergenceDate && draft.emergenceDate < draft.plantingDate) {
