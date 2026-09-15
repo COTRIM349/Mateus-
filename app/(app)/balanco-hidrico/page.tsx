@@ -23,6 +23,7 @@ import {
   PE_METHOD,
   moisturePctCcForDisplay,
   safetyPctCcForDisplay,
+  type BalanceDay,
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
@@ -44,7 +45,6 @@ import {
   filterPivotsWithActiveParcel,
 } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
-import { calculateEffectivePrecipitation } from "@/modules/weather/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
@@ -59,6 +59,50 @@ const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
   vermelho: "deficit_critico",
   cinza: "ideal",
 };
+
+// adapta a saída do motor (BalanceDay) ao formato de exibição da tela.
+function mapBalanceDay(d: BalanceDay): DailyBalanceRow {
+  return {
+    date: d.date,
+    phase: d.phase,
+    et0: d.et0,
+    kc: d.kc,
+    etc: d.etc,
+    precipitation: d.precipitation,
+    effectivePrecipitation: d.effectivePrecipitation,
+    irrigationApplied: d.irrigation,
+    rootDepth: d.rootDepth,
+    cad: d.adt,
+    afd: d.afd,
+    cadProfileMm: d.cadProfileMm,
+    craProfileMm: d.craProfileMm,
+    storedWater: d.storage,
+    depletionFactor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
+    deficit: d.deficit,
+    surplus: d.surplus,
+    netDepth: d.recommendedNetDepth,
+    grossDepth: d.recommendedGrossDepth,
+    volumeNeeded: d.recommendedVolume,
+    irrigationTime: d.estimatedIrrigationTime,
+    waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
+    dae: d.dae,
+    ks: d.ks,
+    kl: d.kl,
+    kcAdjusted: d.kcAdjusted,
+    etcPotential: d.etcPotential,
+    ky: d.ky,
+    yieldRisk: d.yieldRisk,
+    etcFormula: d.etcFormula,
+    effectiveIrrigation: d.effectiveIrrigation,
+    fieldCapacity: d.fieldCapacity,
+    wiltingPoint: d.wiltingPoint,
+    safetyMoistureMm: d.safetyMoistureMm,
+    moisturePctCc: d.moisturePctCc,
+    safetyPctCc: d.safetyPctCc,
+    peFormula: d.peFormula,
+    balanceFormula: d.balanceFormula,
+  };
+}
 
 // distância aproximada entre dois pontos (km) — Haversine
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -259,11 +303,11 @@ export default function BalancoHidricoPage() {
   const [seasonName, setSeasonName] = useState<string | null>(null);
 
   // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
-  const { summary: farmSummary, states: farmStates, loading: farmLoading } = useFarmHydricState();
+  const { summary: farmSummary, states: farmStates, loading: farmLoading, refresh: refreshFarm } = useFarmHydricState();
 
-  // Previsão climática aprovada (weather_forecasts) — usada apenas para exibir
-  // a previsão de ETc e projetar o ARM. Nunca gravada como observação.
-  const [forecast, setForecast] = useState<Array<{ date: string; et0: number | null; precip: number | null }>>([]);
+  // Projeção hídrica: dias futuros calculados pelo motor com a previsão como
+  // clima (ETo calculada aprovada), sem irrigação. Nunca observação.
+  const [projectionRows, setProjectionRows] = useState<DailyBalanceRow[]>([]);
 
   // Lançamento tab
   const [lancDate, setLancDate] = useState("");
@@ -668,7 +712,7 @@ export default function BalancoHidricoPage() {
         engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precip };
       }
 
-      const series = computePivotBalanceSeries({
+      const engineInput = {
         assignment: {
           id: assignment.id,
           planting_date: assignment.planting_date,
@@ -707,69 +751,95 @@ export default function BalancoHidricoPage() {
         irrigationByDate,
         dateStart: calculationStart,
         dateEnd: effectiveEnd,
-      });
+      };
+
+      const series = computePivotBalanceSeries(engineInput);
       if (series.length === 0) {
         throw new Error("Balanço bloqueado: valide condição inicial, solo, fases/Kc e eficiência de aplicação.");
       }
-      const visibleSeries = series.filter((d) => d.date >= dateStart);
+      const rows: DailyBalanceRow[] = series.filter((d) => d.date >= dateStart).map(mapBalanceDay);
 
-      // adapta a saída do motor ao formato de exibição da tela
-      const rows: DailyBalanceRow[] = visibleSeries.map((d) => ({
-        date: d.date,
-        phase: d.phase,
-        et0: d.et0,
-        kc: d.kc,
-        etc: d.etc,
-        precipitation: d.precipitation,
-        effectivePrecipitation: d.effectivePrecipitation,
-        irrigationApplied: d.irrigation,
-        rootDepth: d.rootDepth,
-        cad: d.adt,
-        afd: d.afd,
-        cadProfileMm: d.cadProfileMm,
-        craProfileMm: d.craProfileMm,
-        storedWater: d.storage,
-        depletionFactor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
-        deficit: d.deficit,
-        surplus: d.surplus,
-        netDepth: d.recommendedNetDepth,
-        grossDepth: d.recommendedGrossDepth,
-        volumeNeeded: d.recommendedVolume,
-        irrigationTime: d.estimatedIrrigationTime,
-        waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
-        dae: d.dae,
-        ks: d.ks,
-        kl: d.kl,
-        kcAdjusted: d.kcAdjusted,
-        etcPotential: d.etcPotential,
-        ky: d.ky,
-        yieldRisk: d.yieldRisk,
-        etcFormula: d.etcFormula,
-        effectiveIrrigation: d.effectiveIrrigation,
-        fieldCapacity: d.fieldCapacity,
-        wiltingPoint: d.wiltingPoint,
-        safetyMoistureMm: d.safetyMoistureMm,
-        moisturePctCc: d.moisturePctCc,
-        safetyPctCc: d.safetyPctCc,
-        peFormula: d.peFormula,
-        balanceFormula: d.balanceFormula,
-      }));
+      // 6. Projeção pela previsão — roda o MESMO motor sobre os dias FUTUROS,
+      // usando a previsão (somente ETo calculada aprovada; nunca et0_source) como
+      // clima e sem irrigação futura. Assim Kc/fase/raiz/AFD/Ks/chuva efetiva
+      // vêm do motor por data, e não de parâmetros congelados do último dia.
+      let projRows: DailyBalanceRow[] = [];
+      try {
+        // Estação operacional (mesma fonte do ETo aprovado); sem ela, nível fazenda.
+        const { data: latestSel } = await supabase
+          .from("weather_daily_selection")
+          .select("selected_station_id")
+          .eq("farm_id", activeFarmId!)
+          .eq("operational_approved", true)
+          .not("selected_station_id", "is", null)
+          .order("date", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        const opStationId = (latestSel as { selected_station_id: string | null } | null)?.selected_station_id ?? null;
+        let fq = supabase
+          .from("weather_forecasts")
+          .select("target_date, issued_at, et0_calculated, precipitation")
+          .eq("farm_id", activeFarmId!)
+          .gt("target_date", effectiveEnd)
+          .order("issued_at", { ascending: false });
+        if (opStationId) fq = fq.eq("station_id", opStationId);
+        const { data: fcData } = await fq;
+        // emissão mais recente por data + prefixo CONTÍGUO a partir de effectiveEnd+1.
+        const byDate = new Map<string, { et0: number; precip: number }>();
+        for (const row of (fcData ?? []) as Array<{ target_date: string; et0_calculated: number | null; precipitation: number | null }>) {
+          if (byDate.has(row.target_date)) continue;
+          const et0 = row.et0_calculated; // C3: nunca usar et0_source (referência do provedor) no balanço.
+          if (et0 == null || !Number.isFinite(Number(et0)) || Number(et0) < 0) continue;
+          const precip = row.precipitation == null || !Number.isFinite(Number(row.precipitation)) || Number(row.precipitation) < 0 ? 0 : Number(row.precipitation);
+          byDate.set(row.target_date, { et0: Number(et0), precip });
+        }
+        const projWeather: Record<string, { et0: number; precipitation: number }> = { ...engineWeatherByDate };
+        let cursor = addDaysIso(effectiveEnd, 1);
+        let lastForecastDate = effectiveEnd;
+        for (let i = 0; i < 8; i += 1) {
+          const w = byDate.get(cursor);
+          if (!w) break; // lacuna encerra o prefixo contíguo (não projeta com buraco).
+          projWeather[cursor] = { et0: w.et0, precipitation: w.precip };
+          lastForecastDate = cursor;
+          cursor = addDaysIso(cursor, 1);
+        }
+        if (lastForecastDate > effectiveEnd) {
+          const projSeries = computePivotBalanceSeries({ ...engineInput, weatherByDate: projWeather, dateEnd: lastForecastDate });
+          projRows = projSeries.filter((d) => d.date > effectiveEnd).map(mapBalanceDay);
+        }
+      } catch {
+        projRows = [];
+      }
 
       if (isStale()) return;
       setBalanceRows(rows);
+      setProjectionRows(projRows);
     } catch (err) {
       if (isStale()) return;
       setBalanceRows([]);
+      setProjectionRows([]);
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
       if (!isStale()) setCalculating(false);
     }
   }, [assignment, culture, soil, soilLayers, phases, hydricAnchor, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
 
+  // Trocar de pivô invalida imediatamente qualquer cálculo em voo (o token
+  // avança) e limpa a tela — evita que o resultado do pivô anterior apareça
+  // sob o cabeçalho do novo antes do recálculo.
+  useEffect(() => {
+    calcTokenRef.current += 1;
+    setBalanceRows([]);
+    setProjectionRows([]);
+    setError("");
+    setNotice("");
+  }, [selectedPivotId]);
+
   // O balanço corrente é sempre recalculado de entradas confiáveis; histórico
   // persistido não é usado como estado atual nem como seed do ARM.
   useEffect(() => {
     setBalanceRows([]);
+    setProjectionRows([]);
     setNotice("");
   }, [assignment?.id, dateStart, dateEnd]);
 
@@ -781,55 +851,6 @@ export default function BalancoHidricoPage() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignment?.id, culture?.id, soil?.id, dateStart, dateEnd, soilLayers.length, phases.length, hydricAnchor?.effectiveDate]);
-
-  // Previsão climática (weather_forecasts): pega a emissão mais recente por data
-  // futura, para os próximos dias. Só leitura/exibição — nunca observação.
-  useEffect(() => {
-    if (!activeFarmId) { setForecast([]); return; }
-    let cancelled = false;
-    (async () => {
-      const today = new Date().toISOString().slice(0, 10);
-      // Escopo determinístico: a previsão vem da mesma estação que venceu a
-      // seleção operacional (mesma fonte do ETo aprovado), não de qualquer
-      // linha da fazenda. Sem estação definida, cai para o nível fazenda.
-      const { data: latestSel } = await supabase
-        .from("weather_daily_selection")
-        .select("selected_station_id")
-        .eq("farm_id", activeFarmId)
-        .eq("operational_approved", true)
-        .not("selected_station_id", "is", null)
-        .order("date", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      const opStationId = (latestSel as { selected_station_id: string | null } | null)?.selected_station_id ?? null;
-      let query = supabase
-        .from("weather_forecasts")
-        .select("target_date, issued_at, et0_calculated, et0_source, precipitation")
-        .eq("farm_id", activeFarmId)
-        .gte("target_date", today)
-        .order("issued_at", { ascending: false });
-      if (opStationId) query = query.eq("station_id", opStationId);
-      const { data } = await query;
-      if (cancelled) return;
-      // primeira ocorrência por data = emissão mais recente
-      const byDate = new Map<string, { date: string; et0: number | null; precip: number | null }>();
-      for (const row of (data ?? []) as Array<{ target_date: string; et0_calculated: number | null; et0_source: number | null; precipitation: number | null }>) {
-        if (byDate.has(row.target_date)) continue;
-        const et0 = row.et0_calculated ?? row.et0_source;
-        byDate.set(row.target_date, {
-          date: row.target_date,
-          et0: et0 == null || !Number.isFinite(Number(et0)) ? null : Number(et0),
-          precip: row.precipitation == null || !Number.isFinite(Number(row.precipitation)) ? null : Number(row.precipitation),
-        });
-      }
-      const future = Array.from(byDate.values())
-        .filter((f) => f.date >= today)
-        .sort((a, b) => a.date.localeCompare(b.date))
-        .slice(0, 7);
-      setForecast(future);
-    })();
-    return () => { cancelled = true; };
-  }, [activeFarmId, supabase]);
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
@@ -1011,9 +1032,10 @@ export default function BalancoHidricoPage() {
       setLancDepth("");
       setLancHours("");
       setLancNotes("");
-      // Recalcula o cockpit para refletir o novo ARM/recomendação — o botão
-      // manual "Calcular" foi removido, então o refresh é automático aqui.
+      // Recalcula o cockpit E o estado hídrico da fazenda (KPIs do topo) para
+      // refletir o novo ARM/recomendação — o botão "Calcular" foi removido.
       void runCalculation();
+      refreshFarm();
     } catch (err) {
       setLancMsg(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {
@@ -1131,7 +1153,7 @@ export default function BalancoHidricoPage() {
         <Cockpit
           rows={balanceRows}
           summary={summary}
-          forecast={forecast}
+          projection={projectionRows}
           identity={{
             pivotName: selPivot?.name ?? null,
             cultureName: culture?.name ?? null,
@@ -1776,6 +1798,10 @@ function StatCard({ icon, label, value, unit, tone }: { icon: ReactNode; label: 
 
 // KPIs de toda a fazenda (topo do cockpit).
 function FarmKpiRow({ summary, states, loading }: { summary: ReturnType<typeof useFarmHydricState>["summary"]; states: ReturnType<typeof useFarmHydricState>["states"]; loading: boolean }) {
+  // O caminho de fazenda vazia retorna um resumo zerado (não-nulo); summary
+  // nulo sem loading indica FALHA de carga — não deve virar "tudo zero", que
+  // pareceria uma fazenda saudável sem demanda e suprimiria a ação do operador.
+  const failed = !loading && summary === null;
   const withData = states.filter((s) => s.current && s.current.status !== "cinza");
   const etcMedia = withData.length ? withData.reduce((a, s) => a + (s.current!.etc ?? 0), 0) / withData.length : null;
   // Contagens/áreas derivadas dos estados (uma linha por parcela/setor):
@@ -1797,7 +1823,7 @@ function FarmKpiRow({ summary, states, loading }: { summary: ReturnType<typeof u
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
       {items.map((k) => (
-        <StatCard key={k.label} icon={k.icon} label={k.label} value={loading ? "…" : k.value} unit={k.unit} tone={k.tone} />
+        <StatCard key={k.label} icon={k.icon} label={k.label} value={loading ? "…" : failed ? "—" : k.value} unit={failed ? undefined : k.unit} tone={failed ? "text-graphite-300 dark:text-gray-600" : k.tone} />
       ))}
     </div>
   );
@@ -1817,14 +1843,13 @@ function daysBetweenIso(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
 }
 
-function buildCockpitSeries(rows: DailyBalanceRow[], forecast: Array<{ date: string; et0: number | null; precip: number | null }>) {
+// Constrói as séries do cockpit a partir do balanço observado (rows) e da
+// projeção já calculada PELO MOTOR sobre dias futuros (projection). Todas as
+// grandezas por data — Kc, fase, raiz, CAD/AFD, Ks, chuva efetiva — vêm do
+// motor; aqui só se organiza para exibição.
+function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow[]) {
   if (rows.length === 0) return null;
   const last = rows[rows.length - 1];
-  // ETc potencial prevista = ETo × Kc × KL (Kc/KL base, sem Ks). Não usar
-  // kcAdjusted (= Kc×KL×Ks): já traz o KL — multiplicá-lo de novo duplicaria a
-  // localização — e embutiria o Ks do dia atual em toda a previsão.
-  const kc = last.kc;
-  const kl = last.kl ?? 1;
   const cad = last.cad;
   const afd = last.afd;
   const pmpMm = Math.max((last.wiltingPoint ?? 0) * (last.rootDepth ?? 0) * 1000, 0);
@@ -1834,34 +1859,21 @@ function buildCockpitSeries(rows: DailyBalanceRow[], forecast: Array<{ date: str
   const safetyMm = pmpMm + safetyArm;
   const attentionMm = pmpMm + attentionArm;
 
-  // A previsão só cobre dias APÓS o último dia observado — se o balanço já
-  // inclui hoje, a previsão de hoje não é reaplicada (evita duplicar o dia).
-  const futureForecast = forecast.filter((f) => f.date > last.date);
+  // Projeção só cobre dias após o último observado (garantido no cálculo).
+  const future = projection.filter((p) => p.date > last.date);
+  const armPmpMm = (r: DailyBalanceRow) => Math.max((r.wiltingPoint ?? 0) * (r.rootDepth ?? 0) * 1000, 0);
 
-  // Projeção sem irrigação: parte do ARM observado e desconta a ETc prevista,
-  // somando a chuva efetiva prevista, até acabar a previsão. Offset = diferença
-  // real de datas em relação ao último dia observado.
-  const projection: Array<{ date: string; arm: number; offset: number }> = [{ date: last.date, arm: last.storedWater, offset: 0 }];
-  let arm = last.storedWater;
-  for (const f of futureForecast) {
-    if (f.et0 == null) break;
-    const etc = Math.max(f.et0 * kc * kl, 0);
-    const pe = f.precip != null ? calculateEffectivePrecipitation(Math.max(f.precip, 0)) : 0;
-    arm = Math.min(Math.max(arm - etc + pe, 0), cad);
-    projection.push({ date: f.date, arm, offset: daysBetweenIso(last.date, f.date) });
-  }
-
-  // Reservatório: histórico recente (absoluto) + projeção.
+  // Reservatório: histórico recente (absoluto) + projeção (absoluto por dia).
   const hist = rows.slice(-16);
   const reservatorio: ReservatorioPoint[] = hist.map((r) => ({
     label: fmtDia(r.date),
-    storageAbs: r.storedWater + Math.max((r.wiltingPoint ?? 0) * (r.rootDepth ?? 0) * 1000, 0),
+    storageAbs: r.storedWater + armPmpMm(r),
     isForecast: false,
   }));
   const todayIndexReserv = reservatorio.length - 1;
-  for (const p of projection.slice(1)) reservatorio.push({ label: fmtDia(p.date), storageAbs: p.arm + pmpMm, isForecast: true });
+  for (const p of future) reservatorio.push({ label: fmtDia(p.date), storageAbs: p.storedWater + armPmpMm(p), isForecast: true });
 
-  // Entradas e consumo: últimos 14 dias + previsão (chuva efetiva prevista).
+  // Entradas e consumo: últimos 14 dias + previsão (chuva efetiva e ETc do motor).
   const histE = rows.slice(-14);
   const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
     label: fmtDia(r.date),
@@ -1871,39 +1883,39 @@ function buildCockpitSeries(rows: DailyBalanceRow[], forecast: Array<{ date: str
     isForecast: false,
   }));
   const todayIndexEntradas = entradas.length;
-  for (const f of futureForecast) {
-    if (f.et0 == null) break;
-    entradas.push({
-      label: fmtDia(f.date),
-      chuvaEf: f.precip != null ? calculateEffectivePrecipitation(Math.max(f.precip, 0)) : 0,
-      irrig: 0,
-      etc: Math.max(f.et0 * kc * kl, 0),
-      isForecast: true,
-    });
+  for (const p of future) {
+    entradas.push({ label: fmtDia(p.date), chuvaEf: p.effectivePrecipitation, irrig: 0, etc: p.etc, isForecast: true });
   }
 
-  const wanted = [0, 1, 2, 3, 5, 7];
-  const projTable = wanted.map((d) => projection.find((p) => p.offset === d) ?? null).filter((p): p is { date: string; arm: number; offset: number } => p != null);
+  // Tabela de projeção: Hoje (último observado) + offsets desejados por data.
+  const projByOffset = new Map<number, DailyBalanceRow>();
+  for (const p of future) projByOffset.set(daysBetweenIso(last.date, p.date), p);
+  const wanted = [1, 2, 3, 5, 7];
+  const projTable: Array<{ date: string; arm: number; offset: number }> = [
+    { date: last.date, arm: last.storedWater, offset: 0 },
+    ...wanted.map((d) => { const r = projByOffset.get(d); return r ? { date: r.date, arm: r.storedWater, offset: d } : null; })
+      .filter((p): p is { date: string; arm: number; offset: number } => p != null),
+  ];
 
-  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, projTable, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: projection.length > 1 };
+  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, projTable, future, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: future.length > 0 };
 }
 
 function Cockpit({
   rows,
   summary,
-  forecast,
+  projection,
   identity,
   sensoryByDate,
   onShowDetail,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
-  forecast: Array<{ date: string; et0: number | null; precip: number | null }>;
+  projection: DailyBalanceRow[];
   identity: CockpitIdentity;
   sensoryByDate: Record<string, number>;
   onShowDetail: () => void;
 }) {
-  const series = useMemo(() => buildCockpitSeries(rows, forecast), [rows, forecast]);
+  const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
   const last = rows[rows.length - 1];
   if (!last || !series) return null;
 
@@ -1942,8 +1954,9 @@ function Cockpit({
   const alerts: { sev: "hi" | "md" | "lo"; text: string }[] = [];
   if (urgency.atOrBeyondAfd) alerts.push({ sev: "hi", text: `${identity.pivotName ?? "Pivô"} atingiu o limite de manejo.` });
   else if (urgency.daysToAfd != null && urgency.daysToAfd <= 2.5) alerts.push({ sev: "md", text: `${identity.pivotName ?? "Pivô"} atingirá o limite de manejo em ${fmtNum(urgency.daysToAfd)} dia(s).` });
-  const rain7 = forecast.reduce((a, f) => a + (f.precip ?? 0), 0);
-  if (forecast.length > 0 && rain7 < 5) alerts.push({ sev: "md", text: "Sem chuva efetiva relevante prevista para os próximos dias." });
+  // Chuva efetiva prevista dos dias GENUINAMENTE futuros (mesma base da projeção).
+  const rainForecast = series.future.reduce((a, p) => a + (p.effectivePrecipitation ?? 0), 0);
+  if (series.future.length > 0 && rainForecast < 5) alerts.push({ sev: "md", text: "Sem chuva efetiva relevante prevista para os próximos dias." });
   if ((last.ky ?? 0) >= 1) alerts.push({ sev: "md", text: "Fase reprodutiva com alta sensibilidade ao déficit (Ky ≥ 1)." });
   if ((last.surplus ?? 0) > 0) alerts.push({ sev: "md", text: `Excedente de ${fmtNum(last.surplus)} mm acima da capacidade de campo.` });
   if (alerts.length === 0) alerts.push({ sev: "lo", text: "Nenhum alerta ativo para o pivô no período." });
@@ -2070,7 +2083,9 @@ function Cockpit({
                 </div>
                 {series.projTable.map((p) => {
                   const pct = cad > 0 ? clampN((p.arm / cad) * 100, 0, 100) : 0;
-                  const col = p.arm >= series.attentionArm ? "#16a34a" : p.arm >= series.safetyArm ? "#eab308" : "#dc2626";
+                  // Igual ao motor: amarelo em déficit ≥ 0,7·AFD, vermelho em
+                  // déficit ≥ AFD (ARM ≤ limite de manejo, inclusive na igualdade).
+                  const col = p.arm >= series.attentionArm ? "#16a34a" : p.arm > series.safetyArm ? "#eab308" : "#dc2626";
                   return (
                     <div key={p.offset} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 text-[12px]">
                       <span className="w-8 font-semibold text-graphite-600 dark:text-gray-300">{p.offset === 0 ? "Hoje" : `+${p.offset}`}</span>
