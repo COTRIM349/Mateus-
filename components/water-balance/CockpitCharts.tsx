@@ -66,7 +66,9 @@ export function EntradasConsumoChart({
   const x = (i: number) => padL + band * i + band / 2;
   const y = (v: number) => padT + plotH - (NUM(v) / yMax) * plotH;
 
-  const yTicks = [0, 5, 10, 15, 20, 25].filter((t) => t <= yMax);
+  // ticks derivados do máximo real (não fixos em 0–25).
+  const step = yMax / 5;
+  const yTicks = Array.from({ length: 6 }, (_, i) => Math.round(i * step * 10) / 10);
   const forecastStart = todayIndex >= 0 && todayIndex < n ? x(todayIndex) : null;
 
   // linha de ETc: segmento realizado (sólido) e segmento previsto (tracejado)
@@ -147,7 +149,7 @@ export function ReservatorioChart({
   ccMm,
   pmpMm,
   safetyMm,
-  criticalMm,
+  attentionMm,
 }: {
   points: ReservatorioPoint[];
   todayIndex: number;
@@ -155,10 +157,10 @@ export function ReservatorioChart({
   ccMm: number;
   /** Água no solo no ponto de murcha (mm, absoluto = piso). */
   pmpMm: number;
-  /** Limite de manejo em mm absoluto (PMP + (CAD − AFD)). */
+  /** Limite de manejo em mm absoluto (PMP + (CAD − AFD)) — fronteira alerta/crítico. */
   safetyMm: number;
-  /** Piso da faixa de alerta em mm absoluto (abaixo = déficit crítico). */
-  criticalMm: number;
+  /** Fronteira ótima/alerta (PMP + (CAD − 0,7·AFD)), alinhada ao status amarelo do motor. */
+  attentionMm: number;
 }) {
   const W = 1000;
   const H = 320;
@@ -209,10 +211,10 @@ export function ReservatorioChart({
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Reservatório de água do solo">
-      {/* faixas de manejo */}
-      {bandRect(safetyMm, ccMm, "#16a34a22")}
-      {bandRect(criticalMm, safetyMm, "#eab30826")}
-      {bandRect(pmpMm, criticalMm, "#dc262622")}
+      {/* faixas de manejo (fronteiras derivadas dos limiares do motor) */}
+      {bandRect(attentionMm, ccMm, "#16a34a22")}
+      {bandRect(safetyMm, attentionMm, "#eab30826")}
+      {bandRect(pmpMm, safetyMm, "#dc262622")}
       {bandRect(yBottom, pmpMm, "#7f1d1d22")}
 
       {/* grades / eixo Y */}
@@ -225,9 +227,9 @@ export function ReservatorioChart({
       <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>mm</text>
 
       {/* rótulos das faixas (à esquerda) */}
-      <ZoneLabel y={y((safetyMm + ccMm) / 2)} text="Zona ótima" color="#16a34a" x={padL + 6} />
-      <ZoneLabel y={y((criticalMm + safetyMm) / 2)} text="Alerta" color="#b45309" x={padL + 6} />
-      <ZoneLabel y={y((pmpMm + criticalMm) / 2)} text="Déficit crítico" color="#dc2626" x={padL + 6} />
+      <ZoneLabel y={y((attentionMm + ccMm) / 2)} text="Zona ótima" color="#16a34a" x={padL + 6} />
+      <ZoneLabel y={y((safetyMm + attentionMm) / 2)} text="Alerta" color="#b45309" x={padL + 6} />
+      <ZoneLabel y={y((pmpMm + safetyMm) / 2)} text="Déficit crítico" color="#dc2626" x={padL + 6} />
 
       {/* linhas de referência à direita */}
       <RefLine y={y(ccMm)} label="CAD / CC" value={`${ccMm.toFixed(0)} mm`} color="#2563eb" plotRight={padL + plotW} />

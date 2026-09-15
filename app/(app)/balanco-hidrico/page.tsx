@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, type ReactNode } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -44,6 +44,7 @@ import {
   filterPivotsWithActiveParcel,
 } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
+import { calculateEffectivePrecipitation } from "@/modules/weather/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
@@ -112,6 +113,7 @@ interface CropAssignment {
   season_id: string;
   culture_id: string;
   culture_variety_id: string | null;
+  variety_id: string | null;
   soil_id: string | null;
   planting_date: string;
   management_start_date: string | null;
@@ -382,9 +384,12 @@ export default function BalancoHidricoPage() {
       setAssignment(a);
 
       // Cultivar e safra (identidade da parcela, exibidas no cabeçalho do pivô).
+      // Parcelas antigas/importadas podem ter só variety_id — usa o mesmo
+      // fallback da tela de vinculação (culture_variety_id ?? variety_id).
+      const effectiveVarietyId = a.culture_variety_id ?? a.variety_id;
       const [{ data: varietyRow }, { data: seasonRow }] = await Promise.all([
-        a.culture_variety_id
-          ? supabase.from("culture_varieties").select("name").eq("id", a.culture_variety_id).maybeSingle()
+        effectiveVarietyId
+          ? supabase.from("culture_varieties").select("name").eq("id", effectiveVarietyId).maybeSingle()
           : Promise.resolve({ data: null }),
         a.season_id
           ? supabase.from("seasons").select("name").eq("id", a.season_id).maybeSingle()
@@ -479,9 +484,19 @@ export default function BalancoHidricoPage() {
     })();
   }, [selectedPivotId, supabase]);
 
+  // Sequenciamento: só o cálculo mais recente pode escrever no estado, evitando
+  // que um cálculo lento com entradas antigas sobrescreva o resultado correto
+  // ao trocar de pivô.
+  const calcTokenRef = useRef(0);
+
   // Calculate balance
   const runCalculation = useCallback(async () => {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
+    // Só calcula quando as entradas já pertencem ao mesmo pivô/parcela — evita
+    // disparar com a cultura/solo do pivô anterior ainda em memória.
+    if (culture.id !== assignment.culture_id) return;
+    const token = ++calcTokenRef.current;
+    const isStale = () => token !== calcTokenRef.current;
     setCalculating(true);
     setError("");
     setNotice("");
@@ -641,7 +656,7 @@ export default function BalancoHidricoPage() {
         );
       }
       const tailTrimmed = effectiveEnd < targetEnd;
-      if (tailTrimmed) {
+      if (tailTrimmed && !isStale()) {
         setNotice(
           `Balanço calculado até ${fmtBr(effectiveEnd)} — os dias mais recentes ainda não têm dado climático fechado.`,
         );
@@ -740,12 +755,14 @@ export default function BalancoHidricoPage() {
         balanceFormula: d.balanceFormula,
       }));
 
+      if (isStale()) return;
       setBalanceRows(rows);
     } catch (err) {
+      if (isStale()) return;
       setBalanceRows([]);
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
-      setCalculating(false);
+      if (!isStale()) setCalculating(false);
     }
   }, [assignment, culture, soil, soilLayers, phases, hydricAnchor, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
 
@@ -772,12 +789,27 @@ export default function BalancoHidricoPage() {
     let cancelled = false;
     (async () => {
       const today = new Date().toISOString().slice(0, 10);
-      const { data } = await supabase
+      // Escopo determinístico: a previsão vem da mesma estação que venceu a
+      // seleção operacional (mesma fonte do ETo aprovado), não de qualquer
+      // linha da fazenda. Sem estação definida, cai para o nível fazenda.
+      const { data: latestSel } = await supabase
+        .from("weather_daily_selection")
+        .select("selected_station_id")
+        .eq("farm_id", activeFarmId)
+        .eq("operational_approved", true)
+        .not("selected_station_id", "is", null)
+        .order("date", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      const opStationId = (latestSel as { selected_station_id: string | null } | null)?.selected_station_id ?? null;
+      let query = supabase
         .from("weather_forecasts")
         .select("target_date, issued_at, et0_calculated, et0_source, precipitation")
         .eq("farm_id", activeFarmId)
         .gte("target_date", today)
         .order("issued_at", { ascending: false });
+      if (opStationId) query = query.eq("station_id", opStationId);
+      const { data } = await query;
       if (cancelled) return;
       // primeira ocorrência por data = emissão mais recente
       const byDate = new Map<string, { date: string; et0: number | null; precip: number | null }>();
@@ -975,10 +1007,13 @@ export default function BalancoHidricoPage() {
       });
 
       if (err) throw new Error(err.message);
-      setLancMsg("Irrigação lançada com sucesso. Recalcule o balanço para ver o ARM.");
+      setLancMsg("Irrigação lançada com sucesso. Atualizando o balanço...");
       setLancDepth("");
       setLancHours("");
       setLancNotes("");
+      // Recalcula o cockpit para refletir o novo ARM/recomendação — o botão
+      // manual "Calcular" foi removido, então o refresh é automático aqui.
+      void runCalculation();
     } catch (err) {
       setLancMsg(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {
@@ -997,6 +1032,9 @@ export default function BalancoHidricoPage() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   const selPivot = pivots.find((p) => p.id === selectedPivotId);
+  // Área sob a parcela ativa (setor/planted_area), não o pivô inteiro — reusa o
+  // cálculo do estado hídrico da fazenda.
+  const parcelArea = farmStates.find((s) => s.parcelId === assignment?.id)?.area ?? selPivot?.area ?? null;
   const centroHead = {
     pivotName: selPivot?.name ?? null,
     cultureName: culture?.name ?? null,
@@ -1100,7 +1138,7 @@ export default function BalancoHidricoPage() {
             varietyName,
             seasonName,
             stage: assignment?.crop_stage ?? null,
-            area: selPivot?.area ?? null,
+            area: parcelArea,
             efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
           }}
           sensoryByDate={sensoryByDate}
@@ -1112,20 +1150,25 @@ export default function BalancoHidricoPage() {
           <span className="text-sm text-graphite-400 dark:text-gray-500">Calculando balanço...</span>
         </Card>
       ) : selectedPivotId && assignment && !error ? (
-        <Card className="py-16 text-center">
+        <Card className="py-14 text-center">
           <p className="text-graphite-500 dark:text-gray-400">Sem dados suficientes para o balanço deste pivô. Verifique o clima e a condição inicial.</p>
+          <button type="button" onClick={() => { setShowDetail(true); setActiveTab("lancamento"); }} className="mt-3 rounded-xl border border-gray-200 px-4 py-2 text-[12.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.05]">
+            Registrar irrigação realizada
+          </button>
         </Card>
       ) : null}
 
-      {/* Detalhes / memória de cálculo (gráfico técnico, tabela, lançamento) */}
-      {balanceRows.length > 0 && (
+      {/* Detalhes / memória de cálculo (gráfico técnico, tabela, lançamento).
+          Fica disponível mesmo sem balanço calculado, para que o registro de
+          irrigação realizada não dependa de clima/condição inicial completos. */}
+      {selectedPivotId && assignment && (
         <Card className="overflow-hidden p-0">
           <button
             type="button"
             onClick={() => setShowDetail((s) => !s)}
             className="flex w-full items-center justify-between px-5 py-3.5 text-left"
           >
-            <span className="text-[13px] font-bold text-graphite-900 dark:text-white">Detalhes e memória de cálculo</span>
+            <span className="text-[13px] font-bold text-graphite-900 dark:text-white">{balanceRows.length > 0 ? "Detalhes e memória de cálculo" : "Registrar irrigação e ver detalhes"}</span>
             <span className="text-[12px] font-semibold text-brand-600 dark:text-brand-400">{showDetail ? "Ocultar ▲" : "Mostrar ▼"}</span>
           </button>
           {showDetail && (
@@ -1735,18 +1778,26 @@ function StatCard({ icon, label, value, unit, tone }: { icon: ReactNode; label: 
 function FarmKpiRow({ summary, states, loading }: { summary: ReturnType<typeof useFarmHydricState>["summary"]; states: ReturnType<typeof useFarmHydricState>["states"]; loading: boolean }) {
   const withData = states.filter((s) => s.current && s.current.status !== "cinza");
   const etcMedia = withData.length ? withData.reduce((a, s) => a + (s.current!.etc ?? 0), 0) / withData.length : null;
+  // Contagens/áreas derivadas dos estados (uma linha por parcela/setor):
+  // - pivôs para irrigar contam EQUIPAMENTOS distintos, não parcelas;
+  // - "área em manejo" inclui parcelas sem dado hídrico (mas operacionais);
+  // - "área crítica" é só o status vermelho (amarelo é atenção, não crítico).
+  const distinctPivots = new Set(states.map((s) => s.pivotId)).size;
+  const managedArea = states.reduce((a, s) => a + (s.area ?? 0), 0);
+  const pivotsNeeding = new Set(states.filter((s) => s.current?.shouldIrrigate).map((s) => s.pivotId)).size;
+  const criticalArea = states.filter((s) => s.current?.status === "vermelho").reduce((a, s) => a + (s.area ?? 0), 0);
   const items = [
-    { icon: <IconDrop />, label: "Pivôs ativos", value: summary ? String(summary.totalPivots) : "—" },
-    { icon: <IconArea />, label: "Área em manejo", value: summary ? fmtInt(summary.totalIrrigatedArea) : "—", unit: "ha" },
+    { icon: <IconDrop />, label: "Pivôs ativos", value: String(summary?.totalPivots ?? distinctPivots) },
+    { icon: <IconArea />, label: "Área em manejo", value: fmtInt(managedArea), unit: "ha" },
     { icon: <IconDrop />, label: "ETc média hoje", value: etcMedia != null ? fmtNum(etcMedia) : "—", unit: "mm" },
     { icon: <IconWave />, label: "Déficit médio", value: summary ? fmtNum(summary.avgDeficit) : "—", unit: "mm", tone: summary && summary.avgDeficit > 0 ? "text-orange-600 dark:text-orange-400" : undefined },
-    { icon: <IconGear />, label: "Pivôs para irrigar", value: summary ? String(summary.needIrrigationToday) : "—", tone: summary && summary.needIrrigationToday > 0 ? "text-blue-600 dark:text-blue-400" : undefined },
-    { icon: <IconAlert />, label: "Área crítica", value: summary ? fmtInt(summary.areaInDeficit) : "—", unit: "ha", tone: summary && summary.areaInDeficit > 0 ? "text-red-600 dark:text-red-400" : undefined },
+    { icon: <IconGear />, label: "Pivôs para irrigar", value: String(pivotsNeeding), tone: pivotsNeeding > 0 ? "text-blue-600 dark:text-blue-400" : undefined },
+    { icon: <IconAlert />, label: "Área crítica", value: fmtInt(criticalArea), unit: "ha", tone: criticalArea > 0 ? "text-red-600 dark:text-red-400" : undefined },
   ];
   return (
     <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
       {items.map((k) => (
-        <StatCard key={k.label} icon={k.icon} label={k.label} value={loading && !summary ? "…" : k.value} unit={k.unit} tone={k.tone} />
+        <StatCard key={k.label} icon={k.icon} label={k.label} value={loading ? "…" : k.value} unit={k.unit} tone={k.tone} />
       ))}
     </div>
   );
@@ -1762,31 +1813,42 @@ interface CockpitIdentity {
   efficiency: number | null;
 }
 
+function daysBetweenIso(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
+}
+
 function buildCockpitSeries(rows: DailyBalanceRow[], forecast: Array<{ date: string; et0: number | null; precip: number | null }>) {
   if (rows.length === 0) return null;
   const last = rows[rows.length - 1];
-  const kc = last.kcAdjusted ?? last.kc;
+  // ETc potencial prevista = ETo × Kc × KL (Kc/KL base, sem Ks). Não usar
+  // kcAdjusted (= Kc×KL×Ks): já traz o KL — multiplicá-lo de novo duplicaria a
+  // localização — e embutiria o Ks do dia atual em toda a previsão.
+  const kc = last.kc;
   const kl = last.kl ?? 1;
   const cad = last.cad;
   const afd = last.afd;
   const pmpMm = Math.max((last.wiltingPoint ?? 0) * (last.rootDepth ?? 0) * 1000, 0);
   const ccMm = pmpMm + cad;
-  const safetyArm = Math.max(cad - afd, 0);
+  const safetyArm = Math.max(cad - afd, 0);          // ARM no limite de manejo (déficit = AFD → status vermelho)
+  const attentionArm = Math.max(cad - afd * 0.7, 0); // ARM na fronteira ótima/alerta (déficit = 0,7·AFD → amarelo)
   const safetyMm = pmpMm + safetyArm;
-  const criticalMm = pmpMm + safetyArm * 0.5;
+  const attentionMm = pmpMm + attentionArm;
 
-  // Projeção sem irrigação: parte do ARM atual e desconta a ETc prevista,
-  // somando a chuva prevista, até acabar a previsão.
+  // A previsão só cobre dias APÓS o último dia observado — se o balanço já
+  // inclui hoje, a previsão de hoje não é reaplicada (evita duplicar o dia).
+  const futureForecast = forecast.filter((f) => f.date > last.date);
+
+  // Projeção sem irrigação: parte do ARM observado e desconta a ETc prevista,
+  // somando a chuva efetiva prevista, até acabar a previsão. Offset = diferença
+  // real de datas em relação ao último dia observado.
   const projection: Array<{ date: string; arm: number; offset: number }> = [{ date: last.date, arm: last.storedWater, offset: 0 }];
   let arm = last.storedWater;
-  let off = 1;
-  for (const f of forecast) {
+  for (const f of futureForecast) {
     if (f.et0 == null) break;
     const etc = Math.max(f.et0 * kc * kl, 0);
-    const pe = f.precip != null ? Math.max(f.precip, 0) : 0;
+    const pe = f.precip != null ? calculateEffectivePrecipitation(Math.max(f.precip, 0)) : 0;
     arm = Math.min(Math.max(arm - etc + pe, 0), cad);
-    projection.push({ date: f.date, arm, offset: off });
-    off += 1;
+    projection.push({ date: f.date, arm, offset: daysBetweenIso(last.date, f.date) });
   }
 
   // Reservatório: histórico recente (absoluto) + projeção.
@@ -1799,7 +1861,7 @@ function buildCockpitSeries(rows: DailyBalanceRow[], forecast: Array<{ date: str
   const todayIndexReserv = reservatorio.length - 1;
   for (const p of projection.slice(1)) reservatorio.push({ label: fmtDia(p.date), storageAbs: p.arm + pmpMm, isForecast: true });
 
-  // Entradas e consumo: últimos 14 dias + previsão.
+  // Entradas e consumo: últimos 14 dias + previsão (chuva efetiva prevista).
   const histE = rows.slice(-14);
   const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
     label: fmtDia(r.date),
@@ -1809,15 +1871,21 @@ function buildCockpitSeries(rows: DailyBalanceRow[], forecast: Array<{ date: str
     isForecast: false,
   }));
   const todayIndexEntradas = entradas.length;
-  for (const f of forecast) {
+  for (const f of futureForecast) {
     if (f.et0 == null) break;
-    entradas.push({ label: fmtDia(f.date), chuvaEf: f.precip != null ? Math.max(f.precip, 0) : 0, irrig: 0, etc: Math.max(f.et0 * kc * kl, 0), isForecast: true });
+    entradas.push({
+      label: fmtDia(f.date),
+      chuvaEf: f.precip != null ? calculateEffectivePrecipitation(Math.max(f.precip, 0)) : 0,
+      irrig: 0,
+      etc: Math.max(f.et0 * kc * kl, 0),
+      isForecast: true,
+    });
   }
 
   const wanted = [0, 1, 2, 3, 5, 7];
   const projTable = wanted.map((d) => projection.find((p) => p.offset === d) ?? null).filter((p): p is { date: string; arm: number; offset: number } => p != null);
 
-  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, projTable, ccMm, pmpMm, safetyMm, criticalMm, cad, afd, hasForecast: projection.length > 1 };
+  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, projTable, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: projection.length > 1 };
 }
 
 function Cockpit({
@@ -1848,7 +1916,9 @@ function Cockpit({
   const irrigar = verdict.irrigar;
   const grossDepth = last.grossDepth;
   const netDepth = last.netDepth;
-  const efPct = identity.efficiency ?? (grossDepth > 0 ? (netDepth / grossDepth) * 100 : 0);
+  // Eficiência exibida = a realmente usada no cálculo da lâmina (líquida/bruta),
+  // que já respeita o override da parcela em modo personalizado.
+  const efPct = grossDepth > 0 ? (netDepth / grossDepth) * 100 : (identity.efficiency ?? 0);
   const priority = last.waterStatus === "deficit_critico" || last.waterStatus === "deficit"
     ? { label: "Prioridade Alta", short: "PRIORIDADE ALTA", color: "#dc2626" }
     : last.waterStatus === "atencao"
@@ -1869,7 +1939,6 @@ function Cockpit({
   const latestSensory = sensoryEntries[0] ?? null;
 
   // alertas
-  const safetyArm = Math.max(cad - afd, 0);
   const alerts: { sev: "hi" | "md" | "lo"; text: string }[] = [];
   if (urgency.atOrBeyondAfd) alerts.push({ sev: "hi", text: `${identity.pivotName ?? "Pivô"} atingiu o limite de manejo.` });
   else if (urgency.daysToAfd != null && urgency.daysToAfd <= 2.5) alerts.push({ sev: "md", text: `${identity.pivotName ?? "Pivô"} atingirá o limite de manejo em ${fmtNum(urgency.daysToAfd)} dia(s).` });
@@ -1899,7 +1968,7 @@ function Cockpit({
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="text-[17px] font-extrabold text-graphite-900 dark:text-white">{identity.pivotName ?? "Pivô"}</span>
-          {[identity.cultureName, identity.varietyName, identity.stage, identity.area != null ? `${fmtNum(identity.area, 0)} ha` : null, last.dae != null ? `${last.dae} DAE` : null]
+          {[identity.cultureName, identity.varietyName, last.phase ?? identity.stage, identity.area != null ? `${fmtNum(identity.area, 0)} ha` : null, last.dae != null ? `${last.dae} DAE` : null]
             .filter(Boolean)
             .map((chip, i) => (
               <span key={i} className="text-[12.5px] text-graphite-500 dark:text-gray-400"><span className="mx-1 text-graphite-300 dark:text-gray-600">•</span>{chip}</span>
@@ -1946,7 +2015,7 @@ function Cockpit({
               </div>
               <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#3b82f6", l: "ARM projetado", dashed: true }]} />
             </div>
-            <div className="h-[260px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} criticalMm={series.criticalMm} /></div>
+            <div className="h-[260px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
           </Card>
         </div>
 
@@ -1960,7 +2029,7 @@ function Cockpit({
             <div className="p-4">
               <div className="flex items-end justify-between">
                 <p className="text-[34px] font-extrabold leading-none" style={{ color: irrigar ? "#16a34a" : "#64748b" }}>{irrigar ? `${fmtNum(grossDepth)}` : "0"}<span className="ml-1 text-[16px] font-bold">mm</span></p>
-                <span className="rounded-lg bg-gray-50 px-2 py-1 text-[11px] font-semibold text-graphite-500 dark:bg-white/[0.05] dark:text-gray-400">Janela: {irrigar ? "Hoje" : "—"}</span>
+                <span className="rounded-lg bg-gray-50 px-2 py-1 text-[11px] font-semibold text-graphite-500 dark:bg-white/[0.05] dark:text-gray-400">Janela: {irrigar ? (isToday ? "Hoje" : fmtDia(last.date)) : "—"}</span>
               </div>
               {irrigar ? (
                 <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
@@ -2001,7 +2070,7 @@ function Cockpit({
                 </div>
                 {series.projTable.map((p) => {
                   const pct = cad > 0 ? clampN((p.arm / cad) * 100, 0, 100) : 0;
-                  const col = p.arm >= safetyArm ? "#16a34a" : p.arm >= safetyArm * 0.5 ? "#eab308" : "#dc2626";
+                  const col = p.arm >= series.attentionArm ? "#16a34a" : p.arm >= series.safetyArm ? "#eab308" : "#dc2626";
                   return (
                     <div key={p.offset} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 text-[12px]">
                       <span className="w-8 font-semibold text-graphite-600 dark:text-gray-300">{p.offset === 0 ? "Hoje" : `+${p.offset}`}</span>
