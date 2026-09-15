@@ -152,7 +152,8 @@ export interface ParcelCycleDraft {
   plantedArea: number | null;
   pivotId: string;
   pivotArea: number;
-  pivotSoilId: string | null;
+  /** Espelho legado de pivots.soil_id; não é requisito nem escolha da parcela. */
+  legacyPivotSoilId: string | null;
   seasonId: string;
   cultureId: string;
   cultureVarietyId: string | null;
@@ -171,9 +172,6 @@ export function validateParcelCycle(draft: ParcelCycleDraft): string | null {
   if (!draft.pivotId) return "Selecione o pivô.";
   if (!draft.seasonId) return "Selecione a safra.";
   if (!draft.cultureId) return "Selecione a cultura.";
-  if (!draft.pivotSoilId) {
-    return "O pivô selecionado não possui solo operacional cadastrado no próprio equipamento.";
-  }
   if (!draft.plantingDate) return "Informe a data de plantio.";
   if (draft.emergenceDate && draft.emergenceDate < draft.plantingDate) {
     return "A data de emergência não pode ser anterior ao plantio.";
@@ -210,7 +208,7 @@ export interface ParcelInsertRow {
   culture_id: string;
   culture_variety_id: string | null;
   variety_id: string | null;
-  soil_id: string;
+  soil_id: string | null;
   planting_date: string;
   emergence_date: string | null;
   expected_harvest_date: string | null;
@@ -223,9 +221,6 @@ export interface ParcelInsertRow {
 }
 
 export function buildParcelInsertRow(draft: ParcelCycleDraft): ParcelInsertRow {
-  if (!draft.pivotSoilId) {
-    throw new Error("Parcela exige solo do pivô.");
-  }
   return {
     name: draft.name,
     planted_area: draft.plantedArea,
@@ -234,7 +229,7 @@ export function buildParcelInsertRow(draft: ParcelCycleDraft): ParcelInsertRow {
     culture_id: draft.cultureId,
     culture_variety_id: draft.cultureVarietyId,
     variety_id: draft.cultureVarietyId,
-    soil_id: draft.pivotSoilId,
+    soil_id: draft.legacyPivotSoilId,
     planting_date: draft.plantingDate,
     emergence_date: draft.emergenceDate,
     expected_harvest_date: draft.expectedHarvestDate,

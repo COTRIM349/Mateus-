@@ -26,7 +26,7 @@ function draft(overrides: Partial<ParcelCycleDraft> = {}): ParcelCycleDraft {
     plantedArea: 80,
     pivotId: "pivot-31",
     pivotArea: 86,
-    pivotSoilId: "soil-1",
+    legacyPivotSoilId: "soil-1",
     seasonId: "season-1",
     cultureId: "soy",
     cultureVarietyId: "tmg",
@@ -85,13 +85,10 @@ describe("validatePlantedArea", () => {
 });
 
 describe("validateParcelCycle", () => {
-  it("exige pivô, safra, cultura, solo fixo do pivô e plantio", () => {
+  it("exige pivô, safra, cultura e plantio", () => {
     expect(validateParcelCycle(draft({ pivotId: "" }))).toMatch(/pivô/);
     expect(validateParcelCycle(draft({ seasonId: "" }))).toMatch(/safra/);
     expect(validateParcelCycle(draft({ cultureId: "" }))).toMatch(/cultura/);
-    expect(validateParcelCycle(draft({ pivotSoilId: null }))).toBe(
-      "O pivô selecionado não possui solo operacional cadastrado no próprio equipamento.",
-    );
     expect(validateParcelCycle(draft({ plantingDate: "" }))).toMatch(/plantio/);
   });
 
@@ -163,10 +160,9 @@ describe("buildParcelInsertRow", () => {
     expect(row).not.toHaveProperty("id");
   });
 
-  it("não permite persistir uma escolha de solo independente do pivô", () => {
-    expect(() => buildParcelInsertRow(draft({ pivotSoilId: null }))).toThrow(
-      "Parcela exige solo do pivô.",
-    );
+  it("permite criar sem o vínculo legado porque o solo pertence ao pivô", () => {
+    const row = buildParcelInsertRow(draft({ legacyPivotSoilId: null }));
+    expect(row.soil_id).toBeNull();
   });
 });
 

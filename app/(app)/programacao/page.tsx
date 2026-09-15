@@ -24,6 +24,11 @@ import {
   type WaterStatus,
 } from "@/modules/water-balance/services";
 import type { HydricStatus } from "@/modules/water-balance/services/pivot-engine-v2";
+import {
+  buildOperationalPivotSoil,
+  type PivotSoilRegistryLayerRow,
+  type PivotSoilRegistryRow,
+} from "@/modules/soil/services";
 
 // Estado hídrico do motor (verde/amarelo/vermelho/cinza) → status operacional.
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -82,7 +87,7 @@ interface CropAssignment {
   id: string;
   pivot_id: string;
   culture_id: string;
-  soil_id: string;
+  soil_id: string | null;
   planting_date: string;
   crop_stage: string;
 }
@@ -207,26 +212,49 @@ export default function ProgramacaoPage() {
       if (!pcaData) return null;
       const pca = pcaData as CropAssignment;
 
-      // Sprint 14 · Etapa 7 — solo agora vem do pivô. Fallback para o
-      // soil_id legado da parcela quando o pivô não tem solo cadastrado.
-      const { data: pivotSoilRow } = await supabase
+      // O perfil físico 1:1 do pivô é a fonte operacional. O catálogo antigo
+      // permanece somente como fallback para registros ainda não migrados.
+      const { data: legacyPivotSoilRow } = await supabase
         .from("pivots")
         .select("soil_id")
         .eq("id", pivot.id)
         .single();
       const effectiveSoilId =
-        (pivotSoilRow as { soil_id: string | null } | null)?.soil_id ?? pca.soil_id;
+        (legacyPivotSoilRow as { soil_id: string | null } | null)?.soil_id ?? pca.soil_id;
 
-      const [{ data: cultureData }, { data: soilData }, { data: phasesData }] =
+      const [
+        { data: cultureData },
+        { data: legacySoilData },
+        { data: phasesData },
+        { data: fixedProfileData },
+        { data: fixedLayerData },
+      ] =
         await Promise.all([
           supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor").eq("id", pca.culture_id).single(),
-          supabase.from("soils").select("id, field_capacity, wilting_point, effective_depth").eq("id", effectiveSoilId).single(),
+          effectiveSoilId
+            ? supabase.from("soils").select("id, field_capacity, wilting_point, effective_depth").eq("id", effectiveSoilId).maybeSingle()
+            : Promise.resolve({ data: null }),
           supabase.from("culture_phases").select("*").eq("culture_id", pca.culture_id).order("phase_order"),
+          supabase
+            .from("pivot_soils")
+            .select("pivot_id,soil_class,cc_pmp_unit")
+            .eq("pivot_id", pivot.id)
+            .maybeSingle(),
+          supabase
+            .from("pivot_soil_layers")
+            .select("pivot_id,layer_number,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3")
+            .eq("pivot_id", pivot.id)
+            .order("layer_number"),
         ]);
 
-      if (!cultureData || !soilData) return null;
+      const fixedSoil = buildOperationalPivotSoil(
+        fixedProfileData as PivotSoilRegistryRow | null,
+        (fixedLayerData ?? []) as PivotSoilRegistryLayerRow[],
+      );
+      const soil = fixedSoil ?? (legacySoilData as Soil | null);
+
+      if (!cultureData || !soil) return null;
       const culture = cultureData as Culture;
-      const soil = soilData as Soil;
       const phases = (phasesData ?? []) as CulturePhase[];
 
       const dap = Math.max(

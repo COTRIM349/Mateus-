@@ -29,7 +29,14 @@ import {
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
-import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
+import {
+  buildOperationalPivotSoil,
+  mapDbLayersToProfile,
+  resolveSensoryNote,
+  type PivotSoilRegistryLayerRow,
+  type PivotSoilRegistryRow,
+  type SoilProfileLayer,
+} from "@/modules/soil/services";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import {
   assertParcelAcceptsOperationalLaunch,
@@ -100,7 +107,7 @@ interface CropAssignment {
   pivot_id: string;
   season_id: string;
   culture_id: string;
-  soil_id: string;
+  soil_id: string | null;
   planting_date: string;
   management_start_date: string | null;
   emergence_date: string | null;
@@ -136,7 +143,7 @@ interface Soil {
   name: string;
   field_capacity: number;
   wilting_point: number;
-  bulk_density: number;
+  bulk_density: number | null;
   effective_depth: number;
 }
 
@@ -357,19 +364,28 @@ export default function BalancoHidricoPage() {
       const a = pca as CropAssignment;
       setAssignment(a);
 
-      // Sprint 14 · Etapa 7 — solo agora vem do pivô. Fallback para o
-      // soil_id legado da parcela quando o pivô não tem solo cadastrado.
-      const { data: pivotSoil } = await supabase
+      // O perfil físico 1:1 do pivô é a fonte operacional. O catálogo antigo
+      // permanece somente como fallback para registros ainda não migrados.
+      const { data: legacyPivotSoil } = await supabase
         .from("pivots")
         .select("soil_id")
         .eq("id", selectedPivotId)
         .single();
       const effectiveSoilId =
-        (pivotSoil as { soil_id: string | null } | null)?.soil_id ?? a.soil_id;
+        (legacyPivotSoil as { soil_id: string | null } | null)?.soil_id ?? a.soil_id;
 
-      const [{ data: cultureData }, { data: soilData }, { data: phaseData }, { data: layerData }] = await Promise.all([
+      const [
+        { data: cultureData },
+        { data: legacySoilData },
+        { data: phaseData },
+        { data: legacyLayerData },
+        { data: fixedProfileData },
+        { data: fixedLayerData },
+      ] = await Promise.all([
         supabase.from("cultures").select("id, name, cycle_days, root_depth, depletion_factor, kl, ks_function, ky").eq("id", a.culture_id).single(),
-        supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", effectiveSoilId).single(),
+        effectiveSoilId
+          ? supabase.from("soils").select("id, name, field_capacity, wilting_point, bulk_density, effective_depth").eq("id", effectiveSoilId).maybeSingle()
+          : Promise.resolve({ data: null }),
         supabase.from("culture_phases").select("*").eq("culture_id", a.culture_id).order("phase_order"),
         effectiveSoilId
           ? supabase
@@ -378,7 +394,25 @@ export default function BalancoHidricoPage() {
               .eq("soil_id", effectiveSoilId)
               .order("depth_start")
           : Promise.resolve({ data: [] }),
+        supabase
+          .from("pivot_soils")
+          .select("pivot_id,soil_class,cc_pmp_unit")
+          .eq("pivot_id", selectedPivotId)
+          .maybeSingle(),
+        supabase
+          .from("pivot_soil_layers")
+          .select("pivot_id,layer_number,thickness_m,field_capacity_pct,wilting_point_pct,bulk_density_g_cm3")
+          .eq("pivot_id", selectedPivotId)
+          .order("layer_number"),
       ]);
+
+      const fixedSoil = buildOperationalPivotSoil(
+        fixedProfileData as PivotSoilRegistryRow | null,
+        (fixedLayerData ?? []) as PivotSoilRegistryLayerRow[],
+      );
+      const operationalSoil = fixedSoil ?? (legacySoilData as Soil | null);
+      const operationalLayers = fixedSoil?.layers
+        ?? mapDbLayersToProfile(legacyLayerData ?? []);
 
       const todayIso = new Date().toISOString().slice(0, 10);
       const { data: anchorData } = await supabase
@@ -401,8 +435,8 @@ export default function BalancoHidricoPage() {
         : null;
       setHydricAnchor(anchor);
       setCulture(cultureData as Culture | null);
-      setSoil(soilData as Soil | null);
-      setSoilLayers(mapDbLayersToProfile(layerData ?? []));
+      setSoil(operationalSoil);
+      setSoilLayers(operationalLayers);
       setPhases((phaseData ?? []) as CulturePhase[]);
 
       if (a.planting_date) {

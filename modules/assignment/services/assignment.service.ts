@@ -14,7 +14,7 @@ export interface OperationalAssignment {
   season_id: string;
   culture_id: string;
   culture_variety_id: string | null;
-  soil_id: string;
+  soil_id: string | null;
   crop_stage: string;
   planting_date: string;
   emergence_date: string | null;
