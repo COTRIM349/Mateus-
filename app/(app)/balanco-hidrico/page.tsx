@@ -28,6 +28,7 @@ import {
   type HydricStatus,
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
+import { cropGroupByName } from "@/modules/water-balance/services/availability-factor";
 import { type CulturePhase } from "@/modules/culture/services";
 import { mapDbLayersToProfile, resolveSensoryNote, type SoilProfileLayer } from "@/modules/soil/services";
 import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
@@ -614,6 +615,7 @@ export default function BalancoHidricoPage() {
           kl: culture.kl,
           ks_function: culture.ks_function,
           ky: culture.ky,
+          availabilityGroup: cropGroupByName(culture.name),
         },
         phases,
         soil: {
