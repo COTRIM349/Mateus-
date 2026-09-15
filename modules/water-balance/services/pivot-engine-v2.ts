@@ -402,6 +402,8 @@ export interface PivotHydricState {
   parcelName: string | null;
   current: BalanceDay | null;
   history: BalanceDay[];
+  /** true quando a condição inicial foi presumida (capacidade de campo), não medida/cadastrada. */
+  initialConditionAssumed?: boolean;
 }
 
 export interface PivotIdentity {

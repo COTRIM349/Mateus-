@@ -144,8 +144,11 @@ export default function ProgramacaoPage() {
   // Substitui a leitura de water_balances (que nunca é gravada) — sem inventar
   // estado "ideal" quando falta balanço.
   const { states: hydricStates } = useFarmHydricState();
-  const hydricByPivot = useMemo(
-    () => new Map(hydricStates.map((s) => [s.pivotId, s])),
+  // Chaveado por PARCELA (parcelId), não por pivô: um pivô setorizado tem várias
+  // parcelas ativas e buildPivotContext escolhe uma parcela específica — casar
+  // por parcela evita misturar o balanço de uma com a cultura de outra.
+  const hydricByParcel = useMemo(
+    () => new Map(hydricStates.filter((s) => s.parcelId).map((s) => [s.parcelId as string, s])),
     [hydricStates],
   );
 
@@ -247,7 +250,7 @@ export default function ProgramacaoPage() {
       // Estado hídrico ATUAL vem do motor ao vivo (mesmo do Balanço), não de
       // water_balances (nunca gravada). Sem balanço válido → não inventa "ideal":
       // o pivô fica de fora da recomendação até haver dado real.
-      const current = hydricByPivot.get(pivot.id)?.current ?? null;
+      const current = hydricByParcel.get(pca.id)?.current ?? null;
       if (!current) return null;
 
       return {
@@ -281,7 +284,7 @@ export default function ProgramacaoPage() {
         reservoirAvailable: true,
       };
     },
-    [supabase, hydricByPivot]
+    [supabase, hydricByParcel]
   );
 
   // Load constraints from DB

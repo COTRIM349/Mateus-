@@ -232,6 +232,7 @@ export default function BalancoHidricoPage() {
   const [soilLayers, setSoilLayers] = useState<SoilProfileLayer[]>([]);
   const [phases, setPhases] = useState<CulturePhase[]>([]);
   const [hydricAnchor, setHydricAnchor] = useState<HydricAnchor | null>(null);
+  const [showInitialForm, setShowInitialForm] = useState(false);
   const [balanceRows, setBalanceRows] = useState<DailyBalanceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [dateStart, setDateStart] = useState("");
@@ -428,9 +429,11 @@ export default function BalancoHidricoPage() {
       const legacyInitialValue = assignment.initial_soil_moisture_pct;
       const hasLegacyInitial = assignment.initial_moisture_is_cc === true
         || (legacyInitialValue != null && Number.isFinite(Number(legacyInitialValue)));
-      if (!hydricAnchor && !hasLegacyInitial) {
-        throw new Error("Balanço bloqueado: defina uma condição inicial confiável do solo (medição ou capacidade de campo confirmada).");
-      }
+      // Modelo Irriger/FAO-56: sem âncora datada nem condição inicial cadastrada,
+      // assume o perfil na capacidade de campo (depleção zero) no início do
+      // ciclo e calcula — não bloqueia. O usuário pode registrar uma condição
+      // medida a qualquer momento para sobrescrever a suposição.
+      const assumeFieldCapacity = !hydricAnchor && !hasLegacyInitial;
       const calculationStart = hydricAnchor
         ? addDaysIso(hydricAnchor.effectiveDate, 1)
         : (assignment.management_start_date ?? assignment.planting_date);
@@ -563,9 +566,9 @@ export default function BalancoHidricoPage() {
           depletion_factor: assignment.depletion_factor,
           kl_override: assignment.kl_override,
           ks_function_override: assignment.ks_function_override,
-          initial_soil_moisture_pct: hydricAnchor ? hydricAnchor.moistureValue : assignment.initial_soil_moisture_pct,
+          initial_soil_moisture_pct: hydricAnchor ? hydricAnchor.moistureValue : (assumeFieldCapacity ? null : assignment.initial_soil_moisture_pct),
           initial_moisture_unit: hydricAnchor ? hydricAnchor.moistureUnit : assignment.initial_moisture_unit,
-          initial_moisture_is_cc: hydricAnchor ? hydricAnchor.isFieldCapacity : assignment.initial_moisture_is_cc,
+          initial_moisture_is_cc: hydricAnchor ? hydricAnchor.isFieldCapacity : (assumeFieldCapacity ? true : assignment.initial_moisture_is_cc),
           deficit_irrigation: assignment.deficit_irrigation,
           stress_point_irrigation: assignment.stress_point_irrigation,
         },
@@ -943,17 +946,34 @@ export default function BalancoHidricoPage() {
         )}
         {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
         {assignment && !hydricAnchor && (
-          <HydricInitialConditionForm
-            farmId={activeFarmId}
-            assignmentId={assignment.id}
-            defaultDate={assignment.management_start_date ?? assignment.planting_date}
-            onSaved={(anchor) => {
-              setHydricAnchor(anchor);
-              setBalanceRows([]);
-              setError("");
-              setDateStart(addDaysIso(anchor.effectiveDate, 1));
-            }}
-          />
+          showInitialForm ? (
+            <HydricInitialConditionForm
+              farmId={activeFarmId}
+              assignmentId={assignment.id}
+              defaultDate={assignment.management_start_date ?? assignment.planting_date}
+              onSaved={(anchor) => {
+                setHydricAnchor(anchor);
+                setShowInitialForm(false);
+                setBalanceRows([]);
+                setError("");
+                setDateStart(addDaysIso(anchor.effectiveDate, 1));
+              }}
+            />
+          ) : (
+            <p className="mt-3 text-[11px] text-graphite-400 dark:text-gray-500">
+              {(assignment.initial_moisture_is_cc === true
+                || (assignment.initial_soil_moisture_pct != null && Number.isFinite(Number(assignment.initial_soil_moisture_pct))))
+                ? "Condição inicial: valor cadastrado na parcela. "
+                : "Condição inicial assumida como capacidade de campo no início do ciclo. "}
+              <button
+                type="button"
+                onClick={() => setShowInitialForm(true)}
+                className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
+              >
+                Definir condição inicial
+              </button>
+            </p>
+          )
         )}
       </Card>
 
