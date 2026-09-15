@@ -647,6 +647,8 @@ export default function BalancoHidricoPage() {
         rootDepth: d.rootDepth,
         cad: d.adt,
         afd: d.afd,
+        cadProfileMm: d.cadProfileMm,
+        craProfileMm: d.craProfileMm,
         storedWater: d.storage,
         depletionFactor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
         deficit: d.deficit,
