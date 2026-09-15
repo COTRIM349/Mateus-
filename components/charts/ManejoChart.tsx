@@ -18,6 +18,32 @@ import { hasEtp, type ManagementReportRow } from "@/modules/reports/services/man
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
+// Séries que devem ficar RETAS (referências/limiares): suavizar distorceria o
+// significado (CC é constante; a segurança muda em degrau por fase).
+const CRISP_KEYS = new Set<ManejoSeriesKey>(["cc", "pmp", "seg"]);
+
+// Curva suave (Catmull-Rom → Bézier cúbica) passando por todos os pontos.
+// Estilo Scheduling: linhas fluidas em vez de segmentos angulares.
+function smoothPath(pts: { x: number; y: number }[]): string {
+  if (pts.length === 0) return "";
+  if (pts.length < 3) {
+    return pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
+  }
+  let d = `M ${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < pts.length - 1; i += 1) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const cp1x = p1.x + (p2.x - p0.x) / 6;
+    const cp1y = p1.y + (p2.y - p0.y) / 6;
+    const cp2x = p2.x - (p3.x - p1.x) / 6;
+    const cp2y = p2.y - (p3.y - p1.y) / 6;
+    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
 const PHASE_PALETTE = ["#1ea85b", "#3b82f6", "#eab308", "#f97316", "#14b8c9", "#84cc16", "#a855f7"];
 
 function phaseColor(name: string): string {
@@ -201,7 +227,7 @@ export function ManejoChart({
 
         {umidPts.length > 1 && (
           <path
-            d={`M ${umidPts[0].x},${y1} ${umidPts.map((p) => `L ${p.x},${p.y}`).join(" ")} L ${umidPts[umidPts.length - 1].x},${y1} Z`}
+            d={`${smoothPath(umidPts)} L ${umidPts[umidPts.length - 1].x},${y1} L ${umidPts[0].x},${y1} Z`}
             fill="url(#manejo-umid-fill)"
           />
         )}
@@ -212,16 +238,19 @@ export function ManejoChart({
             .map((r, i) => {
               const v = seriesValue(k, r, extrasAt(i));
               if (v == null) return null;
-              return `${cx(i)},${yFor(s, v, yP, yM)}`;
+              return { x: cx(i), y: yFor(s, v, yP, yM) };
             })
-            .filter((p): p is string => p != null)
-            .join(" ");
-          if (!pts) return null;
+            .filter((p): p is { x: number; y: number } => p != null);
+          if (pts.length === 0) return null;
           const hero = k === "umidade" || k === "cc" || k === "seg";
+          // Curvas de dado ficam suaves; referências/limiares ficam retas.
+          const d = CRISP_KEYS.has(k)
+            ? pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ")
+            : smoothPath(pts);
           return (
-            <polyline
+            <path
               key={k}
-              points={pts}
+              d={d}
               fill="none"
               stroke={s.color}
               strokeWidth={k === "umidade" ? 3.1 : hero ? 2.2 : 1.7}
