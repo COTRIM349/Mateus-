@@ -28,6 +28,7 @@ import {
   type HydricStatus,
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
+import { cropGroupByName } from "@/modules/water-balance/services/availability-factor";
 import { type CulturePhase } from "@/modules/culture/services";
 import {
   buildOperationalPivotSoil,
@@ -648,6 +649,7 @@ export default function BalancoHidricoPage() {
           kl: culture.kl,
           ks_function: culture.ks_function,
           ky: culture.ky,
+          availabilityGroup: cropGroupByName(culture.name),
         },
         phases,
         soil: {
@@ -1308,6 +1310,21 @@ function BalanceTab({
   }
 
   if (panel === "grafico") {
+    const accEtc = rows.reduce((a, r) => a + r.etc, 0);
+    const accEto = rows.reduce((a, r) => a + r.et0, 0);
+    const accRain = rows.reduce((a, r) => a + r.precipitation, 0);
+    const accErain = rows.reduce((a, r) => a + r.effectivePrecipitation, 0);
+    const accIrr = rows.reduce((a, r) => a + r.irrigationApplied, 0);
+    const defNow = last?.deficit ?? 0;
+    const kpis: { label: string; value: string; tone: string }[] = [
+      { label: "ETc acumulada", value: `${accEtc.toFixed(1)} mm`, tone: "text-amber-600 dark:text-amber-400" },
+      { label: "ETo acumulada", value: `${accEto.toFixed(1)} mm`, tone: "text-graphite-700 dark:text-gray-200" },
+      { label: "Chuva", value: `${accRain.toFixed(1)} mm`, tone: "text-blue-600 dark:text-blue-400" },
+      { label: "Chuva efetiva", value: `${accErain.toFixed(1)} mm`, tone: "text-sky-600 dark:text-sky-400" },
+      { label: "Irrigação", value: `${accIrr.toFixed(1)} mm`, tone: "text-cyan-600 dark:text-cyan-400" },
+      { label: "Déficit atual", value: `${defNow.toFixed(1)} mm`, tone: defNow > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400" },
+      { label: "Umidade atual", value: `${pctCc.toFixed(0)}% da CC`, tone: "text-graphite-800 dark:text-white" },
+    ];
     return (
       <Card className="overflow-hidden p-0">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-gray-100 px-5 py-3 dark:border-white/[0.06]">
@@ -1323,6 +1340,15 @@ function BalanceTab({
             <span className="h-2 w-2 rounded-full" style={{ background: verdict.color }} />
             {verdict.label}
           </span>
+        </div>
+        {/* Valores acumulados (estilo iCrop) */}
+        <div className="grid grid-cols-2 gap-px border-b border-gray-100 bg-gray-100 sm:grid-cols-4 lg:grid-cols-7 dark:border-white/[0.06] dark:bg-white/[0.06]">
+          {kpis.map((k) => (
+            <div key={k.label} className="bg-white px-4 py-2.5 dark:bg-graphite-900">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{k.label}</p>
+              <p className={`mt-0.5 text-[15px] font-extrabold tabular-nums ${k.tone}`}>{k.value}</p>
+            </div>
+          ))}
         </div>
         <div className="flex min-h-[min(72vh,calc(100vh-14rem))] flex-col lg:flex-row">
           <ManejoSeriesPicker rows={manejoRows} visible={visible} onToggle={toggleSeries} />

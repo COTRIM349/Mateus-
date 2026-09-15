@@ -68,10 +68,10 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
   {
     cat: "Solo",
     items: [
-      { k: "umidade", label: "Umidade (% da CC)", color: "#8a5a2b", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "cc", label: "CC — Capacidade de Campo", color: "#2f6bff", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "pmp", label: "PMP — Ponto de Murcha", color: "#111827", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "seg", label: "Umidade de segurança", color: "#c0272d", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "umidade", label: "Umidade (% da CC)", color: "#2563eb", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "cc", label: "CC — Capacidade de Campo", color: "#16a34a", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "pmp", label: "PMP — Ponto de Murcha", color: "#dc2626", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "seg", label: "Umidade de segurança", color: "#eab308", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
       { k: "cad", label: "CAD — Água Disponível (perfil)", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
       { k: "afd", label: "CRA / AFD — Limite de manejo (perfil)", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
       { k: "arm", label: "ARM — Água armazenada", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },

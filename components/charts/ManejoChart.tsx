@@ -176,6 +176,21 @@ export function ManejoChart({
   const segPct = rows.length ? rows[n - 1].safetyPctCc : 50;
   const phases = phaseRanges(rows);
 
+  // Zonas de manejo (estilo H2Irriga/iCrop) acompanhando a linha de segurança:
+  //  • Excedente  → acima da CC (100%)
+  //  • Ideal      → entre a segurança e a CC
+  //  • Crítico    → abaixo da segurança
+  const segEdge = rows.length
+    ? [
+        `${x0},${yP(clampN(rows[0].safetyPctCc, 0, 125))}`,
+        ...rows.map((r, i) => `${cx(i)},${yP(clampN(r.safetyPctCc, 0, 125))}`),
+        `${x1},${yP(clampN(rows[n - 1].safetyPctCc, 0, 125))}`,
+      ]
+    : [`${x0},${yP(segPct)}`, `${x1},${yP(segPct)}`];
+  const idealPath = `M ${x0},${yP(100)} L ${x1},${yP(100)} L ${[...segEdge].reverse().join(" L ")} Z`;
+  const criticoPath = `M ${segEdge.join(" L ")} L ${x1},${yP(0)} L ${x0},${yP(0)} Z`;
+  const midSegY = rows.length ? yP(clampN(rows[Math.floor(n / 2)].safetyPctCc, 0, 125)) : yP(segPct);
+
   const extrasAt = (i: number) => ({
     cumulativeIrrigation: cum[i],
     phaseChanged: i > 0 && rows[i].phase !== rows[i - 1].phase,
@@ -202,14 +217,18 @@ export function ManejoChart({
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="h-full min-h-[min(68vh,720px)] overflow-visible">
         <defs>
           <linearGradient id="manejo-umid-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#8a5a2b" stopOpacity="0.28" />
-            <stop offset="100%" stopColor="#8a5a2b" stopOpacity="0.02" />
+            <stop offset="0%" stopColor="#2563eb" stopOpacity="0.42" />
+            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.05" />
           </linearGradient>
         </defs>
         <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} className="fill-gray-50 dark:fill-black/25" rx={6} />
-        <rect x={x0} y={yP(100)} width={x1 - x0} height={Math.max(0, yP(segPct) - yP(100))} fill="#1ea85b" opacity={0.08} />
-        <rect x={x0} y={yP(segPct)} width={x1 - x0} height={Math.max(0, yP(segPct * 0.6) - yP(segPct))} fill="#f97316" opacity={0.08} />
-        <rect x={x0} y={yP(segPct * 0.6)} width={x1 - x0} height={Math.max(0, yP(0) - yP(segPct * 0.6))} fill="#e5484d" opacity={0.07} />
+        {/* Zonas de manejo */}
+        <rect x={x0} y={yP(125)} width={x1 - x0} height={Math.max(0, yP(100) - yP(125))} fill="#3b82f6" opacity={0.1} />
+        <path d={idealPath} fill="#22c55e" opacity={0.13} />
+        <path d={criticoPath} fill="#ef4444" opacity={0.11} />
+        <text x={x1 - 6} y={yP(112) + 3} textAnchor="end" className="fill-blue-500/70 text-[9px] font-bold uppercase tracking-wide">Excedente</text>
+        <text x={x1 - 6} y={(yP(100) + midSegY) / 2 + 3} textAnchor="end" className="fill-green-600/70 text-[9px] font-bold uppercase tracking-wide">Ideal</text>
+        <text x={x1 - 6} y={(midSegY + yP(0)) / 2 + 3} textAnchor="end" className="fill-red-500/70 text-[9px] font-bold uppercase tracking-wide">Crítico</text>
         {[0, 25, 50, 75, 100, 125].map((p) => (
           <g key={p}>
             <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-200 dark:stroke-white/[0.07]" strokeWidth={1} />
@@ -225,7 +244,8 @@ export function ManejoChart({
         {rows.map((r, i) => (
           <g key={i}>
             {visible.chuva && r.rainMm > 0 && (
-              <rect x={cx(i) - bw - 0.8} y={yM(r.rainMm)} width={bw} height={y1 - yM(r.rainMm)} rx={1.5} fill="#2f6bff" opacity={0.88} />
+              // Chuva pendurada no topo (estilo iCrop).
+              <rect x={cx(i) - bw - 0.8} y={y0} width={bw} height={Math.max(1.5, (clampN(r.rainMm, 0, mmMax) / mmMax) * (y1 - y0))} rx={1.5} fill="#2f6bff" opacity={0.8} />
             )}
             {visible.irrig && r.irrigationGrossMm > 0 && (
               <rect x={cx(i) + 0.8} y={yM(r.irrigationGrossMm)} width={bw} height={y1 - yM(r.irrigationGrossMm)} rx={1.5} fill="#14b8c9" opacity={0.95} />

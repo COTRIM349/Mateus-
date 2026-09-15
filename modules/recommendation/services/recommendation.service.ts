@@ -1,8 +1,6 @@
 import { roundTo, clamp } from "@/utils/math";
 import {
   calculateDynamicCAD,
-  calculateDynamicAFD,
-  adjustDepletionFactor,
   calculateETc,
   calculateNetDepth,
   calculateGrossDepth,
@@ -461,8 +459,10 @@ function buildScenario(
     Math.max(0, ctx.storedWater + irrigationDepth - ctx.etc)
   );
 
-  const pAdj = adjustDepletionFactor(ctx.depletionFactor, ctx.etc);
-  const afd = calculateDynamicAFD(ctx.cad, pAdj);
+  // Usa o AFD/​p EFETIVO já resolvido pelo motor (Tabela 2 ou FAO-56). Não
+  // re-ajustar aqui: ctx.depletionFactor já é o p efetivo (afd/adt), então
+  // aplicar adjustDepletionFactor de novo aplicaria o ajuste FAO-56 em dobro.
+  const afd = ctx.afd;
   const projectedStatus = determineWaterStatus(projectedArm, ctx.cad, afd);
   const stressThreshold = ctx.cad - afd;
   const projectedDeficit = projectedArm < stressThreshold

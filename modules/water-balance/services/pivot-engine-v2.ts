@@ -32,6 +32,7 @@ import {
   type InitialMoistureUnit,
 } from "./soil-water-balance";
 import { classifyWaterStatus, type MapHydricStatus } from "./map-hydric-status";
+import { availabilityFactor, type CropAvailabilityGroup } from "./availability-factor";
 
 export type HydricStatus = "verde" | "amarelo" | "vermelho" | "cinza";
 
@@ -84,6 +85,12 @@ export interface EngineCulture {
   kl?: number | null;
   ks_function?: string | null;
   ky?: number | null;
+  /**
+   * Grupo de disponibilidade (1-4) da Tabela 2 (Doorenbos & Kassam, 1979).
+   * Quando definido, o fator f (p) vem de f(grupo, ETm); caso contrário, o
+   * motor mantém o método FAO-56 (depletion_factor ajustado por ETc).
+   */
+  availabilityGroup?: CropAvailabilityGroup | null;
 }
 
 export interface EngineSoil {
@@ -288,9 +295,23 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     if (!Number.isFinite(rootDepth) || rootDepth <= 0) return [];
 
     const phaseName = agronomic?.stageName ?? phaseId?.phase.name ?? "—";
+    const weather = weatherByDate[date];
+    const kl = resolveManejoKl({ parcelOverride: assignment.kl_override, phaseKl: phaseId?.phase.kl, cultureKl: culture.kl });
+
+    // ETm ≈ ETc potencial (ETo × Kc × Kl) — entrada da Tabela 2 (grupo × ETm).
+    const etmForP = weather ? Math.max(weather.et0 * kc * kl, 0) : 5;
     const legacyP = culture.depletion_factor ?? phaseId?.phase.depletion_factor ?? null;
+    // Override explícito da parcela (modo personalizado) tem prioridade sobre a
+    // Tabela 2 — o produtor definiu o p à mão para esta parcela.
+    const hasCustomP = custom
+      && assignment.depletion_factor != null
+      && Number.isFinite(assignment.depletion_factor);
     const pFactor = agronomic?.depletionFractionP
-      ?? (legacyP == null ? null : resolveDepletionFactor(assignment, phaseId?.phase.depletion_factor, legacyP));
+      ?? ((culture.availabilityGroup != null && !hasCustomP)
+          // Fator f pela Tabela 2 (Doorenbos & Kassam) quando há grupo definido.
+          ? availabilityFactor(culture.availabilityGroup, etmForP)
+          // Caso contrário, método FAO-56 atual (preserva o teste-ouro Pivô 59).
+          : (legacyP == null ? null : resolveDepletionFactor(assignment, phaseId?.phase.depletion_factor, legacyP)));
     if (pFactor == null || !Number.isFinite(pFactor) || pFactor <= 0 || pFactor >= 1) return [];
     const adt = soil.layers && soil.layers.length > 0
       ? calculateADTFromLayers(soil.layers, rootDepth)
@@ -298,9 +319,6 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     if (adt <= 0) return [];
     const afd = calculateAFD(adt, pFactor);
     const { fieldCapacity, wiltingPoint } = profileCcPmp(soil, soil.layers, rootDepth);
-
-    const weather = weatherByDate[date];
-    const kl = resolveManejoKl({ parcelOverride: assignment.kl_override, phaseKl: phaseId?.phase.kl, cultureKl: culture.kl });
 
     let armStart: number;
     if (previousStorage != null) {

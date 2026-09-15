@@ -22,6 +22,7 @@ import {
 } from "@/modules/soil/services";
 import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { parcelManagedAreaHa } from "@/modules/assignment/services/parcel-geometry";
+import { cropGroupByName } from "@/modules/water-balance/services/availability-factor";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -432,6 +433,7 @@ export function useFarmHydricState(): FarmHydricState {
               kl:(culture.kl as number|null) ?? null,
               ks_function:(culture.ks_function as string|null) ?? null,
               ky:(culture.ky as number|null) ?? null,
+              availabilityGroup:cropGroupByName((culture.name as string|null) ?? null),
             },
             phases:phasesByCulture.get(assignment.culture_id as string) ?? [],
             soil:{
