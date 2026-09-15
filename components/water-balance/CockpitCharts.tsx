@@ -146,6 +146,7 @@ export function EntradasConsumoChart({
 export function ReservatorioChart({
   points,
   todayIndex,
+  crossIndex,
   ccMm,
   pmpMm,
   safetyMm,
@@ -153,6 +154,8 @@ export function ReservatorioChart({
 }: {
   points: ReservatorioPoint[];
   todayIndex: number;
+  /** Índice do primeiro dia projetado que o motor classifica como crítico (−1 = nenhum). */
+  crossIndex: number;
   /** Água no solo na capacidade de campo (mm, absoluto). */
   ccMm: number;
   /** Água no solo no ponto de murcha (mm, absoluto = piso). */
@@ -199,12 +202,9 @@ export function ReservatorioChart({
   const todayPt = todayIndex >= 0 && todayIndex < n ? points[todayIndex] : null;
   const todayX = todayIndex >= 0 && todayIndex < n ? x(todayIndex) : null;
 
-  // ponto de cruzamento projetado com o limite de manejo
-  let crossIdx = -1;
-  for (let i = Math.max(todayIndex, 0); i < n; i += 1) {
-    const v = points[i].storageAbs;
-    if (v != null && v <= safetyMm) { crossIdx = i; break; }
-  }
+  // cruzamento com o limite de manejo — determinado pelo status do motor por
+  // data (recebido pronto), não por comparação contra a linha fixa do gráfico.
+  const crossIdx = crossIndex >= 0 && crossIndex < n ? crossIndex : -1;
 
   const yTicks = [] as number[];
   for (let t = 0; t <= yTop; t += 20) yTicks.push(t);

@@ -784,14 +784,17 @@ export default function BalancoHidricoPage() {
           .order("issued_at", { ascending: false });
         if (opStationId) fq = fq.eq("station_id", opStationId);
         const { data: fcData } = await fq;
-        // emissão mais recente por data + prefixo CONTÍGUO a partir de effectiveEnd+1.
+        // Emissão mais recente COMPLETA por data. Uma linha só é aceita quando
+        // ETo calculada E precipitação são válidas — previsão com chuva ausente
+        // não vira "0 mm real"; deixa uma emissão mais antiga completa preencher
+        // a data (ou encerra o prefixo contíguo, sem inventar solo seco).
         const byDate = new Map<string, { et0: number; precip: number }>();
         for (const row of (fcData ?? []) as Array<{ target_date: string; et0_calculated: number | null; precipitation: number | null }>) {
           if (byDate.has(row.target_date)) continue;
           const et0 = row.et0_calculated; // C3: nunca usar et0_source (referência do provedor) no balanço.
           if (et0 == null || !Number.isFinite(Number(et0)) || Number(et0) < 0) continue;
-          const precip = row.precipitation == null || !Number.isFinite(Number(row.precipitation)) || Number(row.precipitation) < 0 ? 0 : Number(row.precipitation);
-          byDate.set(row.target_date, { et0: Number(et0), precip });
+          if (row.precipitation == null || !Number.isFinite(Number(row.precipitation)) || Number(row.precipitation) < 0) continue;
+          byDate.set(row.target_date, { et0: Number(et0), precip: Number(row.precipitation) });
         }
         const projWeather: Record<string, { et0: number; precipitation: number }> = { ...engineWeatherByDate };
         let cursor = addDaysIso(effectiveEnd, 1);
@@ -804,7 +807,13 @@ export default function BalancoHidricoPage() {
           cursor = addDaysIso(cursor, 1);
         }
         if (lastForecastDate > effectiveEnd) {
-          const projSeries = computePivotBalanceSeries({ ...engineInput, weatherByDate: projWeather, dateEnd: lastForecastDate });
+          // Cenário "sem irrigação": remove eventos de irrigação posteriores ao
+          // último dia observado — a projeção não deve aplicar irrigação futura
+          // (as barras da previsão são zero e o rótulo diz "sem irrigação").
+          const projIrrigation = Object.fromEntries(
+            Object.entries(irrigationByDate).filter(([d]) => d <= effectiveEnd),
+          );
+          const projSeries = computePivotBalanceSeries({ ...engineInput, weatherByDate: projWeather, irrigationByDate: projIrrigation, dateEnd: lastForecastDate });
           projRows = projSeries.filter((d) => d.date > effectiveEnd).map(mapBalanceDay);
         }
       } catch {
@@ -1871,7 +1880,13 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
     isForecast: false,
   }));
   const todayIndexReserv = reservatorio.length - 1;
-  for (const p of future) reservatorio.push({ label: fmtDia(p.date), storageAbs: p.storedWater + armPmpMm(p), isForecast: true });
+  // Cruzamento do limite de manejo = primeiro dia futuro que o MOTOR classifica
+  // como vermelho (déficit ≥ AFD daquele dia) — não uma linha fixa do gráfico.
+  let crossIndexReserv = -1;
+  future.forEach((p, i) => {
+    reservatorio.push({ label: fmtDia(p.date), storageAbs: p.storedWater + armPmpMm(p), isForecast: true });
+    if (crossIndexReserv < 0 && p.waterStatus === "deficit_critico") crossIndexReserv = todayIndexReserv + 1 + i;
+  });
 
   // Entradas e consumo: últimos 14 dias + previsão (chuva efetiva e ETc do motor).
   const histE = rows.slice(-14);
@@ -1882,22 +1897,24 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
     etc: r.etc,
     isForecast: false,
   }));
-  const todayIndexEntradas = entradas.length;
+  const todayIndexEntradas = histE.length - 1; // marca HOJE no último dia OBSERVADO
   for (const p of future) {
     entradas.push({ label: fmtDia(p.date), chuvaEf: p.effectivePrecipitation, irrig: 0, etc: p.etc, isForecast: true });
   }
 
   // Tabela de projeção: Hoje (último observado) + offsets desejados por data.
+  // A cor de cada linha vem do status do motor daquele dia (limiares por data),
+  // não de uma comparação contra CAD/AFD do último dia observado.
   const projByOffset = new Map<number, DailyBalanceRow>();
   for (const p of future) projByOffset.set(daysBetweenIso(last.date, p.date), p);
   const wanted = [1, 2, 3, 5, 7];
-  const projTable: Array<{ date: string; arm: number; offset: number }> = [
-    { date: last.date, arm: last.storedWater, offset: 0 },
-    ...wanted.map((d) => { const r = projByOffset.get(d); return r ? { date: r.date, arm: r.storedWater, offset: d } : null; })
-      .filter((p): p is { date: string; arm: number; offset: number } => p != null),
+  const projTable: Array<{ date: string; arm: number; offset: number; status: WaterStatus }> = [
+    { date: last.date, arm: last.storedWater, offset: 0, status: last.waterStatus },
+    ...wanted.map((d) => { const r = projByOffset.get(d); return r ? { date: r.date, arm: r.storedWater, offset: d, status: r.waterStatus } : null; })
+      .filter((p): p is { date: string; arm: number; offset: number; status: WaterStatus } => p != null),
   ];
 
-  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, projTable, future, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: future.length > 0 };
+  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, crossIndexReserv, projTable, future, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: future.length > 0 };
 }
 
 function Cockpit({
@@ -2028,7 +2045,7 @@ function Cockpit({
               </div>
               <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#3b82f6", l: "ARM projetado", dashed: true }]} />
             </div>
-            <div className="h-[260px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
+            <div className="h-[260px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
           </Card>
         </div>
 
@@ -2083,9 +2100,9 @@ function Cockpit({
                 </div>
                 {series.projTable.map((p) => {
                   const pct = cad > 0 ? clampN((p.arm / cad) * 100, 0, 100) : 0;
-                  // Igual ao motor: amarelo em déficit ≥ 0,7·AFD, vermelho em
-                  // déficit ≥ AFD (ARM ≤ limite de manejo, inclusive na igualdade).
-                  const col = p.arm >= series.attentionArm ? "#16a34a" : p.arm > series.safetyArm ? "#eab308" : "#dc2626";
+                  // Cor = status do motor daquele dia (limiares por data), não
+                  // uma comparação contra CAD/AFD do último dia observado.
+                  const col = p.status === "ideal" || p.status === "saturado" ? "#16a34a" : p.status === "atencao" ? "#eab308" : "#dc2626";
                   return (
                     <div key={p.offset} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 text-[12px]">
                       <span className="w-8 font-semibold text-graphite-600 dark:text-gray-300">{p.offset === 0 ? "Hoje" : `+${p.offset}`}</span>
