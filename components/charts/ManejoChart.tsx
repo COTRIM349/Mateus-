@@ -18,6 +18,40 @@ import { hasEtp, type ManagementReportRow } from "@/modules/reports/services/man
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
+// Séries que devem ficar RETAS (referências/limiares): suavizar distorceria o
+// significado (CC é constante; a segurança muda em degrau por fase).
+const CRISP_KEYS = new Set<ManejoSeriesKey>(["cc", "pmp", "seg"]);
+
+// Curva suave e arredondada (Catmull-Rom → Bézier), SEGURA: os pontos de
+// controle têm x dentro do segmento (sem laços em X não-uniforme) e y limitado
+// ao intervalo [mín, máx] dos extremos do segmento. Pela propriedade do casco
+// convexo da Bézier, a curva nunca sai dessa faixa — logo, sem overshoot
+// (nada de valor negativo em irrigação acumulada, nem estouro fora do gráfico).
+const CURVE_TENSION = 5; // menor = mais arredondado; maior = mais reto.
+function smoothPath(pts: { x: number; y: number }[]): string {
+  const n = pts.length;
+  if (n === 0) return "";
+  if (n < 3) return pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
+
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
+  let d = `M ${pts[0].x},${pts[0].y}`;
+  for (let i = 0; i < n - 1; i += 1) {
+    const p0 = pts[i - 1] ?? pts[i];
+    const p1 = pts[i];
+    const p2 = pts[i + 1];
+    const p3 = pts[i + 2] ?? p2;
+    const h = p2.x - p1.x;
+    const loY = Math.min(p1.y, p2.y);
+    const hiY = Math.max(p1.y, p2.y);
+    const cp1x = p1.x + h / 3;
+    const cp2x = p2.x - h / 3;
+    const cp1y = clamp(p1.y + (p2.y - p0.y) / CURVE_TENSION, loY, hiY);
+    const cp2y = clamp(p2.y - (p3.y - p1.y) / CURVE_TENSION, loY, hiY);
+    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  }
+  return d;
+}
+
 const PHASE_PALETTE = ["#1ea85b", "#3b82f6", "#eab308", "#f97316", "#14b8c9", "#84cc16", "#a855f7"];
 
 function phaseColor(name: string): string {
@@ -201,7 +235,7 @@ export function ManejoChart({
 
         {umidPts.length > 1 && (
           <path
-            d={`M ${umidPts[0].x},${y1} ${umidPts.map((p) => `L ${p.x},${p.y}`).join(" ")} L ${umidPts[umidPts.length - 1].x},${y1} Z`}
+            d={`${smoothPath(umidPts)} L ${umidPts[umidPts.length - 1].x},${y1} L ${umidPts[0].x},${y1} Z`}
             fill="url(#manejo-umid-fill)"
           />
         )}
@@ -212,16 +246,19 @@ export function ManejoChart({
             .map((r, i) => {
               const v = seriesValue(k, r, extrasAt(i));
               if (v == null) return null;
-              return `${cx(i)},${yFor(s, v, yP, yM)}`;
+              return { x: cx(i), y: yFor(s, v, yP, yM) };
             })
-            .filter((p): p is string => p != null)
-            .join(" ");
-          if (!pts) return null;
+            .filter((p): p is { x: number; y: number } => p != null);
+          if (pts.length === 0) return null;
           const hero = k === "umidade" || k === "cc" || k === "seg";
+          // Curvas de dado ficam suaves; referências/limiares ficam retas.
+          const d = CRISP_KEYS.has(k)
+            ? pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ")
+            : smoothPath(pts);
           return (
-            <polyline
+            <path
               key={k}
-              points={pts}
+              d={d}
               fill="none"
               stroke={s.color}
               strokeWidth={k === "umidade" ? 3.1 : hero ? 2.2 : 1.7}

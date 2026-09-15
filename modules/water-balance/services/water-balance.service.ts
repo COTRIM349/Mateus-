@@ -71,6 +71,10 @@ export interface DailyBalanceRow extends WaterBalanceResult {
   safetyMoistureMm?: number;
   moisturePctCc?: number;
   safetyPctCc?: number;
+  /** CAD do perfil inteiro (referência de exibição). */
+  cadProfileMm?: number;
+  /** CRA/AFD do perfil inteiro (referência de exibição). */
+  craProfileMm?: number;
   peFormula?: string;
   balanceFormula?: string;
 }

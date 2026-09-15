@@ -85,6 +85,10 @@ export interface ManagementReportRow {
   wiltingPoint: number | null;
   cadMm: number;
   afdMm: number;
+  /** CAD do perfil inteiro (referência de exibição). */
+  cadProfileMm: number;
+  /** CRA/AFD do perfil inteiro (referência de exibição). */
+  craProfileMm: number;
   armMm: number;
   safetyMoistureMm: number;
   moisturePctCc: number;
@@ -260,6 +264,8 @@ export function buildManagementRows(input: ManagementBuildInput): ManagementRepo
       wiltingPoint: pmp,
       cadMm: cad,
       afdMm: afd,
+      cadProfileMm: cad,
+      craProfileMm: afd,
       armMm: arm,
       safetyMoistureMm: b.safety_moisture_mm ?? safetyMoistureMm(cad, afd),
       moisturePctCc: moisture,
@@ -322,6 +328,8 @@ export function managementRowFromBalance(
     wiltingPoint: pmp,
     cadMm: cad,
     afdMm: afd,
+    cadProfileMm: r.cadProfileMm ?? cad,
+    craProfileMm: r.craProfileMm ?? afd,
     armMm: arm,
     safetyMoistureMm: r.safetyMoistureMm ?? safetyMoistureMm(cad, afd),
     moisturePctCc: moisturePctCcForDisplay(r.moisturePctCc, arm, cad),

@@ -164,6 +164,10 @@ export interface BalanceDay {
   rootDepth: number;
   adt: number;
   afd: number;
+  /** CAD do perfil inteiro (profundidade efetiva) — referência de exibição. */
+  cadProfileMm: number;
+  /** CRA/AFD do perfil inteiro (CAD_perfil × p) — referência de exibição. */
+  craProfileMm: number;
   storage: number;
   surplus: number;
   deficit: number;
@@ -248,6 +252,15 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
   const daeRefMs = new Date(`${resolveDaeReferenceDate(assignment)}T00:00:00Z`).getTime();
   const custom = assignment.parameter_mode === "personalizado";
   const efficiency = resolveApplicationEfficiency(assignment, pivot);
+
+  // CAD/CRA do PERFIL INTEIRO (profundidade efetiva do solo). Só REFERÊNCIA de
+  // exibição — o balanço em si continua pela zona radicular do dia (FAO-56).
+  const profileDepth = soil.effective_depth && soil.effective_depth > 0 ? soil.effective_depth : 0;
+  const cadProfileMm = profileDepth > 0
+    ? (soil.layers && soil.layers.length > 0
+        ? calculateADTFromLayers(soil.layers, profileDepth)
+        : calculateADT(soil.field_capacity, soil.wilting_point, profileDepth, soil.effective_depth))
+    : 0;
 
   const rows: BalanceDay[] = [];
   let previousStorage: number | null = input.initialStorageMm ?? null;
@@ -358,6 +371,8 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       rootDepth: roundTo(rootDepth, 3),
       adt,
       afd,
+      cadProfileMm: roundTo(cadProfileMm, 2),
+      craProfileMm: roundTo(calculateAFD(cadProfileMm, pFactor), 2),
       storage,
       surplus: step.surplus,
       deficit,
