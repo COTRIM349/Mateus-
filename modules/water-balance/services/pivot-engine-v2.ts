@@ -301,8 +301,13 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     // ETm ≈ ETc potencial (ETo × Kc × Kl) — entrada da Tabela 2 (grupo × ETm).
     const etmForP = weather ? Math.max(weather.et0 * kc * kl, 0) : 5;
     const legacyP = culture.depletion_factor ?? phaseId?.phase.depletion_factor ?? null;
+    // Override explícito da parcela (modo personalizado) tem prioridade sobre a
+    // Tabela 2 — o produtor definiu o p à mão para esta parcela.
+    const hasCustomP = custom
+      && assignment.depletion_factor != null
+      && Number.isFinite(assignment.depletion_factor);
     const pFactor = agronomic?.depletionFractionP
-      ?? (culture.availabilityGroup != null
+      ?? ((culture.availabilityGroup != null && !hasCustomP)
           // Fator f pela Tabela 2 (Doorenbos & Kassam) quando há grupo definido.
           ? availabilityFactor(culture.availabilityGroup, etmForP)
           // Caso contrário, método FAO-56 atual (preserva o teste-ouro Pivô 59).

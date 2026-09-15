@@ -35,8 +35,21 @@ describe("cropGroupByName — rodapés da Tabela 2", () => {
     expect(cropGroupByName("Batata")).toBe(1);
   });
 
+  it("casa por token inteiro — não por substring", () => {
+    // "canadense" contém "cana", mas não deve virar grupo 4.
+    expect(cropGroupByName("Cevada canadense")).toBeNull();
+    // Cana-de-açúcar continua grupo 4 (token "cana").
+    expect(cropGroupByName("Cana-de-açúcar")).toBe(4);
+  });
+
+  it("cártamo (safflower) e açafrão caem no grupo 4", () => {
+    expect(cropGroupByName("Cártamo")).toBe(4);
+    expect(cropGroupByName("Açafrão")).toBe(4);
+  });
+
   it("retorna null para cultura não listada", () => {
     expect(cropGroupByName("Cevada")).toBeNull();
+    expect(cropGroupByName("Melão")).toBeNull(); // melão ≠ melancia
     expect(cropGroupByName("")).toBeNull();
     expect(cropGroupByName(null)).toBeNull();
   });

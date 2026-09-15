@@ -48,8 +48,9 @@ export function availabilityFactor(group: CropAvailabilityGroup, etmMmDay: numbe
 const GROUP_KEYWORDS: Record<CropAvailabilityGroup, string[]> = {
   1: ["cebola", "pimentao", "pimenta", "batata"],
   2: ["banana", "repolho", "uva", "videira", "ervilha", "tomate"],
-  3: ["alfafa", "feijao", "citros", "citrus", "laranja", "amendoim", "abacaxi", "girassol", "melancia", "melao", "trigo"],
-  4: ["algodao", "milho", "azeitona", "oliveira", "acafrao", "sorgo", "soja", "beterraba", "cana", "fumo", "tabaco"],
+  3: ["alfafa", "feijao", "citros", "citrus", "laranja", "amendoim", "abacaxi", "girassol", "melancia", "trigo"],
+  // açafrão/cártamo (safflower) na fonte original; cobrimos ambos os nomes.
+  4: ["algodao", "milho", "azeitona", "oliveira", "acafrao", "cartamo", "sorgo", "soja", "beterraba", "cana", "fumo", "tabaco"],
 };
 
 function normalize(text: string): string {
@@ -62,14 +63,17 @@ function normalize(text: string): string {
 
 /**
  * Grupo (1-4) da cultura pelo nome, conforme os rodapés da Tabela 2.
+ * Casa por TOKEN INTEIRO (não substring): "Cevada canadense" não vira grupo 4
+ * por conter "cana". Sufixos como cultivar/variedade são tolerados porque cada
+ * palavra é um token separado ("Soja BMX", "Cana-de-açúcar").
  * Retorna null quando não reconhece — aí o motor mantém o método FAO-56.
  */
 export function cropGroupByName(cultureName: string | null | undefined): CropAvailabilityGroup | null {
   if (!cultureName) return null;
-  const n = normalize(cultureName);
+  const tokens = new Set(normalize(cultureName).split(/[^a-z0-9]+/).filter(Boolean));
   const groups: CropAvailabilityGroup[] = [1, 2, 3, 4];
   for (const g of groups) {
-    if (GROUP_KEYWORDS[g].some((kw) => n.includes(kw))) return g;
+    if (GROUP_KEYWORDS[g].some((kw) => tokens.has(kw))) return g;
   }
   return null;
 }
