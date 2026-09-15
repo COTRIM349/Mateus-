@@ -22,24 +22,58 @@ const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, h
 // significado (CC é constante; a segurança muda em degrau por fase).
 const CRISP_KEYS = new Set<ManejoSeriesKey>(["cc", "pmp", "seg"]);
 
-// Curva suave (Catmull-Rom → Bézier cúbica) passando por todos os pontos.
-// Estilo Scheduling: linhas fluidas em vez de segmentos angulares.
+// Curva suave que PRESERVA A FORMA (spline cúbica monótona Fritsch–Carlson).
+// Estilo Scheduling, mas sem os defeitos do Catmull-Rom uniforme: não gera
+// overshoot (ex.: irrigação acumulada [0,0,20] não "mergulha" para negativo),
+// não inverte em platôs e lida com X não-uniforme (séries com dias faltando).
 function smoothPath(pts: { x: number; y: number }[]): string {
-  if (pts.length === 0) return "";
-  if (pts.length < 3) {
-    return pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
+  const n = pts.length;
+  if (n === 0) return "";
+  if (n < 3) return pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ");
+
+  // Secantes entre pontos consecutivos (usa distância real em X).
+  const dx: number[] = [];
+  const slope: number[] = [];
+  for (let i = 0; i < n - 1; i += 1) {
+    const h = pts[i + 1].x - pts[i].x;
+    dx[i] = h;
+    slope[i] = h !== 0 ? (pts[i + 1].y - pts[i].y) / h : 0;
   }
+
+  // Tangentes iniciais (média das secantes vizinhas; extremos = secante).
+  const m: number[] = new Array(n);
+  m[0] = slope[0];
+  m[n - 1] = slope[n - 2];
+  for (let i = 1; i < n - 1; i += 1) {
+    m[i] = slope[i - 1] * slope[i] <= 0 ? 0 : (slope[i - 1] + slope[i]) / 2;
+  }
+
+  // Ajuste de monotonicidade (Fritsch–Carlson): impede overshoot.
+  for (let i = 0; i < n - 1; i += 1) {
+    if (slope[i] === 0) {
+      m[i] = 0;
+      m[i + 1] = 0;
+      continue;
+    }
+    const a = m[i] / slope[i];
+    const b = m[i + 1] / slope[i];
+    const s = a * a + b * b;
+    if (s > 9) {
+      const t = 3 / Math.sqrt(s);
+      m[i] = t * a * slope[i];
+      m[i + 1] = t * b * slope[i];
+    }
+  }
+
+  // Hermite → Bézier cúbica por segmento.
   let d = `M ${pts[0].x},${pts[0].y}`;
-  for (let i = 0; i < pts.length - 1; i += 1) {
-    const p0 = pts[i - 1] ?? pts[i];
-    const p1 = pts[i];
-    const p2 = pts[i + 1];
-    const p3 = pts[i + 2] ?? p2;
-    const cp1x = p1.x + (p2.x - p0.x) / 6;
-    const cp1y = p1.y + (p2.y - p0.y) / 6;
-    const cp2x = p2.x - (p3.x - p1.x) / 6;
-    const cp2y = p2.y - (p3.y - p1.y) / 6;
-    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${p2.x},${p2.y}`;
+  for (let i = 0; i < n - 1; i += 1) {
+    const h = dx[i];
+    const cp1x = pts[i].x + h / 3;
+    const cp1y = pts[i].y + (m[i] * h) / 3;
+    const cp2x = pts[i + 1].x - h / 3;
+    const cp2y = pts[i + 1].y - (m[i + 1] * h) / 3;
+    d += ` C ${cp1x},${cp1y} ${cp2x},${cp2y} ${pts[i + 1].x},${pts[i + 1].y}`;
   }
   return d;
 }
