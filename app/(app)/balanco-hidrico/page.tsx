@@ -403,6 +403,10 @@ export default function BalancoHidricoPage() {
       setSeasonName(null);
       return;
     }
+    // Carregamento cancelável: ao trocar de pivô, ignora resultados de uma carga
+    // anterior — senão os dados do pivô antigo podem repovoar o estado por
+    // último e ser calculados sob o novo pivô.
+    let cancelled = false;
     (async () => {
       const { data: pca } = await supabase
         .from("pivot_crop_assignments")
@@ -414,6 +418,7 @@ export default function BalancoHidricoPage() {
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
+      if (cancelled) return;
 
       if (!pca) {
         setAssignment(null);
@@ -439,6 +444,7 @@ export default function BalancoHidricoPage() {
           ? supabase.from("seasons").select("name").eq("id", a.season_id).maybeSingle()
           : Promise.resolve({ data: null }),
       ]);
+      if (cancelled) return;
       setVarietyName((varietyRow as { name: string } | null)?.name ?? null);
       setSeasonName((seasonRow as { name: string } | null)?.name ?? null);
 
@@ -511,6 +517,7 @@ export default function BalancoHidricoPage() {
             isFieldCapacity: anchorData.is_field_capacity === true,
           }
         : null;
+      if (cancelled) return;
       setHydricAnchor(anchor);
       setCulture(cultureData as Culture | null);
       setSoil(operationalSoil);
@@ -526,6 +533,7 @@ export default function BalancoHidricoPage() {
         setDateEnd(end < today ? end : today);
       }
     })();
+    return () => { cancelled = true; };
   }, [selectedPivotId, supabase]);
 
   // Sequenciamento: só o cálculo mais recente pode escrever no estado, evitando
@@ -537,8 +545,9 @@ export default function BalancoHidricoPage() {
   const runCalculation = useCallback(async () => {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
     // Só calcula quando as entradas já pertencem ao mesmo pivô/parcela — evita
-    // disparar com a cultura/solo do pivô anterior ainda em memória.
+    // disparar com a cultura/solo/parcela do pivô anterior ainda em memória.
     if (culture.id !== assignment.culture_id) return;
+    if (assignment.pivot_id !== selectedPivotId) return;
     const token = ++calcTokenRef.current;
     const isStale = () => token !== calcTokenRef.current;
     setCalculating(true);
@@ -838,6 +847,7 @@ export default function BalancoHidricoPage() {
     calcTokenRef.current += 1;
     setBalanceRows([]);
     setProjectionRows([]);
+    setCalculating(false); // o run invalidado não limpa a flag; evita travar em "Calculando…"
     setError("");
     setNotice("");
   }, [selectedPivotId]);
@@ -1968,8 +1978,18 @@ function Cockpit({
 
   // alertas
   const alerts: { sev: "hi" | "md" | "lo"; text: string }[] = [];
-  if (urgency.atOrBeyondAfd) alerts.push({ sev: "hi", text: `${identity.pivotName ?? "Pivô"} atingiu o limite de manejo.` });
-  else if (urgency.daysToAfd != null && urgency.daysToAfd <= 2.5) alerts.push({ sev: "md", text: `${identity.pivotName ?? "Pivô"} atingirá o limite de manejo em ${fmtNum(urgency.daysToAfd)} dia(s).` });
+  const pivotLabel = identity.pivotName ?? "Pivô";
+  if (urgency.atOrBeyondAfd) {
+    alerts.push({ sev: "hi", text: `${pivotLabel} atingiu o limite de manejo.` });
+  } else if (series.future.length > 0) {
+    // Com previsão: a data de cruzamento vem da PROJEÇÃO do motor (considera
+    // chuva prevista), não da estimativa de demanda constante da urgência.
+    const firstRed = series.future.find((p) => p.waterStatus === "deficit_critico");
+    if (firstRed) alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ~${daysBetweenIso(last.date, firstRed.date)} dia(s) (projeção).` });
+  } else if (urgency.daysToAfd != null && urgency.daysToAfd <= 2.5) {
+    // Sem previsão: estimativa por demanda atual (sem chuva) — deixado explícito.
+    alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ${fmtNum(urgency.daysToAfd)} dia(s) (demanda atual, sem chuva).` });
+  }
   // Chuva efetiva prevista dos dias GENUINAMENTE futuros (mesma base da projeção).
   const rainForecast = series.future.reduce((a, p) => a + (p.effectivePrecipitation ?? 0), 0);
   if (series.future.length > 0 && rainForecast < 5) alerts.push({ sev: "md", text: "Sem chuva efetiva relevante prevista para os próximos dias." });

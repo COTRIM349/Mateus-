@@ -178,7 +178,11 @@ export function ReservatorioChart({
     return <EmptyChart label="Sem dados no período." height={H} />;
   }
 
-  const yTop = Math.ceil(ccMm / 10) * 10;
+  // Escala inclui o maior ARM projetado — em dias com raiz/PMP maiores, o
+  // storageAbs projetado pode passar da CC do dia observado; senão a curva (e o
+  // marcador de cruzamento) sairia do quadro.
+  const maxPoint = Math.max(ccMm, ...points.map((p) => p.storageAbs ?? 0));
+  const yTop = Math.ceil(maxPoint / 10) * 10;
   const yBottom = 0;
   const n = points.length;
   const x = (i: number) => padL + (n <= 1 ? plotW / 2 : (plotW * i) / (n - 1));
