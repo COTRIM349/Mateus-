@@ -418,7 +418,7 @@ export function useFarmHydricState(): FarmHydricState {
             dateStart:start.dateStart,
             dateEnd,
           });
-          result.push(state);
+          result.push({ ...state, initialConditionAssumed: start.assumeFieldCapacity });
         }
       }
 

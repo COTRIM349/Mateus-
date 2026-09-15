@@ -961,13 +961,16 @@ export default function BalancoHidricoPage() {
             />
           ) : (
             <p className="mt-3 text-[11px] text-graphite-400 dark:text-gray-500">
-              Condição inicial assumida como capacidade de campo no início do ciclo.{" "}
+              {(assignment.initial_moisture_is_cc === true
+                || (assignment.initial_soil_moisture_pct != null && Number.isFinite(Number(assignment.initial_soil_moisture_pct))))
+                ? "Condição inicial: valor cadastrado na parcela. "
+                : "Condição inicial assumida como capacidade de campo no início do ciclo. "}
               <button
                 type="button"
                 onClick={() => setShowInitialForm(true)}
                 className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
               >
-                Definir condição inicial medida
+                Definir condição inicial
               </button>
             </p>
           )
