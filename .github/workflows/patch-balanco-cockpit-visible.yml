@@ -2,24 +2,25 @@ name: Patch Balanco Cockpit Visible Graphs
 
 on:
   push:
-    branches: [main]
-    paths:
-      - '.github/workflows/patch-balanco-cockpit-visible.yml'
+    branches:
+      - main
 
 permissions:
   contents: write
 
 jobs:
   patch:
+    if: github.event.head_commit.message == 'chore: apply visible cockpit graph patch v2'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
+
       - name: Patch visible cockpit data series
-        shell: python
         run: |
+          python - <<'PY'
           from pathlib import Path
 
           path = Path('app/(app)/balanco-hidrico/page.tsx')
@@ -87,6 +88,7 @@ jobs:
             text = text.replace(old, new, 1)
 
           path.write_text(text, encoding='utf-8')
+          PY
 
       - name: Commit patch
         run: |
