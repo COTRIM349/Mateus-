@@ -19,7 +19,7 @@ jobs:
           fetch-depth: 0
 
       - name: Apply interface patch
-        run: python scripts/apply_manejo_v3_fixed.py
+        run: python scripts/apply_manejo_v3_runner.py
 
       - name: Install dependencies
         run: npm ci
