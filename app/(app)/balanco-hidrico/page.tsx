@@ -318,6 +318,14 @@ export default function BalancoHidricoPage() {
   const [lancSaving, setLancSaving] = useState(false);
   const [lancMsg, setLancMsg] = useState("");
 
+  // Parcela preferida vinda de ?parcel= (fila da Central de Manejo). Consumida
+  // uma única vez ao abrir o pivô setorizado correspondente.
+  const preferredParcelRef = useRef<string | null>(
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("parcel")
+      : null,
+  );
+
   // O balanço só oferece pivôs que estejam ativos e tenham parcela em manejo.
   useEffect(() => {
     let cancelled = false;
@@ -369,11 +377,15 @@ export default function BalancoHidricoPage() {
         );
         setPivots(eligiblePivots);
         setPivotsLoadedFarmId(activeFarmId);
-        setSelectedPivotId((current) => (
-          eligiblePivots.some((pivot) => pivot.id === current)
-            ? current
-            : eligiblePivots[0]?.id ?? ""
-        ));
+        // Pré-seleção por ?pivot= (vindo da Central de Manejo/mapa/fila).
+        const urlPivot = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("pivot")
+          : null;
+        setSelectedPivotId((current) => {
+          if (eligiblePivots.some((pivot) => pivot.id === current)) return current;
+          if (urlPivot && eligiblePivots.some((pivot) => pivot.id === urlPivot)) return urlPivot;
+          return eligiblePivots[0]?.id ?? "";
+        });
       } catch {
         if (!cancelled) {
           setPivots([]);
@@ -408,16 +420,36 @@ export default function BalancoHidricoPage() {
     // último e ser calculados sob o novo pivô.
     let cancelled = false;
     (async () => {
-      const { data: pca } = await supabase
-        .from("pivot_crop_assignments")
-        .select("*")
-        .eq("pivot_id", selectedPivotId)
-        .eq("active", true)
-        // Sprint 13 · Etapa 6 — só considera parcela em manejo.
-        .or("status.is.null,status.eq.ativa")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single();
+      // Parcela preferida via ?parcel= (fila da Central) — em pivô setorizado
+      // abre a parcela exata; consumida uma vez.
+      let pca: unknown = null;
+      const preferredParcel = preferredParcelRef.current;
+      if (preferredParcel) {
+        const { data } = await supabase
+          .from("pivot_crop_assignments")
+          .select("*")
+          .eq("id", preferredParcel)
+          .eq("pivot_id", selectedPivotId)
+          .eq("active", true)
+          .or("status.is.null,status.eq.ativa")
+          .maybeSingle();
+        if (cancelled) return;
+        preferredParcelRef.current = null;
+        pca = data;
+      }
+      if (!pca) {
+        const { data } = await supabase
+          .from("pivot_crop_assignments")
+          .select("*")
+          .eq("pivot_id", selectedPivotId)
+          .eq("active", true)
+          // Sprint 13 · Etapa 6 — só considera parcela em manejo.
+          .or("status.is.null,status.eq.ativa")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        pca = data;
+      }
       if (cancelled) return;
 
       if (!pca) {
@@ -1350,7 +1382,7 @@ function BalanceTab({
     : rows;
 
   const exportCsv = () => {
-    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "CAD", "AFD", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "DTA", "CRA", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
     const lines = filteredRows.map((r) => {
       const entr = soilInflowMm(r);
       const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
@@ -1440,8 +1472,8 @@ function BalanceTab({
     { header: "Entradas", render: (r) => <span className="text-blue-600 dark:text-blue-400">{soilInflowMm(r).toFixed(1)}</span> },
     { header: "Saídas", render: (r) => <span className="text-amber-600 dark:text-amber-400">{r.etc.toFixed(1)}</span> },
     { header: "Saldo", render: (r) => { const s = soilInflowMm(r) - r.etc; return <span className={s >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{s >= 0 ? "+" : ""}{s.toFixed(1)}</span>; } },
-    { header: "CAD", render: (r) => r.cad.toFixed(1) },
-    { header: "AFD", render: (r) => r.afd.toFixed(1) },
+    { header: "DTA", render: (r) => r.cad.toFixed(1) },
+    { header: "CRA", render: (r) => r.afd.toFixed(1) },
     { header: "ARM", render: (r) => <span title={r.balanceFormula}>{r.storedWater.toFixed(1)}</span> },
     { header: "Seg.", render: (r) => (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1) },
     { header: "% CC", render: (r) => `${moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad).toFixed(0)}` },
@@ -1564,21 +1596,21 @@ function BalanceTab({
           <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
           <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
             {arm < safetyMm
-              ? "O ARM está abaixo da umidade de segurança (CAD − AFD) e a demanda (ETc) supera as entradas recentes."
+              ? "O ARM está abaixo da umidade de segurança (DTA − CRA) e a demanda (ETc) supera as entradas recentes."
               : urgency?.daysToAfd != null
-                ? `O ARM está dentro da faixa segura. Mantida a demanda atual e sem chuva/irrigação, a AFD seria atingida em aproximadamente ${urgency.daysToAfd.toFixed(1)} dia(s).`
+                ? `O ARM está dentro da faixa segura. Mantida a demanda atual e sem chuva/irrigação, a CRA seria atingida em aproximadamente ${urgency.daysToAfd.toFixed(1)} dia(s).`
                 : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
           </p>
           <div className="mt-3 grid grid-cols-2 gap-2">
             {[
               { l: "ARM atual", v: `${arm.toFixed(1)} mm` },
-              { l: "CAD / AFD", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
+              { l: "DTA / CRA", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
               { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` },
               { l: "% da CC", v: `${pctCc.toFixed(0)}%` },
               { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
-              { l: "AFD consumida", v: urgency ? `${urgency.afdUsedPct.toFixed(0)}%` : "—" },
-              { l: "Margem até AFD", v: urgency ? (urgency.atOrBeyondAfd ? "limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—" },
-              { l: "Dias até AFD", v: daysToAfdLabel },
+              { l: "CRA consumida", v: urgency ? `${urgency.afdUsedPct.toFixed(0)}%` : "—" },
+              { l: "Margem até CRA", v: urgency ? (urgency.atOrBeyondAfd ? "limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—" },
+              { l: "Dias até CRA", v: daysToAfdLabel },
               { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
             ].map((f) => (
               <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]">
@@ -1597,10 +1629,10 @@ function BalanceTab({
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
             if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
-            if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `Restam ${urgency.remainingToAfdMm.toFixed(1)} mm até a AFD; na demanda atual, cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).` });
+            if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `Restam ${urgency.remainingToAfdMm.toFixed(1)} mm até a CRA; na demanda atual, cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).` });
             if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
             if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
-            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: urgency && urgency.daysToAfd != null ? `Sem alerta ativo. Janela estimada até a AFD: ${urgency.daysToAfd.toFixed(1)} dia(s).` : "Nenhum alerta ativo para o pivô no período." });
+            if (items.length === 0) items.push({ sev: "lo", title: "Tudo dentro do esperado", desc: urgency && urgency.daysToAfd != null ? `Sem alerta ativo. Janela estimada até a CRA: ${urgency.daysToAfd.toFixed(1)} dia(s).` : "Nenhum alerta ativo para o pivô no período." });
             const sevCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
             return items.map((a, i) => (
               <div key={i} className="flex gap-3 border-t border-gray-100 py-2.5 first:border-0 dark:border-white/[0.06]">
@@ -1640,7 +1672,7 @@ function BalanceTab({
         </div>
       </div>
 
-      {/* 2 · Situação atual (CAD / AFD / ARM / segurança — unidades explícitas) */}
+      {/* 2 · Situação atual (DTA / CRA / ARM / segurança — unidades explícitas) */}
       <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2 xl:grid-cols-4">
         <Card className="p-4">
           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">ARM</p>
@@ -1649,9 +1681,9 @@ function BalanceTab({
           <span className={`mt-2.5 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-bold ${tendencia.down ? "bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400" : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"}`}>{tendencia.down ? "▼" : "▲"} {tendencia.label}</span>
         </Card>
         <Card className="p-4">
-          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">CAD / AFD</p>
+          <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">DTA / CRA</p>
           <p className="mt-2 text-[26px] font-extrabold leading-none tabular-nums text-graphite-900 dark:text-white">{cad.toFixed(1)}<span className="text-[14px] text-graphite-400"> mm</span></p>
-          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">AFD {afd.toFixed(1)} mm · p {cad > 0 ? (afd / cad).toFixed(2) : "—"}</p>
+          <p className="mt-2.5 text-[11.5px] tabular-nums text-graphite-400 dark:text-gray-500">CRA {afd.toFixed(1)} mm · p {cad > 0 ? (afd / cad).toFixed(2) : "—"}</p>
         </Card>
         <Card className="p-4">
           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Umidade de segurança</p>
@@ -1662,7 +1694,7 @@ function BalanceTab({
           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Situação do solo</p>
           <p className="mt-2 text-[22px] font-extrabold leading-none" style={{ color: classificacao.color }}>{classificacao.label}</p>
           <p className="mt-2 text-[11.5px] leading-relaxed text-graphite-400 dark:text-gray-500">
-            {classificacao.label === "Adequado" ? "ARM acima da umidade de segurança." : classificacao.label === "Atenção" ? "Próximo do limite CAD − AFD." : "Déficit relevante — repor a água do solo."}
+            {classificacao.label === "Adequado" ? "ARM acima da umidade de segurança." : classificacao.label === "Atenção" ? "Próximo do limite DTA − CRA." : "Déficit relevante — repor a água do solo."}
           </p>
         </Card>
       </div>
@@ -1703,11 +1735,11 @@ function BalanceTab({
             head.energiaEspecifica != null ? { l: "Energia específica", v: `${head.energiaEspecifica} kWh/m³` } : { l: "Energia específica", v: "pendente", pend: true },
             { l: "Uniformidade (CUC)", v: "pendente", pend: true },
             {
-              l: "Janela até AFD",
+              l: "Janela até CRA",
               v: daysToAfdLabel,
               sub: urgency
                 ? urgency.atOrBeyondAfd
-                  ? "AFD já atingida"
+                  ? "CRA já atingida"
                   : `${urgency.remainingToAfdMm.toFixed(1)} mm de margem`
                 : undefined,
               cls: urgency?.atOrBeyondAfd
@@ -1757,11 +1789,11 @@ function BalanceTab({
         <span>Método ETo <strong className="font-semibold text-graphite-800 dark:text-white">FAO Penman-Monteith</strong></span>
         <span>Origem do Kc <strong className="font-semibold text-graphite-800 dark:text-white">Interpolação linear na fase</strong></span>
         <span>ETc <strong className="font-semibold text-graphite-800 dark:text-white">ETo × Kc × KL × Ks</strong></span>
-        <span>Ks <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56 (Dr vs AFD)</strong></span>
+        <span>Ks <strong className="font-semibold text-graphite-800 dark:text-white">FAO-56 (Dr vs CRA)</strong></span>
         <span>Ky <strong className="font-semibold text-graphite-800 dark:text-white">risco produtivo, não lâmina</strong></span>
         <span>Chuva efetiva <strong className="font-semibold text-graphite-800 dark:text-white">{PE_METHOD}</strong></span>
         <span>Balanço <strong className="font-semibold text-graphite-800 dark:text-white">{ARM_FORMULA}</strong></span>
-        <span>Unidades <strong className="font-semibold text-graphite-800 dark:text-white">CAD/AFD/ARM mm · % da CC volumétrico</strong></span>
+        <span>Unidades <strong className="font-semibold text-graphite-800 dark:text-white">DTA/CRA/ARM mm · % da CC volumétrico</strong></span>
         <span>Sensorial <strong className="font-semibold text-graphite-800 dark:text-white">nota 1–10, sem conversão para % da CC</strong></span>
         <span>Irrigação <strong className="font-semibold text-graphite-800 dark:text-white">evento real · I_ef = I × eficiência</strong></span>
         <span>Eficiência <strong className="font-semibold text-graphite-800 dark:text-white">{efPct.toFixed(0)}%</strong></span>
@@ -2031,8 +2063,8 @@ function Cockpit({
     { icon: <IconWave />, label: "ETc potencial", value: fmtNum(last.etcPotential ?? last.etc), unit: "mm" },
     { icon: <IconSprout />, label: "Ks", value: fmtNum(last.ks ?? 1, 2) },
     { icon: <IconDrop />, label: "ARM", value: fmtNum(arm), unit: "mm" },
-    { icon: <IconLayers />, label: "CAD", value: fmtNum(cad), unit: "mm" },
-    { icon: <IconAlert />, label: "AFD", value: fmtNum(afd), unit: "mm" },
+    { icon: <IconLayers />, label: "DTA", value: fmtNum(cad), unit: "mm" },
+    { icon: <IconAlert />, label: "CRA", value: fmtNum(afd), unit: "mm" },
     { icon: <IconLeaf />, label: "p", value: fmtNum(pFactor, 2) },
     { icon: <IconRoot />, label: "Raiz efetiva", value: fmtNum(last.rootDepth, 2), unit: "m" },
   ];
@@ -2077,9 +2109,9 @@ function Cockpit({
             <div className="mb-2 flex items-center justify-between">
               <div>
                 <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
-                <p className="text-[11px] text-graphite-400 dark:text-gray-500">ARM, curva de umidade do solo e segurança calculada por AFD = p × CAD</p>
+                <p className="text-[11px] text-graphite-400 dark:text-gray-500">ARM, curva de umidade do solo e segurança calculada por CRA = p × DTA</p>
               </div>
-              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#7c3aed", l: "Umidade do solo (%CC)", line: true }, { c: "#eab308", l: "Segurança = CAD − AFD", dashed: true }, { c: "#3b82f6", l: "Projetado", dashed: true }]} />
+              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#7c3aed", l: "Umidade do solo (%CC)", line: true }, { c: "#eab308", l: "Segurança = DTA − CRA", dashed: true }, { c: "#3b82f6", l: "Projetado", dashed: true }]} />
             </div>
             <div className="h-[330px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
           </Card>
@@ -2164,7 +2196,7 @@ function Cockpit({
               <>
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-white/[0.06]">
                   <div className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 bg-gray-50 px-2.5 py-2 text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:bg-white/[0.03] dark:text-gray-500">
-                    <span>Camada</span><span>CAD</span><span>Explorada</span><span>CAD efetiva</span>
+                    <span>Camada</span><span>DTA</span><span>Explorada</span><span>DTA efetiva</span>
                   </div>
                   {profileRows.map((row) => (
                     <div key={`${row.layer.depth_start}-${row.layer.depth_end}`} className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 border-t border-gray-100 px-2.5 py-2 text-[11.5px] tabular-nums text-graphite-600 dark:border-white/[0.05] dark:text-gray-300">
@@ -2176,12 +2208,12 @@ function Cockpit({
                   ))}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px]">
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA perfil completo</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(ctaProfile)} mm</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CAD efetiva hoje</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(cad)} mm</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">DTA perfil completo</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(ctaProfile)} mm</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">DTA efetiva hoje</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(cad)} mm</p></div>
                   <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">Fator p</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">AFD</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(afd)} mm</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CRA</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(afd)} mm</p></div>
                 </div>
-                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">CAD por camada = (CC − PMP) × espessura. A CAD efetiva considera somente a fração já explorada pela raiz.</p>
+                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA por camada = (CC − PMP) × espessura. A DTA efetiva considera somente a fração já explorada pela raiz.</p>
               </>
             ) : (
               <p className="text-[12px] text-graphite-400 dark:text-gray-500">Perfil por camadas não cadastrado para este pivô.</p>

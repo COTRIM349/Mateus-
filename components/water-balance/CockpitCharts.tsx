@@ -294,8 +294,8 @@ export function ReservatorioChart({
       {safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="6 4" />}
       {pmpPts.length > 1 && <polyline points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
 
-      <RefLine y={yMm(ccMm)} label="CAD / CC" value={`${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />
-      <RefLine y={yMm(safetyMm)} label="Segurança (CAD−AFD)" value={`${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />
+      <RefLine y={yMm(ccMm)} label="DTA / CC" value={`${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />
+      <RefLine y={yMm(safetyMm)} label="Segurança (DTA−CRA)" value={`${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />
       <RefLine y={yMm(pmpMm)} label="PMP" value={`${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />
 
       {/* ARM */}
