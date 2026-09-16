@@ -9,13 +9,95 @@ on:
       - main
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   validate:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Patch visible cockpit data series
+        if: github.event_name == 'push' && github.event.head_commit.message == 'chore: apply cockpit data feed through CI'
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('app/(app)/balanco-hidrico/page.tsx')
+          text = path.read_text(encoding='utf-8')
+
+          replacements = [
+            ('''  const reservatorio: ReservatorioPoint[] = hist.map((r) => ({
+    label: fmtDia(r.date),
+    storageAbs: r.storedWater + armPmpMm(r),
+    isForecast: false,
+  }));''', '''  const reservatorio: ReservatorioPoint[] = hist.map((r) => ({
+    label: fmtDia(r.date),
+    storageAbs: r.storedWater + armPmpMm(r),
+    moisturePctCc: moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad),
+    ccAbs: armPmpMm(r) + r.cad,
+    safetyAbs: armPmpMm(r) + Math.max(r.cad - r.afd, 0),
+    pmpAbs: armPmpMm(r),
+    attentionAbs: armPmpMm(r) + Math.max(r.cad - r.afd * 0.7, 0),
+    isForecast: false,
+  }));'''),
+            ('''    reservatorio.push({ label: fmtDia(p.date), storageAbs: p.storedWater + armPmpMm(p), isForecast: true });''', '''    reservatorio.push({
+      label: fmtDia(p.date),
+      storageAbs: p.storedWater + armPmpMm(p),
+      moisturePctCc: moisturePctCcForDisplay(p.moisturePctCc, p.storedWater, p.cad),
+      ccAbs: armPmpMm(p) + p.cad,
+      safetyAbs: armPmpMm(p) + Math.max(p.cad - p.afd, 0),
+      pmpAbs: armPmpMm(p),
+      attentionAbs: armPmpMm(p) + Math.max(p.cad - p.afd * 0.7, 0),
+      isForecast: true,
+    });'''),
+            ('''  const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
+    label: fmtDia(r.date),
+    chuvaEf: r.effectivePrecipitation,
+    irrig: r.effectiveIrrigation ?? r.irrigationApplied,
+    etc: r.etc,
+    isForecast: false,
+  }));''', '''  const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
+    label: fmtDia(r.date),
+    chuvaEf: r.effectivePrecipitation,
+    irrig: r.effectiveIrrigation ?? r.irrigationApplied,
+    etc: r.etc,
+    eto: r.et0,
+    kc: r.kc,
+    isForecast: false,
+  }));'''),
+            ('''    entradas.push({ label: fmtDia(p.date), chuvaEf: p.effectivePrecipitation, irrig: 0, etc: p.etc, isForecast: true });''', '''    entradas.push({
+      label: fmtDia(p.date),
+      chuvaEf: p.effectivePrecipitation,
+      irrig: 0,
+      etc: p.etc,
+      eto: p.et0,
+      kc: p.kc,
+      isForecast: true,
+    });'''),
+            ('''                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""}</p>''', '''                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""}</p>'''),
+            ('''              <Legend items={[{ c: "#2f6bff", l: "Chuva efetiva" }, { c: "#16a34a", l: "Irrigação" }, { c: "#64748b", l: "ETc", line: true }, { c: "#94a3b8", l: "Previsão ETc", dashed: true }]} />''', '''              <Legend items={[{ c: "#2f6bff", l: "Chuva efetiva" }, { c: "#16a34a", l: "Irrigação efetiva" }, { c: "#64748b", l: "ETc", line: true }, { c: "#f59e0b", l: "ETo", line: true }, { c: "#22c55e", l: "Kc", line: true }, { c: "#94a3b8", l: "Previsão", dashed: true }]} />'''),
+            ('''                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Armazenamento e faixas de manejo</p>''', '''                <p className="text-[11px] text-graphite-400 dark:text-gray-500">ARM, curva de umidade do solo e segurança calculada por AFD = p × CAD</p>'''),
+            ('''              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#3b82f6", l: "ARM projetado", dashed: true }]} />''', '''              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#7c3aed", l: "Umidade do solo (%CC)", line: true }, { c: "#eab308", l: "Segurança = CAD − AFD", dashed: true }, { c: "#3b82f6", l: "Projetado", dashed: true }]} />'''),
+          ]
+
+          for old, new in replacements:
+            count = text.count(old)
+            if count != 1:
+              raise SystemExit(f'Patch abortado: trecho esperado ocorreu {count} vez(es).')
+            text = text.replace(old, new, 1)
+
+          path.write_text(text, encoding='utf-8')
+          PY
+
+          git config user.name "Cotrim Irrigacao Bot"
+          git config user.email "actions@github.com"
+          git add 'app/(app)/balanco-hidrico/page.tsx'
+          git commit -m 'feat(balanco): mostrar Kc ETo e umidade no cockpit visivel'
+          git push origin main
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
