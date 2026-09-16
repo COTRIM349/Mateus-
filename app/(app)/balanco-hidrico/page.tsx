@@ -48,7 +48,19 @@ import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modul
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
-import { EntradasConsumoChart, ReservatorioChart, type EntradaConsumoPoint, type ReservatorioPoint } from "@/components/water-balance/CockpitCharts";
+import {
+  EntradasConsumoChart,
+  ReservatorioChart,
+  CockpitSeriesToggles,
+  ENTRADAS_SERIES,
+  RESERVATORIO_SERIES,
+  defaultEntradasVisible,
+  defaultReservatorioVisible,
+  type EntradaConsumoPoint,
+  type ReservatorioPoint,
+  type EntradaSeriesKey,
+  type ReservSeriesKey,
+} from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 import Link from "next/link";
 
@@ -1986,6 +1998,36 @@ function Cockpit({
   onShowDetail: () => void;
 }) {
   const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
+
+  // Variáveis exibidas em cada gráfico — o usuário inclui/remove séries (estilo
+  // Scheduling) e a escolha persiste por navegador.
+  const [entradasVis, setEntradasVis] = useState<Record<EntradaSeriesKey, boolean>>(defaultEntradasVisible);
+  const [reservVis, setReservVis] = useState<Record<ReservSeriesKey, boolean>>(defaultReservatorioVisible);
+  useEffect(() => {
+    try {
+      const e = window.localStorage.getItem("bh:entradasVis");
+      if (e) setEntradasVis((prev) => ({ ...prev, ...JSON.parse(e) }));
+      const r = window.localStorage.getItem("bh:reservVis");
+      if (r) setReservVis((prev) => ({ ...prev, ...JSON.parse(r) }));
+    } catch {
+      // localStorage indisponível — mantém os padrões.
+    }
+  }, []);
+  const toggleEntrada = useCallback((k: EntradaSeriesKey) => {
+    setEntradasVis((prev) => {
+      const next = { ...prev, [k]: !prev[k] };
+      try { window.localStorage.setItem("bh:entradasVis", JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
+  }, []);
+  const toggleReserv = useCallback((k: ReservSeriesKey) => {
+    setReservVis((prev) => {
+      const next = { ...prev, [k]: !prev[k] };
+      try { window.localStorage.setItem("bh:reservVis", JSON.stringify(next)); } catch { /* noop */ }
+      return next;
+    });
+  }, []);
+
   const last = rows[rows.length - 1];
   if (!last || !series) return null;
 
@@ -2096,24 +2138,26 @@ function Cockpit({
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="space-y-4 lg:col-span-2">
           <Card className="p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
-                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""}</p>
-              </div>
-              <Legend items={[{ c: "#2f6bff", l: "Chuva efetiva" }, { c: "#16a34a", l: "Irrigação efetiva" }, { c: "#64748b", l: "ETc", line: true }, { c: "#f59e0b", l: "ETo", line: true }, { c: "#22c55e", l: "Kc", line: true }, { c: "#94a3b8", l: "Previsão", dashed: true }]} />
+            <div className="mb-2">
+              <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
+              <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""} · previsão tracejada</p>
             </div>
-            <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} /></div>
+            <div className="mb-2.5">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
+              <CockpitSeriesToggles series={ENTRADAS_SERIES} visible={entradasVis} onToggle={toggleEntrada} />
+            </div>
+            <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} visible={entradasVis} /></div>
           </Card>
           <Card className="p-4">
-            <div className="mb-2 flex items-center justify-between">
-              <div>
-                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
-                <p className="text-[11px] text-graphite-400 dark:text-gray-500">ARM, curva de umidade do solo e segurança calculada por CRA = p × DTA</p>
-              </div>
-              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#7c3aed", l: "Umidade do solo (%CC)", line: true }, { c: "#eab308", l: "Segurança = DTA − CRA", dashed: true }, { c: "#3b82f6", l: "Projetado", dashed: true }]} />
+            <div className="mb-2">
+              <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
+              <p className="text-[11px] text-graphite-400 dark:text-gray-500">ARM, curva de umidade do solo (cai conforme o solo seca) e segurança calculada por CRA = p × DTA · previsão tracejada</p>
             </div>
-            <div className="h-[330px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
+            <div className="mb-2.5">
+              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
+              <CockpitSeriesToggles series={RESERVATORIO_SERIES} visible={reservVis} onToggle={toggleReserv} />
+            </div>
+            <div className="h-[330px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} /></div>
           </Card>
         </div>
 
@@ -2259,21 +2303,6 @@ function Cockpit({
       </div>
 
 
-    </div>
-  );
-}
-
-function Legend({ items }: { items: { c: string; l: string; line?: boolean; dashed?: boolean }[] }) {
-  return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-      {items.map((it) => (
-        <span key={it.l} className="inline-flex items-center gap-1.5 text-[10.5px] font-medium text-graphite-500 dark:text-gray-400">
-          {it.line || it.dashed
-            ? <svg width="16" height="6" viewBox="0 0 16 6"><line x1="0" y1="3" x2="16" y2="3" stroke={it.c} strokeWidth="2" strokeDasharray={it.dashed ? "4 3" : undefined} /></svg>
-            : <span className="h-2.5 w-2.5 rounded-sm" style={{ background: it.c }} />}
-          {it.l}
-        </span>
-      ))}
     </div>
   );
 }

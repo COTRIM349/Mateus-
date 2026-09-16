@@ -39,6 +39,105 @@ export interface ReservatorioPoint {
 const NUM = (v: number) => (Number.isFinite(v) ? v : 0);
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
+// ── Séries editáveis (add/remover variáveis, estilo Scheduling) ──────────────
+
+export type EntradaSeriesKey = "chuva" | "irrig" | "etc" | "eto" | "kc" | "fase";
+export type ReservSeriesKey =
+  | "arm"
+  | "umidade"
+  | "cc"
+  | "seguranca"
+  | "pmp"
+  | "zonas";
+
+export interface SeriesDef<K extends string> {
+  k: K;
+  label: string;
+  color: string;
+}
+
+export const ENTRADAS_SERIES: SeriesDef<EntradaSeriesKey>[] = [
+  { k: "chuva", label: "Chuva efetiva", color: "#2f6bff" },
+  { k: "irrig", label: "Irrigação efetiva", color: "#16a34a" },
+  { k: "etc", label: "ETc", color: "#64748b" },
+  { k: "eto", label: "ETo", color: "#f59e0b" },
+  { k: "kc", label: "Kc", color: "#22c55e" },
+  { k: "fase", label: "Faixa fenológica", color: "#365314" },
+];
+
+export const RESERVATORIO_SERIES: SeriesDef<ReservSeriesKey>[] = [
+  { k: "arm", label: "ARM — Água armazenada", color: "#3b82f6" },
+  { k: "umidade", label: "Umidade do solo (curva de secagem, %CC)", color: "#7c3aed" },
+  { k: "cc", label: "DTA / CC operacional", color: "#16a34a" },
+  { k: "seguranca", label: "Segurança (DTA − CRA)", color: "#eab308" },
+  { k: "pmp", label: "PMP", color: "#dc2626" },
+  { k: "zonas", label: "Faixas de zona (ótima/alerta/déficit)", color: "#94a3b8" },
+];
+
+export const defaultEntradasVisible: Record<EntradaSeriesKey, boolean> = {
+  chuva: true,
+  irrig: true,
+  etc: true,
+  eto: true,
+  kc: true,
+  fase: true,
+};
+
+export const defaultReservatorioVisible: Record<ReservSeriesKey, boolean> = {
+  arm: true,
+  umidade: true,
+  cc: true,
+  seguranca: true,
+  pmp: true,
+  zonas: true,
+};
+
+/**
+ * Chips clicáveis para incluir/remover variáveis do gráfico — mesma lógica de
+ * seleção do Scheduling, porém sempre visível (sem popover) e reaproveitável
+ * pelos dois gráficos do cockpit.
+ */
+export function CockpitSeriesToggles<K extends string>({
+  series,
+  visible,
+  onToggle,
+}: {
+  series: SeriesDef<K>[];
+  visible: Record<K, boolean>;
+  onToggle: (k: K) => void;
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      {series.map((s) => {
+        const on = visible[s.k];
+        return (
+          <button
+            key={s.k}
+            type="button"
+            onClick={() => onToggle(s.k)}
+            aria-pressed={on}
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              on
+                ? "border-transparent text-graphite-700 dark:text-gray-200"
+                : "border-gray-200 text-graphite-400 line-through opacity-60 hover:opacity-90 dark:border-white/10 dark:text-gray-500"
+            }`}
+            style={on ? { background: `${s.color}1f` } : undefined}
+          >
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-[3px]"
+              style={{
+                background: on ? s.color : "transparent",
+                boxShadow: on ? undefined : `inset 0 0 0 1.5px ${s.color}`,
+              }}
+            />
+            {s.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function splitSeries(
   points: EntradaConsumoPoint[],
   value: (p: EntradaConsumoPoint) => number | null | undefined,
@@ -63,9 +162,11 @@ function splitSeries(
 export function EntradasConsumoChart({
   points,
   todayIndex,
+  visible = defaultEntradasVisible,
 }: {
   points: EntradaConsumoPoint[];
   todayIndex: number;
+  visible?: Record<EntradaSeriesKey, boolean>;
 }) {
   const W = 1000;
   const H = 300;
@@ -124,10 +225,14 @@ export function EntradasConsumoChart({
       ))}
       <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>mm</text>
 
-      {kcTicks.map((t) => (
-        <text key={`kc-${t}`} x={W - padR + 7} y={yKc(t) + 3} className="fill-green-600 dark:fill-green-400" fontSize={9}>{t.toFixed(1)}</text>
-      ))}
-      <text x={W - 24} y={padT - 5} className="fill-green-600 dark:fill-green-400" fontSize={9} fontWeight={700}>Kc</text>
+      {visible.kc && (
+        <>
+          {kcTicks.map((t) => (
+            <text key={`kc-${t}`} x={W - padR + 7} y={yKc(t) + 3} className="fill-green-600 dark:fill-green-400" fontSize={9}>{t.toFixed(1)}</text>
+          ))}
+          <text x={W - 24} y={padT - 5} className="fill-green-600 dark:fill-green-400" fontSize={9} fontWeight={700}>Kc</text>
+        </>
+      )}
 
       {/* entradas */}
       {points.map((p, i) => {
@@ -141,23 +246,23 @@ export function EntradasConsumoChart({
         const opacity = p.isForecast ? 0.45 : 1;
         return (
           <g key={i} opacity={opacity}>
-            {chuva > 0 && <rect x={cx - barW / 2} y={yChuvaTop} width={barW} height={Math.max(chuvaH, 0)} rx={2} fill="#2f6bff" />}
-            {irr > 0 && <rect x={cx - barW / 2} y={yIrrTop} width={barW} height={Math.max(irrH, 0)} rx={2} fill="#16a34a" />}
+            {visible.chuva && chuva > 0 && <rect x={cx - barW / 2} y={yChuvaTop} width={barW} height={Math.max(chuvaH, 0)} rx={2} fill="#2f6bff" />}
+            {visible.irrig && irr > 0 && <rect x={cx - barW / 2} y={yIrrTop} width={barW} height={Math.max(irrH, 0)} rx={2} fill="#16a34a" />}
           </g>
         );
       })}
 
       {/* ETc */}
-      {etc.real.length > 1 && <polyline points={etc.real.join(" ")} fill="none" stroke="#64748b" strokeWidth={2.2} />}
-      {etc.fore.length > 1 && <polyline points={etc.fore.join(" ")} fill="none" stroke="#94a3b8" strokeWidth={2.1} strokeDasharray="5 4" />}
+      {visible.etc && etc.real.length > 1 && <polyline points={etc.real.join(" ")} fill="none" stroke="#64748b" strokeWidth={2.2} />}
+      {visible.etc && etc.fore.length > 1 && <polyline points={etc.fore.join(" ")} fill="none" stroke="#94a3b8" strokeWidth={2.1} strokeDasharray="5 4" />}
 
       {/* ETo */}
-      {eto.real.length > 1 && <polyline points={eto.real.join(" ")} fill="none" stroke="#f59e0b" strokeWidth={2} />}
-      {eto.fore.length > 1 && <polyline points={eto.fore.join(" ")} fill="none" stroke="#f59e0b" strokeWidth={1.9} strokeDasharray="5 4" opacity={0.8} />}
+      {visible.eto && eto.real.length > 1 && <polyline points={eto.real.join(" ")} fill="none" stroke="#f59e0b" strokeWidth={2} />}
+      {visible.eto && eto.fore.length > 1 && <polyline points={eto.fore.join(" ")} fill="none" stroke="#f59e0b" strokeWidth={1.9} strokeDasharray="5 4" opacity={0.8} />}
 
       {/* Kc */}
-      {kc.real.length > 1 && <polyline points={kc.real.join(" ")} fill="none" stroke="#22c55e" strokeWidth={2.2} />}
-      {kc.fore.length > 1 && <polyline points={kc.fore.join(" ")} fill="none" stroke="#22c55e" strokeWidth={2} strokeDasharray="6 4" opacity={0.8} />}
+      {visible.kc && kc.real.length > 1 && <polyline points={kc.real.join(" ")} fill="none" stroke="#22c55e" strokeWidth={2.2} />}
+      {visible.kc && kc.fore.length > 1 && <polyline points={kc.fore.join(" ")} fill="none" stroke="#22c55e" strokeWidth={2} strokeDasharray="6 4" opacity={0.8} />}
 
       {forecastStart != null && (
         <>
@@ -171,7 +276,7 @@ export function EntradasConsumoChart({
       ) : null)}
 
       {/* Faixa fenológica — usa exatamente a fase calculada pelo motor. */}
-      {phaseRuns.map((run, i) => {
+      {visible.fase && phaseRuns.map((run, i) => {
         const x1 = padL + band * run.start;
         const width = band * (run.end - run.start + 1);
         const fills = ["#14532d", "#166534", "#365314", "#713f12", "#7c2d12"];
@@ -196,6 +301,7 @@ export function ReservatorioChart({
   pmpMm,
   safetyMm,
   attentionMm,
+  visible = defaultReservatorioVisible,
 }: {
   points: ReservatorioPoint[];
   todayIndex: number;
@@ -204,6 +310,7 @@ export function ReservatorioChart({
   pmpMm: number;
   safetyMm: number;
   attentionMm: number;
+  visible?: Record<ReservSeriesKey, boolean>;
 }) {
   const W = 1000;
   const H = 320;
@@ -267,10 +374,14 @@ export function ReservatorioChart({
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Reservatório de água e umidade do solo">
       {/* Faixas atuais; as curvas dinâmicas de CC/segurança acompanham cada data. */}
-      {bandRect(attentionMm, ccMm, "#16a34a22")}
-      {bandRect(safetyMm, attentionMm, "#eab30826")}
-      {bandRect(pmpMm, safetyMm, "#dc262622")}
-      {bandRect(yBottom, pmpMm, "#7f1d1d22")}
+      {visible.zonas && (
+        <>
+          {bandRect(attentionMm, ccMm, "#16a34a22")}
+          {bandRect(safetyMm, attentionMm, "#eab30826")}
+          {bandRect(pmpMm, safetyMm, "#dc262622")}
+          {bandRect(yBottom, pmpMm, "#7f1d1d22")}
+        </>
+      )}
 
       {yTicks.map((t) => (
         <g key={t}>
@@ -280,31 +391,39 @@ export function ReservatorioChart({
       ))}
       <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>mm</text>
 
-      {pctTicks.map((t) => (
-        <text key={`pct-${t}`} x={padL + plotW + 72} y={yPct(t) + 3} className="fill-violet-600 dark:fill-violet-400" fontSize={8.5}>{t}</text>
-      ))}
-      <text x={padL + plotW + 72} y={padT - 4} className="fill-violet-600 dark:fill-violet-400" fontSize={8.5} fontWeight={700}>%CC</text>
+      {visible.umidade && (
+        <>
+          {pctTicks.map((t) => (
+            <text key={`pct-${t}`} x={padL + plotW + 72} y={yPct(t) + 3} className="fill-violet-600 dark:fill-violet-400" fontSize={8.5}>{t}</text>
+          ))}
+          <text x={padL + plotW + 72} y={padT - 4} className="fill-violet-600 dark:fill-violet-400" fontSize={8.5} fontWeight={700}>%CC</text>
+        </>
+      )}
 
-      <ZoneLabel y={yMm((attentionMm + ccMm) / 2)} text="Zona ótima" color="#16a34a" x={padL + 6} />
-      <ZoneLabel y={yMm((safetyMm + attentionMm) / 2)} text="Alerta" color="#b45309" x={padL + 6} />
-      <ZoneLabel y={yMm((pmpMm + safetyMm) / 2)} text="Déficit crítico" color="#dc2626" x={padL + 6} />
+      {visible.zonas && (
+        <>
+          <ZoneLabel y={yMm((attentionMm + ccMm) / 2)} text="Zona ótima" color="#16a34a" x={padL + 6} />
+          <ZoneLabel y={yMm((safetyMm + attentionMm) / 2)} text="Alerta" color="#b45309" x={padL + 6} />
+          <ZoneLabel y={yMm((pmpMm + safetyMm) / 2)} text="Déficit crítico" color="#dc2626" x={padL + 6} />
+        </>
+      )}
 
       {/* Referências dinâmicas do perfil explorado */}
-      {ccPts.length > 1 && <polyline points={ccPts.join(" ")} fill="none" stroke="#16a34a" strokeWidth={1.5} opacity={0.8} />}
-      {safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="6 4" />}
-      {pmpPts.length > 1 && <polyline points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
+      {visible.cc && ccPts.length > 1 && <polyline points={ccPts.join(" ")} fill="none" stroke="#16a34a" strokeWidth={1.5} opacity={0.8} />}
+      {visible.seguranca && safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="6 4" />}
+      {visible.pmp && pmpPts.length > 1 && <polyline points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
 
-      <RefLine y={yMm(ccMm)} label="DTA / CC" value={`${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />
-      <RefLine y={yMm(safetyMm)} label="Segurança (DTA−CRA)" value={`${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />
-      <RefLine y={yMm(pmpMm)} label="PMP" value={`${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />
+      {visible.cc && <RefLine y={yMm(ccMm)} label="DTA / CC" value={`${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
+      {visible.seguranca && <RefLine y={yMm(safetyMm)} label="Segurança (DTA−CRA)" value={`${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />}
+      {visible.pmp && <RefLine y={yMm(pmpMm)} label="PMP" value={`${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
 
       {/* ARM */}
-      {armReal.length > 1 && <polyline points={armReal.join(" ")} fill="none" stroke="#3b82f6" strokeWidth={2.5} />}
-      {armFore.length > 1 && <polyline points={armFore.join(" ")} fill="none" stroke="#3b82f6" strokeWidth={2.2} strokeDasharray="6 4" opacity={0.85} />}
+      {visible.arm && armReal.length > 1 && <polyline points={armReal.join(" ")} fill="none" stroke="#3b82f6" strokeWidth={2.5} />}
+      {visible.arm && armFore.length > 1 && <polyline points={armFore.join(" ")} fill="none" stroke="#3b82f6" strokeWidth={2.2} strokeDasharray="6 4" opacity={0.85} />}
 
-      {/* Umidade do solo (% da CC) */}
-      {moistureReal.length > 1 && <polyline points={moistureReal.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={2.1} />}
-      {moistureFore.length > 1 && <polyline points={moistureFore.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={1.9} strokeDasharray="5 4" opacity={0.75} />}
+      {/* Umidade do solo (% da CC) — curva que cai conforme o solo seca */}
+      {visible.umidade && moistureReal.length > 1 && <polyline points={moistureReal.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={2.1} />}
+      {visible.umidade && moistureFore.length > 1 && <polyline points={moistureFore.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={1.9} strokeDasharray="5 4" opacity={0.75} />}
 
       {todayX != null && (
         <>
@@ -313,7 +432,7 @@ export function ReservatorioChart({
         </>
       )}
 
-      {todayPt?.storageAbs != null && todayX != null && (
+      {visible.arm && todayPt?.storageAbs != null && todayX != null && (
         <>
           <circle cx={todayX} cy={yMm(todayPt.storageAbs)} r={4.5} fill="#3b82f6" stroke="#fff" strokeWidth={1.5} />
           <g transform={`translate(${todayX - 48}, ${yMm(todayPt.storageAbs) - 30})`}>
@@ -323,7 +442,7 @@ export function ReservatorioChart({
         </>
       )}
 
-      {crossIdx > todayIndex && points[crossIdx].storageAbs != null && (
+      {visible.arm && crossIdx > todayIndex && points[crossIdx].storageAbs != null && (
         <circle cx={x(crossIdx)} cy={yMm(points[crossIdx].storageAbs!)} r={4} fill="#dc2626" stroke="#fff" strokeWidth={1.4} />
       )}
 
