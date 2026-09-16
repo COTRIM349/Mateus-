@@ -18,6 +18,7 @@ export interface EntradaConsumoPoint {
   etc: number | null;
   eto?: number | null;
   kc?: number | null;
+  phase?: string | null;
   isForecast: boolean;
 }
 
@@ -71,7 +72,7 @@ export function EntradasConsumoChart({
   const padL = 38;
   const padR = 42;
   const padT = 18;
-  const padB = 28;
+  const padB = 48;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
@@ -100,6 +101,14 @@ export function EntradasConsumoChart({
   const etc = splitSeries(points, (p) => p.etc, x, yMm);
   const eto = splitSeries(points, (p) => p.eto, x, yMm);
   const kc = splitSeries(points, (p) => p.kc, x, yKc);
+  const phaseRuns: Array<{ phase: string; start: number; end: number }> = [];
+  points.forEach((p, i) => {
+    const phase = p.phase?.trim();
+    if (!phase) return;
+    const lastRun = phaseRuns[phaseRuns.length - 1];
+    if (lastRun && lastRun.phase === phase && lastRun.end === i - 1) lastRun.end = i;
+    else phaseRuns.push({ phase, start: i, end: i });
+  });
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Entradas, demanda e Kc">
@@ -158,8 +167,21 @@ export function EntradasConsumoChart({
       )}
 
       {points.map((p, i) => (n <= 16 || i % 2 === 0) ? (
-        <text key={`x${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{p.label}</text>
+        <text key={`x${i}`} x={x(i)} y={H - 27} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{p.label}</text>
       ) : null)}
+
+      {/* Faixa fenológica — usa exatamente a fase calculada pelo motor. */}
+      {phaseRuns.map((run, i) => {
+        const x1 = padL + band * run.start;
+        const width = band * (run.end - run.start + 1);
+        const fills = ["#14532d", "#166534", "#365314", "#713f12", "#7c2d12"];
+        return (
+          <g key={`${run.phase}-${run.start}`}>
+            <rect x={x1} y={H - 18} width={width} height={12} rx={2} fill={fills[i % fills.length]} opacity={0.72} />
+            {width > 70 && <text x={x1 + width / 2} y={H - 9} textAnchor="middle" fill="#e5e7eb" fontSize={8.2} fontWeight={700}>{run.phase}</text>}
+          </g>
+        );
+      })}
     </svg>
   );
 }

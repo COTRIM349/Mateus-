@@ -278,7 +278,7 @@ export default function BalancoHidricoPage() {
   const { activeFarmId, farms } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<"grafico" | "dados" | "decisao" | "lancamento">("dados");
+  const [activeTab, setActiveTab] = useState<"grafico" | "dados" | "decisao" | "lancamento">("grafico");
   const [showDetail, setShowDetail] = useState(false);
   const [pivots, setPivots] = useState<Pivot[]>([]);
   const [selectedPivotId, setSelectedPivotId] = useState("");
@@ -303,7 +303,7 @@ export default function BalancoHidricoPage() {
   const [seasonName, setSeasonName] = useState<string | null>(null);
 
   // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
-  const { summary: farmSummary, states: farmStates, loading: farmLoading, refresh: refreshFarm } = useFarmHydricState();
+  const { states: farmStates, refresh: refreshFarm } = useFarmHydricState();
 
   // Projeção hídrica: dias futuros calculados pelo motor com a previsão como
   // clima (ETo calculada aprovada), sem irrigação. Nunca observação.
@@ -1129,8 +1129,12 @@ export default function BalancoHidricoPage() {
         </div>
       </div>
 
-      {/* KPIs da fazenda */}
-      <FarmKpiRow summary={farmSummary} states={farmStates} loading={farmLoading} />
+      {/* Navegação principal do manejo — cada aba tem função própria. */}
+      {selectedPivotId && assignment && (
+        <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
+          <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
+        </div>
+      )}
 
       {/* Mensagens de estado */}
       {(pivotsLoading || pivotLoadError || (pivots.length === 0 && pivotsLoadedFarmId === activeFarmId) || (!assignment && selectedPivotId && !pivotsLoading) || error || (notice && !error) || (assignment && !hydricAnchor)) && (
@@ -1165,106 +1169,86 @@ export default function BalancoHidricoPage() {
         </div>
       )}
 
-      {/* Cockpit do pivô selecionado */}
-      {balanceRows.length > 0 ? (
-        <Cockpit
-          rows={balanceRows}
-          summary={summary}
-          projection={projectionRows}
-          identity={{
-            pivotName: selPivot?.name ?? null,
-            cultureName: culture?.name ?? null,
-            varietyName,
-            seasonName,
-            stage: assignment?.crop_stage ?? null,
-            area: parcelArea,
-            efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
-          }}
-          sensoryByDate={sensoryByDate}
-          onShowDetail={() => { setShowDetail(true); setActiveTab("dados"); }}
-        />
-      ) : (calculating || loading) ? (
-        <Card className="flex items-center justify-center gap-3 py-16">
-          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-          <span className="text-sm text-graphite-400 dark:text-gray-500">Calculando balanço...</span>
-        </Card>
-      ) : selectedPivotId && assignment && !error ? (
-        <Card className="py-14 text-center">
-          <p className="text-graphite-500 dark:text-gray-400">Sem dados suficientes para o balanço deste pivô. Verifique o clima e a condição inicial.</p>
-          <button type="button" onClick={() => { setShowDetail(true); setActiveTab("lancamento"); }} className="mt-3 rounded-xl border border-gray-200 px-4 py-2 text-[12.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.05]">
-            Registrar irrigação realizada
-          </button>
-        </Card>
-      ) : null}
-
-      {/* Detalhes / memória de cálculo (gráfico técnico, tabela, lançamento).
-          Fica disponível mesmo sem balanço calculado, para que o registro de
-          irrigação realizada não dependa de clima/condição inicial completos. */}
-      {selectedPivotId && assignment && (
-        <Card className="overflow-hidden p-0">
-          <button
-            type="button"
-            onClick={() => setShowDetail((s) => !s)}
-            className="flex w-full items-center justify-between px-5 py-3.5 text-left"
-          >
-            <span className="text-[13px] font-bold text-graphite-900 dark:text-white">{balanceRows.length > 0 ? "Detalhes e memória de cálculo" : "Registrar irrigação e ver detalhes"}</span>
-            <span className="text-[12px] font-semibold text-brand-600 dark:text-brand-400">{showDetail ? "Ocultar ▲" : "Mostrar ▼"}</span>
-          </button>
-          {showDetail && (
-            <div className="border-t border-gray-100 p-4 dark:border-white/[0.06]">
-              <div className="mb-3 flex flex-wrap items-center gap-1.5">
-                <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
-                {([7, 15, 30, 60, "safra"] as const).map((p) => (
-                  <button key={String(p)} type="button" onClick={() => applyPeriod(p)} disabled={p === "safra" && !assignment?.planting_date}
-                    className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${activePeriod === p ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}>
-                    {p === "safra" ? "Safra" : `${p}d`}
-                  </button>
-                ))}
-              </div>
-              <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
-              <div className="mt-4">
-                {(activeTab === "grafico" || activeTab === "dados" || activeTab === "decisao") && (
-                  <BalanceTab
-                    panel={activeTab}
-                    rows={balanceRows}
-                    summary={summary}
-                    loading={loading || calculating}
-                    head={centroHead}
-                    weatherByDate={weatherByDate}
-                    sensoryByDate={sensoryByDate}
-                  />
-                )}
-                {activeTab === "lancamento" && (
-                  <LancamentoTab
-                    pivotId={selectedPivotId}
-                    pivots={pivots}
-                    date={lancDate}
-                    time={lancTime}
-                    depth={lancDepth}
-                    hours={lancHours}
-                    notes={lancNotes}
-                    saving={lancSaving}
-                    message={lancMsg}
-                    onDateChange={setLancDate}
-                    onTimeChange={setLancTime}
-                    onDepthChange={(v) => {
-                      setLancDepth(v);
-                      const pivot = pivots.find((p) => p.id === selectedPivotId);
-                      const n = parseFloat(v);
-                      if (pivot && Number.isFinite(n) && n > 0) {
-                        setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
-                      }
-                    }}
-                    onHoursChange={setLancHours}
-                    onNotesChange={setLancNotes}
-                    onSave={handleLancamento}
-                  />
-                )}
-              </div>
-            </div>
-          )}
-        </Card>
+      {/* Conteúdo por aba: Gráfico = manejo; Dados = auditoria; Decisão = ação; Lançamento = registro. */}
+      {activeTab === "grafico" && (
+        balanceRows.length > 0 ? (
+          <Cockpit
+            rows={balanceRows}
+            summary={summary}
+            projection={projectionRows}
+            soilLayers={soilLayers}
+            identity={{
+              pivotName: selPivot?.name ?? null,
+              cultureName: culture?.name ?? null,
+              varietyName,
+              seasonName,
+              stage: assignment?.crop_stage ?? null,
+              area: parcelArea,
+              efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
+            }}
+            sensoryByDate={sensoryByDate}
+            onShowDetail={() => setActiveTab("dados")}
+          />
+        ) : (calculating || loading) ? (
+          <Card className="flex items-center justify-center gap-3 py-16">
+            <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+            <span className="text-sm text-graphite-400 dark:text-gray-500">Calculando balanço...</span>
+          </Card>
+        ) : selectedPivotId && assignment && !error ? (
+          <Card className="py-14 text-center">
+            <p className="text-graphite-500 dark:text-gray-400">Sem dados suficientes para o balanço deste pivô. Verifique o clima e a condição inicial.</p>
+          </Card>
+        ) : null
       )}
+
+      {(activeTab === "dados" || activeTab === "decisao") && selectedPivotId && assignment && (
+        <div className="space-y-3">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
+            {([7, 15, 30, 60, "safra"] as const).map((p) => (
+              <button key={String(p)} type="button" onClick={() => applyPeriod(p)} disabled={p === "safra" && !assignment?.planting_date}
+                className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${activePeriod === p ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}>
+                {p === "safra" ? "Safra" : `${p}d`}
+              </button>
+            ))}
+          </div>
+          <BalanceTab
+            panel={activeTab}
+            rows={balanceRows}
+            summary={summary}
+            loading={loading || calculating}
+            head={centroHead}
+            weatherByDate={weatherByDate}
+            sensoryByDate={sensoryByDate}
+          />
+        </div>
+      )}
+
+      {activeTab === "lancamento" && selectedPivotId && assignment && (
+        <LancamentoTab
+          pivotId={selectedPivotId}
+          pivots={pivots}
+          date={lancDate}
+          time={lancTime}
+          depth={lancDepth}
+          hours={lancHours}
+          notes={lancNotes}
+          saving={lancSaving}
+          message={lancMsg}
+          onDateChange={setLancDate}
+          onTimeChange={setLancTime}
+          onDepthChange={(v) => {
+            setLancDepth(v);
+            const pivot = pivots.find((p) => p.id === selectedPivotId);
+            const n = parseFloat(v);
+            if (pivot && Number.isFinite(n) && n > 0) setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
+          }}
+          onHoursChange={setLancHours}
+          onNotesChange={setLancNotes}
+          onSave={handleLancamento}
+        />
+      )}
+
     </div>
   );
 }
@@ -1919,6 +1903,7 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
     etc: r.etc,
     eto: r.et0,
     kc: r.kc,
+    phase: r.phase,
     isForecast: false,
   }));
   const todayIndexEntradas = histE.length - 1; // marca HOJE no último dia OBSERVADO
@@ -1930,6 +1915,7 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
       etc: p.etc,
       eto: p.et0,
       kc: p.kc,
+      phase: p.phase,
       isForecast: true,
     });
   }
@@ -1954,6 +1940,7 @@ function Cockpit({
   rows,
   summary,
   projection,
+  soilLayers,
   identity,
   sensoryByDate,
   onShowDetail,
@@ -1961,6 +1948,7 @@ function Cockpit({
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
   projection: DailyBalanceRow[];
+  soilLayers: SoilProfileLayer[];
   identity: CockpitIdentity;
   sensoryByDate: Record<string, number>;
   onShowDetail: () => void;
@@ -2025,18 +2013,38 @@ function Cockpit({
   const kySens = last.ky == null ? null : last.ky >= 1.15 ? "MUITO ALTA" : last.ky >= 1 ? "ALTA" : last.ky >= 0.85 ? "MÉDIA" : "BAIXA";
   const kySensColor = last.ky == null ? undefined : last.ky >= 1 ? "text-red-600 dark:text-red-400" : last.ky >= 0.85 ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400";
 
-  const bottomKpis = [
-    { icon: <IconSun />, label: "ETo", value: fmtNum(last.et0), unit: "mm/dia" },
+  const rootCm = Math.max(last.rootDepth * 100, 0);
+  const profileRows = soilLayers.map((layer) => {
+    const thicknessCm = Math.max(layer.depth_end - layer.depth_start, 0);
+    const cadLayer = Math.max((layer.field_capacity - layer.wilting_point) * (thicknessCm / 100) * 1000, 0);
+    const exploredCm = Math.max(Math.min(rootCm, layer.depth_end) - layer.depth_start, 0);
+    const exploredPct = thicknessCm > 0 ? clampN((exploredCm / thicknessCm) * 100, 0, 100) : 0;
+    const cadEffective = cadLayer * (exploredPct / 100);
+    return { layer, cadLayer, exploredPct, cadEffective };
+  });
+  const ctaProfile = profileRows.reduce((sum, row) => sum + row.cadLayer, 0);
+  const pFactor = cad > 0 ? afd / cad : 0;
+
+  const topKpis = [
+    { icon: <IconSun />, label: "ETo hoje", value: fmtNum(last.et0), unit: "mm" },
     { icon: <IconLeaf />, label: "Kc", value: fmtNum(last.kc, 2) },
+    { icon: <IconWave />, label: "ETc potencial", value: fmtNum(last.etcPotential ?? last.etc), unit: "mm" },
     { icon: <IconSprout />, label: "Ks", value: fmtNum(last.ks ?? 1, 2) },
+    { icon: <IconDrop />, label: "ARM", value: fmtNum(arm), unit: "mm" },
     { icon: <IconLayers />, label: "CAD", value: fmtNum(cad), unit: "mm" },
-    { icon: <IconDrop />, label: "AFD", value: fmtNum(afd), unit: "mm" },
+    { icon: <IconAlert />, label: "AFD", value: fmtNum(afd), unit: "mm" },
+    { icon: <IconLeaf />, label: "p", value: fmtNum(pFactor, 2) },
     { icon: <IconRoot />, label: "Raiz efetiva", value: fmtNum(last.rootDepth, 2), unit: "m" },
-    { icon: <IconWave />, label: "Sensibilidade hídrica", value: kySens ?? "—", tone: kySensColor },
   ];
 
   return (
     <div className="space-y-4">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-9">
+        {topKpis.map((k) => (
+          <StatCard key={k.label} icon={k.icon} label={k.label} value={k.value} unit={k.unit} />
+        ))}
+      </div>
+
       {/* Cabeçalho do pivô selecionado */}
       <Card className="p-4">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -2049,21 +2057,6 @@ function Cockpit({
           <span className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: priority.color, background: `${priority.color}1a` }}>
             <span className="h-1.5 w-1.5 rounded-full" style={{ background: priority.color }} />{priority.short}
           </span>
-        </div>
-        <div className="mt-3.5 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-gray-100 sm:grid-cols-3 lg:grid-cols-6 dark:bg-white/[0.06]">
-          {[
-            { l: "ARM atual", v: `${fmtNum(arm)} mm`, tone: "text-graphite-900 dark:text-white" },
-            { l: "Depleção", v: `${fmtNum(last.deficit)} mm`, tone: "text-amber-600 dark:text-amber-400" },
-            { l: "AFD utilizada", v: `${Math.round(urgency.afdUsedPct)}%`, tone: urgency.afdUsedPct >= 90 ? "text-red-600 dark:text-red-400" : "text-graphite-900 dark:text-white" },
-            { l: "ETc hoje", v: `${fmtNum(last.etc)} mm`, tone: "text-graphite-900 dark:text-white" },
-            { l: "Limite em", v: daysToAfdLabel, tone: urgency.daysToAfd != null && urgency.daysToAfd <= 2 ? "text-orange-600 dark:text-orange-400" : "text-graphite-900 dark:text-white" },
-            { l: "Lâmina recomendada", v: irrigar ? `${fmtNum(grossDepth)} mm` : "0 mm", tone: irrigar ? "text-green-600 dark:text-green-400" : "text-graphite-900 dark:text-white" },
-          ].map((m) => (
-            <div key={m.l} className="bg-white px-3 py-2.5 dark:bg-graphite-900">
-              <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.l}</p>
-              <p className={`mt-0.5 text-[16px] font-extrabold tabular-nums ${m.tone}`}>{m.v}</p>
-            </div>
-          ))}
         </div>
       </Card>
 
@@ -2078,7 +2071,7 @@ function Cockpit({
               </div>
               <Legend items={[{ c: "#2f6bff", l: "Chuva efetiva" }, { c: "#16a34a", l: "Irrigação efetiva" }, { c: "#64748b", l: "ETc", line: true }, { c: "#f59e0b", l: "ETo", line: true }, { c: "#22c55e", l: "Kc", line: true }, { c: "#94a3b8", l: "Previsão", dashed: true }]} />
             </div>
-            <div className="h-[220px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} /></div>
+            <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} /></div>
           </Card>
           <Card className="p-4">
             <div className="mb-2 flex items-center justify-between">
@@ -2088,7 +2081,7 @@ function Cockpit({
               </div>
               <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#7c3aed", l: "Umidade do solo (%CC)", line: true }, { c: "#eab308", l: "Segurança = CAD − AFD", dashed: true }, { c: "#3b82f6", l: "Projetado", dashed: true }]} />
             </div>
-            <div className="h-[260px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
+            <div className="h-[330px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
           </Card>
         </div>
 
@@ -2161,6 +2154,40 @@ function Cockpit({
             )}
           </Card>
 
+
+          <Card className="p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconRoot /> Perfil explorado pela raiz</p>
+              <span className="text-[10.5px] font-semibold text-graphite-400 dark:text-gray-500">Zr {fmtNum(last.rootDepth, 2)} m</span>
+            </div>
+            {profileRows.length > 0 ? (
+              <>
+                <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-white/[0.06]">
+                  <div className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 bg-gray-50 px-2.5 py-2 text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:bg-white/[0.03] dark:text-gray-500">
+                    <span>Camada</span><span>CAD</span><span>Explorada</span><span>CAD efetiva</span>
+                  </div>
+                  {profileRows.map((row) => (
+                    <div key={`${row.layer.depth_start}-${row.layer.depth_end}`} className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 border-t border-gray-100 px-2.5 py-2 text-[11.5px] tabular-nums text-graphite-600 dark:border-white/[0.05] dark:text-gray-300">
+                      <span className="font-semibold">{row.layer.depth_start}–{row.layer.depth_end} cm</span>
+                      <span>{fmtNum(row.cadLayer)} mm</span>
+                      <span>{fmtNum(row.exploredPct, 0)}%</span>
+                      <span className="font-bold text-graphite-900 dark:text-white">{fmtNum(row.cadEffective)} mm</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px]">
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA perfil completo</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(ctaProfile)} mm</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CAD efetiva hoje</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(cad)} mm</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">Fator p</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">AFD</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(afd)} mm</p></div>
+                </div>
+                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">CAD por camada = (CC − PMP) × espessura. A CAD efetiva considera somente a fração já explorada pela raiz.</p>
+              </>
+            ) : (
+              <p className="text-[12px] text-graphite-400 dark:text-gray-500">Perfil por camadas não cadastrado para este pivô.</p>
+            )}
+          </Card>
+
           {/* Nota de umidade de campo + Alertas */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
             <Card className="p-4">
@@ -2199,12 +2226,7 @@ function Cockpit({
         </div>
       </div>
 
-      {/* KPIs agronômicos (rodapé) */}
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-7">
-        {bottomKpis.map((k) => (
-          <StatCard key={k.label} icon={k.icon} label={k.label} value={k.value} unit={k.unit} tone={k.tone} />
-        ))}
-      </div>
+
     </div>
   );
 }
