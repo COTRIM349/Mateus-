@@ -70,11 +70,11 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
     items: [
       { k: "arm", label: "ARM — Água armazenada", color: "#2563eb", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
       { k: "cc", label: "CAD / CC operacional", color: "#16a34a", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
-      { k: "seg", label: "Limite de manejo (CAD − AFD)", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.safetyMoisture },
+      { k: "seg", label: "Umidade de segurança (CAD − AFD; fator p)", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.safetyMoisture },
       { k: "pmp", label: "PMP na escala de ARM (0 mm)", color: "#dc2626", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
       { k: "afd", label: "AFD — depleção permitida (perfil)", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
       { k: "cad", label: "CAD — Água disponível (perfil)", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
-      { k: "umidade", label: "Umidade volumétrica (% da CC)", color: "#7c3aed", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
+      { k: "umidade", label: "Curva de umidade do solo (% da CC)", color: "#7c3aed", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
       { k: "sensorial", label: "Nota sensorial de campo", color: "#a855f7", kind: "marker", axis: "marker", unit: MANAGEMENT_UNITS.sensoryNote },
     ],
   },
@@ -82,7 +82,7 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
     cat: "Cultura",
     items: [
       { k: "dap", label: "Dias após plantio (DAP)", color: "#16a34a", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.dae, norm: [0, 200] },
-      { k: "kc", label: "Kc — Coeficiente da cultura", color: "#22c55e", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.kc, norm: [0, 1.5] },
+      { k: "kc", label: "Kc — Curva do coeficiente da cultura", color: "#22c55e", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.kc, norm: [0, 1.5] },
       { k: "p", label: "Fator de disponibilidade hídrica (p)", color: "#10b981", kind: "dash", axis: "norm", unit: "adimensional", norm: [0, 1] },
       { k: "ks", label: "Ks — Coeficiente de estresse", color: "#15803d", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.ks, norm: [0, 1] },
       { k: "kl", label: "KL — Coeficiente de localização", color: "#4ade80", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.kl, norm: [0, 1.2] },
@@ -117,12 +117,16 @@ export const MANEJO_CHART_LAYOUT = {
 
 export const MANEJO_DEFAULT_ON: ManejoSeriesKey[] = [
   "arm",
+  "umidade",
   "cc",
   "seg",
   "pmp",
+  "p",
+  "kc",
   "irrig",
   "chuva",
   "etc",
+  "eto",
   "sensorial",
   "fase",
 ];
