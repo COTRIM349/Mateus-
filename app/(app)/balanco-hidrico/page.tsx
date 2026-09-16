@@ -1885,6 +1885,11 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   const reservatorio: ReservatorioPoint[] = hist.map((r) => ({
     label: fmtDia(r.date),
     storageAbs: r.storedWater + armPmpMm(r),
+    moisturePctCc: moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad),
+    ccAbs: armPmpMm(r) + r.cad,
+    safetyAbs: armPmpMm(r) + Math.max(r.cad - r.afd, 0),
+    pmpAbs: armPmpMm(r),
+    attentionAbs: armPmpMm(r) + Math.max(r.cad - r.afd * 0.7, 0),
     isForecast: false,
   }));
   const todayIndexReserv = reservatorio.length - 1;
@@ -1892,7 +1897,16 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   // como vermelho (déficit ≥ AFD daquele dia) — não uma linha fixa do gráfico.
   let crossIndexReserv = -1;
   future.forEach((p, i) => {
-    reservatorio.push({ label: fmtDia(p.date), storageAbs: p.storedWater + armPmpMm(p), isForecast: true });
+    reservatorio.push({
+      label: fmtDia(p.date),
+      storageAbs: p.storedWater + armPmpMm(p),
+      moisturePctCc: moisturePctCcForDisplay(p.moisturePctCc, p.storedWater, p.cad),
+      ccAbs: armPmpMm(p) + p.cad,
+      safetyAbs: armPmpMm(p) + Math.max(p.cad - p.afd, 0),
+      pmpAbs: armPmpMm(p),
+      attentionAbs: armPmpMm(p) + Math.max(p.cad - p.afd * 0.7, 0),
+      isForecast: true,
+    });
     if (crossIndexReserv < 0 && p.waterStatus === "deficit_critico") crossIndexReserv = todayIndexReserv + 1 + i;
   });
 
@@ -1903,11 +1917,21 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
     chuvaEf: r.effectivePrecipitation,
     irrig: r.effectiveIrrigation ?? r.irrigationApplied,
     etc: r.etc,
+    eto: r.et0,
+    kc: r.kc,
     isForecast: false,
   }));
   const todayIndexEntradas = histE.length - 1; // marca HOJE no último dia OBSERVADO
   for (const p of future) {
-    entradas.push({ label: fmtDia(p.date), chuvaEf: p.effectivePrecipitation, irrig: 0, etc: p.etc, isForecast: true });
+    entradas.push({
+      label: fmtDia(p.date),
+      chuvaEf: p.effectivePrecipitation,
+      irrig: 0,
+      etc: p.etc,
+      eto: p.et0,
+      kc: p.kc,
+      isForecast: true,
+    });
   }
 
   // Tabela de projeção: Hoje (último observado) + offsets desejados por data.
@@ -2050,9 +2074,9 @@ function Cockpit({
             <div className="mb-2 flex items-center justify-between">
               <div>
                 <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
-                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""}</p>
+                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""}</p>
               </div>
-              <Legend items={[{ c: "#2f6bff", l: "Chuva efetiva" }, { c: "#16a34a", l: "Irrigação" }, { c: "#64748b", l: "ETc", line: true }, { c: "#94a3b8", l: "Previsão ETc", dashed: true }]} />
+              <Legend items={[{ c: "#2f6bff", l: "Chuva efetiva" }, { c: "#16a34a", l: "Irrigação efetiva" }, { c: "#64748b", l: "ETc", line: true }, { c: "#f59e0b", l: "ETo", line: true }, { c: "#22c55e", l: "Kc", line: true }, { c: "#94a3b8", l: "Previsão", dashed: true }]} />
             </div>
             <div className="h-[220px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} /></div>
           </Card>
@@ -2060,9 +2084,9 @@ function Cockpit({
             <div className="mb-2 flex items-center justify-between">
               <div>
                 <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
-                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Armazenamento e faixas de manejo</p>
+                <p className="text-[11px] text-graphite-400 dark:text-gray-500">ARM, curva de umidade do solo e segurança calculada por AFD = p × CAD</p>
               </div>
-              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#3b82f6", l: "ARM projetado", dashed: true }]} />
+              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#7c3aed", l: "Umidade do solo (%CC)", line: true }, { c: "#eab308", l: "Segurança = CAD − AFD", dashed: true }, { c: "#3b82f6", l: "Projetado", dashed: true }]} />
             </div>
             <div className="h-[260px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
           </Card>
