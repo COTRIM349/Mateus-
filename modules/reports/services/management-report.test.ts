@@ -144,16 +144,22 @@ describe("relatório de manejo (Etapa K)", () => {
 });
 
 describe("gráfico central de manejo", () => {
-  it("tem os quatro grupos e não liga todas as séries por padrão", () => {
+  it("tem os quatro grupos e liga por padrão as séries-chave de decisão", () => {
     expect(MANEJO_GROUPS.map((g) => g.cat)).toEqual(["Irrigação", "Solo", "Cultura", "Clima"]);
     expect(isDefaultManejoSubset()).toBe(true);
-    expect(MANEJO_DEFAULT_ON).toEqual(["arm", "cc", "seg", "pmp", "irrig", "chuva", "etc", "sensorial", "fase"]);
+    expect(MANEJO_DEFAULT_ON).toEqual([
+      "arm", "umidade", "cc", "seg", "pmp", "p", "kc",
+      "irrig", "chuva", "etc", "eto", "sensorial", "fase",
+    ]);
     const vis = initialManejoVisibility();
     const on = Object.values(vis).filter(Boolean).length;
     expect(on).toBe(MANEJO_DEFAULT_ON.length);
     expect(on).toBeLessThan(Object.keys(vis).length);
     expect(vis.tmax).toBe(false);
-    expect(vis.kc).toBe(false);
+    expect(vis.kc).toBe(true);
+    expect(vis.eto).toBe(true);
+    expect(vis.umidade).toBe(true);
+    expect(vis.p).toBe(true);
     expect(vis.cc).toBe(true);
     expect(vis.seg).toBe(true);
     expect(vis.fase).toBe(true);
