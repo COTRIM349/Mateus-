@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button,
@@ -23,6 +23,7 @@ import {
   PE_METHOD,
   moisturePctCcForDisplay,
   safetyPctCcForDisplay,
+  type BalanceDay,
   type DailyBalanceRow,
   type WaterStatus,
   type HydricStatus,
@@ -47,6 +48,9 @@ import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modul
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
+import { EntradasConsumoChart, ReservatorioChart, type EntradaConsumoPoint, type ReservatorioPoint } from "@/components/water-balance/CockpitCharts";
+import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
+import Link from "next/link";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -55,6 +59,50 @@ const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
   vermelho: "deficit_critico",
   cinza: "ideal",
 };
+
+// adapta a saída do motor (BalanceDay) ao formato de exibição da tela.
+function mapBalanceDay(d: BalanceDay): DailyBalanceRow {
+  return {
+    date: d.date,
+    phase: d.phase,
+    et0: d.et0,
+    kc: d.kc,
+    etc: d.etc,
+    precipitation: d.precipitation,
+    effectivePrecipitation: d.effectivePrecipitation,
+    irrigationApplied: d.irrigation,
+    rootDepth: d.rootDepth,
+    cad: d.adt,
+    afd: d.afd,
+    cadProfileMm: d.cadProfileMm,
+    craProfileMm: d.craProfileMm,
+    storedWater: d.storage,
+    depletionFactor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
+    deficit: d.deficit,
+    surplus: d.surplus,
+    netDepth: d.recommendedNetDepth,
+    grossDepth: d.recommendedGrossDepth,
+    volumeNeeded: d.recommendedVolume,
+    irrigationTime: d.estimatedIrrigationTime,
+    waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
+    dae: d.dae,
+    ks: d.ks,
+    kl: d.kl,
+    kcAdjusted: d.kcAdjusted,
+    etcPotential: d.etcPotential,
+    ky: d.ky,
+    yieldRisk: d.yieldRisk,
+    etcFormula: d.etcFormula,
+    effectiveIrrigation: d.effectiveIrrigation,
+    fieldCapacity: d.fieldCapacity,
+    wiltingPoint: d.wiltingPoint,
+    safetyMoistureMm: d.safetyMoistureMm,
+    moisturePctCc: d.moisturePctCc,
+    safetyPctCc: d.safetyPctCc,
+    peFormula: d.peFormula,
+    balanceFormula: d.balanceFormula,
+  };
+}
 
 // distância aproximada entre dois pontos (km) — Haversine
 function haversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
@@ -108,6 +156,8 @@ interface CropAssignment {
   pivot_id: string;
   season_id: string;
   culture_id: string;
+  culture_variety_id: string | null;
+  variety_id: string | null;
   soil_id: string | null;
   planting_date: string;
   management_start_date: string | null;
@@ -228,7 +278,8 @@ export default function BalancoHidricoPage() {
   const { activeFarmId, farms } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<"grafico" | "dados" | "decisao" | "lancamento">("grafico");
+  const [activeTab, setActiveTab] = useState<"grafico" | "dados" | "decisao" | "lancamento">("dados");
+  const [showDetail, setShowDetail] = useState(false);
   const [pivots, setPivots] = useState<Pivot[]>([]);
   const [selectedPivotId, setSelectedPivotId] = useState("");
   const [pivotsLoading, setPivotsLoading] = useState(false);
@@ -248,6 +299,15 @@ export default function BalancoHidricoPage() {
   const [calculating, setCalculating] = useState(false);
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [varietyName, setVarietyName] = useState<string | null>(null);
+  const [seasonName, setSeasonName] = useState<string | null>(null);
+
+  // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
+  const { summary: farmSummary, states: farmStates, loading: farmLoading, refresh: refreshFarm } = useFarmHydricState();
+
+  // Projeção hídrica: dias futuros calculados pelo motor com a previsão como
+  // clima (ETo calculada aprovada), sem irrigação. Nunca observação.
+  const [projectionRows, setProjectionRows] = useState<DailyBalanceRow[]>([]);
 
   // Lançamento tab
   const [lancDate, setLancDate] = useState("");
@@ -339,8 +399,14 @@ export default function BalancoHidricoPage() {
       setSoilLayers([]);
       setPhases([]);
       setHydricAnchor(null);
+      setVarietyName(null);
+      setSeasonName(null);
       return;
     }
+    // Carregamento cancelável: ao trocar de pivô, ignora resultados de uma carga
+    // anterior — senão os dados do pivô antigo podem repovoar o estado por
+    // último e ser calculados sob o novo pivô.
+    let cancelled = false;
     (async () => {
       const { data: pca } = await supabase
         .from("pivot_crop_assignments")
@@ -352,6 +418,7 @@ export default function BalancoHidricoPage() {
         .order("created_at", { ascending: false })
         .limit(1)
         .single();
+      if (cancelled) return;
 
       if (!pca) {
         setAssignment(null);
@@ -364,6 +431,22 @@ export default function BalancoHidricoPage() {
       }
       const a = pca as CropAssignment;
       setAssignment(a);
+
+      // Cultivar e safra (identidade da parcela, exibidas no cabeçalho do pivô).
+      // Parcelas antigas/importadas podem ter só variety_id — usa o mesmo
+      // fallback da tela de vinculação (culture_variety_id ?? variety_id).
+      const effectiveVarietyId = a.culture_variety_id ?? a.variety_id;
+      const [{ data: varietyRow }, { data: seasonRow }] = await Promise.all([
+        effectiveVarietyId
+          ? supabase.from("culture_varieties").select("name").eq("id", effectiveVarietyId).maybeSingle()
+          : Promise.resolve({ data: null }),
+        a.season_id
+          ? supabase.from("seasons").select("name").eq("id", a.season_id).maybeSingle()
+          : Promise.resolve({ data: null }),
+      ]);
+      if (cancelled) return;
+      setVarietyName((varietyRow as { name: string } | null)?.name ?? null);
+      setSeasonName((seasonRow as { name: string } | null)?.name ?? null);
 
       // O perfil físico 1:1 do pivô é a fonte operacional. O catálogo antigo
       // permanece somente como fallback para registros ainda não migrados.
@@ -434,6 +517,7 @@ export default function BalancoHidricoPage() {
             isFieldCapacity: anchorData.is_field_capacity === true,
           }
         : null;
+      if (cancelled) return;
       setHydricAnchor(anchor);
       setCulture(cultureData as Culture | null);
       setSoil(operationalSoil);
@@ -449,11 +533,23 @@ export default function BalancoHidricoPage() {
         setDateEnd(end < today ? end : today);
       }
     })();
+    return () => { cancelled = true; };
   }, [selectedPivotId, supabase]);
+
+  // Sequenciamento: só o cálculo mais recente pode escrever no estado, evitando
+  // que um cálculo lento com entradas antigas sobrescreva o resultado correto
+  // ao trocar de pivô.
+  const calcTokenRef = useRef(0);
 
   // Calculate balance
   const runCalculation = useCallback(async () => {
     if (!assignment || !culture || !soil || !dateStart || !dateEnd) return;
+    // Só calcula quando as entradas já pertencem ao mesmo pivô/parcela — evita
+    // disparar com a cultura/solo/parcela do pivô anterior ainda em memória.
+    if (culture.id !== assignment.culture_id) return;
+    if (assignment.pivot_id !== selectedPivotId) return;
+    const token = ++calcTokenRef.current;
+    const isStale = () => token !== calcTokenRef.current;
     setCalculating(true);
     setError("");
     setNotice("");
@@ -613,7 +709,7 @@ export default function BalancoHidricoPage() {
         );
       }
       const tailTrimmed = effectiveEnd < targetEnd;
-      if (tailTrimmed) {
+      if (tailTrimmed && !isStale()) {
         setNotice(
           `Balanço calculado até ${fmtBr(effectiveEnd)} — os dias mais recentes ainda não têm dado climático fechado.`,
         );
@@ -625,7 +721,7 @@ export default function BalancoHidricoPage() {
         engineWeatherByDate[d] = { et0: w.et0, precipitation: w.precip };
       }
 
-      const series = computePivotBalanceSeries({
+      const engineInput = {
         assignment: {
           id: assignment.id,
           planting_date: assignment.planting_date,
@@ -664,69 +760,114 @@ export default function BalancoHidricoPage() {
         irrigationByDate,
         dateStart: calculationStart,
         dateEnd: effectiveEnd,
-      });
+      };
+
+      const series = computePivotBalanceSeries(engineInput);
       if (series.length === 0) {
         throw new Error("Balanço bloqueado: valide condição inicial, solo, fases/Kc e eficiência de aplicação.");
       }
-      const visibleSeries = series.filter((d) => d.date >= dateStart);
+      const rows: DailyBalanceRow[] = series.filter((d) => d.date >= dateStart).map(mapBalanceDay);
 
-      // adapta a saída do motor ao formato de exibição da tela
-      const rows: DailyBalanceRow[] = visibleSeries.map((d) => ({
-        date: d.date,
-        phase: d.phase,
-        et0: d.et0,
-        kc: d.kc,
-        etc: d.etc,
-        precipitation: d.precipitation,
-        effectivePrecipitation: d.effectivePrecipitation,
-        irrigationApplied: d.irrigation,
-        rootDepth: d.rootDepth,
-        cad: d.adt,
-        afd: d.afd,
-        cadProfileMm: d.cadProfileMm,
-        craProfileMm: d.craProfileMm,
-        storedWater: d.storage,
-        depletionFactor: d.adt > 0 ? Math.round((d.afd / d.adt) * 1000) / 1000 : 0,
-        deficit: d.deficit,
-        surplus: d.surplus,
-        netDepth: d.recommendedNetDepth,
-        grossDepth: d.recommendedGrossDepth,
-        volumeNeeded: d.recommendedVolume,
-        irrigationTime: d.estimatedIrrigationTime,
-        waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
-        dae: d.dae,
-        ks: d.ks,
-        kl: d.kl,
-        kcAdjusted: d.kcAdjusted,
-        etcPotential: d.etcPotential,
-        ky: d.ky,
-        yieldRisk: d.yieldRisk,
-        etcFormula: d.etcFormula,
-        effectiveIrrigation: d.effectiveIrrigation,
-        fieldCapacity: d.fieldCapacity,
-        wiltingPoint: d.wiltingPoint,
-        safetyMoistureMm: d.safetyMoistureMm,
-        moisturePctCc: d.moisturePctCc,
-        safetyPctCc: d.safetyPctCc,
-        peFormula: d.peFormula,
-        balanceFormula: d.balanceFormula,
-      }));
+      // 6. Projeção pela previsão — roda o MESMO motor sobre os dias FUTUROS,
+      // usando a previsão (somente ETo calculada aprovada; nunca et0_source) como
+      // clima e sem irrigação futura. Assim Kc/fase/raiz/AFD/Ks/chuva efetiva
+      // vêm do motor por data, e não de parâmetros congelados do último dia.
+      let projRows: DailyBalanceRow[] = [];
+      try {
+        // Seleção da previsão por PRIORIDADE DE PROVEDOR (precipitação forecast:
+        // open_meteo → meteoblue, CLIMATE_SPECIFICATION §prioridades), não pela
+        // estação observada — que pode ser Davis/INMET/in-field, sem previsão.
+        const { data: fcData } = await supabase
+          .from("weather_forecasts")
+          .select("target_date, issued_at, et0_calculated, precipitation, provider")
+          .eq("farm_id", activeFarmId!)
+          .gt("target_date", effectiveEnd)
+          .order("issued_at", { ascending: false });
+        const providerRank = (p: string | null) => {
+          const k = (p ?? "").toLowerCase().replace(/[^a-z]/g, "");
+          return k.includes("openmeteo") ? 0 : k.includes("meteoblue") ? 1 : 2;
+        };
+        const FORECAST_FRESH_MS = 24 * 3600 * 1000; // forecast além de 24h = stale (spec)
+        const now = Date.now();
+        // Por data: linha COMPLETA (ETo calculada E chuva válidas), FRESCA (<24h),
+        // do melhor provedor; empate de provedor resolve pela emissão mais nova
+        // (linhas já vêm issued_at desc). ETo sempre calculada; nunca et0_source.
+        const byDate = new Map<string, { et0: number; precip: number; rank: number }>();
+        for (const row of (fcData ?? []) as Array<{ target_date: string; issued_at: string; et0_calculated: number | null; precipitation: number | null; provider: string | null }>) {
+          const et0 = row.et0_calculated;
+          if (et0 == null || !Number.isFinite(Number(et0)) || Number(et0) < 0) continue;
+          if (row.precipitation == null || !Number.isFinite(Number(row.precipitation)) || Number(row.precipitation) < 0) continue;
+          const issued = Date.parse(row.issued_at);
+          if (!Number.isFinite(issued) || now - issued > FORECAST_FRESH_MS) continue; // descarta previsão velha
+          const rank = providerRank(row.provider);
+          const cur = byDate.get(row.target_date);
+          if (!cur || rank < cur.rank) byDate.set(row.target_date, { et0: Number(et0), precip: Number(row.precipitation), rank });
+        }
+        const projWeather: Record<string, { et0: number; precipitation: number }> = { ...engineWeatherByDate };
+        let cursor = addDaysIso(effectiveEnd, 1);
+        let lastForecastDate = effectiveEnd;
+        for (let i = 0; i < 8; i += 1) {
+          const w = byDate.get(cursor);
+          if (!w) break; // lacuna encerra o prefixo contíguo (não projeta com buraco).
+          projWeather[cursor] = { et0: w.et0, precipitation: w.precip };
+          lastForecastDate = cursor;
+          cursor = addDaysIso(cursor, 1);
+        }
+        if (lastForecastDate > effectiveEnd) {
+          // Cenário "sem irrigação": remove eventos de irrigação posteriores ao
+          // último dia observado — a projeção não deve aplicar irrigação futura
+          // (as barras da previsão são zero e o rótulo diz "sem irrigação").
+          const projIrrigation = Object.fromEntries(
+            Object.entries(irrigationByDate).filter(([d]) => d <= effectiveEnd),
+          );
+          const projSeries = computePivotBalanceSeries({ ...engineInput, weatherByDate: projWeather, irrigationByDate: projIrrigation, dateEnd: lastForecastDate });
+          projRows = projSeries.filter((d) => d.date > effectiveEnd).map(mapBalanceDay);
+        }
+      } catch {
+        projRows = [];
+      }
 
+      if (isStale()) return;
       setBalanceRows(rows);
+      setProjectionRows(projRows);
     } catch (err) {
+      if (isStale()) return;
       setBalanceRows([]);
+      setProjectionRows([]);
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
-      setCalculating(false);
+      if (!isStale()) setCalculating(false);
     }
   }, [assignment, culture, soil, soilLayers, phases, hydricAnchor, dateStart, dateEnd, selectedPivotId, pivots, activeFarmId, supabase]);
+
+  // Trocar de pivô invalida imediatamente qualquer cálculo em voo (o token
+  // avança) e limpa a tela — evita que o resultado do pivô anterior apareça
+  // sob o cabeçalho do novo antes do recálculo.
+  useEffect(() => {
+    calcTokenRef.current += 1;
+    setBalanceRows([]);
+    setProjectionRows([]);
+    setCalculating(false); // o run invalidado não limpa a flag; evita travar em "Calculando…"
+    setError("");
+    setNotice("");
+  }, [selectedPivotId]);
 
   // O balanço corrente é sempre recalculado de entradas confiáveis; histórico
   // persistido não é usado como estado atual nem como seed do ARM.
   useEffect(() => {
     setBalanceRows([]);
+    setProjectionRows([]);
     setNotice("");
   }, [assignment?.id, dateStart, dateEnd]);
+
+  // Cockpit: o balanço é recalculado automaticamente quando as entradas do pivô
+  // selecionado estão prontas — sem exigir clique em "Calcular".
+  useEffect(() => {
+    if (assignment && culture && soil && dateStart && dateEnd) {
+      void runCalculation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assignment?.id, culture?.id, soil?.id, dateStart, dateEnd, soilLayers.length, phases.length, hydricAnchor?.effectiveDate]);
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
@@ -904,10 +1045,14 @@ export default function BalancoHidricoPage() {
       });
 
       if (err) throw new Error(err.message);
-      setLancMsg("Irrigação lançada com sucesso. Recalcule o balanço para ver o ARM.");
+      setLancMsg("Irrigação lançada com sucesso. Atualizando o balanço...");
       setLancDepth("");
       setLancHours("");
       setLancNotes("");
+      // Recalcula o cockpit E o estado hídrico da fazenda (KPIs do topo) para
+      // refletir o novo ARM/recomendação — o botão "Calcular" foi removido.
+      void runCalculation();
+      refreshFarm();
     } catch (err) {
       setLancMsg(err instanceof Error ? err.message : "Erro ao salvar");
     } finally {
@@ -926,6 +1071,9 @@ export default function BalancoHidricoPage() {
   // ── Render ──────────────────────────────────────────────────────────────
 
   const selPivot = pivots.find((p) => p.id === selectedPivotId);
+  // Área sob a parcela ativa (setor/planted_area), não o pivô inteiro — reusa o
+  // cálculo do estado hídrico da fazenda.
+  const parcelArea = farmStates.find((s) => s.parcelId === assignment?.id)?.area ?? selPivot?.area ?? null;
   const centroHead = {
     pivotName: selPivot?.name ?? null,
     cultureName: culture?.name ?? null,
@@ -944,158 +1092,188 @@ export default function BalancoHidricoPage() {
     horasOperadas: ops.hours,
   };
 
-  return (
-    <div>
-      <PageHeader
-        titulo="Balanço Hídrico"
-        descricao="Gráfico, dados e decisão em abas — o mapa da fazenda fica na Visão Geral"
-      />
+  const farmName = farms.find((f) => f.id === activeFarmId)?.name ?? null;
+  const lastRow = balanceRows[balanceRows.length - 1] ?? null;
+  const lastUpdate = trace.lastSync
+    ? `${fmtDia(trace.lastSync.slice(0, 10))} ${trace.lastSync.slice(11, 16)}`
+    : lastRow ? fmtDia(lastRow.date) : null;
+  const showInitialNotice = (assignment?.initial_moisture_is_cc === true
+    || (assignment?.initial_soil_moisture_pct != null && Number.isFinite(Number(assignment?.initial_soil_moisture_pct))));
 
-      <Card className="mb-4 p-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-          <Select
-            label="Pivô"
-            value={selectedPivotId}
-            onChange={(e) => setSelectedPivotId(e.target.value)}
-            options={pivots.map((p) => ({ value: p.id, label: p.name }))}
-          />
-          <Input
-            label="Data início"
-            type="date"
-            value={dateStart}
-            onChange={(e) => setDateStart(e.target.value)}
-          />
-          <Input
-            label="Data fim"
-            type="date"
-            value={dateEnd}
-            onChange={(e) => setDateEnd(e.target.value)}
-          />
-          <div className="flex items-end">
-            <Button
-              onClick={runCalculation}
-              disabled={!selectedPivotId || !assignment || calculating}
-            >
-              {calculating ? "Calculando..." : "Calcular"}
-            </Button>
-          </div>
+  return (
+    <div className="space-y-4">
+      {/* Cabeçalho — central de decisão */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-[24px] font-extrabold tracking-tight text-graphite-900 dark:text-white">Balanço Hídrico</h1>
+          <p className="text-[12.5px] text-graphite-400 dark:text-gray-500">Central de decisão do manejo de irrigação</p>
         </div>
-        <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-          <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
-          {([7, 15, 30, 60, "safra"] as const).map((p) => (
-            <button
-              key={String(p)}
-              type="button"
-              onClick={() => applyPeriod(p)}
-              disabled={p === "safra" && !assignment?.planting_date}
-              className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${activePeriod === p ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}
-            >
-              {p === "safra" ? "Safra" : `${p}d`}
-            </button>
-          ))}
-          {assignment && culture && soil && (
-            <span className="ml-2 text-[11px] text-graphite-400 dark:text-gray-500">
-              {culture.name} · {soil.name} · plantio {assignment.planting_date}
-            </span>
+        <div className="flex flex-wrap items-end gap-2">
+          <HeaderChip label="Fazenda" value={farmName ?? "—"} />
+          <HeaderChip label="Safra" value={seasonName ?? "—"} />
+          <HeaderChip label="Cultura" value={culture?.name ?? "—"} />
+          <div className="min-w-[150px]">
+            <Select
+              label="Pivô"
+              value={selectedPivotId}
+              onChange={(e) => setSelectedPivotId(e.target.value)}
+              options={pivots.map((p) => ({ value: p.id, label: p.name }))}
+            />
+          </div>
+          {lastUpdate && (
+            <div className="pb-1 text-right">
+              <p className="text-[10px] font-medium text-graphite-400 dark:text-gray-500">Última atualização</p>
+              <p className="text-[12px] font-semibold text-graphite-700 dark:text-gray-200">{lastUpdate}</p>
+            </div>
           )}
         </div>
-        {pivotsLoading && (
-          <p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">
-            Carregando pivôs com parcela ativa...
-          </p>
-        )}
-        {pivotLoadError && (
-          <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">
-            {pivotLoadError}
-          </p>
-        )}
-        {activeFarmId && pivotsLoadedFarmId === activeFarmId && pivots.length === 0 && !pivotLoadError && (
-          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">
-            Nenhum pivô com parcela ativa nesta fazenda.
-          </p>
-        )}
-        {!assignment && selectedPivotId && !pivotsLoading && (
-          <p className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">
-            A parcela deste pivô deixou de estar ativa. Atualize a seleção.
-          </p>
-        )}
-        {error && <p role="alert" className="mt-3 rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
-        {notice && !error && <p className="mt-3 rounded-xl bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">{notice}</p>}
-        {assignment && !hydricAnchor && (
-          showInitialForm ? (
-            <HydricInitialConditionForm
-              farmId={activeFarmId}
-              assignmentId={assignment.id}
-              defaultDate={assignment.management_start_date ?? assignment.planting_date}
-              onSaved={(anchor) => {
-                setHydricAnchor(anchor);
-                setShowInitialForm(false);
-                setBalanceRows([]);
-                setError("");
-                setDateStart(addDaysIso(anchor.effectiveDate, 1));
-              }}
-            />
-          ) : (
-            <p className="mt-3 text-[11px] text-graphite-400 dark:text-gray-500">
-              {(assignment.initial_moisture_is_cc === true
-                || (assignment.initial_soil_moisture_pct != null && Number.isFinite(Number(assignment.initial_soil_moisture_pct))))
-                ? "Condição inicial: valor cadastrado na parcela. "
-                : "Condição inicial assumida como capacidade de campo no início do ciclo. "}
-              <button
-                type="button"
-                onClick={() => setShowInitialForm(true)}
-                className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400"
-              >
-                Definir condição inicial
-              </button>
-            </p>
-          )
-        )}
-      </Card>
-
-      <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
-
-      <div className="mt-4">
-        {(activeTab === "grafico" || activeTab === "dados" || activeTab === "decisao") && (
-          <div className="animate-in">
-            <BalanceTab
-              panel={activeTab}
-              rows={balanceRows}
-              summary={summary}
-              loading={loading || calculating}
-              head={centroHead}
-              weatherByDate={weatherByDate}
-              sensoryByDate={sensoryByDate}
-            />
-          </div>
-        )}
-        {activeTab === "lancamento" && (
-          <div className="animate-in">          <LancamentoTab
-            pivotId={selectedPivotId}
-            pivots={pivots}
-            date={lancDate}
-            time={lancTime}
-            depth={lancDepth}
-            hours={lancHours}
-            notes={lancNotes}
-            saving={lancSaving}
-            message={lancMsg}
-            onDateChange={setLancDate}
-            onTimeChange={setLancTime}
-            onDepthChange={(v) => {
-              setLancDepth(v);
-              const pivot = pivots.find((p) => p.id === selectedPivotId);
-              const n = parseFloat(v);
-              if (pivot && Number.isFinite(n) && n > 0) {
-                setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
-              }
-            }}
-            onHoursChange={setLancHours}
-            onNotesChange={setLancNotes}
-            onSave={handleLancamento}
-          /></div>
-        )}
       </div>
+
+      {/* KPIs da fazenda */}
+      <FarmKpiRow summary={farmSummary} states={farmStates} loading={farmLoading} />
+
+      {/* Mensagens de estado */}
+      {(pivotsLoading || pivotLoadError || (pivots.length === 0 && pivotsLoadedFarmId === activeFarmId) || (!assignment && selectedPivotId && !pivotsLoading) || error || (notice && !error) || (assignment && !hydricAnchor)) && (
+        <div className="space-y-2">
+          {pivotsLoading && <p className="rounded-xl bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">Carregando pivôs com parcela ativa...</p>}
+          {pivotLoadError && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{pivotLoadError}</p>}
+          {activeFarmId && pivotsLoadedFarmId === activeFarmId && pivots.length === 0 && !pivotLoadError && <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">Nenhum pivô com parcela ativa nesta fazenda.</p>}
+          {!assignment && selectedPivotId && !pivotsLoading && <p className="rounded-xl bg-amber-50 p-3 text-xs text-amber-600 dark:bg-amber-950/30 dark:text-amber-400">A parcela deste pivô deixou de estar ativa. Atualize a seleção.</p>}
+          {error && <p role="alert" className="rounded-xl bg-red-50 p-3 text-xs text-red-600 dark:bg-red-950/30 dark:text-red-400">{error}</p>}
+          {notice && !error && <p className="rounded-xl bg-blue-50 p-3 text-xs text-blue-700 dark:bg-blue-950/30 dark:text-blue-300">{notice}</p>}
+          {assignment && !hydricAnchor && (
+            showInitialForm ? (
+              <HydricInitialConditionForm
+                farmId={activeFarmId}
+                assignmentId={assignment.id}
+                defaultDate={assignment.management_start_date ?? assignment.planting_date}
+                onSaved={(anchor) => {
+                  setHydricAnchor(anchor);
+                  setShowInitialForm(false);
+                  setBalanceRows([]);
+                  setError("");
+                  setDateStart(addDaysIso(anchor.effectiveDate, 1));
+                }}
+              />
+            ) : (
+              <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+                {showInitialNotice ? "Condição inicial: valor cadastrado na parcela. " : "Condição inicial assumida como capacidade de campo no início do ciclo. "}
+                <button type="button" onClick={() => setShowInitialForm(true)} className="font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400">Definir condição inicial</button>
+              </p>
+            )
+          )}
+        </div>
+      )}
+
+      {/* Cockpit do pivô selecionado */}
+      {balanceRows.length > 0 ? (
+        <Cockpit
+          rows={balanceRows}
+          summary={summary}
+          projection={projectionRows}
+          identity={{
+            pivotName: selPivot?.name ?? null,
+            cultureName: culture?.name ?? null,
+            varietyName,
+            seasonName,
+            stage: assignment?.crop_stage ?? null,
+            area: parcelArea,
+            efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
+          }}
+          sensoryByDate={sensoryByDate}
+          onShowDetail={() => { setShowDetail(true); setActiveTab("dados"); }}
+        />
+      ) : (calculating || loading) ? (
+        <Card className="flex items-center justify-center gap-3 py-16">
+          <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+          <span className="text-sm text-graphite-400 dark:text-gray-500">Calculando balanço...</span>
+        </Card>
+      ) : selectedPivotId && assignment && !error ? (
+        <Card className="py-14 text-center">
+          <p className="text-graphite-500 dark:text-gray-400">Sem dados suficientes para o balanço deste pivô. Verifique o clima e a condição inicial.</p>
+          <button type="button" onClick={() => { setShowDetail(true); setActiveTab("lancamento"); }} className="mt-3 rounded-xl border border-gray-200 px-4 py-2 text-[12.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.05]">
+            Registrar irrigação realizada
+          </button>
+        </Card>
+      ) : null}
+
+      {/* Detalhes / memória de cálculo (gráfico técnico, tabela, lançamento).
+          Fica disponível mesmo sem balanço calculado, para que o registro de
+          irrigação realizada não dependa de clima/condição inicial completos. */}
+      {selectedPivotId && assignment && (
+        <Card className="overflow-hidden p-0">
+          <button
+            type="button"
+            onClick={() => setShowDetail((s) => !s)}
+            className="flex w-full items-center justify-between px-5 py-3.5 text-left"
+          >
+            <span className="text-[13px] font-bold text-graphite-900 dark:text-white">{balanceRows.length > 0 ? "Detalhes e memória de cálculo" : "Registrar irrigação e ver detalhes"}</span>
+            <span className="text-[12px] font-semibold text-brand-600 dark:text-brand-400">{showDetail ? "Ocultar ▲" : "Mostrar ▼"}</span>
+          </button>
+          {showDetail && (
+            <div className="border-t border-gray-100 p-4 dark:border-white/[0.06]">
+              <div className="mb-3 flex flex-wrap items-center gap-1.5">
+                <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
+                {([7, 15, 30, 60, "safra"] as const).map((p) => (
+                  <button key={String(p)} type="button" onClick={() => applyPeriod(p)} disabled={p === "safra" && !assignment?.planting_date}
+                    className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${activePeriod === p ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}>
+                    {p === "safra" ? "Safra" : `${p}d`}
+                  </button>
+                ))}
+              </div>
+              <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
+              <div className="mt-4">
+                {(activeTab === "grafico" || activeTab === "dados" || activeTab === "decisao") && (
+                  <BalanceTab
+                    panel={activeTab}
+                    rows={balanceRows}
+                    summary={summary}
+                    loading={loading || calculating}
+                    head={centroHead}
+                    weatherByDate={weatherByDate}
+                    sensoryByDate={sensoryByDate}
+                  />
+                )}
+                {activeTab === "lancamento" && (
+                  <LancamentoTab
+                    pivotId={selectedPivotId}
+                    pivots={pivots}
+                    date={lancDate}
+                    time={lancTime}
+                    depth={lancDepth}
+                    hours={lancHours}
+                    notes={lancNotes}
+                    saving={lancSaving}
+                    message={lancMsg}
+                    onDateChange={setLancDate}
+                    onTimeChange={setLancTime}
+                    onDepthChange={(v) => {
+                      setLancDepth(v);
+                      const pivot = pivots.find((p) => p.id === selectedPivotId);
+                      const n = parseFloat(v);
+                      if (pivot && Number.isFinite(n) && n > 0) {
+                        setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
+                      }
+                    }}
+                    onHoursChange={setLancHours}
+                    onNotesChange={setLancNotes}
+                    onSave={handleLancamento}
+                  />
+                )}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+    </div>
+  );
+}
+
+function HeaderChip({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
+      <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{label}</p>
+      <p className="max-w-[140px] truncate text-[12.5px] font-bold text-graphite-800 dark:text-white">{value}</p>
     </div>
   );
 }
@@ -1617,6 +1795,424 @@ function BalanceTab({
     </div>
   );
 }
+
+// ── Cockpit (central de decisão) ─────────────────────────────────────────
+
+const fmtNum = (v: number, d = 1) => v.toLocaleString("pt-BR", { minimumFractionDigits: d, maximumFractionDigits: d });
+const fmtInt = (v: number) => Math.round(v).toLocaleString("pt-BR");
+
+function StatCard({ icon, label, value, unit, tone }: { icon: ReactNode; label: string; value: string; unit?: string; tone?: string }) {
+  return (
+    <div className="flex items-center gap-3 rounded-2xl border border-gray-100 bg-white p-3.5 dark:border-white/[0.06] dark:bg-graphite-900">
+      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gray-50 text-graphite-500 dark:bg-white/[0.05] dark:text-gray-400">{icon}</div>
+      <div className="min-w-0">
+        <p className="truncate text-[11px] font-medium text-graphite-400 dark:text-gray-500">{label}</p>
+        <p className={`text-[18px] font-extrabold leading-tight tabular-nums ${tone ?? "text-graphite-900 dark:text-white"}`}>{value}{unit && <span className="ml-0.5 text-[12px] font-semibold text-graphite-400 dark:text-gray-500">{unit}</span>}</p>
+      </div>
+    </div>
+  );
+}
+
+// KPIs de toda a fazenda (topo do cockpit).
+function FarmKpiRow({ summary, states, loading }: { summary: ReturnType<typeof useFarmHydricState>["summary"]; states: ReturnType<typeof useFarmHydricState>["states"]; loading: boolean }) {
+  // O caminho de fazenda vazia retorna um resumo zerado (não-nulo); summary
+  // nulo sem loading indica FALHA de carga — não deve virar "tudo zero", que
+  // pareceria uma fazenda saudável sem demanda e suprimiria a ação do operador.
+  const failed = !loading && summary === null;
+  const withData = states.filter((s) => s.current && s.current.status !== "cinza");
+  const etcMedia = withData.length ? withData.reduce((a, s) => a + (s.current!.etc ?? 0), 0) / withData.length : null;
+  // Contagens/áreas derivadas dos estados (uma linha por parcela/setor):
+  // - pivôs para irrigar contam EQUIPAMENTOS distintos, não parcelas;
+  // - "área em manejo" inclui parcelas sem dado hídrico (mas operacionais);
+  // - "área crítica" é só o status vermelho (amarelo é atenção, não crítico).
+  const distinctPivots = new Set(states.map((s) => s.pivotId)).size;
+  const managedArea = states.reduce((a, s) => a + (s.area ?? 0), 0);
+  const pivotsNeeding = new Set(states.filter((s) => s.current?.shouldIrrigate).map((s) => s.pivotId)).size;
+  const criticalArea = states.filter((s) => s.current?.status === "vermelho").reduce((a, s) => a + (s.area ?? 0), 0);
+  const items = [
+    { icon: <IconDrop />, label: "Pivôs ativos", value: String(summary?.totalPivots ?? distinctPivots) },
+    { icon: <IconArea />, label: "Área em manejo", value: fmtInt(managedArea), unit: "ha" },
+    { icon: <IconDrop />, label: "ETc média hoje", value: etcMedia != null ? fmtNum(etcMedia) : "—", unit: "mm" },
+    { icon: <IconWave />, label: "Déficit médio", value: summary ? fmtNum(summary.avgDeficit) : "—", unit: "mm", tone: summary && summary.avgDeficit > 0 ? "text-orange-600 dark:text-orange-400" : undefined },
+    { icon: <IconGear />, label: "Pivôs para irrigar", value: String(pivotsNeeding), tone: pivotsNeeding > 0 ? "text-blue-600 dark:text-blue-400" : undefined },
+    { icon: <IconAlert />, label: "Área crítica", value: fmtInt(criticalArea), unit: "ha", tone: criticalArea > 0 ? "text-red-600 dark:text-red-400" : undefined },
+  ];
+  return (
+    <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+      {items.map((k) => (
+        <StatCard key={k.label} icon={k.icon} label={k.label} value={loading ? "…" : failed ? "—" : k.value} unit={failed ? undefined : k.unit} tone={failed ? "text-graphite-300 dark:text-gray-600" : k.tone} />
+      ))}
+    </div>
+  );
+}
+
+interface CockpitIdentity {
+  pivotName: string | null;
+  cultureName: string | null;
+  varietyName: string | null;
+  seasonName: string | null;
+  stage: string | null;
+  area: number | null;
+  efficiency: number | null;
+}
+
+function daysBetweenIso(a: string, b: string): number {
+  return Math.round((Date.parse(`${b}T12:00:00Z`) - Date.parse(`${a}T12:00:00Z`)) / 86400000);
+}
+
+// Constrói as séries do cockpit a partir do balanço observado (rows) e da
+// projeção já calculada PELO MOTOR sobre dias futuros (projection). Todas as
+// grandezas por data — Kc, fase, raiz, CAD/AFD, Ks, chuva efetiva — vêm do
+// motor; aqui só se organiza para exibição.
+function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow[]) {
+  if (rows.length === 0) return null;
+  const last = rows[rows.length - 1];
+  const cad = last.cad;
+  const afd = last.afd;
+  const pmpMm = Math.max((last.wiltingPoint ?? 0) * (last.rootDepth ?? 0) * 1000, 0);
+  const ccMm = pmpMm + cad;
+  const safetyArm = Math.max(cad - afd, 0);          // ARM no limite de manejo (déficit = AFD → status vermelho)
+  const attentionArm = Math.max(cad - afd * 0.7, 0); // ARM na fronteira ótima/alerta (déficit = 0,7·AFD → amarelo)
+  const safetyMm = pmpMm + safetyArm;
+  const attentionMm = pmpMm + attentionArm;
+
+  // Projeção só cobre dias após o último observado (garantido no cálculo).
+  const future = projection.filter((p) => p.date > last.date);
+  const armPmpMm = (r: DailyBalanceRow) => Math.max((r.wiltingPoint ?? 0) * (r.rootDepth ?? 0) * 1000, 0);
+
+  // Reservatório: histórico recente (absoluto) + projeção (absoluto por dia).
+  const hist = rows.slice(-16);
+  const reservatorio: ReservatorioPoint[] = hist.map((r) => ({
+    label: fmtDia(r.date),
+    storageAbs: r.storedWater + armPmpMm(r),
+    isForecast: false,
+  }));
+  const todayIndexReserv = reservatorio.length - 1;
+  // Cruzamento do limite de manejo = primeiro dia futuro que o MOTOR classifica
+  // como vermelho (déficit ≥ AFD daquele dia) — não uma linha fixa do gráfico.
+  let crossIndexReserv = -1;
+  future.forEach((p, i) => {
+    reservatorio.push({ label: fmtDia(p.date), storageAbs: p.storedWater + armPmpMm(p), isForecast: true });
+    if (crossIndexReserv < 0 && p.waterStatus === "deficit_critico") crossIndexReserv = todayIndexReserv + 1 + i;
+  });
+
+  // Entradas e consumo: últimos 14 dias + previsão (chuva efetiva e ETc do motor).
+  const histE = rows.slice(-14);
+  const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
+    label: fmtDia(r.date),
+    chuvaEf: r.effectivePrecipitation,
+    irrig: r.effectiveIrrigation ?? r.irrigationApplied,
+    etc: r.etc,
+    isForecast: false,
+  }));
+  const todayIndexEntradas = histE.length - 1; // marca HOJE no último dia OBSERVADO
+  for (const p of future) {
+    entradas.push({ label: fmtDia(p.date), chuvaEf: p.effectivePrecipitation, irrig: 0, etc: p.etc, isForecast: true });
+  }
+
+  // Tabela de projeção: Hoje (último observado) + offsets desejados por data.
+  // A cor de cada linha vem do status do motor daquele dia (limiares por data),
+  // não de uma comparação contra CAD/AFD do último dia observado.
+  const projByOffset = new Map<number, DailyBalanceRow>();
+  for (const p of future) projByOffset.set(daysBetweenIso(last.date, p.date), p);
+  const wanted = [1, 2, 3, 5, 7];
+  type ProjRow = { date: string; arm: number; offset: number; status: WaterStatus; cad: number };
+  const projTable: ProjRow[] = [
+    { date: last.date, arm: last.storedWater, offset: 0, status: last.waterStatus, cad: last.cad },
+    ...wanted.map((d) => { const r = projByOffset.get(d); return r ? { date: r.date, arm: r.storedWater, offset: d, status: r.waterStatus, cad: r.cad } : null; })
+      .filter((p): p is ProjRow => p != null),
+  ];
+
+  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, crossIndexReserv, projTable, future, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: future.length > 0 };
+}
+
+function Cockpit({
+  rows,
+  summary,
+  projection,
+  identity,
+  sensoryByDate,
+  onShowDetail,
+}: {
+  rows: DailyBalanceRow[];
+  summary: ReturnType<typeof calculateSummary>;
+  projection: DailyBalanceRow[];
+  identity: CockpitIdentity;
+  sensoryByDate: Record<string, number>;
+  onShowDetail: () => void;
+}) {
+  const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
+  const last = rows[rows.length - 1];
+  if (!last || !series) return null;
+
+  const cad = last.cad;
+  const afd = last.afd;
+  const arm = last.storedWater;
+  const pctCc = moisturePctCcForDisplay(last.moisturePctCc, arm, cad);
+  const urgency = calculateManagementUrgency({ afd: last.afd, deficit: last.deficit, etcPotential: last.etcPotential ?? last.etc });
+  const verdict = VERDICT[last.waterStatus];
+  const irrigar = verdict.irrigar;
+  const grossDepth = last.grossDepth;
+  const netDepth = last.netDepth;
+  // Eficiência exibida = a realmente usada no cálculo da lâmina (líquida/bruta),
+  // que já respeita o override da parcela em modo personalizado.
+  const efPct = grossDepth > 0 ? (netDepth / grossDepth) * 100 : (identity.efficiency ?? 0);
+  const priority = last.waterStatus === "deficit_critico" || last.waterStatus === "deficit"
+    ? { label: "Prioridade Alta", short: "PRIORIDADE ALTA", color: "#dc2626" }
+    : last.waterStatus === "atencao"
+      ? { label: "Prioridade Média", short: "PRIORIDADE MÉDIA", color: "#f97316" }
+      : { label: "Prioridade Baixa", short: "PRIORIDADE BAIXA", color: "#16a34a" };
+
+  const daysToAfdLabel = urgency.atOrBeyondAfd
+    ? "limite atingido"
+    : urgency.daysToAfd == null
+      ? "sem demanda"
+      : urgency.daysToAfd < 1 ? "< 1 dia" : `${fmtNum(urgency.daysToAfd)} dias`;
+
+  const todayIso = new Date().toISOString().slice(0, 10);
+  const isToday = last.date === todayIso;
+
+  // nota sensorial mais recente
+  const sensoryEntries = Object.entries(sensoryByDate).sort((a, b) => b[0].localeCompare(a[0]));
+  const latestSensory = sensoryEntries[0] ?? null;
+
+  // alertas
+  const alerts: { sev: "hi" | "md" | "lo"; text: string }[] = [];
+  const pivotLabel = identity.pivotName ?? "Pivô";
+  if (urgency.atOrBeyondAfd) {
+    alerts.push({ sev: "hi", text: `${pivotLabel} atingiu o limite de manejo.` });
+  } else if (series.future.length > 0) {
+    // Com previsão: a data de cruzamento vem da PROJEÇÃO do motor (considera
+    // chuva prevista), não da estimativa de demanda constante da urgência.
+    const firstRed = series.future.find((p) => p.waterStatus === "deficit_critico");
+    if (firstRed) alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ~${daysBetweenIso(last.date, firstRed.date)} dia(s) (projeção).` });
+  } else if (urgency.daysToAfd != null && urgency.daysToAfd <= 2.5) {
+    // Sem previsão: estimativa por demanda atual (sem chuva) — deixado explícito.
+    alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ${fmtNum(urgency.daysToAfd)} dia(s) (demanda atual, sem chuva).` });
+  }
+  // Chuva efetiva prevista dos dias GENUINAMENTE futuros (mesma base da projeção).
+  const rainForecast = series.future.reduce((a, p) => a + (p.effectivePrecipitation ?? 0), 0);
+  if (series.future.length > 0 && rainForecast < 5) alerts.push({ sev: "md", text: "Sem chuva efetiva relevante prevista para os próximos dias." });
+  if ((last.ky ?? 0) >= 1) alerts.push({ sev: "md", text: "Fase reprodutiva com alta sensibilidade ao déficit (Ky ≥ 1)." });
+  if ((last.surplus ?? 0) > 0) alerts.push({ sev: "md", text: `Excedente de ${fmtNum(last.surplus)} mm acima da capacidade de campo.` });
+  if (alerts.length === 0) alerts.push({ sev: "lo", text: "Nenhum alerta ativo para o pivô no período." });
+  const sevDot = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
+
+  const kySens = last.ky == null ? null : last.ky >= 1.15 ? "MUITO ALTA" : last.ky >= 1 ? "ALTA" : last.ky >= 0.85 ? "MÉDIA" : "BAIXA";
+  const kySensColor = last.ky == null ? undefined : last.ky >= 1 ? "text-red-600 dark:text-red-400" : last.ky >= 0.85 ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400";
+
+  const bottomKpis = [
+    { icon: <IconSun />, label: "ETo", value: fmtNum(last.et0), unit: "mm/dia" },
+    { icon: <IconLeaf />, label: "Kc", value: fmtNum(last.kc, 2) },
+    { icon: <IconSprout />, label: "Ks", value: fmtNum(last.ks ?? 1, 2) },
+    { icon: <IconLayers />, label: "CAD", value: fmtNum(cad), unit: "mm" },
+    { icon: <IconDrop />, label: "AFD", value: fmtNum(afd), unit: "mm" },
+    { icon: <IconRoot />, label: "Raiz efetiva", value: fmtNum(last.rootDepth, 2), unit: "m" },
+    { icon: <IconWave />, label: "Sensibilidade hídrica", value: kySens ?? "—", tone: kySensColor },
+  ];
+
+  return (
+    <div className="space-y-4">
+      {/* Cabeçalho do pivô selecionado */}
+      <Card className="p-4">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[17px] font-extrabold text-graphite-900 dark:text-white">{identity.pivotName ?? "Pivô"}</span>
+          {[identity.cultureName, identity.varietyName, last.phase ?? identity.stage, identity.area != null ? `${fmtNum(identity.area, 0)} ha` : null, last.dae != null ? `${last.dae} DAE` : null]
+            .filter(Boolean)
+            .map((chip, i) => (
+              <span key={i} className="text-[12.5px] text-graphite-500 dark:text-gray-400"><span className="mx-1 text-graphite-300 dark:text-gray-600">•</span>{chip}</span>
+            ))}
+          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: priority.color, background: `${priority.color}1a` }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: priority.color }} />{priority.short}
+          </span>
+        </div>
+        <div className="mt-3.5 grid grid-cols-2 gap-px overflow-hidden rounded-xl bg-gray-100 sm:grid-cols-3 lg:grid-cols-6 dark:bg-white/[0.06]">
+          {[
+            { l: "ARM atual", v: `${fmtNum(arm)} mm`, tone: "text-graphite-900 dark:text-white" },
+            { l: "Depleção", v: `${fmtNum(last.deficit)} mm`, tone: "text-amber-600 dark:text-amber-400" },
+            { l: "AFD utilizada", v: `${Math.round(urgency.afdUsedPct)}%`, tone: urgency.afdUsedPct >= 90 ? "text-red-600 dark:text-red-400" : "text-graphite-900 dark:text-white" },
+            { l: "ETc hoje", v: `${fmtNum(last.etc)} mm`, tone: "text-graphite-900 dark:text-white" },
+            { l: "Limite em", v: daysToAfdLabel, tone: urgency.daysToAfd != null && urgency.daysToAfd <= 2 ? "text-orange-600 dark:text-orange-400" : "text-graphite-900 dark:text-white" },
+            { l: "Lâmina recomendada", v: irrigar ? `${fmtNum(grossDepth)} mm` : "0 mm", tone: irrigar ? "text-green-600 dark:text-green-400" : "text-graphite-900 dark:text-white" },
+          ].map((m) => (
+            <div key={m.l} className="bg-white px-3 py-2.5 dark:bg-graphite-900">
+              <p className="text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{m.l}</p>
+              <p className={`mt-0.5 text-[16px] font-extrabold tabular-nums ${m.tone}`}>{m.v}</p>
+            </div>
+          ))}
+        </div>
+      </Card>
+
+      {/* Gráficos + coluna de decisão */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <div className="space-y-4 lg:col-span-2">
+          <Card className="p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
+                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""}</p>
+              </div>
+              <Legend items={[{ c: "#2f6bff", l: "Chuva efetiva" }, { c: "#16a34a", l: "Irrigação" }, { c: "#64748b", l: "ETc", line: true }, { c: "#94a3b8", l: "Previsão ETc", dashed: true }]} />
+            </div>
+            <div className="h-[220px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} /></div>
+          </Card>
+          <Card className="p-4">
+            <div className="mb-2 flex items-center justify-between">
+              <div>
+                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
+                <p className="text-[11px] text-graphite-400 dark:text-gray-500">Armazenamento e faixas de manejo</p>
+              </div>
+              <Legend items={[{ c: "#3b82f6", l: "ARM", line: true }, { c: "#3b82f6", l: "ARM projetado", dashed: true }]} />
+            </div>
+            <div className="h-[260px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} /></div>
+          </Card>
+        </div>
+
+        <div className="space-y-4">
+          {/* Recomendação de hoje */}
+          <Card className="overflow-hidden p-0">
+            <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-white/[0.06]">
+              <p className="flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconLeaf /> {isToday ? "Recomendação de Hoje" : `Situação de ${fmtDia(last.date)}`}</p>
+              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ color: priority.color, background: `${priority.color}1a` }}>{priority.label}</span>
+            </div>
+            <div className="p-4">
+              <div className="flex items-end justify-between">
+                <p className="text-[34px] font-extrabold leading-none" style={{ color: irrigar ? "#16a34a" : "#64748b" }}>{irrigar ? `${fmtNum(grossDepth)}` : "0"}<span className="ml-1 text-[16px] font-bold">mm</span></p>
+                <span className="rounded-lg bg-gray-50 px-2 py-1 text-[11px] font-semibold text-graphite-500 dark:bg-white/[0.05] dark:text-gray-400">Janela: {irrigar ? (isToday ? "Hoje" : fmtDia(last.date)) : "—"}</span>
+              </div>
+              {irrigar ? (
+                <div className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 text-[12px]">
+                  {[
+                    { l: "Lâmina líquida", v: `${fmtNum(netDepth)} mm` },
+                    { l: "Eficiência do pivô", v: `${Math.round(efPct)}%` },
+                    { l: "Lâmina bruta", v: `${fmtNum(grossDepth)} mm` },
+                    { l: "Tempo estimado", v: last.irrigationTime > 0 ? `${fmtNum(last.irrigationTime)} h` : "—" },
+                  ].map((r) => (
+                    <div key={r.l}>
+                      <p className="text-[10.5px] text-graphite-400 dark:text-gray-500">{r.l}</p>
+                      <p className="font-bold text-graphite-800 dark:text-white">{r.v}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              <p className="mt-3 text-[12px] leading-relaxed text-graphite-500 dark:text-gray-400">{verdict.texto(`${fmtNum(grossDepth)} mm`)}</p>
+              <div className="mt-3.5 space-y-2">
+                <Link href="/programacao" className="flex w-full items-center justify-center gap-2 rounded-xl bg-green-600 px-4 py-2.5 text-[13px] font-bold text-white transition-colors hover:bg-green-700">
+                  Programar irrigação <span aria-hidden>→</span>
+                </Link>
+                <button type="button" onClick={onShowDetail} className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 px-4 py-2 text-[12.5px] font-semibold text-graphite-600 transition-colors hover:bg-gray-50 dark:border-white/[0.1] dark:text-gray-300 dark:hover:bg-white/[0.05]">
+                  Ver memória de cálculo
+                </button>
+              </div>
+            </div>
+          </Card>
+
+          {/* Projeção hídrica */}
+          <Card className="p-4">
+            <p className="mb-2.5 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconBars /> Projeção Hídrica <span className="font-normal text-graphite-400 dark:text-gray-500">(sem irrigação)</span></p>
+            {series.projTable.length <= 1 ? (
+              <p className="text-[12px] text-graphite-400 dark:text-gray-500">Sem previsão climática disponível para projetar o ARM.</p>
+            ) : (
+              <div className="space-y-1">
+                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-3 pb-1 text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">
+                  <span>Dia</span><span>Data</span><span className="text-right">ARM (mm)</span>
+                </div>
+                {series.projTable.map((p) => {
+                  const pct = p.cad > 0 ? clampN((p.arm / p.cad) * 100, 0, 100) : 0;
+                  // Cor = status do motor daquele dia (limiares por data), não
+                  // uma comparação contra CAD/AFD do último dia observado.
+                  const col = p.status === "ideal" || p.status === "saturado" ? "#16a34a" : p.status === "atencao" ? "#eab308" : "#dc2626";
+                  return (
+                    <div key={p.offset} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 text-[12px]">
+                      <span className="w-8 font-semibold text-graphite-600 dark:text-gray-300">{p.offset === 0 ? "Hoje" : `+${p.offset}`}</span>
+                      <span className="flex items-center gap-2 text-graphite-400 dark:text-gray-500">
+                        <span className="tabular-nums">{fmtDia(p.date)}</span>
+                        <span className="h-1.5 flex-1 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]"><span className="block h-full rounded-full" style={{ width: `${pct}%`, background: col }} /></span>
+                      </span>
+                      <span className="text-right font-bold tabular-nums text-graphite-800 dark:text-white">{fmtNum(p.arm)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+
+          {/* Nota de umidade de campo + Alertas */}
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+            <Card className="p-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconDrop /> Nota de Umidade de Campo</p>
+              {latestSensory ? (
+                <div className="flex items-center gap-3">
+                  <div className="relative flex h-14 w-14 items-center justify-center">
+                    <svg viewBox="0 0 36 36" className="h-14 w-14 -rotate-90">
+                      <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" className="stroke-gray-100 dark:stroke-white/[0.08]" />
+                      <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" strokeLinecap="round" stroke={Number(latestSensory[1]) >= 7 ? "#16a34a" : Number(latestSensory[1]) >= 4 ? "#eab308" : "#dc2626"} strokeDasharray={`${(Number(latestSensory[1]) / 10) * 97.4} 97.4`} />
+                    </svg>
+                    <span className="absolute text-[13px] font-extrabold text-graphite-900 dark:text-white">{latestSensory[1]}<span className="text-[9px] text-graphite-400">/10</span></span>
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-[11px] text-graphite-400 dark:text-gray-500">{fmtDia(latestSensory[0])}</p>
+                    <p className="text-[12px] font-semibold text-graphite-700 dark:text-gray-200">{Number(latestSensory[1]) >= 7 ? "Solo úmido" : Number(latestSensory[1]) >= 4 ? "Umidade intermediária" : "Solo seco"}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[12px] text-graphite-400 dark:text-gray-500">Sem leitura sensorial registrada no período.</p>
+              )}
+            </Card>
+
+            <Card className="p-4">
+              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconAlert /> Alertas Inteligentes</p>
+              <div className="space-y-2">
+                {alerts.map((a, i) => (
+                  <div key={i} className="flex gap-2.5">
+                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${sevDot[a.sev]}`} />
+                    <p className="text-[12px] leading-snug text-graphite-600 dark:text-gray-300">{a.text}</p>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          </div>
+        </div>
+      </div>
+
+      {/* KPIs agronômicos (rodapé) */}
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-4 xl:grid-cols-7">
+        {bottomKpis.map((k) => (
+          <StatCard key={k.label} icon={k.icon} label={k.label} value={k.value} unit={k.unit} tone={k.tone} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Legend({ items }: { items: { c: string; l: string; line?: boolean; dashed?: boolean }[] }) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+      {items.map((it) => (
+        <span key={it.l} className="inline-flex items-center gap-1.5 text-[10.5px] font-medium text-graphite-500 dark:text-gray-400">
+          {it.line || it.dashed
+            ? <svg width="16" height="6" viewBox="0 0 16 6"><line x1="0" y1="3" x2="16" y2="3" stroke={it.c} strokeWidth="2" strokeDasharray={it.dashed ? "4 3" : undefined} /></svg>
+            : <span className="h-2.5 w-2.5 rounded-sm" style={{ background: it.c }} />}
+          {it.l}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+// ── Ícones (inline, leves) ───────────────────────────────────────────────
+const svgP = { fill: "none", stroke: "currentColor", strokeWidth: 1.8, viewBox: "0 0 24 24", className: "h-4 w-4" } as const;
+function IconDrop() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3s6 6.5 6 11a6 6 0 01-12 0c0-4.5 6-11 6-11z" /></svg>; }
+function IconArea() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h16" /></svg>; }
+function IconWave() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M3 8c2 0 2 2 4.5 2S10 8 12 8s2 2 4.5 2S19 8 21 8M3 15c2 0 2 2 4.5 2S10 15 12 15s2 2 4.5 2S19 15 21 15" /></svg>; }
+function IconGear() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 15a3 3 0 100-6 3 3 0 000 6z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19 12a7 7 0 00-.1-1l2-1.5-2-3.4-2.3 1a7 7 0 00-1.7-1L14.5 2h-5l-.4 2.6a7 7 0 00-1.7 1l-2.3-1-2 3.4L3 11a7 7 0 000 2l-2 1.5 2 3.4 2.3-1a7 7 0 001.7 1l.4 2.6h5l.4-2.6a7 7 0 001.7-1l2.3 1 2-3.4-2-1.5c.07-.3.1-.66.1-1z" /></svg>; }
+function IconAlert() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>; }
+function IconSun() { return <svg {...svgP}><circle cx="12" cy="12" r="4" /><path strokeLinecap="round" d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5M17.5 17.5L19 19M19 5l-1.5 1.5M6.5 17.5L5 19" /></svg>; }
+function IconLeaf() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20s0-8 8-8 8-8 8-8-1 16-9 16c-4 0-7-3-7-7 0 0 3-2 6-2" /></svg>; }
+function IconSprout() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 22V12m0 0C12 8 8 6 4 6c0 4 4 6 8 6zm0 0c0-3 3-5 7-5 0 3-3 5-7 5z" /></svg>; }
+function IconLayers() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l9 5-9 5-9-5 9-5zm9 9l-9 5-9-5m18 4l-9 5-9-5" /></svg>; }
+function IconRoot() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v8m0 0c0 3-3 4-3 7m3-7c0 3 3 4 3 7M9 21h6" /></svg>; }
+function IconBars() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10m5 10V4m5 16v-7m5 7V8" /></svg>; }
 
 // ── Lancamento Tab ──────────────────────────────────────────────────────
 

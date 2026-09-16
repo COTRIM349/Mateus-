@@ -228,7 +228,12 @@ export function buildParcelInsertRow(draft: ParcelCycleDraft): ParcelInsertRow {
     season_id: draft.seasonId,
     culture_id: draft.cultureId,
     culture_variety_id: draft.cultureVarietyId,
-    variety_id: draft.cultureVarietyId,
+    // `variety_id` é a coluna LEGADA e duplicada do cultivar. Sua FK varia entre
+    // bancos (algumas ainda apontam para `cultures`, não `culture_varieties`),
+    // então gravar o id do cultivar aqui viola a FK. O cultivar canônico é
+    // `culture_variety_id`; todo o app lê `culture_variety_id ?? variety_id`,
+    // logo deixamos a coluna legada nula e não dependemos da migração da FK.
+    variety_id: null,
     soil_id: draft.legacyPivotSoilId,
     planting_date: draft.plantingDate,
     emergence_date: draft.emergenceDate,
