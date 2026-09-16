@@ -18,8 +18,9 @@ import { hasEtp, type ManagementReportRow } from "@/modules/reports/services/man
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
-// Séries que devem ficar RETAS (referências/limiares): suavizar distorceria o
-// significado (CC é constante; a segurança muda em degrau por fase).
+// Referências/limiares do reservatório do solo devem ficar retas. O gráfico
+// operacional usa a mesma escala do ARM (mm): topo = CAD, limite = CAD - AFD,
+// base = 0 mm de água disponível (PMP na escala de ARM).
 const CRISP_KEYS = new Set<ManejoSeriesKey>(["cc", "pmp", "seg"]);
 
 // Curva suave e arredondada (Catmull-Rom → Bézier), SEGURA: os pontos de
@@ -134,7 +135,7 @@ export function ManejoSeriesPicker({
         })}
       </div>
       <p className="mt-3 border-t border-gray-100 pt-2.5 text-[10px] leading-relaxed text-graphite-300 dark:border-white/[0.06] dark:text-gray-600">
-        Passe o mouse no gráfico para ver os valores do dia. Padrão: umidade, CC, segurança, ARM, irrigação, chuva, ETc e nota sensorial.
+        Padrão do reservatório: ARM, CAD/CC operacional, limite CAD − AFD, PMP = 0 mm, irrigação, chuva e ETc.
       </p>
     </div>
   );
@@ -150,7 +151,7 @@ export function ManejoChart({
   const [hover, setHover] = useState<number | null>(null);
   const W = MANEJO_CHART_LAYOUT.width;
   const H = MANEJO_CHART_LAYOUT.height;
-  const padL = 52, padR = 58, padT = 28, padB = 86;
+  const padL = 58, padR = 58, padT = 28, padB = 86;
   const x0 = padL, x1 = W - padR, y0 = padT, y1 = H - padB;
   const n = rows.length || 1;
   const band = (x1 - x0) / n;
@@ -160,7 +161,8 @@ export function ManejoChart({
   const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
   const mmCandidates = rows.flatMap((r, i) => [
     r.rainMm, r.irrigationGrossMm, r.etcMm, r.etoMm, r.etpMm ?? 0,
-    r.cadMm, r.afdMm, r.armMm, r.recommendedGrossMm, cum[i],
+    r.cadMm, Math.max(r.cadMm - r.afdMm, 0), r.afdMm, r.armMm,
+    r.recommendedGrossMm, cum[i],
   ]);
   const mmMax = Math.max(10, Math.ceil(Math.max(1, ...mmCandidates) / 10) * 10);
   const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
@@ -173,23 +175,34 @@ export function ManejoChart({
   const step = Math.max(1, Math.ceil(n / 12));
   const activeVisible = MANEJO_ALL.filter((s) => visible[s.k]);
   const hasNorm = activeVisible.some((s) => s.axis === "norm");
-  const segPct = rows.length ? rows[n - 1].safetyPctCc : 50;
+  const hasPct = activeVisible.some((s) => s.axis === "pct");
   const phases = phaseRanges(rows);
+  const safetyMm = (r: ManagementReportRow) => Math.max(r.cadMm - r.afdMm, 0);
 
-  // Zonas de manejo (estilo H2Irriga/iCrop) acompanhando a linha de segurança:
-  //  • Excedente  → acima da CC (100%)
-  //  • Ideal      → entre a segurança e a CC
-  //  • Crítico    → abaixo da segurança
+  // Zonas do reservatório na MESMA escala do ARM (mm):
+  //  • acima da CAD = excedente/saturação potencial;
+  //  • CAD até CAD-AFD = faixa adequada de manejo;
+  //  • abaixo de CAD-AFD = água facilmente disponível esgotada / atenção.
+  const cadEdge = rows.length
+    ? [
+        `${x0},${yM(rows[0].cadMm)}`,
+        ...rows.map((r, i) => `${cx(i)},${yM(r.cadMm)}`),
+        `${x1},${yM(rows[n - 1].cadMm)}`,
+      ]
+    : [`${x0},${yM(0)}`, `${x1},${yM(0)}`];
   const segEdge = rows.length
     ? [
-        `${x0},${yP(clampN(rows[0].safetyPctCc, 0, 125))}`,
-        ...rows.map((r, i) => `${cx(i)},${yP(clampN(r.safetyPctCc, 0, 125))}`),
-        `${x1},${yP(clampN(rows[n - 1].safetyPctCc, 0, 125))}`,
+        `${x0},${yM(safetyMm(rows[0]))}`,
+        ...rows.map((r, i) => `${cx(i)},${yM(safetyMm(r))}`),
+        `${x1},${yM(safetyMm(rows[n - 1]))}`,
       ]
-    : [`${x0},${yP(segPct)}`, `${x1},${yP(segPct)}`];
-  const idealPath = `M ${x0},${yP(100)} L ${x1},${yP(100)} L ${[...segEdge].reverse().join(" L ")} Z`;
-  const criticoPath = `M ${segEdge.join(" L ")} L ${x1},${yP(0)} L ${x0},${yP(0)} Z`;
-  const midSegY = rows.length ? yP(clampN(rows[Math.floor(n / 2)].safetyPctCc, 0, 125)) : yP(segPct);
+    : [`${x0},${yM(0)}`, `${x1},${yM(0)}`];
+  const excessPath = `M ${x0},${yM(mmMax)} L ${x1},${yM(mmMax)} L ${[...cadEdge].reverse().join(" L ")} Z`;
+  const idealPath = `M ${cadEdge.join(" L ")} L ${[...segEdge].reverse().join(" L ")} Z`;
+  const criticalPath = `M ${segEdge.join(" L ")} L ${x1},${yM(0)} L ${x0},${yM(0)} Z`;
+  const mid = rows.length ? rows[Math.floor(n / 2)] : null;
+  const cadMidY = mid ? yM(mid.cadMm) : yM(0);
+  const segMidY = mid ? yM(safetyMm(mid)) : yM(0);
 
   const extrasAt = (i: number) => ({
     cumulativeIrrigation: cum[i],
@@ -212,34 +225,58 @@ export function ManejoChart({
     setHover(clampN(Math.round((svgX - x0) / band - 0.5), 0, n - 1));
   };
 
+  const mmTicks = [0, mmMax / 4, mmMax / 2, (mmMax * 3) / 4, mmMax];
+
   return (
     <div className="relative min-h-[min(68vh,720px)]" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="h-full min-h-[min(68vh,720px)] overflow-visible">
         <defs>
           <linearGradient id="manejo-umid-fill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#2563eb" stopOpacity="0.42" />
-            <stop offset="100%" stopColor="#2563eb" stopOpacity="0.05" />
+            <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.30" />
+            <stop offset="100%" stopColor="#7c3aed" stopOpacity="0.03" />
           </linearGradient>
         </defs>
         <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} className="fill-gray-50 dark:fill-black/25" rx={6} />
-        {/* Zonas de manejo */}
-        <rect x={x0} y={yP(125)} width={x1 - x0} height={Math.max(0, yP(100) - yP(125))} fill="#3b82f6" opacity={0.1} />
+
+        {/* Zonas de manejo na escala física do ARM */}
+        <path d={excessPath} fill="#3b82f6" opacity={0.08} />
         <path d={idealPath} fill="#22c55e" opacity={0.13} />
-        <path d={criticoPath} fill="#ef4444" opacity={0.11} />
-        <text x={x1 - 6} y={yP(112) + 3} textAnchor="end" className="fill-blue-500/70 text-[9px] font-bold uppercase tracking-wide">Excedente</text>
-        <text x={x1 - 6} y={(yP(100) + midSegY) / 2 + 3} textAnchor="end" className="fill-green-600/70 text-[9px] font-bold uppercase tracking-wide">Ideal</text>
-        <text x={x1 - 6} y={(midSegY + yP(0)) / 2 + 3} textAnchor="end" className="fill-red-500/70 text-[9px] font-bold uppercase tracking-wide">Crítico</text>
-        {[0, 25, 50, 75, 100, 125].map((p) => (
-          <g key={p}>
-            <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-200 dark:stroke-white/[0.07]" strokeWidth={1} />
-            <text x={x0 - 8} y={yP(p) + 4} textAnchor="end" className="fill-graphite-400 text-[11px] tabular-nums dark:fill-gray-500">{p}</text>
-          </g>
-        ))}
-        <text x={x0 - 8} y={y0 - 8} textAnchor="end" className="fill-graphite-500 text-[11px] font-bold dark:fill-gray-400">%CC</text>
-        {[0, mmMax / 2, mmMax].map((v) => (
-          <text key={v} x={x1 + 8} y={yM(v) + 4} className="fill-graphite-400 text-[11px] tabular-nums dark:fill-gray-500">{Math.round(v)}</text>
-        ))}
-        <text x={x1 + 8} y={y0 - 8} className="fill-graphite-500 text-[11px] font-bold dark:fill-gray-400">mm</text>
+        <path d={criticalPath} fill="#f97316" opacity={0.10} />
+        {mid && cadMidY > y0 + 12 && (
+          <text x={x1 - 6} y={(y0 + cadMidY) / 2 + 3} textAnchor="end" className="fill-blue-500/70 text-[9px] font-bold uppercase tracking-wide">Excedente</text>
+        )}
+        {mid && (
+          <text x={x1 - 6} y={(cadMidY + segMidY) / 2 + 3} textAnchor="end" className="fill-green-600/70 text-[9px] font-bold uppercase tracking-wide">Adequado</text>
+        )}
+        {mid && (
+          <text x={x1 - 6} y={(segMidY + yM(0)) / 2 + 3} textAnchor="end" className="fill-orange-600/70 text-[9px] font-bold uppercase tracking-wide">Abaixo do limite</text>
+        )}
+
+        {hasPct ? (
+          <>
+            {[0, 25, 50, 75, 100, 125].map((p) => (
+              <g key={p}>
+                <line x1={x0} x2={x1} y1={yP(p)} y2={yP(p)} className="stroke-gray-200 dark:stroke-white/[0.07]" strokeWidth={1} />
+                <text x={x0 - 8} y={yP(p) + 4} textAnchor="end" className="fill-graphite-400 text-[11px] tabular-nums dark:fill-gray-500">{p}</text>
+              </g>
+            ))}
+            <text x={x0 - 8} y={y0 - 8} textAnchor="end" className="fill-graphite-500 text-[11px] font-bold dark:fill-gray-400">%CC</text>
+            {[0, mmMax / 2, mmMax].map((v) => (
+              <text key={v} x={x1 + 8} y={yM(v) + 4} className="fill-graphite-400 text-[11px] tabular-nums dark:fill-gray-500">{Math.round(v)}</text>
+            ))}
+            <text x={x1 + 8} y={y0 - 8} className="fill-graphite-500 text-[11px] font-bold dark:fill-gray-400">mm</text>
+          </>
+        ) : (
+          <>
+            {mmTicks.map((v) => (
+              <g key={v}>
+                <line x1={x0} x2={x1} y1={yM(v)} y2={yM(v)} className="stroke-gray-200 dark:stroke-white/[0.07]" strokeWidth={1} />
+                <text x={x0 - 8} y={yM(v) + 4} textAnchor="end" className="fill-graphite-400 text-[11px] tabular-nums dark:fill-gray-500">{Math.round(v)}</text>
+              </g>
+            ))}
+            <text x={x0 - 8} y={y0 - 8} textAnchor="end" className="fill-graphite-500 text-[11px] font-bold dark:fill-gray-400">mm</text>
+          </>
+        )}
 
         {rows.map((r, i) => (
           <g key={i}>
@@ -270,7 +307,7 @@ export function ManejoChart({
             })
             .filter((p): p is { x: number; y: number } => p != null);
           if (pts.length === 0) return null;
-          const hero = k === "umidade" || k === "cc" || k === "seg";
+          const hero = k === "arm" || k === "cc" || k === "seg";
           // Curvas de dado ficam suaves; referências/limiares ficam retas.
           const d = CRISP_KEYS.has(k)
             ? pts.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x},${p.y}`).join(" ")
@@ -281,7 +318,7 @@ export function ManejoChart({
               d={d}
               fill="none"
               stroke={s.color}
-              strokeWidth={k === "umidade" ? 3.1 : hero ? 2.2 : 1.7}
+              strokeWidth={k === "arm" ? 3.1 : hero ? 2.2 : 1.7}
               strokeDasharray={s.kind === "dash" ? "6 4" : undefined}
               strokeLinejoin="round"
               strokeLinecap="round"

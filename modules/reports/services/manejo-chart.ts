@@ -68,13 +68,13 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
   {
     cat: "Solo",
     items: [
-      { k: "umidade", label: "Umidade (% da CC)", color: "#2563eb", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "cc", label: "CC — Capacidade de Campo", color: "#16a34a", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "pmp", label: "PMP — Ponto de Murcha", color: "#dc2626", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "seg", label: "Umidade de segurança", color: "#eab308", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
-      { k: "cad", label: "CAD — Água Disponível (perfil)", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
-      { k: "afd", label: "CRA / AFD — Limite de manejo (perfil)", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
-      { k: "arm", label: "ARM — Água armazenada", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
+      { k: "arm", label: "ARM — Água armazenada", color: "#2563eb", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
+      { k: "cc", label: "CAD / CC operacional", color: "#16a34a", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
+      { k: "seg", label: "Limite de manejo (CAD − AFD)", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.safetyMoisture },
+      { k: "pmp", label: "PMP na escala de ARM (0 mm)", color: "#dc2626", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
+      { k: "afd", label: "AFD — depleção permitida (perfil)", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
+      { k: "cad", label: "CAD — Água disponível (perfil)", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
+      { k: "umidade", label: "Umidade volumétrica (% da CC)", color: "#7c3aed", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
       { k: "sensorial", label: "Nota sensorial de campo", color: "#a855f7", kind: "marker", axis: "marker", unit: MANAGEMENT_UNITS.sensoryNote },
     ],
   },
@@ -116,10 +116,10 @@ export const MANEJO_CHART_LAYOUT = {
 } as const;
 
 export const MANEJO_DEFAULT_ON: ManejoSeriesKey[] = [
-  "umidade",
+  "arm",
   "cc",
   "seg",
-  "arm",
+  "pmp",
   "irrig",
   "chuva",
   "etc",
@@ -164,11 +164,12 @@ export function seriesValue(
     case "irrigRec": return row.recommendedGrossMm;
     case "irrigAcum": return extras.cumulativeIrrigation ?? row.irrigationGrossMm;
     case "umidade": return row.moisturePctCc;
-    case "cc": return 100;
-    case "pmp": return row.pmpPctCc;
-    case "seg": return row.safetyPctCc;
-    // CAD/CRA exibidos como PERFIL INTEIRO (referência geral); o balanço em si
-    // continua pela zona radicular (ARM/déficit/Ks/%CC inalterados).
+    // No gráfico de reservatório do solo, as referências são desenhadas na
+    // mesma escala do ARM (mm). Portanto: topo = CAD, limite = CAD - AFD e
+    // PMP = 0 mm de água disponível. AFD isolada é uma depleção, não uma cota.
+    case "cc": return row.cadMm;
+    case "seg": return Math.max(row.cadMm - row.afdMm, 0);
+    case "pmp": return 0;
     case "cad": return row.cadProfileMm;
     case "afd": return row.craProfileMm;
     case "arm": return row.armMm;
@@ -195,7 +196,7 @@ export function seriesValue(
 }
 
 export function seriesHasData(key: ManejoSeriesKey, rows: ManagementReportRow[]): boolean {
-  if (key === "cc") return rows.length > 0;
+  if (key === "cc" || key === "pmp" || key === "seg") return rows.length > 0;
   if (key === "fase") return rows.some((r, i) => i > 0 && r.phase !== rows[i - 1].phase);
   const cum = key === "irrigAcum" ? cumulativeIrrigationMm(rows) : [];
   return rows.some((r, i) => {
