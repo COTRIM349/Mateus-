@@ -369,11 +369,15 @@ export default function BalancoHidricoPage() {
         );
         setPivots(eligiblePivots);
         setPivotsLoadedFarmId(activeFarmId);
-        setSelectedPivotId((current) => (
-          eligiblePivots.some((pivot) => pivot.id === current)
-            ? current
-            : eligiblePivots[0]?.id ?? ""
-        ));
+        // Pré-seleção por ?pivot= (vindo da Central de Manejo/mapa/fila).
+        const urlPivot = typeof window !== "undefined"
+          ? new URLSearchParams(window.location.search).get("pivot")
+          : null;
+        setSelectedPivotId((current) => {
+          if (eligiblePivots.some((pivot) => pivot.id === current)) return current;
+          if (urlPivot && eligiblePivots.some((pivot) => pivot.id === urlPivot)) return urlPivot;
+          return eligiblePivots[0]?.id ?? "";
+        });
       } catch {
         if (!cancelled) {
           setPivots([]);
