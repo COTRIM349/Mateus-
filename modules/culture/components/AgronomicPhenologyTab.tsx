@@ -3,9 +3,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, Input, Modal, Select, Table, TextArea, type Column } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
+import { cropKindFromName, resolveCycleDays, expectedDae } from "@/modules/culture/services/phenology-presets";
 
 interface CultureOption { id: string; name: string }
-interface CultivarOption { id: string; name: string }
+interface CultivarOption { id: string; name: string; manufacturer_cycle_days?: number | null; maturity?: string | null }
 interface SourceOption { id: string; title: string; institution: string | null }
 interface Marker {
   id: string;
@@ -73,6 +74,12 @@ export function AgronomicPhenologyTab({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Geração de DAE esperado por variedade (a partir do ciclo).
+  const [genOpen, setGenOpen] = useState(false);
+  const [genCycle, setGenCycle] = useState(120);
+  const [genSourceId, setGenSourceId] = useState("");
+  const [genConfidence, setGenConfidence] = useState("media");
+  const [genLoading, setGenLoading] = useState(false);
 
   const loadBase = useCallback(async () => {
     if (!selectedCultureId) {
@@ -86,7 +93,7 @@ export function AgronomicPhenologyTab({
 
     setLoading(true);
     const [cultivarRes, markerRes, sourceRes, cultureRes] = await Promise.all([
-      supabase.from("culture_varieties").select("id,name").eq("culture_id", selectedCultureId).eq("active", true).order("name"),
+      supabase.from("culture_varieties").select("id,name,manufacturer_cycle_days,maturity").eq("culture_id", selectedCultureId).eq("active", true).order("name"),
       supabase.from("culture_phenology_markers")
         .select("id,stage_code,name,marker_order,management_phase_key,critical_water_stage,physiological_process,yield_component_risk,source_id")
         .eq("culture_id", selectedCultureId)
@@ -129,6 +136,64 @@ export function AgronomicPhenologyTab({
     () => Object.fromEntries(sources.map((source) => [source.id, source.title || source.institution || "Fonte"])),
     [sources],
   );
+
+  const selectedCultivar = cultivars.find((v) => v.id === cultivarId) ?? null;
+  const cropKind = cropKindFromName(cultures.find((c) => c.id === selectedCultureId)?.name ?? "");
+
+  const openGenerate = () => {
+    setGenCycle(resolveCycleDays(cropKind, selectedCultivar?.manufacturer_cycle_days, selectedCultivar?.maturity));
+    setGenSourceId(culturePhenology?.phenology_source_id ?? sources[0]?.id ?? "");
+    setGenConfidence("media");
+    setError("");
+    setGenOpen(true);
+  };
+
+  // Prévia do DAE esperado por estádio a partir do ciclo informado.
+  const genPreview = useMemo(
+    () => markers
+      .map((m) => ({ marker: m, dae: expectedDae(cropKind, m.stage_code, m.management_phase_key, genCycle) }))
+      .filter((r): r is { marker: Marker; dae: number } => r.dae != null),
+    [markers, cropKind, genCycle],
+  );
+
+  // Gera/atualiza o DAE esperado de todos os estádios com fração de referência,
+  // preservando a calibração local existente. Rascunho rastreável (fonte + p),
+  // que o agrônomo revisa.
+  const generateExpectedDae = async () => {
+    if (!cultivarId) return;
+    if (!genSourceId) { setError("Selecione a fonte dos valores esperados."); return; }
+    if (!(genCycle > 0)) { setError("Informe um ciclo válido (dias)."); return; }
+    if (genPreview.length === 0) { setError("Não há frações fenológicas de referência para esta cultura."); return; }
+    setGenLoading(true);
+    setError("");
+    const payloads = genPreview.map(({ marker, dae }) => {
+      const cur = targetByMarker[marker.id];
+      return {
+        variety_id: cultivarId,
+        marker_id: marker.id,
+        expected_dae: dae,
+        expected_gdd: cur?.expected_gdd ?? null,
+        source_id: genSourceId,
+        expected_source_id: genSourceId,
+        confidence: genConfidence,
+        // Preserva calibração local já registrada.
+        calibrated_dae: cur?.calibrated_dae ?? null,
+        calibrated_gdd: cur?.calibrated_gdd ?? null,
+        calibrated_source_id: cur?.calibrated_source_id ?? null,
+        calibration_confidence: cur?.calibration_confidence ?? null,
+        use_calibrated: cur?.use_calibrated ?? false,
+        notes: cur?.notes ?? null,
+        updated_at: new Date().toISOString(),
+      };
+    });
+    const { error: genError } = await supabase
+      .from("culture_variety_phenology_targets")
+      .upsert(payloads, { onConflict: "variety_id,marker_id" });
+    if (genError) { setError(genError.message); setGenLoading(false); return; }
+    setGenOpen(false);
+    setGenLoading(false);
+    await loadTargets();
+  };
 
   const columns: Column<Marker>[] = [
     {
@@ -274,6 +339,17 @@ export function AgronomicPhenologyTab({
         Fenologia informa <strong>quando</strong> a planta está em cada estádio. Kc permanece em curva própria. Observação de campo e calibração local não apagam o valor esperado de literatura/fabricante.
       </div>
 
+      {cultivarId && markers.length > 0 && (
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-graphite-500 dark:text-gray-400">
+            Preencha o <strong>DAE esperado</strong> de todos os estádios a partir do ciclo da variedade — depois revise e calibre.
+          </p>
+          <Button size="sm" variant="secondary" onClick={openGenerate} disabled={cropKind === "outro"}>
+            Gerar DAE esperado
+          </Button>
+        </div>
+      )}
+
       <Card>
         {!selectedCultureId ? (
           <p className="py-8 text-center text-sm text-graphite-400">Selecione uma cultura.</p>
@@ -324,6 +400,34 @@ export function AgronomicPhenologyTab({
             </div>
           </form>
         )}
+      </Modal>
+
+      <Modal open={genOpen} onClose={() => { setGenOpen(false); setError(""); }} title="Gerar DAE esperado por variedade" size="lg">
+        <div className="space-y-5">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
+            Calcula o DAE esperado de cada estádio a partir do <strong>ciclo da variedade</strong> (VE = 0, na emergência). É um ponto de partida rastreável — revise e calibre. A calibração local existente é preservada.
+          </div>
+          <div className="grid gap-4 sm:grid-cols-3">
+            <Input id="gen_cycle" name="gen_cycle" label="Ciclo (dias)" type="number" min="1" value={String(genCycle)} onChange={(e: React.ChangeEvent<HTMLInputElement>) => setGenCycle(Math.max(0, Math.round(Number(e.target.value) || 0)))} />
+            <Select id="gen_source" name="gen_source" label="Fonte" options={[{ value: "", label: "Selecione" }, ...sources.map((s) => ({ value: s.id, label: s.title || s.institution || "Fonte" }))]} value={genSourceId} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setGenSourceId(e.target.value)} />
+            <Select id="gen_conf" name="gen_conf" label="Confiabilidade" options={CONFIDENCE_OPTIONS} value={genConfidence} onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setGenConfidence(e.target.value)} />
+          </div>
+          <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
+            <p className="mb-1.5 text-xs font-semibold text-graphite-600 dark:text-gray-300">Prévia ({genPreview.length} estádios)</p>
+            {genPreview.length === 0 ? (
+              <p className="text-xs text-graphite-400">Sem frações de referência para esta cultura.</p>
+            ) : (
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-graphite-500 dark:text-gray-400">
+                {genPreview.map(({ marker, dae }) => (<span key={marker.id}>{marker.stage_code} → {dae} DAE</span>))}
+              </div>
+            )}
+          </div>
+          {error && <p role="alert" className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" type="button" onClick={() => { setGenOpen(false); setError(""); }}>Cancelar</Button>
+            <Button type="button" onClick={generateExpectedDae} disabled={genLoading || genPreview.length === 0 || !genSourceId || genCycle <= 0}>{genLoading ? "Gerando..." : "Gerar DAE esperado"}</Button>
+          </div>
+        </div>
       </Modal>
     </>
   );
