@@ -1984,6 +1984,10 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
     safetyAbs: armPmpMm(r) + Math.max(r.cad - r.afd, 0),
     pmpAbs: armPmpMm(r),
     attentionAbs: armPmpMm(r) + Math.max(r.cad - r.afd * 0.7, 0),
+    rain: r.effectivePrecipitation,
+    irr: r.effectiveIrrigation ?? r.irrigationApplied,
+    eto: r.et0,
+    kc: r.kc,
     isForecast: false,
   }));
   // REGRA ABSOLUTA: o gráfico é EXCLUSIVAMENTE histórico e termina no dia atual.
@@ -2236,7 +2240,7 @@ function Cockpit({
                 onToggle={toggleReserv}
               />
             </div>
-            <div className="h-[330px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} unit={reservUnit} /></div>
+            <div className="h-[360px] w-full"><ReservatorioChart points={series.reservatorio} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} unit={reservUnit} /></div>
           </Card>
         </div>
 
