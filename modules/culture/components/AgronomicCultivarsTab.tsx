@@ -126,6 +126,11 @@ export function AgronomicCultivarsTab({
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  // Reaproveitamento: cultivares já salvos (na base) para autopreencher um novo
+  // cadastro. Sem inventar dados — só copia o que já foi registrado antes.
+  const [reuseRows, setReuseRows] = useState<CultivarRow[]>([]);
+  const [prefill, setPrefill] = useState<CultivarRow | null>(null);
+  const [formKey, setFormKey] = useState(0);
 
   const selectedCulture = cultures.find((c) => c.id === selectedCultureId);
   const kind = cultureKind(selectedCulture);
@@ -153,6 +158,27 @@ export function AgronomicCultivarsTab({
     if (!sourceResponse.error && sourceResponse.data) setSources(sourceResponse.data as SourceOption[]);
     setLoading(false);
   }, [selectedCultureId, supabase]);
+
+  // Candidatos para reaproveitar: todos os cultivares ativos da base (a RLS já
+  // limita à fazenda), deduplicados por nome (mantém o mais recente).
+  const loadReuse = useCallback(async () => {
+    const { data } = await supabase
+      .from("culture_varieties")
+      .select("*")
+      .eq("active", true)
+      .order("name");
+    const seen = new Set<string>();
+    const deduped: CultivarRow[] = [];
+    for (const row of (data ?? []) as CultivarRow[]) {
+      const nameKey = normalize(row.name);
+      if (seen.has(nameKey)) continue;
+      seen.add(nameKey);
+      deduped.push(row);
+    }
+    setReuseRows(deduped);
+  }, [supabase]);
+
+  useEffect(() => { void loadReuse(); }, [loadReuse]);
 
   useEffect(() => { void load(); }, [load]);
 
@@ -193,7 +219,7 @@ export function AgronomicCultivarsTab({
       align: "right",
       render: (r) => (
         <div className="flex justify-end gap-2">
-          <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setError(""); setModalOpen(true); }}>Editar</Button>
+          <Button variant="ghost" size="sm" onClick={() => { setEditing(r); setPrefill(null); setFormKey((k) => k + 1); setError(""); setModalOpen(true); }}>Editar</Button>
           <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(r)}>Desativar</Button>
         </div>
       ),
@@ -294,6 +320,14 @@ export function AgronomicCultivarsTab({
     })),
   ];
 
+  // Valores iniciais do formulário: ao editar usa o próprio registro; ao criar
+  // usa o cultivar reaproveitado (prefill), se houver.
+  const base = editing ?? prefill;
+  const reuseOptions = [
+    { value: "", label: "— não reaproveitar —" },
+    ...reuseRows.map((r) => ({ value: r.id, label: r.technology ? `${r.name} · ${r.technology}` : r.name })),
+  ];
+
   return (
     <>
       <div className="mb-4 flex flex-wrap items-end justify-between gap-4">
@@ -308,7 +342,7 @@ export function AgronomicCultivarsTab({
           />
         </div>
         {selectedCultureId && (
-          <Button onClick={() => { setEditing(null); setError(""); setModalOpen(true); }}>Nova cultivar</Button>
+          <Button onClick={() => { setEditing(null); setPrefill(null); setFormKey((k) => k + 1); setError(""); setModalOpen(true); }}>Nova cultivar</Button>
         )}
       </div>
 
@@ -334,21 +368,40 @@ export function AgronomicCultivarsTab({
 
       <Modal
         open={modalOpen}
-        onClose={() => { setModalOpen(false); setEditing(null); setError(""); }}
+        onClose={() => { setModalOpen(false); setEditing(null); setPrefill(null); setError(""); }}
         title={editing ? "Editar cultivar" : "Nova cultivar"}
         size="lg"
       >
-        <form onSubmit={submit} className="space-y-5">
+        <form key={`${editing?.id ?? "new"}-${formKey}`} onSubmit={submit} className="space-y-5">
+          {!editing && reuseRows.length > 0 && (
+            <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 dark:border-brand-500/30 dark:bg-brand-900/15">
+              <Select
+                id="reuse_cultivar"
+                name="reuse_cultivar"
+                label="Reaproveitar cultivar já cadastrada"
+                options={reuseOptions}
+                value={prefill?.id ?? ""}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => {
+                  const found = reuseRows.find((r) => r.id === e.target.value) ?? null;
+                  setPrefill(found);
+                  setFormKey((k) => k + 1);
+                }}
+              />
+              <p className="mt-2 text-[11px] text-graphite-500 dark:text-gray-400">
+                Copia os dados de um cultivar já salvo na base para este novo cadastro. Revise antes de salvar — nada é preenchido automaticamente sem sua confirmação.
+              </p>
+            </div>
+          )}
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="name" name="name" label="Nome da cultivar" required defaultValue={editing?.name ?? ""} />
-            <Input id="breeder" name="breeder" label="Obtentor / fabricante" defaultValue={editing?.breeder ?? editing?.company ?? ""} />
-            <Input id="technology" name="technology" label="Tecnologia" defaultValue={editing?.technology ?? ""} />
+            <Input id="name" name="name" label="Nome da cultivar" required defaultValue={base?.name ?? ""} />
+            <Input id="breeder" name="breeder" label="Obtentor / fabricante" defaultValue={base?.breeder ?? base?.company ?? ""} />
+            <Input id="technology" name="technology" label="Tecnologia" defaultValue={base?.technology ?? ""} />
             <Select
               id="maturity"
               name="maturity"
               label="Classe operacional de ciclo"
               options={MATURITY_OPTIONS}
-              defaultValue={editing?.maturity ?? ""}
+              defaultValue={base?.maturity ?? ""}
             />
           </div>
 
@@ -360,14 +413,14 @@ export function AgronomicCultivarsTab({
                 label="Grupo de maturação relativa (GRM)"
                 type="number"
                 step="0.1"
-                defaultValue={editing?.relative_maturity_group ?? ""}
+                defaultValue={base?.relative_maturity_group ?? ""}
               />
               <Select
                 id="growth_habit"
                 name="growth_habit"
                 label="Hábito de crescimento"
                 options={GROWTH_HABIT_OPTIONS}
-                defaultValue={editing?.growth_habit ?? ""}
+                defaultValue={base?.growth_habit ?? ""}
               />
               <Select
                 id="long_juvenile_period"
@@ -378,14 +431,14 @@ export function AgronomicCultivarsTab({
                   { value: "sim", label: "Sim" },
                   { value: "nao", label: "Não" },
                 ]}
-                defaultValue={editing?.long_juvenile_period == null ? "" : editing.long_juvenile_period ? "sim" : "nao"}
+                defaultValue={base?.long_juvenile_period == null ? "" : base.long_juvenile_period ? "sim" : "nao"}
               />
               <Select
                 id="photoperiod_sensitivity"
                 name="photoperiod_sensitivity"
                 label="Sensibilidade fotoperiódica"
                 options={PHOTOPERIOD_OPTIONS}
-                defaultValue={editing?.photoperiod_sensitivity ?? ""}
+                defaultValue={base?.photoperiod_sensitivity ?? ""}
               />
             </div>
           )}
@@ -397,7 +450,7 @@ export function AgronomicCultivarsTab({
               label="Ciclo informado pelo obtentor (dias)"
               type="number"
               min="1"
-              defaultValue={editing?.manufacturer_cycle_days ?? ""}
+              defaultValue={base?.manufacturer_cycle_days ?? ""}
             />
             <Input
               id="planning_occupancy_days"
@@ -405,21 +458,21 @@ export function AgronomicCultivarsTab({
               label="Janela de ocupação (dias)"
               type="number"
               min="1"
-              defaultValue={editing?.planning_occupancy_days ?? ""}
+              defaultValue={base?.planning_occupancy_days ?? ""}
             />
-            <Input id="recommended_spacing_m" name="recommended_spacing_m" label="Espaçamento (m)" type="number" step="0.01" defaultValue={editing?.recommended_spacing_m ?? ""} />
+            <Input id="recommended_spacing_m" name="recommended_spacing_m" label="Espaçamento (m)" type="number" step="0.01" defaultValue={base?.recommended_spacing_m ?? ""} />
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
-            <Input id="adaptation_region" name="adaptation_region" label="Região de adaptação" defaultValue={editing?.adaptation_region ?? ""} />
-            <Input id="architecture" name="architecture" label="Arquitetura / porte" defaultValue={editing?.architecture ?? ""} />
-            <Input id="recommended_population_min" name="recommended_population_min" label="População mínima" type="number" step="1" defaultValue={editing?.recommended_population_min ?? ""} />
-            <Input id="recommended_population_max" name="recommended_population_max" label="População máxima" type="number" step="1" defaultValue={editing?.recommended_population_max ?? ""} />
-            <Input id="expected_height_m" name="expected_height_m" label="Altura esperada (m)" type="number" step="0.01" defaultValue={editing?.expected_height_m ?? ""} />
+            <Input id="adaptation_region" name="adaptation_region" label="Região de adaptação" defaultValue={base?.adaptation_region ?? ""} />
+            <Input id="architecture" name="architecture" label="Arquitetura / porte" defaultValue={base?.architecture ?? ""} />
+            <Input id="recommended_population_min" name="recommended_population_min" label="População mínima" type="number" step="1" defaultValue={base?.recommended_population_min ?? ""} />
+            <Input id="recommended_population_max" name="recommended_population_max" label="População máxima" type="number" step="1" defaultValue={base?.recommended_population_max ?? ""} />
+            <Input id="expected_height_m" name="expected_height_m" label="Altura esperada (m)" type="number" step="0.01" defaultValue={base?.expected_height_m ?? ""} />
             {kind === "soja" ? (
-              <Input id="lodging_sensitivity" name="lodging_sensitivity" label="Sensibilidade ao acamamento" defaultValue={editing?.lodging_sensitivity ?? ""} />
+              <Input id="lodging_sensitivity" name="lodging_sensitivity" label="Sensibilidade ao acamamento" defaultValue={base?.lodging_sensitivity ?? ""} />
             ) : (
-              <Input id="regulator_sensitivity" name="regulator_sensitivity" label="Sensibilidade a regulador" defaultValue={editing?.regulator_sensitivity ?? ""} />
+              <Input id="regulator_sensitivity" name="regulator_sensitivity" label="Sensibilidade a regulador" defaultValue={base?.regulator_sensitivity ?? ""} />
             )}
           </div>
 
@@ -432,7 +485,7 @@ export function AgronomicCultivarsTab({
                 label="Fonte"
                 options={sourceOptions}
                 required
-                defaultValue={editing?.data_source_id ?? ""}
+                defaultValue={base?.data_source_id ?? ""}
               />
               <Select
                 id="data_confidence"
@@ -440,7 +493,7 @@ export function AgronomicCultivarsTab({
                 label="Confiabilidade"
                 options={CONFIDENCE_OPTIONS}
                 required
-                defaultValue={editing?.data_confidence ?? "nao_validada"}
+                defaultValue={base?.data_confidence ?? "nao_validada"}
               />
             </div>
             {sources.length === 0 && (
@@ -448,7 +501,7 @@ export function AgronomicCultivarsTab({
             )}
           </div>
 
-          <TextArea id="observations" name="observations" label="Observações" defaultValue={editing?.observations ?? ""} />
+          <TextArea id="observations" name="observations" label="Observações" defaultValue={base?.observations ?? ""} />
 
           {error && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{error}</p>}
           <div className="flex justify-end gap-3 pt-2">

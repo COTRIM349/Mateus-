@@ -16,6 +16,9 @@
 export interface Fao56Preset {
   key: string;
   crop: string;
+  /** Classe operacional de ciclo (ex.: Precoce/Médio/Tardio). Vazia quando a
+   *  cultura tem pouca variação de ciclo e um preset único basta. */
+  cycleClass?: string;
   /** Kc dos três estádios de referência. */
   kcIni: number;
   kcMid: number;
@@ -31,43 +34,60 @@ export interface Fao56Preset {
   notes: string;
 }
 
-// Faixas típicas FAO-56; adotamos valores centrais representativos para clima
-// quente/seco (Cerrado). Kc_end para colheita com solo seco.
+// Faixas típicas FAO-56 (Tab. 11/12); valores centrais para clima quente/seco
+// (Cerrado). O Kc por estádio é o mesmo dentro de uma cultura — o que muda com
+// a classe de ciclo é a DURAÇÃO dos estádios. Por isso a soja tem três presets
+// (precoce/médio/tardio) e milho/algodão/feijão/tabaco têm um preset padrão
+// (pouca variação relevante de ciclo para o Kc).
 export const FAO56_CROP_PRESETS: Fao56Preset[] = [
   {
-    key: "soja", crop: "Soja",
+    key: "soja-precoce", crop: "Soja", cycleClass: "Precoce",
     kcIni: 0.40, kcMid: 1.15, kcEnd: 0.50,
-    lIni: 20, lDev: 30, lMid: 60, lLate: 25,
+    lIni: 15, lDev: 25, lMid: 45, lLate: 25,
+    rootMaxM: 0.9, depletionP: 0.50,
+    notes: "FAO-56 Tab. 12 — soja, ciclo precoce (~110 dias). Kc_end 0,50 (folha verde); 0,30 se secar em campo.",
+  },
+  {
+    key: "soja-medio", crop: "Soja", cycleClass: "Médio",
+    kcIni: 0.40, kcMid: 1.15, kcEnd: 0.50,
+    lIni: 20, lDev: 30, lMid: 50, lLate: 25,
     rootMaxM: 1.0, depletionP: 0.50,
-    notes: "FAO-56 Tab. 12 — soja (soybean). Kc_end 0,50 para colheita com folha verde; 0,30 se secar em campo.",
+    notes: "FAO-56 Tab. 12 — soja, ciclo médio (~125 dias). Kc_end 0,50 (folha verde); 0,30 se secar em campo.",
+  },
+  {
+    key: "soja-tardio", crop: "Soja", cycleClass: "Tardio",
+    kcIni: 0.40, kcMid: 1.15, kcEnd: 0.50,
+    lIni: 20, lDev: 35, lMid: 60, lLate: 25,
+    rootMaxM: 1.1, depletionP: 0.50,
+    notes: "FAO-56 Tab. 12 — soja, ciclo tardio (~140 dias). Kc_end 0,50 (folha verde); 0,30 se secar em campo.",
   },
   {
     key: "milho", crop: "Milho (grão)",
     kcIni: 0.30, kcMid: 1.20, kcEnd: 0.60,
     lIni: 30, lDev: 40, lMid: 50, lLate: 30,
     rootMaxM: 1.3, depletionP: 0.55,
-    notes: "FAO-56 Tab. 12 — milho grão (maize, field). Kc_end 0,35 quando colhido seco.",
+    notes: "FAO-56 Tab. 12 — milho grão (maize, field, ~150 dias). Kc_end 0,35 quando colhido seco.",
   },
   {
     key: "algodao", crop: "Algodão",
     kcIni: 0.35, kcMid: 1.18, kcEnd: 0.60,
     lIni: 30, lDev: 50, lMid: 60, lLate: 55,
     rootMaxM: 1.4, depletionP: 0.65,
-    notes: "FAO-56 Tab. 12 — algodão (cotton). Kc_mid 1,15–1,20; Kc_end 0,70–0,50 conforme manejo de desfolha.",
+    notes: "FAO-56 Tab. 12 — algodão (cotton, ~195 dias). Kc_mid 1,15–1,20; Kc_end 0,70–0,50 conforme desfolha.",
   },
   {
     key: "feijao", crop: "Feijão",
     kcIni: 0.40, kcMid: 1.15, kcEnd: 0.35,
     lIni: 20, lDev: 30, lMid: 40, lLate: 20,
     rootMaxM: 0.7, depletionP: 0.45,
-    notes: "FAO-56 Tab. 12 — feijão seco (dry bean). Ciclo curto; ajustar às cultivares locais.",
+    notes: "FAO-56 Tab. 12 — feijão seco (dry bean, ~110 dias). Ajustar às cultivares locais.",
   },
   {
     key: "tabaco", crop: "Tabaco",
     kcIni: 0.35, kcMid: 1.15, kcEnd: 0.80,
     lIni: 20, lDev: 30, lMid: 30, lLate: 30,
     rootMaxM: 0.8, depletionP: 0.35,
-    notes: "FAO-56 Tab. 12 — tabaco (tobacco). Kc_end alto porque a colheita ocorre com folha ainda ativa.",
+    notes: "FAO-56 Tab. 12 — tabaco (tobacco, ~110 dias). Kc_end alto: colheita com folha ainda ativa.",
   },
 ];
 

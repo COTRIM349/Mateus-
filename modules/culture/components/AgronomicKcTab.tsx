@@ -270,7 +270,7 @@ export function AgronomicKcTab({
       const {data:curve,error:curveErr}=await supabase.from("kc_curves").insert({
         culture_id:selectedCultureId,
         cultivar_id:cultivarId||null,
-        curve_name:`FAO-56 padrão — ${pf.crop}`,
+        curve_name:`FAO-56 padrão — ${pf.crop}${pf.cycleClass?` (${pf.cycleClass})`:""}`,
         curve_type:"bibliographic",
         axis_type:"DAE",
         eto_reference_method:"FAO56_PENMAN_MONTEITH_GRASS",
@@ -420,7 +420,7 @@ export function AgronomicKcTab({
           <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
             A curva é criada em <strong>rascunho</strong>, com fonte <strong>FAO-56</strong> e no formato de 4 estádios (patamar inicial/médio, rampa no desenvolvimento e na senescência). Revise, ajuste à realidade local e <strong>aprove</strong> antes de ativar para cálculo. {cultivarId?"Será vinculada ao cultivar selecionado.":"Será vinculada à referência da cultura."}
           </div>
-          <Select id="preset_crop" name="preset_crop" label="Cultura de referência (FAO-56)" options={FAO56_CROP_PRESETS.map(p=>({value:p.key,label:p.crop}))} value={pf.key} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>{const found=FAO56_CROP_PRESETS.find(p=>p.key===e.target.value);if(found)setPf(found);}}/>
+          <Select id="preset_crop" name="preset_crop" label="Cultura / classe de ciclo (FAO-56)" options={FAO56_CROP_PRESETS.map(p=>({value:p.key,label:p.cycleClass?`${p.crop} — ${p.cycleClass}`:p.crop}))} value={pf.key} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>{const found=FAO56_CROP_PRESETS.find(p=>p.key===e.target.value);if(found)setPf(found);}}/>
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-graphite-400">Coeficientes Kc</p>
             <div className="grid gap-4 sm:grid-cols-3">

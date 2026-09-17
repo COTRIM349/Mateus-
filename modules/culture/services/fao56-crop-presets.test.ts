@@ -30,7 +30,9 @@ describe("FAO-56 crop presets", () => {
 
   it("presets cobrem as culturas do Cerrado com Kc dentro de faixa físico-plausível", () => {
     const keys = FAO56_CROP_PRESETS.map((p) => p.key);
-    expect(keys).toEqual(["soja", "milho", "algodao", "feijao", "tabaco"]);
+    // Soja tem 3 classes de ciclo; demais culturas, um preset padrão.
+    expect(keys).toEqual(["soja-precoce", "soja-medio", "soja-tardio", "milho", "algodao", "feijao", "tabaco"]);
+    expect(FAO56_CROP_PRESETS.filter((p) => p.crop === "Soja")).toHaveLength(3);
     for (const p of FAO56_CROP_PRESETS) {
       expect(p.kcIni).toBeGreaterThan(0);
       expect(p.kcMid).toBeGreaterThanOrEqual(p.kcIni);
