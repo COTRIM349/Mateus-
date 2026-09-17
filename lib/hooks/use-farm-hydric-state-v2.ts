@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/providers";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -28,6 +28,8 @@ interface FarmHydricState {
   states: PivotHydricState[];
   summary: FarmHydricSummary | null;
   loading: boolean;
+  /** true quando a carga falhou (erro de query/cálculo) — distinto de fazenda vazia. */
+  error: boolean;
   refresh: () => void;
 }
 
@@ -103,17 +105,26 @@ export function useFarmHydricState(): FarmHydricState {
   const [states, setStates] = useState<PivotHydricState[]>([]);
   const [summary, setSummary] = useState<FarmHydricSummary | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(false);
   const supabase = createClient();
+  // Versionamento das cargas: só a mais recente escreve no estado, para que uma
+  // carga antiga (ex.: da fazenda anterior) não sobreponha a atual ao resolver
+  // por último.
+  const loadIdRef = useRef(0);
 
   const load = useCallback(async () => {
+    const loadId = ++loadIdRef.current;
+    const isStale = () => loadId !== loadIdRef.current;
     if (!activeFarmId) {
       setStates([]);
       setSummary(null);
+      setError(false);
       setLoading(false);
       return;
     }
 
     setLoading(true);
+    setError(false);
     const dateEnd = todayLocalIso();
 
     try {
@@ -128,6 +139,7 @@ export function useFarmHydricState(): FarmHydricState {
       const pivots = (pivotRows ?? []) as Array<Record<string, unknown>>;
       const pivotIds = pivots.map((p) => p.id as string);
       if (pivotIds.length === 0) {
+        if (isStale()) return;
         setStates([]);
         setSummary(computeFarmHydricState([]));
         return;
@@ -158,6 +170,7 @@ export function useFarmHydricState(): FarmHydricState {
       const operationalPivots = pivots.filter((p) => (assignmentsByPivot.get(p.id as string)?.length ?? 0) > 0);
       const assignments = operationalPivots.flatMap((p) => assignmentsByPivot.get(p.id as string) ?? []);
       if (assignments.length === 0) {
+        if (isStale()) return;
         setStates([]);
         setSummary(computeFarmHydricState([]));
         return;
@@ -187,6 +200,14 @@ export function useFarmHydricState(): FarmHydricState {
           .lte("effective_date", dateEnd)
           .order("effective_date", { ascending: false }),
       ]);
+
+      // Falha em QUALQUER pré-requisito invalida o estado: um anchorsRes vazio
+      // por erro faria o motor assumir capacidade de campo e publicar decisões
+      // plausíveis porém incorretas. Melhor mostrar o card de erro.
+      const prereqError = [culturesRes, phasesRes, soilsRes, layersRes, pivotSoilsRes, pivotSoilLayersRes, seasonsRes, varietiesRes, stationsRes, anchorsRes]
+        .map((r) => (r as { error?: unknown }).error)
+        .find(Boolean);
+      if (prereqError) throw prereqError;
 
       const cultureMap = new Map((culturesRes.data ?? []).map((c: Record<string, unknown>) => [c.id as string, c]));
       const soilMap = new Map((soilsRes.data ?? []).map((s: Record<string, unknown>) => [s.id as string, s]));
@@ -281,6 +302,8 @@ export function useFarmHydricState(): FarmHydricState {
             .gte("date", dataStart)
             .lte("date", dateEnd),
         ]);
+        if (selectionRes.error) throw selectionRes.error;
+        if (readingsRes.error) throw readingsRes.error;
         const readingsById = new Map((readingsRes.data ?? []).map((r) => [r.id as string, r]));
         for (const selection of selectionRes.data ?? []) {
           if (!selection.selected_reading_id || selection.operational_approved !== true) continue;
@@ -458,14 +481,17 @@ export function useFarmHydricState(): FarmHydricState {
         }
       }
 
+      if (isStale()) return;
       setStates(result);
       setSummary(computeFarmHydricState(result));
-    } catch (error) {
-      console.error("Falha ao carregar estado hídrico operacional", error);
+    } catch (err) {
+      if (isStale()) return;
+      console.error("Falha ao carregar estado hídrico operacional", err);
       setStates([]);
       setSummary(null);
+      setError(true);
     } finally {
-      setLoading(false);
+      if (!isStale()) setLoading(false);
     }
   }, [activeFarmId, supabase]);
 
@@ -473,5 +499,5 @@ export function useFarmHydricState(): FarmHydricState {
     if (!authLoading) load();
   }, [authLoading, load]);
 
-  return { states, summary, loading:authLoading || loading, refresh:load };
+  return { states, summary, loading:authLoading || loading, error, refresh:load };
 }

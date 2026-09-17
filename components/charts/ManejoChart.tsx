@@ -135,7 +135,7 @@ export function ManejoSeriesPicker({
         })}
       </div>
       <p className="mt-3 border-t border-gray-100 pt-2.5 text-[10px] leading-relaxed text-graphite-300 dark:border-white/[0.06] dark:text-gray-600">
-        Padrão do reservatório: ARM, CAD/CC operacional, limite CAD − AFD, PMP = 0 mm, irrigação, chuva e ETc.
+        Padrão do reservatório: ARM, DTA/CC operacional, limite DTA − CRA, PMP = 0 mm, irrigação, chuva e ETc.
       </p>
     </div>
   );

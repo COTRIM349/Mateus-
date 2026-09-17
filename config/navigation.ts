@@ -61,6 +61,7 @@ export const navGroups: NavGroup[] = [
     label: "Manejo Diário",
     icon: ICON.decision,
     items: [
+      { label: "Central de Manejo", href: "/central-manejo", icon: ICON.decision },
       { label: "Clima", href: "/clima", icon: ICON.cloud },
       { label: "Balanço Hídrico", href: "/balanco-hidrico", icon: ICON.balance },
       { label: "Decisão de Irrigação", href: "/operacao/decisao", icon: ICON.decision },

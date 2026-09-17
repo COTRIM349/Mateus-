@@ -539,9 +539,9 @@ function TabIndicadores({
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
         <StatCard metric={{ id: "water", title: "Água aplicada", value: `${formatNumber(totals.irrigationMm, 1)} mm`, description: "Lâmina bruta dos dias/eventos" }} />
         <StatCard metric={{ id: "etc", title: "ETc total", value: `${formatNumber(totals.etcMm, 1)} mm`, description: "Evapotranspiração da cultura" }} />
-        <StatCard metric={{ id: "arm", title: "ARM médio", value: `${formatNumber(totals.avgArmMm, 1)} mm`, description: "Água armazenada — não é % da CAD" }} />
+        <StatCard metric={{ id: "arm", title: "ARM médio", value: `${formatNumber(totals.avgArmMm, 1)} mm`, description: "Água armazenada — não é % da DTA" }} />
         <StatCard metric={{ id: "cc", title: "Umidade média", value: `${formatNumber(totals.avgMoisturePctCc, 0)}% da CC`, description: "Volumétrico (θ / θCC)" }} />
-        <StatCard metric={{ id: "rain", title: "Chuva / Pe", value: `${formatNumber(totals.rainMm, 1)} / ${formatNumber(totals.effectiveRainMm, 1)} mm`, description: "Pe USDA-SCS limitada pela CAD" }} />
+        <StatCard metric={{ id: "rain", title: "Chuva / Pe", value: `${formatNumber(totals.rainMm, 1)} / ${formatNumber(totals.effectiveRainMm, 1)} mm`, description: "Pe USDA-SCS limitada pela DTA" }} />
         <StatCard metric={{ id: "energy", title: "Energia", value: totals.energyKwh != null ? `${formatNumber(totals.energyKwh, 0)} kWh` : "—", description: "Soma dos eventos reais" }} />
         <StatCard metric={{ id: "cost", title: "Custo", value: money(totals.cost), description: "Sem tarifa, permanece vazio" }} />
         <StatCard metric={{ id: "events", title: "Eventos", value: `${totals.eventCount}`, description: "Irrigações registradas no recorte" }} />
