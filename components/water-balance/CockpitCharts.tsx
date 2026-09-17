@@ -302,6 +302,7 @@ export function ReservatorioChart({
   safetyMm,
   attentionMm,
   visible = defaultReservatorioVisible,
+  unit = "pct",
 }: {
   points: ReservatorioPoint[];
   todayIndex: number;
@@ -311,6 +312,9 @@ export function ReservatorioChart({
   safetyMm: number;
   attentionMm: number;
   visible?: Record<ReservSeriesKey, boolean>;
+  /** "pct" = eixo em % da água disponível (PMP=0, CC=100, estilo Scheduling);
+   *  "mm" = ARM em mm absolutos com umidade θ/θCC no eixo secundário. */
+  unit?: "pct" | "mm";
 }) {
   const W = 1000;
   const H = 320;
@@ -323,77 +327,115 @@ export function ReservatorioChart({
 
   if (points.length === 0 || ccMm <= 0) return <EmptyChart label="Sem dados no período." height={H} />;
 
+  const pct = unit === "pct";
+  const n = points.length;
+  const x = (i: number) => padL + (n <= 1 ? plotW / 2 : (plotW * i) / (n - 1));
+
+  // Água disponível como % da CAD por data: PMP = 0 %, CC = 100 % (estilo Valley
+  // Scheduling). Cada valor sai de (ARM − PMP) / (CC − PMP) do próprio dia,
+  // acompanhando o crescimento radicular.
+  const cadOf = (p: ReservatorioPoint) =>
+    p.ccAbs != null && p.pmpAbs != null ? p.ccAbs - p.pmpAbs : null;
+  const availOf = (p: ReservatorioPoint) => {
+    const cad = cadOf(p);
+    if (cad == null || cad <= 0 || p.storageAbs == null) return null;
+    return ((p.storageAbs - (p.pmpAbs ?? 0)) / cad) * 100;
+  };
+  const segAvailOf = (p: ReservatorioPoint) => {
+    const cad = cadOf(p);
+    if (cad == null || cad <= 0 || p.safetyAbs == null) return null;
+    return ((p.safetyAbs - (p.pmpAbs ?? 0)) / cad) * 100;
+  };
+
+  // Referências "de hoje" nas duas escalas.
+  const cadMm = Math.max(ccMm - pmpMm, 0);
+  const ccRef = pct ? 100 : ccMm;
+  const pmpRef = pct ? 0 : pmpMm;
+  const segRef = pct ? (cadMm > 0 ? ((safetyMm - pmpMm) / cadMm) * 100 : 0) : safetyMm;
+  const attnRef = pct ? (cadMm > 0 ? ((attentionMm - pmpMm) / cadMm) * 100 : 0) : attentionMm;
+
   const maxPoint = Math.max(
     ccMm,
     ...points.flatMap((p) => [p.storageAbs ?? 0, p.ccAbs ?? 0, p.safetyAbs ?? 0]),
   );
-  const yTop = Math.max(10, Math.ceil(maxPoint / 10) * 10);
-  const yBottom = 0;
-  const n = points.length;
-  const x = (i: number) => padL + (n <= 1 ? plotW / 2 : (plotW * i) / (n - 1));
-  const yMm = (v: number) => padT + plotH - ((NUM(v) - yBottom) / (yTop - yBottom)) * plotH;
-  const yPct = (v: number) => padT + plotH - (clamp(v, 0, 125) / 125) * plotH;
+  const yTop = pct ? 110 : Math.max(10, Math.ceil(maxPoint / 10) * 10);
+  const y = (v: number) => padT + plotH - (clamp(NUM(v), 0, yTop) / yTop) * plotH;
+  const yPct = (v: number) => padT + plotH - (clamp(v, 0, 125) / 125) * plotH; // θ/θCC secundário (só mm)
 
   const bandRect = (lo: number, hi: number, fill: string) => (
-    <rect x={padL} y={yMm(hi)} width={plotW} height={Math.max(yMm(lo) - yMm(hi), 0)} fill={fill} />
+    <rect x={padL} y={y(hi)} width={plotW} height={Math.max(y(lo) - y(hi), 0)} fill={fill} />
   );
 
-  const armReal: string[] = [];
-  const armFore: string[] = [];
-  const moistureReal: string[] = [];
+  // Curva de água no solo (ARM em mm, ou umidade em % da CAD).
+  const waterOf = (p: ReservatorioPoint) => (pct ? availOf(p) : p.storageAbs);
+  const waterReal: string[] = [];
+  const waterFore: string[] = [];
+  const moistureReal: string[] = []; // θ/θCC — apenas no modo mm (eixo secundário)
   const moistureFore: string[] = [];
   const ccPts: string[] = [];
   const safetyPts: string[] = [];
   const pmpPts: string[] = [];
 
   points.forEach((p, i) => {
-    if (p.storageAbs != null && Number.isFinite(p.storageAbs)) {
-      const pt = `${x(i).toFixed(1)},${yMm(p.storageAbs).toFixed(1)}`;
-      if (p.isForecast) armFore.push(pt); else armReal.push(pt);
+    const w = waterOf(p);
+    if (w != null && Number.isFinite(w)) {
+      const ptStr = `${x(i).toFixed(1)},${y(w).toFixed(1)}`;
+      if (p.isForecast) waterFore.push(ptStr); else waterReal.push(ptStr);
     }
-    if (p.moisturePctCc != null && Number.isFinite(p.moisturePctCc)) {
-      const pt = `${x(i).toFixed(1)},${yPct(p.moisturePctCc).toFixed(1)}`;
-      if (p.isForecast) moistureFore.push(pt); else moistureReal.push(pt);
+    if (!pct && p.moisturePctCc != null && Number.isFinite(p.moisturePctCc)) {
+      const ptStr = `${x(i).toFixed(1)},${yPct(p.moisturePctCc).toFixed(1)}`;
+      if (p.isForecast) moistureFore.push(ptStr); else moistureReal.push(ptStr);
     }
-    if (p.ccAbs != null && Number.isFinite(p.ccAbs)) ccPts.push(`${x(i).toFixed(1)},${yMm(p.ccAbs).toFixed(1)}`);
-    if (p.safetyAbs != null && Number.isFinite(p.safetyAbs)) safetyPts.push(`${x(i).toFixed(1)},${yMm(p.safetyAbs).toFixed(1)}`);
-    if (p.pmpAbs != null && Number.isFinite(p.pmpAbs)) pmpPts.push(`${x(i).toFixed(1)},${yMm(p.pmpAbs).toFixed(1)}`);
+    const ccV = pct ? 100 : p.ccAbs;
+    const segV = pct ? segAvailOf(p) : p.safetyAbs;
+    const pmpV = pct ? 0 : p.pmpAbs;
+    if (ccV != null && Number.isFinite(ccV)) ccPts.push(`${x(i).toFixed(1)},${y(ccV).toFixed(1)}`);
+    if (segV != null && Number.isFinite(segV)) safetyPts.push(`${x(i).toFixed(1)},${y(segV).toFixed(1)}`);
+    if (pmpV != null && Number.isFinite(pmpV)) pmpPts.push(`${x(i).toFixed(1)},${y(pmpV).toFixed(1)}`);
   });
-  if (armReal.length > 0 && armFore.length > 0) armFore.unshift(armReal[armReal.length - 1]);
+  if (waterReal.length > 0 && waterFore.length > 0) waterFore.unshift(waterReal[waterReal.length - 1]);
   if (moistureReal.length > 0 && moistureFore.length > 0) moistureFore.unshift(moistureReal[moistureReal.length - 1]);
 
   const todayPt = todayIndex >= 0 && todayIndex < n ? points[todayIndex] : null;
   const todayX = todayIndex >= 0 && todayIndex < n ? x(todayIndex) : null;
   const crossIdx = crossIndex >= 0 && crossIndex < n ? crossIndex : -1;
+  const todayWater = todayPt ? waterOf(todayPt) : null;
+  const crossWater = crossIdx >= 0 ? waterOf(points[crossIdx]) : null;
 
-  const yTicks: number[] = [];
+  // A curva de água é comandada por "umidade" no modo %, e por "arm" no modo mm.
+  const waterVisible = pct ? visible.umidade : visible.arm;
+  const waterColor = pct ? "#7c3aed" : "#3b82f6";
+
+  const mmTicks: number[] = [];
   const tickStep = yTop <= 60 ? 10 : 20;
-  for (let t = 0; t <= yTop; t += tickStep) yTicks.push(t);
-  const pctTicks = [0, 25, 50, 75, 100, 125];
+  for (let t = 0; t <= yTop; t += tickStep) mmTicks.push(t);
+  const leftTicks = pct ? [0, 25, 50, 75, 100] : mmTicks;
+  const secTicks = [0, 25, 50, 75, 100, 125];
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Reservatório de água e umidade do solo">
-      {/* Faixas atuais; as curvas dinâmicas de CC/segurança acompanham cada data. */}
+      {/* Faixas de manejo (verde/amarelo/vermelho) nas duas escalas. */}
       {visible.zonas && (
         <>
-          {bandRect(attentionMm, ccMm, "#16a34a22")}
-          {bandRect(safetyMm, attentionMm, "#eab30826")}
-          {bandRect(pmpMm, safetyMm, "#dc262622")}
-          {bandRect(yBottom, pmpMm, "#7f1d1d22")}
+          {bandRect(attnRef, ccRef, "#16a34a22")}
+          {bandRect(segRef, attnRef, "#eab30826")}
+          {bandRect(pmpRef, segRef, "#dc262622")}
+          {!pct && bandRect(0, pmpMm, "#7f1d1d22")}
         </>
       )}
 
-      {yTicks.map((t) => (
+      {leftTicks.map((t) => (
         <g key={t}>
-          <line x1={padL} x2={padL + plotW} y1={yMm(t)} y2={yMm(t)} stroke="currentColor" strokeWidth={1} className="text-gray-200/60 dark:text-white/[0.05]" />
-          <text x={padL - 7} y={yMm(t) + 3} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={10}>{t}</text>
+          <line x1={padL} x2={padL + plotW} y1={y(t)} y2={y(t)} stroke="currentColor" strokeWidth={1} className="text-gray-200/60 dark:text-white/[0.05]" />
+          <text x={padL - 7} y={y(t) + 3} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={10}>{t}</text>
         </g>
       ))}
-      <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>mm</text>
+      <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{pct ? "%CC" : "mm"}</text>
 
-      {visible.umidade && (
+      {/* Eixo secundário θ/θCC — só faz sentido no modo mm. */}
+      {!pct && visible.umidade && (
         <>
-          {pctTicks.map((t) => (
+          {secTicks.map((t) => (
             <text key={`pct-${t}`} x={padL + plotW + 72} y={yPct(t) + 3} className="fill-violet-600 dark:fill-violet-400" fontSize={8.5}>{t}</text>
           ))}
           <text x={padL + plotW + 72} y={padT - 4} className="fill-violet-600 dark:fill-violet-400" fontSize={8.5} fontWeight={700}>%CC</text>
@@ -402,9 +444,9 @@ export function ReservatorioChart({
 
       {visible.zonas && (
         <>
-          <ZoneLabel y={yMm((attentionMm + ccMm) / 2)} text="Zona ótima" color="#16a34a" x={padL + 6} />
-          <ZoneLabel y={yMm((safetyMm + attentionMm) / 2)} text="Alerta" color="#b45309" x={padL + 6} />
-          <ZoneLabel y={yMm((pmpMm + safetyMm) / 2)} text="Déficit crítico" color="#dc2626" x={padL + 6} />
+          <ZoneLabel y={y((attnRef + ccRef) / 2)} text="Zona ótima" color="#16a34a" x={padL + 6} />
+          <ZoneLabel y={y((segRef + attnRef) / 2)} text="Alerta" color="#b45309" x={padL + 6} />
+          <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Déficit crítico" color="#dc2626" x={padL + 6} />
         </>
       )}
 
@@ -413,17 +455,17 @@ export function ReservatorioChart({
       {visible.seguranca && safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="6 4" />}
       {visible.pmp && pmpPts.length > 1 && <polyline points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
 
-      {visible.cc && <RefLine y={yMm(ccMm)} label="DTA / CC" value={`${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
-      {visible.seguranca && <RefLine y={yMm(safetyMm)} label="Segurança (DTA−CRA)" value={`${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />}
-      {visible.pmp && <RefLine y={yMm(pmpMm)} label="PMP" value={`${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
+      {visible.cc && <RefLine y={y(ccRef)} label="DTA / CC" value={pct ? "100 %CC" : `${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
+      {visible.seguranca && <RefLine y={y(segRef)} label="Segurança (DTA−CRA)" value={pct ? `${segRef.toFixed(0)} %CC` : `${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />}
+      {visible.pmp && <RefLine y={y(pmpRef)} label="PMP" value={pct ? "0 %CC" : `${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
 
-      {/* ARM */}
-      {visible.arm && armReal.length > 1 && <polyline points={armReal.join(" ")} fill="none" stroke="#3b82f6" strokeWidth={2.5} />}
-      {visible.arm && armFore.length > 1 && <polyline points={armFore.join(" ")} fill="none" stroke="#3b82f6" strokeWidth={2.2} strokeDasharray="6 4" opacity={0.85} />}
+      {/* θ/θCC (só no modo mm, eixo secundário) */}
+      {!pct && visible.umidade && moistureReal.length > 1 && <polyline points={moistureReal.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={2.1} />}
+      {!pct && visible.umidade && moistureFore.length > 1 && <polyline points={moistureFore.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={1.9} strokeDasharray="5 4" opacity={0.75} />}
 
-      {/* Umidade do solo (% da CC) — curva que cai conforme o solo seca */}
-      {visible.umidade && moistureReal.length > 1 && <polyline points={moistureReal.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={2.1} />}
-      {visible.umidade && moistureFore.length > 1 && <polyline points={moistureFore.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={1.9} strokeDasharray="5 4" opacity={0.75} />}
+      {/* Curva de água no solo — cai conforme o solo seca. */}
+      {waterVisible && waterReal.length > 1 && <polyline points={waterReal.join(" ")} fill="none" stroke={waterColor} strokeWidth={2.5} />}
+      {waterVisible && waterFore.length > 1 && <polyline points={waterFore.join(" ")} fill="none" stroke={waterColor} strokeWidth={2.2} strokeDasharray="6 4" opacity={0.85} />}
 
       {todayX != null && (
         <>
@@ -432,18 +474,22 @@ export function ReservatorioChart({
         </>
       )}
 
-      {visible.arm && todayPt?.storageAbs != null && todayX != null && (
+      {waterVisible && todayWater != null && todayX != null && (
         <>
-          <circle cx={todayX} cy={yMm(todayPt.storageAbs)} r={4.5} fill="#3b82f6" stroke="#fff" strokeWidth={1.5} />
-          <g transform={`translate(${todayX - 48}, ${yMm(todayPt.storageAbs) - 30})`}>
-            <rect width={96} height={20} rx={5} className="fill-graphite-900/90 dark:fill-black/70" />
-            <text x={48} y={14} textAnchor="middle" fill="#fff" fontSize={9.5} fontWeight={700}>Hoje: {(todayPt.storageAbs - (todayPt.pmpAbs ?? pmpMm)).toFixed(1)} mm ARM</text>
+          <circle cx={todayX} cy={y(todayWater)} r={4.5} fill={waterColor} stroke="#fff" strokeWidth={1.5} />
+          <g transform={`translate(${todayX - 52}, ${y(todayWater) - 30})`}>
+            <rect width={104} height={20} rx={5} className="fill-graphite-900/90 dark:fill-black/70" />
+            <text x={52} y={14} textAnchor="middle" fill="#fff" fontSize={9.5} fontWeight={700}>
+              {pct
+                ? `Hoje: ${todayWater.toFixed(0)}% da CC`
+                : `Hoje: ${(todayWater - (todayPt?.pmpAbs ?? pmpMm)).toFixed(1)} mm ARM`}
+            </text>
           </g>
         </>
       )}
 
-      {visible.arm && crossIdx > todayIndex && points[crossIdx].storageAbs != null && (
-        <circle cx={x(crossIdx)} cy={yMm(points[crossIdx].storageAbs!)} r={4} fill="#dc2626" stroke="#fff" strokeWidth={1.4} />
+      {waterVisible && crossIdx > todayIndex && crossWater != null && (
+        <circle cx={x(crossIdx)} cy={y(crossWater)} r={4} fill="#dc2626" stroke="#fff" strokeWidth={1.4} />
       )}
 
       {points.map((p, i) => (n <= 18 || i % 2 === 0) ? (

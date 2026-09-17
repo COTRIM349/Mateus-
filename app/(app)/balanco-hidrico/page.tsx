@@ -2003,15 +2003,24 @@ function Cockpit({
   // Scheduling) e a escolha persiste por navegador.
   const [entradasVis, setEntradasVis] = useState<Record<EntradaSeriesKey, boolean>>(defaultEntradasVisible);
   const [reservVis, setReservVis] = useState<Record<ReservSeriesKey, boolean>>(defaultReservatorioVisible);
+  // Escala do gráfico de reservatório: "pct" = % da água disponível (PMP=0,
+  // CC=100, estilo Scheduling); "mm" = ARM em milímetros absolutos.
+  const [reservUnit, setReservUnit] = useState<"pct" | "mm">("pct");
   useEffect(() => {
     try {
       const e = window.localStorage.getItem("bh:entradasVis");
       if (e) setEntradasVis((prev) => ({ ...prev, ...JSON.parse(e) }));
       const r = window.localStorage.getItem("bh:reservVis");
       if (r) setReservVis((prev) => ({ ...prev, ...JSON.parse(r) }));
+      const u = window.localStorage.getItem("bh:reservUnit");
+      if (u === "pct" || u === "mm") setReservUnit(u);
     } catch {
       // localStorage indisponível — mantém os padrões.
     }
+  }, []);
+  const changeReservUnit = useCallback((u: "pct" | "mm") => {
+    setReservUnit(u);
+    try { window.localStorage.setItem("bh:reservUnit", u); } catch { /* noop */ }
   }, []);
   const toggleEntrada = useCallback((k: EntradaSeriesKey) => {
     setEntradasVis((prev) => {
@@ -2149,15 +2158,38 @@ function Cockpit({
             <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} visible={entradasVis} /></div>
           </Card>
           <Card className="p-4">
-            <div className="mb-2">
-              <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
-              <p className="text-[11px] text-graphite-400 dark:text-gray-500">ARM, curva de umidade do solo (cai conforme o solo seca) e segurança calculada por CRA = p × DTA · previsão tracejada</p>
+            <div className="mb-2 flex items-start justify-between gap-3">
+              <div>
+                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
+                <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+                  {reservUnit === "pct"
+                    ? "Umidade, CC e segurança em % da água disponível (PMP = 0%, CC = 100%) · previsão tracejada"
+                    : "ARM em mm, umidade do solo (θ/θCC) e segurança calculada por CRA = p × DTA · previsão tracejada"}
+                </p>
+              </div>
+              <div className="flex shrink-0 gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
+                {(["pct", "mm"] as const).map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => changeReservUnit(u)}
+                    aria-pressed={reservUnit === u}
+                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${reservUnit === u ? "bg-white text-graphite-800 shadow-xs dark:bg-white/[0.1] dark:text-white" : "text-graphite-400 hover:text-graphite-600 dark:text-gray-500"}`}
+                  >
+                    {u === "pct" ? "% da CC" : "mm"}
+                  </button>
+                ))}
+              </div>
             </div>
             <div className="mb-2.5">
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
-              <CockpitSeriesToggles series={RESERVATORIO_SERIES} visible={reservVis} onToggle={toggleReserv} />
+              <CockpitSeriesToggles
+                series={reservUnit === "pct" ? RESERVATORIO_SERIES.filter((s) => s.k !== "arm") : RESERVATORIO_SERIES}
+                visible={reservVis}
+                onToggle={toggleReserv}
+              />
             </div>
-            <div className="h-[330px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} /></div>
+            <div className="h-[330px] w-full"><ReservatorioChart points={series.reservatorio} todayIndex={series.todayIndexReserv} crossIndex={series.crossIndexReserv} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} unit={reservUnit} /></div>
           </Card>
         </div>
 
