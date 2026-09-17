@@ -33,6 +33,11 @@ export interface ReservatorioPoint {
   safetyAbs?: number | null;
   pmpAbs?: number | null;
   attentionAbs?: number | null;
+  /** Eventos e clima do dia (opcionais no gráfico). */
+  rain?: number | null;
+  irr?: number | null;
+  eto?: number | null;
+  kc?: number | null;
   isForecast: boolean;
 }
 
@@ -48,7 +53,11 @@ export type ReservSeriesKey =
   | "cc"
   | "seguranca"
   | "pmp"
-  | "zonas";
+  | "zonas"
+  | "chuva"
+  | "irrig"
+  | "eto"
+  | "kc";
 
 export interface SeriesDef<K extends string> {
   k: K;
@@ -68,10 +77,14 @@ export const ENTRADAS_SERIES: SeriesDef<EntradaSeriesKey>[] = [
 export const RESERVATORIO_SERIES: SeriesDef<ReservSeriesKey>[] = [
   { k: "arm", label: "ARM — Água armazenada", color: "#3b82f6" },
   { k: "umidade", label: "Umidade do solo (curva de secagem, %CC)", color: "#7c3aed" },
-  { k: "cc", label: "DTA / CC operacional", color: "#16a34a" },
-  { k: "seguranca", label: "Segurança (DTA − CRA)", color: "#eab308" },
-  { k: "pmp", label: "PMP", color: "#dc2626" },
+  { k: "cc", label: "Capacidade de campo (CC)", color: "#16a34a" },
+  { k: "seguranca", label: "Umidade de segurança (limite de manejo)", color: "#eab308" },
+  { k: "pmp", label: "Ponto de murcha (PMP)", color: "#dc2626" },
   { k: "zonas", label: "Faixas de zona (ótima/alerta/déficit)", color: "#94a3b8" },
+  { k: "chuva", label: "Chuva efetiva", color: "#2f6bff" },
+  { k: "irrig", label: "Irrigação realizada", color: "#16a34a" },
+  { k: "eto", label: "ETo (demanda atmosférica)", color: "#f59e0b" },
+  { k: "kc", label: "Kc (coeficiente da cultura)", color: "#0ea5a3" },
 ];
 
 export const defaultEntradasVisible: Record<EntradaSeriesKey, boolean> = {
@@ -90,6 +103,10 @@ export const defaultReservatorioVisible: Record<ReservSeriesKey, boolean> = {
   seguranca: true,
   pmp: true,
   zonas: true,
+  chuva: true,
+  irrig: true,
+  eto: false, // séries de clima/cultura: opcionais, para não poluir
+  kc: false,
 };
 
 /**
@@ -295,8 +312,6 @@ export function EntradasConsumoChart({
 
 export function ReservatorioChart({
   points,
-  todayIndex,
-  crossIndex,
   ccMm,
   pmpMm,
   safetyMm,
@@ -305,8 +320,6 @@ export function ReservatorioChart({
   unit = "pct",
 }: {
   points: ReservatorioPoint[];
-  todayIndex: number;
-  crossIndex: number;
   ccMm: number;
   pmpMm: number;
   safetyMm: number;
@@ -317,11 +330,11 @@ export function ReservatorioChart({
   unit?: "pct" | "mm";
 }) {
   const W = 1000;
-  const H = 320;
+  const H = 330;
   const padL = 38;
-  const padR = 112;
+  const padR = 116;
   const padT = 16;
-  const padB = 26;
+  const padB = 30;
   const plotW = W - padL - padR;
   const plotH = H - padT - padB;
 
@@ -396,15 +409,32 @@ export function ReservatorioChart({
   if (waterReal.length > 0 && waterFore.length > 0) waterFore.unshift(waterReal[waterReal.length - 1]);
   if (moistureReal.length > 0 && moistureFore.length > 0) moistureFore.unshift(moistureReal[moistureReal.length - 1]);
 
-  const todayPt = todayIndex >= 0 && todayIndex < n ? points[todayIndex] : null;
-  const todayX = todayIndex >= 0 && todayIndex < n ? x(todayIndex) : null;
-  const crossIdx = crossIndex >= 0 && crossIndex < n ? crossIndex : -1;
-  const todayWater = todayPt ? waterOf(todayPt) : null;
-  const crossWater = crossIdx >= 0 ? waterOf(points[crossIdx]) : null;
-
   // A curva de água é comandada por "umidade" no modo %, e por "arm" no modo mm.
   const waterVisible = pct ? visible.umidade : visible.arm;
   const waterColor = pct ? "#7c3aed" : "#3b82f6";
+
+  // Curva em coordenadas numéricas (para a área sob a linha e o ponto final).
+  const baseY = y(0);
+  const waterXY = points
+    .map((p, i) => { const w = waterOf(p); return w != null && Number.isFinite(w) ? { x: x(i), y: y(w) } : null; })
+    .filter((p): p is { x: number; y: number } => p != null);
+
+  // Eventos na base: chuva efetiva e irrigação realizada (mm), escala própria.
+  const evtMax = Math.max(10, ...points.flatMap((p) => [p.rain ?? 0, p.irr ?? 0]));
+  const evtH = (mm: number) => (mm > 0 ? Math.max(2.5, (Math.min(mm, evtMax) / evtMax) * plotH * 0.26) : 0);
+  const evtW = Math.min((plotW / Math.max(n, 1)) * 0.32, 10);
+
+  // ETo (mm/d) e Kc — séries opcionais em escalas próprias (não poluem o padrão).
+  const etoMax = Math.max(8, ...points.map((p) => p.eto ?? 0));
+  const yEto = (v: number) => padT + plotH - (clamp(v, 0, etoMax) / etoMax) * plotH * 0.9;
+  const etoPts = points
+    .map((p, i) => (p.eto != null && Number.isFinite(p.eto) ? `${x(i).toFixed(1)},${yEto(p.eto).toFixed(1)}` : null))
+    .filter((s): s is string => s != null);
+  const KC_MAX = 1.5;
+  const yKc = (v: number) => padT + plotH - (clamp(v, 0, KC_MAX) / KC_MAX) * plotH * 0.9;
+  const kcPts = points
+    .map((p, i) => (p.kc != null && Number.isFinite(p.kc) ? `${x(i).toFixed(1)},${yKc(p.kc).toFixed(1)}` : null))
+    .filter((s): s is string => s != null);
 
   const mmTicks: number[] = [];
   const tickStep = yTop <= 60 ? 10 : 20;
@@ -414,6 +444,16 @@ export function ReservatorioChart({
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Reservatório de água e umidade do solo">
+      <defs>
+        <linearGradient id="reserv-fill-umid" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.16" />
+          <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
+        </linearGradient>
+        <linearGradient id="reserv-fill-arm" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor="#3b82f6" stopOpacity="0.16" />
+          <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
+        </linearGradient>
+      </defs>
       {/* Faixas de manejo (verde/amarelo/vermelho) nas duas escalas. */}
       {visible.zonas && (
         <>
@@ -455,45 +495,53 @@ export function ReservatorioChart({
       {visible.seguranca && safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="6 4" />}
       {visible.pmp && pmpPts.length > 1 && <polyline points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
 
-      {visible.cc && <RefLine y={y(ccRef)} label="DTA / CC" value={pct ? "100 %CC" : `${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
-      {visible.seguranca && <RefLine y={y(segRef)} label="Segurança (DTA−CRA)" value={pct ? `${segRef.toFixed(0)} %CC` : `${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />}
-      {visible.pmp && <RefLine y={y(pmpRef)} label="PMP" value={pct ? "0 %CC" : `${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
+      {visible.cc && <RefLine y={y(ccRef)} label="Capacidade de campo" value={pct ? "100 %CC" : `${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
+      {visible.seguranca && <RefLine y={y(segRef)} label="Umidade de segurança" value={pct ? `${segRef.toFixed(0)} %CC` : `${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />}
+      {visible.pmp && <RefLine y={y(pmpRef)} label="Ponto de murcha" value={pct ? "0 %CC" : `${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
+
+      {/* Eventos na base: chuva efetiva e irrigação realizada. */}
+      {points.map((p, i) => {
+        const rain = p.rain ?? 0;
+        const irr = p.irr ?? 0;
+        return (
+          <g key={`evt${i}`}>
+            {visible.chuva && rain > 0 && <rect x={x(i) - evtW - 0.8} y={baseY - evtH(rain)} width={evtW} height={evtH(rain)} rx={1.5} fill="#2f6bff" opacity={0.6} />}
+            {visible.irrig && irr > 0 && <rect x={x(i) + 0.8} y={baseY - evtH(irr)} width={evtW} height={evtH(irr)} rx={1.5} fill="#16a34a" opacity={0.85} />}
+          </g>
+        );
+      })}
 
       {/* θ/θCC (só no modo mm, eixo secundário) */}
       {!pct && visible.umidade && moistureReal.length > 1 && <polyline points={moistureReal.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={2.1} />}
-      {!pct && visible.umidade && moistureFore.length > 1 && <polyline points={moistureFore.join(" ")} fill="none" stroke="#7c3aed" strokeWidth={1.9} strokeDasharray="5 4" opacity={0.75} />}
 
-      {/* Curva de água no solo — cai conforme o solo seca. */}
-      {waterVisible && waterReal.length > 1 && <polyline points={waterReal.join(" ")} fill="none" stroke={waterColor} strokeWidth={2.5} />}
-      {waterVisible && waterFore.length > 1 && <polyline points={waterFore.join(" ")} fill="none" stroke={waterColor} strokeWidth={2.2} strokeDasharray="6 4" opacity={0.85} />}
-
-      {todayX != null && (
-        <>
-          <line x1={todayX} x2={todayX} y1={padT} y2={padT + plotH} stroke="currentColor" strokeWidth={1} strokeDasharray="3 3" className="text-graphite-400 dark:text-gray-500" />
-          <text x={todayX} y={padT - 4} textAnchor="middle" className="fill-graphite-500 dark:fill-gray-400" fontSize={9} fontWeight={700}>HOJE</text>
-        </>
+      {/* ETo (mm/d) e Kc — opcionais, em escala própria, discretas. */}
+      {visible.eto && etoPts.length > 1 && <polyline points={etoPts.join(" ")} fill="none" stroke="#f59e0b" strokeWidth={1.6} strokeDasharray="2 4" opacity={0.85} />}
+      {visible.kc && kcPts.length > 1 && <polyline points={kcPts.join(" ")} fill="none" stroke="#0ea5a3" strokeWidth={1.8} opacity={0.9} />}
+      {(visible.eto || visible.kc) && (
+        <text x={padL + plotW + 8} y={padT + plotH + 8} className="fill-graphite-400 dark:fill-gray-500" fontSize={8}>
+          {visible.eto ? `ETo 0–${etoMax.toFixed(0)} mm/d` : ""}{visible.eto && visible.kc ? " · " : ""}{visible.kc ? "Kc 0–1,5" : ""}
+        </text>
       )}
 
-      {waterVisible && todayWater != null && todayX != null && (
-        <>
-          <circle cx={todayX} cy={y(todayWater)} r={4.5} fill={waterColor} stroke="#fff" strokeWidth={1.5} />
-          <g transform={`translate(${todayX - 52}, ${y(todayWater) - 30})`}>
-            <rect width={104} height={20} rx={5} className="fill-graphite-900/90 dark:fill-black/70" />
-            <text x={52} y={14} textAnchor="middle" fill="#fff" fontSize={9.5} fontWeight={700}>
-              {pct
-                ? `Hoje: ${todayWater.toFixed(0)}% da CC`
-                : `Hoje: ${(todayWater - (todayPt?.pmpAbs ?? pmpMm)).toFixed(1)} mm ARM`}
-            </text>
-          </g>
-        </>
+      {/* Área sob a curva + curva de água (modelo do gráfico aprovado). */}
+      {waterVisible && waterXY.length > 1 && (
+        <polygon
+          points={`${waterXY[0].x.toFixed(1)},${baseY.toFixed(1)} ${waterXY.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} ${waterXY[waterXY.length - 1].x.toFixed(1)},${baseY.toFixed(1)}`}
+          fill={pct ? "url(#reserv-fill-umid)" : "url(#reserv-fill-arm)"}
+        />
       )}
+      {waterVisible && waterReal.length > 1 && <polyline points={waterReal.join(" ")} fill="none" stroke={waterColor} strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" />}
 
-      {waterVisible && crossIdx > todayIndex && crossWater != null && (
-        <circle cx={x(crossIdx)} cy={y(crossWater)} r={4} fill="#dc2626" stroke="#fff" strokeWidth={1.4} />
+      {/* Ponto final = estado atual do pivô (sem linha vertical "HOJE"). */}
+      {waterVisible && waterXY.length > 0 && (
+        <>
+          <circle cx={waterXY[waterXY.length - 1].x} cy={waterXY[waterXY.length - 1].y} r={5} fill={waterColor} stroke="#fff" strokeWidth={2} />
+          <text x={waterXY[waterXY.length - 1].x} y={H - 6} textAnchor="middle" className="fill-brand-600 dark:fill-brand-400" fontSize={9} fontWeight={700}>hoje</text>
+        </>
       )}
 
       {points.map((p, i) => (n <= 18 || i % 2 === 0) ? (
-        <text key={`rx${i}`} x={x(i)} y={H - 8} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{p.label}</text>
+        <text key={`rx${i}`} x={x(i)} y={H - 16} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{p.label}</text>
       ) : null)}
     </svg>
   );
