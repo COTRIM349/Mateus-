@@ -277,11 +277,12 @@ interface StoredBalance {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
+// Arquitetura obrigatória: apenas duas abas. DADOS entende o histórico;
+// DECISÃO transforma o estado atual em ação. O registro de irrigação
+// executada vive em /lancamentos/irrigacao (fluxo de execução).
 const TABS = [
-  { id: "grafico", label: "Gráfico" },
   { id: "dados", label: "Dados" },
   { id: "decisao", label: "Decisão" },
-  { id: "lancamento", label: "Lançamento" },
 ];
 
 // ── Main Page ─────────────────────────────────────────────────────────────
@@ -290,7 +291,7 @@ export default function BalancoHidricoPage() {
   const { activeFarmId, farms } = useAuth();
   const supabase = createClient();
 
-  const [activeTab, setActiveTab] = useState<"grafico" | "dados" | "decisao" | "lancamento">("grafico");
+  const [activeTab, setActiveTab] = useState<"dados" | "decisao">("dados");
   const [showDetail, setShowDetail] = useState(false);
   const [pivots, setPivots] = useState<Pivot[]>([]);
   const [selectedPivotId, setSelectedPivotId] = useState("");
@@ -1213,51 +1214,75 @@ export default function BalancoHidricoPage() {
         </div>
       )}
 
-      {/* Conteúdo por aba: Gráfico = manejo; Dados = auditoria; Decisão = ação; Lançamento = registro. */}
-      {activeTab === "grafico" && (
-        balanceRows.length > 0 ? (
-          <Cockpit
-            rows={balanceRows}
-            summary={summary}
-            projection={projectionRows}
-            soilLayers={soilLayers}
-            identity={{
-              pivotName: selPivot?.name ?? null,
-              cultureName: culture?.name ?? null,
-              varietyName,
-              seasonName,
-              stage: assignment?.crop_stage ?? null,
-              area: parcelArea,
-              efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
-            }}
-            sensoryByDate={sensoryByDate}
-            onShowDetail={() => setActiveTab("dados")}
-          />
-        ) : (calculating || loading) ? (
-          <Card className="flex items-center justify-center gap-3 py-16">
-            <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-            <span className="text-sm text-graphite-400 dark:text-gray-500">Calculando balanço...</span>
-          </Card>
-        ) : selectedPivotId && assignment && !error ? (
-          <Card className="py-14 text-center">
-            <p className="text-graphite-500 dark:text-gray-400">Sem dados suficientes para o balanço deste pivô. Verifique o clima e a condição inicial.</p>
-          </Card>
-        ) : null
-      )}
-
-      {(activeTab === "dados" || activeTab === "decisao") && selectedPivotId && assignment && (
+      {/* ── ABA DADOS: o que aconteceu e a condição hídrica atual.
+          O gráfico é EXCLUSIVAMENTE histórico e termina no dia atual. ── */}
+      {activeTab === "dados" && selectedPivotId && assignment && (
         <div className="space-y-3">
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período</span>
+            <span className="mr-1 text-[11px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Período (termina sempre hoje)</span>
             {([7, 15, 30, 60, "safra"] as const).map((p) => (
               <button key={String(p)} type="button" onClick={() => applyPeriod(p)} disabled={p === "safra" && !assignment?.planting_date}
                 className={`rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition-colors disabled:opacity-40 ${activePeriod === p ? "border-brand-300 bg-brand-50 text-brand-700 dark:border-brand-500/40 dark:bg-brand-900/20 dark:text-brand-300" : "border-gray-200 bg-white text-graphite-600 hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-300 dark:hover:bg-white/[0.08]"}`}>
-                {p === "safra" ? "Safra" : `${p}d`}
+                {p === "safra" ? "Ciclo" : `${p}d`}
               </button>
             ))}
           </div>
+          {balanceRows.length > 0 ? (
+            <>
+              <Cockpit
+                rows={balanceRows}
+                summary={summary}
+                projection={projectionRows}
+                soilLayers={soilLayers}
+                identity={{
+                  pivotName: selPivot?.name ?? null,
+                  cultureName: culture?.name ?? null,
+                  varietyName,
+                  seasonName,
+                  stage: assignment?.crop_stage ?? null,
+                  area: parcelArea,
+                  efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
+                }}
+                sensoryByDate={sensoryByDate}
+                onShowDetail={() => setActiveTab("decisao")}
+                mode="dados"
+              />
+              <details className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-900">
+                <summary className="cursor-pointer select-none text-[13px] font-bold text-graphite-900 dark:text-white">
+                  Tabela detalhada do balanço <span className="ml-1 text-[11px] font-normal text-graphite-400 dark:text-gray-500">— auditoria dia a dia, com origem de cada dado</span>
+                </summary>
+                <div className="mt-3">
+                  <BalanceTab
+                    panel="dados"
+                    rows={balanceRows}
+                    summary={summary}
+                    loading={loading || calculating}
+                    head={centroHead}
+                    weatherByDate={weatherByDate}
+                    sensoryByDate={sensoryByDate}
+                  />
+                </div>
+              </details>
+            </>
+          ) : (calculating || loading) ? (
+            <Card className="flex items-center justify-center gap-3 py-16">
+              <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+              <span className="text-sm text-graphite-400 dark:text-gray-500">Calculando balanço...</span>
+            </Card>
+          ) : !error ? (
+            <Card className="py-14 text-center">
+              <p className="text-graphite-500 dark:text-gray-400">Sem dados suficientes para o balanço deste pivô. Verifique o clima e a condição inicial.</p>
+            </Card>
+          ) : null}
+        </div>
+      )}
+
+      {/* ── ABA DECISÃO: transforma o estado atual em recomendação operacional.
+          Não repete o gráfico; a previsão vive só aqui, nunca no histórico. ── */}
+      {activeTab === "decisao" && selectedPivotId && assignment && (
+        <div className="space-y-3">
           <BalanceTab
-            panel={activeTab}
+            panel="decisao"
             rows={balanceRows}
             summary={summary}
             loading={loading || calculating}
@@ -1265,35 +1290,76 @@ export default function BalancoHidricoPage() {
             weatherByDate={weatherByDate}
             sensoryByDate={sensoryByDate}
           />
+          {balanceRows.length > 0 && (
+            <DecisionForecast projection={projectionRows} last={balanceRows[balanceRows.length - 1]} />
+          )}
+          {balanceRows.length > 0 && (
+            <details className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-900">
+              <summary className="cursor-pointer select-none text-[13px] font-bold text-graphite-900 dark:text-white">
+                Registrar irrigação realizada <span className="ml-1 text-[11px] font-normal text-graphite-400 dark:text-gray-500">— só após execução ela entra no histórico (aba DADOS)</span>
+              </summary>
+              <div className="mt-3">
+                <LancamentoTab
+                  pivotId={selectedPivotId}
+                  pivots={pivots}
+                  date={lancDate}
+                  time={lancTime}
+                  depth={lancDepth}
+                  hours={lancHours}
+                  notes={lancNotes}
+                  saving={lancSaving}
+                  message={lancMsg}
+                  onDateChange={setLancDate}
+                  onTimeChange={setLancTime}
+                  onDepthChange={(v) => {
+                    setLancDepth(v);
+                    const pivot = pivots.find((p) => p.id === selectedPivotId);
+                    const n = parseFloat(v);
+                    if (pivot && Number.isFinite(n) && n > 0) setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
+                  }}
+                  onHoursChange={setLancHours}
+                  onNotesChange={setLancNotes}
+                  onSave={handleLancamento}
+                />
+              </div>
+            </details>
+          )}
         </div>
       )}
 
-      {activeTab === "lancamento" && selectedPivotId && assignment && (
-        <LancamentoTab
-          pivotId={selectedPivotId}
-          pivots={pivots}
-          date={lancDate}
-          time={lancTime}
-          depth={lancDepth}
-          hours={lancHours}
-          notes={lancNotes}
-          saving={lancSaving}
-          message={lancMsg}
-          onDateChange={setLancDate}
-          onTimeChange={setLancTime}
-          onDepthChange={(v) => {
-            setLancDepth(v);
-            const pivot = pivots.find((p) => p.id === selectedPivotId);
-            const n = parseFloat(v);
-            if (pivot && Number.isFinite(n) && n > 0) setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
-          }}
-          onHoursChange={setLancHours}
-          onNotesChange={setLancNotes}
-          onSave={handleLancamento}
-        />
-      )}
-
     </div>
+  );
+}
+
+// ── Clima de apoio à decisão (NUNCA entra no gráfico/histórico) ──────────────
+// Previsão só orienta a decisão operacional; só o evento realizado entra no
+// balanço (aba DADOS). Dado ausente permanece indisponível.
+function DecisionForecast({ projection, last }: { projection: DailyBalanceRow[]; last: DailyBalanceRow }) {
+  const future = projection.filter((p) => p.date > last.date);
+  if (future.length === 0) return null;
+  const byOffset = (days: number) =>
+    future.filter((p) => daysBetweenIso(last.date, p.date) <= days);
+  const rain24 = byOffset(1).reduce((a, p) => a + (p.precipitation ?? 0), 0);
+  const rain48 = byOffset(2).reduce((a, p) => a + (p.precipitation ?? 0), 0);
+  const etoDays = future.filter((p) => Number.isFinite(p.et0));
+  const etoAvg = etoDays.length > 0 ? etoDays.reduce((a, p) => a + p.et0, 0) / etoDays.length : null;
+  const cell = (label: string, value: string, sub: string) => (
+    <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
+      <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{label}</p>
+      <p className="mt-0.5 text-[18px] font-extrabold tabular-nums text-graphite-900 dark:text-white">{value}</p>
+      <p className="text-[10.5px] text-graphite-400 dark:text-gray-500">{sub}</p>
+    </div>
+  );
+  return (
+    <Card className="p-4">
+      <p className="mb-1 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconCloud /> Clima de apoio à decisão</p>
+      <p className="mb-3 text-[11px] text-graphite-400 dark:text-gray-500">Previsão meteorológica — apoia a decisão, mas <strong>não</strong> altera o histórico nem o gráfico. Só a chuva/irrigação realizada entra no balanço.</p>
+      <div className="grid grid-cols-3 gap-2.5">
+        {cell("Chuva prev. 24 h", `${rain24.toFixed(1)} mm`, "próximas 24 h")}
+        {cell("Chuva prev. 48 h", `${rain48.toFixed(1)} mm`, "próximas 48 h")}
+        {cell("ETo esperada", etoAvg != null ? `${etoAvg.toFixed(1)} mm/d` : "indisponível", "média prevista")}
+      </div>
+    </Card>
   );
 }
 
@@ -1920,25 +1986,13 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
     attentionAbs: armPmpMm(r) + Math.max(r.cad - r.afd * 0.7, 0),
     isForecast: false,
   }));
-  const todayIndexReserv = reservatorio.length - 1;
-  // Cruzamento do limite de manejo = primeiro dia futuro que o MOTOR classifica
-  // como vermelho (déficit ≥ AFD daquele dia) — não uma linha fixa do gráfico.
-  let crossIndexReserv = -1;
-  future.forEach((p, i) => {
-    reservatorio.push({
-      label: fmtDia(p.date),
-      storageAbs: p.storedWater + armPmpMm(p),
-      moisturePctCc: moisturePctCcForDisplay(p.moisturePctCc, p.storedWater, p.cad),
-      ccAbs: armPmpMm(p) + p.cad,
-      safetyAbs: armPmpMm(p) + Math.max(p.cad - p.afd, 0),
-      pmpAbs: armPmpMm(p),
-      attentionAbs: armPmpMm(p) + Math.max(p.cad - p.afd * 0.7, 0),
-      isForecast: true,
-    });
-    if (crossIndexReserv < 0 && p.waterStatus === "deficit_critico") crossIndexReserv = todayIndexReserv + 1 + i;
-  });
+  // REGRA ABSOLUTA: o gráfico é EXCLUSIVAMENTE histórico e termina no dia atual.
+  // Nenhum ponto de projeção/previsão entra nas séries — o último ponto já
+  // representa o estado atual do pivô. A análise futura vive na aba DECISÃO.
+  const todayIndexReserv = -1;
+  const crossIndexReserv = -1;
 
-  // Entradas e consumo: últimos 14 dias + previsão (chuva efetiva e ETc do motor).
+  // Entradas e consumo: últimos 14 dias observados (sem previsão no gráfico).
   const histE = rows.slice(-14);
   const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
     label: fmtDia(r.date),
@@ -1950,21 +2004,10 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
     phase: r.phase,
     isForecast: false,
   }));
-  const todayIndexEntradas = histE.length - 1; // marca HOJE no último dia OBSERVADO
-  for (const p of future) {
-    entradas.push({
-      label: fmtDia(p.date),
-      chuvaEf: p.effectivePrecipitation,
-      irrig: 0,
-      etc: p.etc,
-      eto: p.et0,
-      kc: p.kc,
-      phase: p.phase,
-      isForecast: true,
-    });
-  }
+  const todayIndexEntradas = -1; // sem linha "HOJE": o último ponto já é o dia atual
 
-  // Tabela de projeção: Hoje (último observado) + offsets desejados por data.
+  // Tabela de projeção (APENAS aba DECISÃO — nunca plotada no gráfico):
+  // Hoje (último observado) + offsets desejados por data.
   // A cor de cada linha vem do status do motor daquele dia (limiares por data),
   // não de uma comparação contra CAD/AFD do último dia observado.
   const projByOffset = new Map<number, DailyBalanceRow>();
@@ -1988,6 +2031,7 @@ function Cockpit({
   identity,
   sensoryByDate,
   onShowDetail,
+  mode = "dados",
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
@@ -1996,6 +2040,9 @@ function Cockpit({
   identity: CockpitIdentity;
   sensoryByDate: Record<string, number>;
   onShowDetail: () => void;
+  /** "dados" = só histórico + condição atual (sem recomendação/projeção, que
+   *  vivem na aba DECISÃO). "full" mantém o cockpit completo. */
+  mode?: "dados" | "full";
 }) {
   const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
 
@@ -2149,7 +2196,7 @@ function Cockpit({
           <Card className="p-4">
             <div className="mb-2">
               <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
-              <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · últimos {Math.min(rows.length, 14)} dias{series.hasForecast ? " + previsão" : ""} · previsão tracejada</p>
+              <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · histórico até hoje ({Math.min(rows.length, 14)} dias) · sem previsão no gráfico</p>
             </div>
             <div className="mb-2.5">
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
@@ -2163,8 +2210,8 @@ function Cockpit({
                 <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
                 <p className="text-[11px] text-graphite-400 dark:text-gray-500">
                   {reservUnit === "pct"
-                    ? "Umidade, CC e segurança em % da água disponível (PMP = 0%, CC = 100%) · previsão tracejada"
-                    : "ARM em mm, umidade do solo (θ/θCC) e segurança calculada por CRA = p × DTA · previsão tracejada"}
+                    ? "Umidade, CC e segurança em % da água disponível (PMP = 0%, CC = 100%) · histórico até hoje"
+                    : "ARM em mm, umidade do solo (θ/θCC) e segurança calculada por CRA = p × DTA · histórico até hoje"}
                 </p>
               </div>
               <div className="flex shrink-0 gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
@@ -2194,7 +2241,10 @@ function Cockpit({
         </div>
 
         <div className="space-y-4">
-          {/* Recomendação de hoje */}
+          {/* Recomendação de hoje — só no cockpit completo; na arquitetura de
+              duas abas isto pertence à aba DECISÃO. */}
+          {mode === "full" && (
+          <>
           <Card className="overflow-hidden p-0">
             <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3 dark:border-white/[0.06]">
               <p className="flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconLeaf /> {isToday ? "Recomendação de Hoje" : `Situação de ${fmtDia(last.date)}`}</p>
@@ -2261,6 +2311,8 @@ function Cockpit({
               </div>
             )}
           </Card>
+          </>
+          )}
 
 
           <Card className="p-4">
@@ -2352,6 +2404,7 @@ function IconSprout() { return <svg {...svgP}><path strokeLinecap="round" stroke
 function IconLayers() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l9 5-9 5-9-5 9-5zm9 9l-9 5-9-5m18 4l-9 5-9-5" /></svg>; }
 function IconRoot() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v8m0 0c0 3-3 4-3 7m3-7c0 3 3 4 3 7M9 21h6" /></svg>; }
 function IconBars() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10m5 10V4m5 16v-7m5 7V8" /></svg>; }
+function IconCloud() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 014-4 5 5 0 019.9 1H17a3 3 0 010 6H6a3 3 0 01-3-3z" /></svg>; }
 
 // ── Lancamento Tab ──────────────────────────────────────────────────────
 
