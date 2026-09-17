@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, ConfirmDialog, Input, Modal, Select, Table, TextArea, type Column } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { calculateDailyKc } from "@/modules/culture/services/agronomic-engine";
+import { FAO56_CROP_PRESETS, buildFao56Anchors, type Fao56Preset } from "@/modules/culture/services/fao56-crop-presets";
 
 interface CultureOption { id: string; name: string }
 interface CultivarOption { id: string; name: string }
@@ -127,6 +128,9 @@ export function AgronomicKcTab({
   const [deleteAnchor,setDeleteAnchor]=useState<Anchor|null>(null);
   const [error,setError]=useState("");
   const [saving,setSaving]=useState(false);
+  const [presetModal,setPresetModal]=useState(false);
+  const [pf,setPf]=useState<Fao56Preset>(FAO56_CROP_PRESETS[0]);
+  const [genLoading,setGenLoading]=useState(false);
 
   const loadCatalog=useCallback(async()=>{
     if(!selectedCultureId){
@@ -225,6 +229,68 @@ export function AgronomicKcTab({
     setDeleteAnchor(null);setSaving(false);await loadAnchors();
   };
 
+  // Gera uma curva Kc no padrão FAO-56 (4 estádios) como ponto de partida
+  // rastreável. Fica em rascunho, fonte FAO-56 — o agrônomo revisa, ajusta e
+  // ativa. Não inventa nada silenciosamente nem ativa para cálculo.
+  const generatePreset=async()=>{
+    if(!selectedCultureId)return;
+    setGenLoading(true);setError("");
+    try{
+      const SRC_KEY="fao56-allen-1998";
+      let sourceId:string|null=null;
+      const {data:existing}=await supabase.from("agronomic_sources").select("id").eq("source_key",SRC_KEY).maybeSingle();
+      if(existing?.id){sourceId=existing.id as string;}
+      else{
+        const {data:created,error:srcErr}=await supabase.from("agronomic_sources").insert({
+          source_key:SRC_KEY,
+          source_type:"fao",
+          title:"FAO-56 — Crop Evapotranspiration (Allen et al., 1998)",
+          institution:"FAO",
+          authors:"Allen, R.G.; Pereira, L.S.; Raes, D.; Smith, M.",
+          publication_year:1998,
+          citation:"Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration — Guidelines for computing crop water requirements. FAO Irrigation and Drainage Paper 56, Rome.",
+          methodology:"Curva Kc padrão de 4 estádios (Tabelas 11 e 12): patamar inicial/médio, rampa no desenvolvimento e na senescência.",
+          active:true,
+        }).select("id").single();
+        if(srcErr)throw srcErr;
+        sourceId=(created as {id:string}).id;
+      }
+      const {data:curve,error:curveErr}=await supabase.from("kc_curves").insert({
+        culture_id:selectedCultureId,
+        cultivar_id:cultivarId||null,
+        curve_name:`FAO-56 padrão — ${pf.crop}`,
+        curve_type:"bibliographic",
+        axis_type:"DAE",
+        eto_reference_method:"FAO56_PENMAN_MONTEITH_GRASS",
+        source_id:sourceId,
+        confidence:"media",
+        validation_status:"draft",
+        active_for_calculation:false,
+        notes:pf.notes,
+      }).select("id").single();
+      if(curveErr)throw curveErr;
+      const curveId=(curve as {id:string}).id;
+      const anchors=buildFao56Anchors(pf).map(a=>({
+        curve_id:curveId,
+        sequence_no:a.sequence_no,
+        marker_id:null,
+        x_value:a.x_value,
+        kc_value:a.kc_value,
+        source_id:sourceId,
+        confidence:"media",
+        notes:a.stage,
+      }));
+      const {error:anchErr}=await supabase.from("kc_anchor_points").insert(anchors);
+      if(anchErr)throw anchErr;
+      setPresetModal(false);setGenLoading(false);
+      await loadCatalog();await loadCurves();
+      setSelectedCurveId(curveId);
+    }catch(e){
+      setError(e instanceof Error?e.message:"Falha ao gerar a curva FAO-56.");
+      setGenLoading(false);
+    }
+  };
+
   const activate=async()=>{
     if(!selectedCurve||!selectedCultureId)return;
     if(selectedCurve.validation_status!=="approved"){setError("Somente uma curva aprovada pode ser ativada.");return;}
@@ -254,7 +320,10 @@ export function AgronomicKcTab({
       <div className="mb-4 grid gap-4 sm:grid-cols-3">
         <Select id="kc_culture" name="kc_culture" label="Cultura" options={cultures.map(c=>({value:c.id,label:c.name}))} value={selectedCultureId??""} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>onSelectCulture(e.target.value||null)} />
         <Select id="kc_cultivar" name="kc_cultivar" label="Curva para" options={[{value:"",label:"Referência da cultura"},...cultivars.map(v=>({value:v.id,label:v.name}))]} value={cultivarId} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setCultivarId(e.target.value)} disabled={!selectedCultureId}/>
-        <div className="flex items-end justify-end"><Button onClick={()=>{setEditingCurve(null);setError("");setCurveModal(true);}} disabled={!selectedCultureId}>Nova curva Kc</Button></div>
+        <div className="flex items-end justify-end gap-2">
+          <Button variant="secondary" onClick={()=>{setError("");setPresetModal(true);}} disabled={!selectedCultureId}>Gerar curva FAO-56</Button>
+          <Button onClick={()=>{setEditingCurve(null);setError("");setCurveModal(true);}} disabled={!selectedCultureId}>Nova curva Kc</Button>
+        </div>
       </div>
 
       <div className="mb-4 rounded-xl border border-blue-200 bg-blue-50 p-4 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
@@ -332,6 +401,46 @@ export function AgronomicKcTab({
           {error&&<p className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-3"><Button variant="secondary" type="button" onClick={()=>setAnchorModal(false)}>Cancelar</Button><Button type="submit" disabled={saving}>Salvar ponto</Button></div>
         </form>
+      </Modal>
+
+      <Modal open={presetModal} onClose={()=>{setPresetModal(false);setError("");}} title="Gerar curva Kc padrão FAO-56" size="lg">
+        <div className="space-y-5">
+          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
+            A curva é criada em <strong>rascunho</strong>, com fonte <strong>FAO-56</strong> e no formato de 4 estádios (patamar inicial/médio, rampa no desenvolvimento e na senescência). Revise, ajuste à realidade local e <strong>aprove</strong> antes de ativar para cálculo. {cultivarId?"Será vinculada ao cultivar selecionado.":"Será vinculada à referência da cultura."}
+          </div>
+          <Select id="preset_crop" name="preset_crop" label="Cultura de referência (FAO-56)" options={FAO56_CROP_PRESETS.map(p=>({value:p.key,label:p.crop}))} value={pf.key} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>{const found=FAO56_CROP_PRESETS.find(p=>p.key===e.target.value);if(found)setPf(found);}}/>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-graphite-400">Coeficientes Kc</p>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <Input id="pf_kcIni" name="pf_kcIni" label="Kc inicial" type="number" step="0.01" min="0" max="2.5" value={String(pf.kcIni)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setPf(v=>({...v,kcIni:Number(e.target.value.replace(",","."))||0}))}/>
+              <Input id="pf_kcMid" name="pf_kcMid" label="Kc médio" type="number" step="0.01" min="0" max="2.5" value={String(pf.kcMid)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setPf(v=>({...v,kcMid:Number(e.target.value.replace(",","."))||0}))}/>
+              <Input id="pf_kcEnd" name="pf_kcEnd" label="Kc final" type="number" step="0.01" min="0" max="2.5" value={String(pf.kcEnd)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setPf(v=>({...v,kcEnd:Number(e.target.value.replace(",","."))||0}))}/>
+            </div>
+          </div>
+          <div>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-graphite-400">Duração dos estádios (dias)</p>
+            <div className="grid gap-4 sm:grid-cols-4">
+              <Input id="pf_lIni" name="pf_lIni" label="Inicial" type="number" min="0" value={String(pf.lIni)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setPf(v=>({...v,lIni:Math.max(0,Math.round(Number(e.target.value)||0))}))}/>
+              <Input id="pf_lDev" name="pf_lDev" label="Desenvolvimento" type="number" min="0" value={String(pf.lDev)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setPf(v=>({...v,lDev:Math.max(0,Math.round(Number(e.target.value)||0))}))}/>
+              <Input id="pf_lMid" name="pf_lMid" label="Média" type="number" min="0" value={String(pf.lMid)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setPf(v=>({...v,lMid:Math.max(0,Math.round(Number(e.target.value)||0))}))}/>
+              <Input id="pf_lLate" name="pf_lLate" label="Final" type="number" min="0" value={String(pf.lLate)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setPf(v=>({...v,lLate:Math.max(0,Math.round(Number(e.target.value)||0))}))}/>
+            </div>
+          </div>
+          <p className="text-xs text-graphite-500 dark:text-gray-400">
+            Ciclo total: <strong>{pf.lIni+pf.lDev+pf.lMid+pf.lLate} dias</strong> · Zr máx {pf.rootMaxM.toFixed(1)} m · fator p {pf.depletionP.toFixed(2)} <span className="text-graphite-400">(Zr e p ajustáveis na aba Raiz e Água)</span>
+          </p>
+          <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
+            <p className="mb-1.5 text-xs font-semibold text-graphite-600 dark:text-gray-300">Pontos que serão gerados (DAE × Kc)</p>
+            <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-graphite-500 dark:text-gray-400">
+              {buildFao56Anchors(pf).map(a=>(<span key={a.sequence_no}>DAE {a.x_value} → Kc {a.kc_value.toFixed(2)} <span className="text-graphite-400">({a.stage})</span></span>))}
+            </div>
+          </div>
+          {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-3">
+            <Button variant="secondary" type="button" onClick={()=>{setPresetModal(false);setError("");}}>Cancelar</Button>
+            <Button type="button" onClick={generatePreset} disabled={genLoading||!selectedCultureId}>{genLoading?"Gerando...":"Gerar curva"}</Button>
+          </div>
+        </div>
       </Modal>
 
       <ConfirmDialog open={!!deleteAnchor} onClose={()=>setDeleteAnchor(null)} onConfirm={removeAnchor} title="Excluir ponto Kc" message="Excluir este ponto âncora? A curva será recalculada entre os pontos restantes." confirmLabel="Excluir" loading={saving}/>
