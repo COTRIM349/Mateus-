@@ -234,9 +234,21 @@ export function AgronomicKcTab({
   // ativa. Não inventa nada silenciosamente nem ativa para cálculo.
   const generatePreset=async()=>{
     if(!selectedCultureId)return;
+    // Valida ANTES de inserir qualquer coisa: estádios com duração > 0 e pontos
+    // com X distintos (a curva tem unique (curve_id, x_value)). Assim não fica
+    // curva órfã se a validação falhar.
+    const anchorsPreview=buildFao56Anchors(pf);
+    const xs=anchorsPreview.map(a=>a.x_value);
+    const hasDupX=new Set(xs).size!==xs.length;
+    if(pf.lIni<=0||pf.lDev<=0||pf.lMid<=0||pf.lLate<=0||hasDupX){
+      setError("Cada estádio precisa ter duração maior que zero (pontos de Kc não podem coincidir no mesmo dia).");
+      return;
+    }
     setGenLoading(true);setError("");
     try{
-      const SRC_KEY="fao56-allen-1998";
+      // Reutiliza a fonte FAO-56 canônica já semeada no banco (00056), evitando
+      // duplicar a mesma publicação no catálogo de fontes.
+      const SRC_KEY="fao56-kc-single";
       let sourceId:string|null=null;
       const {data:existing}=await supabase.from("agronomic_sources").select("id").eq("source_key",SRC_KEY).maybeSingle();
       if(existing?.id){sourceId=existing.id as string;}
@@ -270,7 +282,7 @@ export function AgronomicKcTab({
       }).select("id").single();
       if(curveErr)throw curveErr;
       const curveId=(curve as {id:string}).id;
-      const anchors=buildFao56Anchors(pf).map(a=>({
+      const anchors=anchorsPreview.map(a=>({
         curve_id:curveId,
         sequence_no:a.sequence_no,
         marker_id:null,
@@ -438,7 +450,7 @@ export function AgronomicKcTab({
           {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
           <div className="flex justify-end gap-3">
             <Button variant="secondary" type="button" onClick={()=>{setPresetModal(false);setError("");}}>Cancelar</Button>
-            <Button type="button" onClick={generatePreset} disabled={genLoading||!selectedCultureId}>{genLoading?"Gerando...":"Gerar curva"}</Button>
+            <Button type="button" onClick={generatePreset} disabled={genLoading||!selectedCultureId||pf.lIni<=0||pf.lDev<=0||pf.lMid<=0||pf.lLate<=0}>{genLoading?"Gerando...":"Gerar curva"}</Button>
           </div>
         </div>
       </Modal>
