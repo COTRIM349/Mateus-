@@ -264,21 +264,26 @@ describe("telas de relatórios e gráfico", () => {
     expect(src).not.toContain("energy_consumption");
   });
 
-  it("balanço abre gráfico, dados e decisão em abas, sem mapa na página", () => {
+  it("balanço usa duas abas (dados/decisão), gráfico só histórico e sem mapa", () => {
     const src = readFileSync(join(process.cwd(), "app/(app)/balanco-hidrico/page.tsx"), "utf8");
-    expect(src).toContain('id: "grafico"');
+    // Arquitetura obrigatória: exatamente duas abas principais.
     expect(src).toContain('id: "dados"');
     expect(src).toContain('id: "decisao"');
-    expect(src).toContain('panel: "grafico" | "dados" | "decisao"');
+    expect(src).not.toContain('id: "grafico"');
+    expect(src).not.toContain('id: "lancamento"');
+    // Regra absoluta do gráfico: nenhum ponto de futuro/HOJE nas séries.
+    expect(src).toContain("REGRA ABSOLUTA");
+    expect(src).toContain("const todayIndexReserv = -1;");
+    expect(src).toContain("const crossIndexReserv = -1;");
+    // Previsão só na aba DECISÃO, nunca no histórico/gráfico.
+    expect(src).toContain("Clima de apoio à decisão");
+    // Componentes de manejo reutilizados e conteúdo esperado.
     expect(src).toContain("ManejoSeriesPicker");
     expect(src).toContain("initialManejoVisibility");
     expect(src).toContain("managementRowFromBalance");
-    expect(src).toContain("min-h-[min(72vh,calc(100vh-14rem))]");
     expect(src).toContain("Dados do balanço");
     expect(src).toContain("Totais do período");
     expect(src).not.toContain("Mapa Operacional");
     expect(src).not.toContain("min-h-[min(68vh,720px)]");
-    expect(src).not.toContain("xl:grid-cols-[minmax(0,1.9fr)_minmax(300px,1fr)]");
-    expect(src).not.toContain("justexc");
   });
 });
