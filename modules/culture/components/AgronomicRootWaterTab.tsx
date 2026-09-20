@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button, Card, ConfirmDialog, Input, Modal, Select, Table, TextArea, type Column } from "@/components/ui";
 import { createClient } from "@/lib/supabase/client";
 import { calculateRootDepthMeters } from "@/modules/culture/services/agronomic-engine";
+import { FAO56_CROP_PRESETS, buildFao56RootAnchors, type Fao56Preset } from "@/modules/culture/services/fao56-crop-presets";
 
 interface CultureOption { id:string; name:string }
 interface CultivarOption { id:string; name:string }
@@ -82,6 +83,10 @@ export function AgronomicRootWaterTab({
   const [editingP,setEditingP]=useState<PValue|null>(null);
   const [error,setError]=useState("");
   const [saving,setSaving]=useState(false);
+  const [genOpen,setGenOpen]=useState(false);
+  const [gpf,setGpf]=useState<Fao56Preset>(FAO56_CROP_PRESETS[0]);
+  const [gZrIni,setGZrIni]=useState(0.1);
+  const [genLoading,setGenLoading]=useState(false);
 
   const loadCatalog=useCallback(async()=>{
     if(!selectedCultureId){setCultivars([]);setSources([]);return;}
@@ -183,6 +188,61 @@ export function AgronomicRootWaterTab({
 
   const removeAnchor=async()=>{if(!deleteAnchor)return;setSaving(true);await supabase.from("root_depth_anchor_points").delete().eq("id",deleteAnchor.id);setDeleteAnchor(null);setSaving(false);await loadAnchors();};
 
+  const rootPreview=buildFao56RootAnchors(gpf,gZrIni);
+
+  // Gera curva de raiz (Zr) + fator p no padrão FAO-56, em rascunho e fonte
+  // canônica. Não ativa para cálculo — o agrônomo revisa e aprova.
+  const generateFao56=async()=>{
+    if(!selectedCultureId)return;
+    if(!(gpf.rootMaxM>0)||!(gZrIni>0)||gpf.depletionP<=0||gpf.depletionP>=1){setError("Zr e p precisam ser valores válidos (p entre 0 e 1).");return;}
+    const xs=rootPreview.map(a=>a.x_value);
+    if(new Set(xs).size!==xs.length){setError("Durações dos estádios inválidas (pontos coincidentes).");return;}
+    setGenLoading(true);setError("");
+    try{
+      const SRC_KEY="fao56-kc-single";
+      let sourceId:string|null=null;
+      const {data:existing}=await supabase.from("agronomic_sources").select("id").eq("source_key",SRC_KEY).maybeSingle();
+      if(existing?.id){sourceId=existing.id as string;}
+      else{
+        const {data:created,error:srcErr}=await supabase.from("agronomic_sources").insert({
+          source_key:SRC_KEY,source_type:"fao",
+          title:"FAO-56 — Crop Evapotranspiration (Allen et al., 1998)",
+          institution:"FAO",authors:"Allen, R.G.; Pereira, L.S.; Raes, D.; Smith, M.",
+          publication_year:1998,
+          citation:"Allen, R.G., Pereira, L.S., Raes, D., Smith, M. (1998). Crop evapotranspiration — FAO Irrigation and Drainage Paper 56, Rome.",
+          methodology:"Zr máx e fração de depleção p de referência (Tab. 22).",active:true,
+        }).select("id").single();
+        if(srcErr)throw srcErr;
+        sourceId=(created as {id:string}).id;
+      }
+      const label=`FAO-56 padrão — ${gpf.crop}${gpf.cycleClass?` (${gpf.cycleClass})`:""}`;
+      const {data:curve,error:curveErr}=await supabase.from("root_depth_curves").insert({
+        culture_id:selectedCultureId,cultivar_id:cultivarId||null,
+        curve_name:label,curve_type:"bibliographic",axis_type:"DAE",
+        source_id:sourceId,confidence:"media",validation_status:"draft",active_for_calculation:false,
+        notes:`Zr máx ${gpf.rootMaxM} m — ${gpf.notes}`,
+      }).select("id").single();
+      if(curveErr)throw curveErr;
+      const curveId2=(curve as {id:string}).id;
+      const anchorsPayload=rootPreview.map(a=>({curve_id:curveId2,sequence_no:a.sequence_no,marker_id:null,x_value:a.x_value,root_depth_m:a.root_depth_m,source_id:sourceId,confidence:"media",notes:a.stage}));
+      const {error:anchErr}=await supabase.from("root_depth_anchor_points").insert(anchorsPayload);
+      if(anchErr)throw anchErr;
+      const {error:pErr}=await supabase.from("agronomic_parameter_values").insert({
+        parameter_code:"depletion_fraction_p",scope_type:cultivarId?"cultivar":"culture",
+        culture_id:selectedCultureId,cultivar_id:cultivarId||null,farm_id:null,season_id:null,planting_window_id:null,
+        numeric_value:gpf.depletionP,text_value:null,unit:"fraction",source_id:sourceId,confidence:"media",
+        validation_status:"draft",method:"FAO-56 Tab. 22",active_for_calculation:false,
+        notes:`Fator p de referência — ${gpf.crop}${gpf.cycleClass?` (${gpf.cycleClass})`:""}`,updated_at:new Date().toISOString(),
+      });
+      if(pErr)throw pErr;
+      setGenOpen(false);setGenLoading(false);
+      await loadCurves();await loadP();setCurveId(curveId2);
+    }catch(e){
+      setError(e instanceof Error?e.message:"Falha ao gerar padrão FAO-56.");
+      setGenLoading(false);
+    }
+  };
+
   const rootColumns:Column<RootAnchor>[]=[
     {header:"#",render:r=>r.sequence_no,align:"right"},
     {header:curve?.axis_type??"X",render:r=>r.x_value,align:"right"},
@@ -205,7 +265,7 @@ export function AgronomicRootWaterTab({
     <div className="mb-4 grid gap-4 sm:grid-cols-3">
       <Select id="rw_culture" name="rw_culture" label="Cultura" options={cultures.map(c=>({value:c.id,label:c.name}))} value={selectedCultureId??""} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>onSelectCulture(e.target.value||null)}/>
       <Select id="rw_cultivar" name="rw_cultivar" label="Parâmetro para" options={[{value:"",label:"Referência da cultura"},...cultivars.map(v=>({value:v.id,label:v.name}))]} value={cultivarId} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>setCultivarId(e.target.value)} disabled={!selectedCultureId}/>
-      <div className="flex items-end justify-end gap-2"><Button variant="secondary" onClick={()=>{setEditingP(null);setPModal(true);}} disabled={!selectedCultureId}>Novo p</Button><Button onClick={()=>{setEditingCurve(null);setCurveModal(true);}} disabled={!selectedCultureId}>Nova curva de raiz</Button></div>
+      <div className="flex flex-wrap items-end justify-end gap-2"><Button variant="secondary" onClick={()=>{setError("");setGenOpen(true);}} disabled={!selectedCultureId}>Gerar FAO-56 (raiz + p)</Button><Button variant="secondary" onClick={()=>{setEditingP(null);setPModal(true);}} disabled={!selectedCultureId}>Novo p</Button><Button onClick={()=>{setEditingCurve(null);setCurveModal(true);}} disabled={!selectedCultureId}>Nova curva de raiz</Button></div>
     </div>
 
     <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-xs text-emerald-800 dark:border-emerald-900/40 dark:bg-emerald-900/20 dark:text-emerald-300">
@@ -262,6 +322,32 @@ export function AgronomicRootWaterTab({
         <p className="text-xs text-graphite-400">O ajuste diário de p pela ETc é calculado pelo motor e não substitui o valor de referência armazenado.</p>
         <div className="flex justify-end gap-3"><Button variant="secondary" type="button" onClick={()=>setPModal(false)}>Cancelar</Button><Button type="submit" disabled={saving}>Salvar p</Button></div>
       </form>
+    </Modal>
+
+    <Modal open={genOpen} onClose={()=>{setGenOpen(false);setError("");}} title="Gerar Zr e p padrão FAO-56" size="lg">
+      <div className="space-y-5">
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
+          Gera uma <strong>curva de raiz</strong> (rampa da emergência à profundidade máxima + patamar) e o <strong>fator p</strong> de referência FAO-56, em rascunho e fonte canônica. Revise e aprove antes de ativar. {cultivarId?"Vinculados ao cultivar selecionado.":"Vinculados à referência da cultura."}
+        </div>
+        <Select id="gen_preset" name="gen_preset" label="Cultura / classe de ciclo (FAO-56)" options={FAO56_CROP_PRESETS.map(p=>({value:p.key,label:p.cycleClass?`${p.crop} — ${p.cycleClass}`:p.crop}))} value={gpf.key} onChange={(e:React.ChangeEvent<HTMLSelectElement>)=>{const f=FAO56_CROP_PRESETS.find(x=>x.key===e.target.value);if(f){setGpf(f);}}}/>
+        <div className="grid gap-4 sm:grid-cols-3">
+          <Input id="gen_zrmax" name="gen_zrmax" label="Zr máx (m)" type="number" min="0.1" max="5" step="0.05" value={String(gpf.rootMaxM)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setGpf(v=>({...v,rootMaxM:Number(e.target.value.replace(",","."))||0}))}/>
+          <Input id="gen_zrini" name="gen_zrini" label="Zr inicial (m)" type="number" min="0.05" max="1" step="0.01" value={String(gZrIni)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setGZrIni(Number(e.target.value.replace(",","."))||0)}/>
+          <Input id="gen_p" name="gen_p" label="Fator p" type="number" min="0" max="1" step="0.01" value={String(gpf.depletionP)} onChange={(e:React.ChangeEvent<HTMLInputElement>)=>setGpf(v=>({...v,depletionP:Number(e.target.value.replace(",","."))||0}))}/>
+        </div>
+        <div className="rounded-xl bg-gray-50 p-3 dark:bg-white/[0.03]">
+          <p className="mb-1.5 text-xs font-semibold text-graphite-600 dark:text-gray-300">Curva de raiz gerada (DAE × Zr)</p>
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-graphite-500 dark:text-gray-400">
+            {rootPreview.map(a=>(<span key={a.sequence_no}>DAE {a.x_value} → {a.root_depth_m.toFixed(2)} m <span className="text-graphite-400">({a.stage})</span></span>))}
+          </div>
+          <p className="mt-2 text-xs text-graphite-500 dark:text-gray-400">Fator p = <strong>{gpf.depletionP.toFixed(2)}</strong></p>
+        </div>
+        {error&&<p role="alert" className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-3">
+          <Button variant="secondary" type="button" onClick={()=>{setGenOpen(false);setError("");}}>Cancelar</Button>
+          <Button type="button" onClick={generateFao56} disabled={genLoading||!selectedCultureId}>{genLoading?"Gerando...":"Gerar Zr e p"}</Button>
+        </div>
+      </div>
     </Modal>
 
     <ConfirmDialog open={!!deleteAnchor} onClose={()=>setDeleteAnchor(null)} onConfirm={removeAnchor} title="Excluir ponto de raiz" message="Excluir este ponto âncora da curva?" confirmLabel="Excluir" loading={saving}/>

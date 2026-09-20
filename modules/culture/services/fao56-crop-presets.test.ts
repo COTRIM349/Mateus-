@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildFao56Anchors, FAO56_CROP_PRESETS } from "./fao56-crop-presets";
+import { buildFao56Anchors, buildFao56RootAnchors, FAO56_CROP_PRESETS } from "./fao56-crop-presets";
 import { interpolatePiecewiseLinear } from "./agronomic-engine";
 
 describe("FAO-56 crop presets", () => {
@@ -41,5 +41,16 @@ describe("FAO-56 crop presets", () => {
       expect(p.depletionP).toBeLessThan(1);
       expect(p.rootMaxM).toBeGreaterThan(0);
     }
+  });
+
+  it("curva de raiz: rampa da emergência à raiz máxima + patamar até o fim", () => {
+    const a = buildFao56RootAnchors({ lIni: 20, lDev: 30, lMid: 50, lLate: 25, rootMaxM: 1.0 }, 0.1);
+    expect(a.map((p) => p.x_value)).toEqual([0, 50, 125]);
+    expect(a[0].root_depth_m).toBe(0.1);
+    expect(a[1].root_depth_m).toBe(1.0);
+    expect(a[2].root_depth_m).toBe(1.0); // patamar até o fim do ciclo
+    const pts = a.map((p) => ({ x: p.x_value, y: p.root_depth_m }));
+    expect(interpolatePiecewiseLinear(pts, 25)).toBeCloseTo(0.55, 2); // meio da rampa
+    expect(interpolatePiecewiseLinear(pts, 90)).toBe(1.0); // patamar
   });
 });
