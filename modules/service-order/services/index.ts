@@ -3,3 +3,4 @@ export * from "./os-parsing";
 export * from "./os-calculations";
 export * from "./whatsapp-message";
 export * from "./ficha-html";
+export * from "./service-order-record";

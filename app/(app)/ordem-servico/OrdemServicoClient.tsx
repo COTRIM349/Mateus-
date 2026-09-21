@@ -1,17 +1,22 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
+import { useAuth } from "@/components/providers";
+import { createClient } from "@/lib/supabase/client";
 import {
   buildFichaHtml,
   buildRecommendation,
+  buildServiceOrderInsert,
   buildWhatsappMessage,
   normalizeServiceOrder,
+  orderToRaw,
   parseBrazilianNumber,
   ServiceOrderParseError,
   type RawServiceOrder,
   type RawServiceOrderInput,
   type ServiceOrderRecommendation,
+  type ServiceOrderRow,
   type ValidationWarning,
 } from "@/modules/service-order/services";
 
@@ -52,9 +57,16 @@ const WARNING_STYLE: Record<ValidationWarning["level"], string> = {
 };
 
 export function OrdemServicoClient() {
+  const { activeFarmId, profile } = useAuth();
+  const supabase = createClient();
+
   const [order, setOrder] = useState<RawServiceOrder>(emptyOrder());
   const [applicationRate, setApplicationRate] = useState("");
   const [tankCapacity, setTankCapacity] = useState("");
+
+  const [history, setHistory] = useState<ServiceOrderRow[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
 
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -112,6 +124,66 @@ export function OrdemServicoClient() {
     } finally {
       setUploading(false);
     }
+  }
+
+  const loadHistory = useCallback(async () => {
+    if (!activeFarmId) {
+      setHistory([]);
+      return;
+    }
+    const { data } = await supabase
+      .from("service_orders")
+      .select("*")
+      .eq("farm_id", activeFarmId)
+      .order("created_at", { ascending: false })
+      .limit(20);
+    setHistory((data ?? []) as ServiceOrderRow[]);
+  }, [activeFarmId, supabase]);
+
+  useEffect(() => {
+    loadHistory();
+  }, [loadHistory]);
+
+  async function handleSave() {
+    setSaveNotice(null);
+    if (!recommendation) return;
+    if (!activeFarmId) {
+      setSaveNotice("Selecione uma fazenda ativa para salvar.");
+      return;
+    }
+    setSaving(true);
+    try {
+      const row = buildServiceOrderInsert(activeFarmId, recommendation, message ?? "", profile?.id ?? null);
+      const { error } = await supabase.from("service_orders").insert(row);
+      if (error) {
+        setSaveNotice(`Não foi possível salvar: ${error.message}`);
+        return;
+      }
+      setSaveNotice("Salvo no histórico.");
+      await loadHistory();
+    } catch (err) {
+      setSaveNotice(err instanceof Error ? `Falha ao salvar: ${err.message}` : "Falha ao salvar.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleReopen(row: ServiceOrderRow) {
+    setFormError(null);
+    setSaveNotice(null);
+    setCopied(false);
+    setOrder(orderToRaw(row.order_data));
+    setApplicationRate(row.application_rate != null ? String(row.application_rate) : "");
+    setTankCapacity(row.tank_capacity != null ? String(row.tank_capacity) : "");
+
+    const rec = buildRecommendation(row.order_data, {
+      applicationRate: row.application_rate ?? undefined,
+      tankCapacity: row.tank_capacity ?? undefined,
+    });
+    setRecommendation(rec);
+    setMessage(buildWhatsappMessage(rec));
+    setWarnings(rec.warnings);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   function handleGenerate() {
@@ -259,8 +331,15 @@ export function OrdemServicoClient() {
             <div className="flex items-center gap-2">
               <Button variant="secondary" size="sm" onClick={handlePrint}>Baixar PDF</Button>
               <Button variant="secondary" size="sm" onClick={handleCopy}>{copied ? "Copiado!" : "Copiar WhatsApp"}</Button>
+              <Button size="sm" onClick={handleSave} disabled={saving}>{saving ? "Salvando…" : "Salvar"}</Button>
             </div>
           </div>
+
+          {saveNotice && (
+            <p className="mb-4 rounded-xl bg-gray-50 px-4 py-2.5 text-[13px] text-graphite-600 dark:bg-white/[0.04] dark:text-gray-300">
+              {saveNotice}
+            </p>
+          )}
 
           {warnings.length > 0 && (
             <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-500/30 dark:bg-amber-900/15">
@@ -279,6 +358,30 @@ export function OrdemServicoClient() {
             rows={16}
             className="w-full rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 font-mono text-[13px] leading-relaxed text-graphite-800 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-100"
           />
+        </Card>
+      )}
+
+      {/* Histórico */}
+      {history.length > 0 && (
+        <Card>
+          <h2 className="mb-4 text-sm font-semibold text-graphite-800 dark:text-white">Histórico de OS</h2>
+          <div className="divide-y divide-gray-100 dark:divide-white/[0.06]">
+            {history.map((row) => (
+              <div key={row.id} className="flex items-center justify-between gap-4 py-3">
+                <div className="min-w-0">
+                  <p className="truncate text-[13px] font-semibold text-graphite-800 dark:text-white">
+                    OS {row.os_number} · {row.operation_description || "—"}
+                  </p>
+                  <p className="truncate text-[12px] text-graphite-400 dark:text-gray-500">
+                    {row.os_farm_name} · {row.pivot_label}
+                    {row.quadrant ? ` (Q${row.quadrant})` : ""} ·{" "}
+                    {new Date(row.created_at).toLocaleString("pt-BR")}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => handleReopen(row)}>Reabrir</Button>
+              </div>
+            ))}
+          </div>
         </Card>
       )}
     </div>
