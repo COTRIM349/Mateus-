@@ -1,0 +1,10 @@
+{
+  "name": "os-pro-grupo",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Foto da Ordem de Serviço -> relatório pronto para o WhatsApp",
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.68.0"
+  }
+}
