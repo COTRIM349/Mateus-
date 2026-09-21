@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Button, Card, Input } from "@/components/ui";
 import {
+  buildFichaHtml,
   buildRecommendation,
   buildWhatsappMessage,
   normalizeServiceOrder,
@@ -10,6 +11,7 @@ import {
   ServiceOrderParseError,
   type RawServiceOrder,
   type RawServiceOrderInput,
+  type ServiceOrderRecommendation,
   type ValidationWarning,
 } from "@/modules/service-order/services";
 
@@ -58,6 +60,7 @@ export function OrdemServicoClient() {
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   const [message, setMessage] = useState<string | null>(null);
+  const [recommendation, setRecommendation] = useState<ServiceOrderRecommendation | null>(null);
   const [warnings, setWarnings] = useState<ValidationWarning[]>([]);
   const [formError, setFormError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -120,9 +123,11 @@ export function OrdemServicoClient() {
         applicationRate: parseBrazilianNumber(applicationRate) ?? undefined,
         tankCapacity: parseBrazilianNumber(tankCapacity) ?? undefined,
       });
+      setRecommendation(rec);
       setMessage(buildWhatsappMessage(rec));
       setWarnings(rec.warnings);
     } catch (error) {
+      setRecommendation(null);
       setMessage(null);
       setWarnings([]);
       setFormError(
@@ -131,6 +136,17 @@ export function OrdemServicoClient() {
           : "Não foi possível gerar a recomendação. Revise os dados.",
       );
     }
+  }
+
+  function handlePrint() {
+    if (!recommendation) return;
+    const html = buildFichaHtml(recommendation);
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    win.onload = () => win.print();
   }
 
   async function handleCopy() {
@@ -239,8 +255,11 @@ export function OrdemServicoClient() {
       {message && (
         <Card>
           <div className="mb-4 flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-graphite-800 dark:text-white">4. Mensagem para o WhatsApp</h2>
-            <Button variant="secondary" size="sm" onClick={handleCopy}>{copied ? "Copiado!" : "Copiar"}</Button>
+            <h2 className="text-sm font-semibold text-graphite-800 dark:text-white">4. Recomendação</h2>
+            <div className="flex items-center gap-2">
+              <Button variant="secondary" size="sm" onClick={handlePrint}>Baixar PDF</Button>
+              <Button variant="secondary" size="sm" onClick={handleCopy}>{copied ? "Copiado!" : "Copiar WhatsApp"}</Button>
+            </div>
           </div>
 
           {warnings.length > 0 && (
