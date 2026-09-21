@@ -18,6 +18,7 @@ describe("sidebar compacta", () => {
     expect(nav).toContain('href: "/historico"');
     expect(nav).toContain('href: "/relatorios"');
     expect(nav).toContain('href: "/balanco-hidrico"');
+    expect(nav).toContain('href: "/ordem-servico"');
     expect(nav).not.toContain("Gestão de Ativos");
     expect(nav).not.toContain("Operação e Manejo");
     expect(nav).not.toContain('label: "Home"');
@@ -26,7 +27,6 @@ describe("sidebar compacta", () => {
     expect(nav).not.toContain('href: "/sensores"');
     expect(nav).not.toContain('href: "/reservatorios"');
     expect(nav).not.toContain('href: "/cotrim-ai"');
-    expect(nav).not.toContain('href: "/ordem-servico"');
     expect(nav).not.toContain('href: "/lancamentos/chuvas"');
     expect(nav).not.toContain("Infraestrutura");
     expect(sidebar).not.toContain("tracking-[0.14em] text-brand-200");
