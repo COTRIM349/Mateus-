@@ -124,3 +124,30 @@ export function buildFao56Anchors(p: {
     { sequence_no: 5, x_value: xLateEnd, kc_value: kc(p.kcEnd), stage: "Fim do ciclo" },
   ];
 }
+
+export interface GeneratedRootAnchor {
+  sequence_no: number;
+  x_value: number;
+  root_depth_m: number;
+  stage: string;
+}
+
+/**
+ * Curva de profundidade radicular no padrão FAO-56 (eixo DAE): a raiz cresce da
+ * emergência até a profundidade máxima ao fim do desenvolvimento (início da fase
+ * média) e permanece constante até o fim do ciclo. Interpolação linear por
+ * trechos → rampa + patamar.
+ */
+export function buildFao56RootAnchors(
+  p: { lIni: number; lDev: number; lMid: number; lLate: number; rootMaxM: number },
+  zrIniM = 0.1,
+): GeneratedRootAnchor[] {
+  const devEnd = Math.max(1, Math.round(p.lIni + p.lDev));
+  const cycleEnd = Math.max(devEnd + 1, Math.round(p.lIni + p.lDev + p.lMid + p.lLate));
+  const z = (v: number) => Math.round(Math.max(0.05, v) * 1000) / 1000;
+  return [
+    { sequence_no: 1, x_value: 0, root_depth_m: z(zrIniM), stage: "Emergência" },
+    { sequence_no: 2, x_value: devEnd, root_depth_m: z(p.rootMaxM), stage: "Raiz máxima (fim do desenvolvimento)" },
+    { sequence_no: 3, x_value: cycleEnd, root_depth_m: z(p.rootMaxM), stage: "Fim do ciclo" },
+  ];
+}

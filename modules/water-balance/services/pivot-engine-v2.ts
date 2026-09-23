@@ -118,10 +118,12 @@ export interface EngineWeatherDay {
 export interface AgronomicDayInput {
   /** Kc potencial diário. Nunca incorporar Ks neste valor. */
   kc: number;
-  /** Profundidade radicular resolvida pelo domínio de cultura. */
-  rootDepthM: number;
-  /** p base resolvido pelo domínio de cultura; o ajuste diário por ETc continua no motor operacional. */
-  depletionFractionP: number;
+  /** Profundidade radicular resolvida pelo domínio de cultura (opcional: quando
+   *  ausente, o motor calcula pela curva de fases/raiz). */
+  rootDepthM?: number;
+  /** p base resolvido pelo domínio de cultura (opcional: quando ausente, o motor
+   *  usa o p da cultura/fase). O ajuste diário por ETc continua no motor. */
+  depletionFractionP?: number;
   /** Estádio efetivo (observado prevalece sobre previsto) apenas para rastreabilidade/exibição. */
   stageName?: string | null;
   /** Metadados de origem do conjunto diário. */

@@ -343,7 +343,7 @@ export function AgronomicKcTab({
       </div>
 
       {curves.length===0?(
-        <Card><p className="py-8 text-center text-sm text-graphite-400">Nenhuma curva cadastrada. Nenhum Kc será inventado automaticamente.</p></Card>
+        <Card><p className="py-8 text-center text-sm text-graphite-400">Nenhuma curva cadastrada para esta seleção. Gere uma curva FAO-56 e <strong>ative</strong> — o balanço passa a usar o Kc automaticamente (por DAE). Um cultivar sem curva própria usa a curva ativa da cultura.</p></Card>
       ):(
         <>
           <Card className="mb-4">
