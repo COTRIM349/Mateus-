@@ -43,7 +43,9 @@ import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, 
 import {
   assertParcelAcceptsOperationalLaunch,
   filterPivotsWithActiveParcel,
+  resolveDaeReferenceDate,
 } from "@/modules/assignment/services";
+import { calculateDailyKc } from "@/modules/culture/services/agronomic-engine";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
@@ -619,6 +621,56 @@ export default function BalancoHidricoPage() {
         throw new Error("Balanço bloqueado: a condição inicial é posterior ao período selecionado.");
       }
 
+      // Kc AUTOMÁTICO do cadastro: usa a curva de Kc ATIVA (cultivar → cultura),
+      // interpolada por DAE. Sem curva ativa, o motor mantém o Kc das fases
+      // (comportamento anterior preservado).
+      const effectiveVarietyId = assignment.culture_variety_id ?? assignment.variety_id;
+      let kcPoints: { x: number; y: number }[] | null = null;
+      {
+        const findActive = (byCultivar: boolean) => {
+          let q = supabase
+            .from("kc_curves")
+            .select("id")
+            .eq("culture_id", assignment.culture_id)
+            .eq("active_for_calculation", true)
+            .eq("axis_type", "DAE")
+            .limit(1);
+          q = byCultivar && effectiveVarietyId ? q.eq("cultivar_id", effectiveVarietyId) : q.is("cultivar_id", null);
+          return q.maybeSingle();
+        };
+        let activeCurveId: string | null = null;
+        if (effectiveVarietyId) {
+          const { data } = await findActive(true);
+          activeCurveId = (data as { id: string } | null)?.id ?? null;
+        }
+        if (!activeCurveId) {
+          const { data } = await findActive(false);
+          activeCurveId = (data as { id: string } | null)?.id ?? null;
+        }
+        if (activeCurveId) {
+          const { data: anch } = await supabase
+            .from("kc_anchor_points")
+            .select("x_value,kc_value")
+            .eq("curve_id", activeCurveId)
+            .order("sequence_no");
+          const pts = ((anch ?? []) as { x_value: number; kc_value: number }[])
+            .map((r) => ({ x: r.x_value, y: r.kc_value }));
+          if (pts.length >= 2) kcPoints = pts;
+        }
+      }
+      if (isStale()) return;
+
+      // Monta o Kc por data a partir da curva (mesma base de DAE do motor).
+      const daeRefMs = new Date(`${resolveDaeReferenceDate(assignment)}T00:00:00Z`).getTime();
+      const agronomicByDate: Record<string, { kc: number }> = {};
+      if (kcPoints) {
+        for (const d of datesInRange(calculationStart, addDaysIso(dateEnd, 30))) {
+          const ms = new Date(`${d}T00:00:00Z`).getTime();
+          const dae = Math.max(0, Math.floor((ms - daeRefMs) / 86400000));
+          agronomicByDate[d] = { kc: calculateDailyKc(kcPoints, dae) };
+        }
+      }
+
       // 1. Get weather readings for the farm stations
       const { data: stations } = await supabase
         .from("weather_stations")
@@ -803,6 +855,7 @@ export default function BalancoHidricoPage() {
         pivot: { application_efficiency: pivot.application_efficiency, efficiency: pivot.efficiency, area: pivot.area, flow_rate: pivot.flow_rate },
         weatherByDate: engineWeatherByDate,
         irrigationByDate,
+        agronomicByDate,
         dateStart: calculationStart,
         dateEnd: effectiveEnd,
       };
