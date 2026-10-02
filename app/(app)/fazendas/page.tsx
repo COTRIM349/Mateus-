@@ -82,8 +82,23 @@ function FarmsTab() {
   const [deleteTarget, setDeleteTarget] = useState<Farm | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const [showInactive, setShowInactive] = useState(false);
+  const [reactivatingId, setReactivatingId] = useState<string | null>(null);
 
   const activeFarms = data.filter((f) => f.active);
+  const inactiveFarms = data.filter((f) => !f.active);
+
+  // "Excluir" apenas desativa a fazenda; aqui ela pode ser reativada de volta.
+  const handleReactivate = async (farm: Farm) => {
+    setReactivatingId(farm.id);
+    setFormError("");
+    try {
+      await update(farm.id, { active: true } as Partial<Farm>);
+    } catch {
+      setFormError(`Erro ao reativar a fazenda "${farm.name}".`);
+    }
+    setReactivatingId(null);
+  };
 
   const columns: Column<Farm>[] = [
     { header: "Nome", render: (r) => <span className="font-medium">{r.name}</span> },
@@ -209,19 +224,59 @@ function FarmsTab() {
 
   return (
     <>
-      <div className="mb-5 flex justify-end">
+      <div className="mb-5 flex items-center justify-end gap-2">
+        {inactiveFarms.length > 0 && (
+          <Button variant="secondary" onClick={() => setShowInactive((v) => !v)}>
+            {showInactive ? "Ocultar inativas" : `Mostrar inativas (${inactiveFarms.length})`}
+          </Button>
+        )}
         <Button onClick={() => { setEditing(null); setModalOpen(true); }}>Nova fazenda</Button>
       </div>
+
+      {formError && !modalOpen && !deleteTarget && (
+        <p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-600 dark:bg-red-950/30 dark:text-red-400">{formError}</p>
+      )}
 
       <Card>
         {loading ? (
           <div className="flex items-center justify-center gap-3 py-8"><div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" /><span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span></div>
         ) : activeFarms.length === 0 ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma fazenda cadastrada.</p>
+          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">Nenhuma fazenda ativa.{inactiveFarms.length > 0 ? " Há fazendas inativas — use “Mostrar inativas” para reativar." : ""}</p>
         ) : (
           <Table columns={columns} data={activeFarms} getKey={(r) => r.id} />
         )}
       </Card>
+
+      {showInactive && inactiveFarms.length > 0 && (
+        <Card className="mt-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <h3 className="text-sm font-semibold text-graphite-900 dark:text-white">Fazendas inativas</h3>
+              <p className="text-xs text-graphite-400 dark:text-gray-500">Desativadas por exclusão. Reative para voltar a operá-las.</p>
+            </div>
+          </div>
+          <Table
+            columns={[
+              { header: "Nome", render: (r: Farm) => <span className="font-medium text-graphite-600 dark:text-gray-300">{r.name}</span> },
+              { header: "Cidade", render: (r: Farm) => r.city },
+              { header: "UF", render: (r: Farm) => r.state },
+              {
+                header: "Ações",
+                align: "right",
+                render: (r: Farm) => (
+                  <div className="flex justify-end">
+                    <Button variant="ghost" size="sm" disabled={reactivatingId === r.id} onClick={() => void handleReactivate(r)}>
+                      {reactivatingId === r.id ? "Reativando..." : "Reativar"}
+                    </Button>
+                  </div>
+                ),
+              },
+            ]}
+            data={inactiveFarms}
+            getKey={(r) => r.id}
+          />
+        </Card>
+      )}
 
       <Modal open={modalOpen} onClose={() => { setModalOpen(false); setEditing(null); }} title={editing ? "Editar fazenda" : "Nova fazenda"} size="lg">
         <form onSubmit={handleSubmit} className="space-y-5">
