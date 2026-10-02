@@ -316,6 +316,9 @@ export default function BalancoHidricoPage() {
   const [notice, setNotice] = useState("");
   const [varietyName, setVarietyName] = useState<string | null>(null);
   const [seasonName, setSeasonName] = useState<string | null>(null);
+  // Curva de Kc ativa detectada no último cálculo (checklist "pivô pronto").
+  // null = ainda não avaliado; false = usando Kc das fases; true = curva do cadastro.
+  const [hasActiveKcCurve, setHasActiveKcCurve] = useState<boolean | null>(null);
 
   // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
   const { states: farmStates, refresh: refreshFarm } = useFarmHydricState();
@@ -659,6 +662,7 @@ export default function BalancoHidricoPage() {
         }
       }
       if (isStale()) return;
+      setHasActiveKcCurve(kcPoints != null);
 
       // Monta o Kc por data a partir da curva (mesma base de DAE do motor).
       const daeRefMs = new Date(`${resolveDaeReferenceDate(assignment)}T00:00:00Z`).getTime();
@@ -1323,9 +1327,15 @@ export default function BalancoHidricoPage() {
               <span className="text-sm text-graphite-400 dark:text-gray-500">Calculando balanço...</span>
             </Card>
           ) : !error ? (
-            <Card className="py-14 text-center">
-              <p className="text-graphite-500 dark:text-gray-400">Sem dados suficientes para o balanço deste pivô. Verifique o clima e a condição inicial.</p>
-            </Card>
+            <ReadinessChecklist
+              soilOk={!!soil}
+              layersOk={soilLayers.length > 0}
+              cultureName={culture?.name ?? null}
+              varietyName={varietyName}
+              climateDays={Object.keys(weatherByDate).length}
+              initialOk={!!hydricAnchor}
+              hasActiveKcCurve={hasActiveKcCurve}
+            />
           ) : null}
         </div>
       )}
@@ -1381,6 +1391,132 @@ export default function BalancoHidricoPage() {
       )}
 
     </div>
+  );
+}
+
+// ── Checklist "pivô pronto" ──────────────────────────────────────────────────
+// Quando o balanço não roda, o operador precisa saber EXATAMENTE o que falta,
+// não um aviso genérico. Cada linha diz o estado (pronto / atenção / falta) e
+// para onde ir. Só itens essenciais bloqueiam; Kc e condição inicial são
+// recomendados (o motor assume Kc das fases / capacidade de campo sem eles).
+type ReadyState = "ok" | "warn" | "missing";
+function ReadyRow({ state, label, hint, href, cta }: { state: ReadyState; label: string; hint: string; href?: string; cta?: string }) {
+  const dot =
+    state === "ok"
+      ? "border-emerald-500 bg-emerald-500 text-white"
+      : state === "warn"
+      ? "border-amber-400 bg-amber-50 text-amber-600 dark:bg-amber-900/30 dark:text-amber-300"
+      : "border-gray-300 bg-white text-transparent dark:border-white/20 dark:bg-white/[0.04]";
+  return (
+    <li className="flex items-start gap-3 py-2.5">
+      <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${dot}`}>
+        {state === "ok" ? "✓" : state === "warn" ? "!" : ""}
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2">
+          <span className={`text-[13px] font-semibold ${state === "missing" ? "text-graphite-900 dark:text-white" : "text-graphite-700 dark:text-gray-200"}`}>{label}</span>
+          {href && state !== "ok" && (
+            <a href={href} className="text-[11.5px] font-semibold text-brand-600 underline-offset-2 hover:underline dark:text-brand-400">{cta ?? "Abrir cadastro"} →</a>
+          )}
+        </div>
+        <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-400 dark:text-gray-500">{hint}</p>
+      </div>
+    </li>
+  );
+}
+function ReadinessChecklist({
+  soilOk,
+  layersOk,
+  cultureName,
+  varietyName,
+  climateDays,
+  initialOk,
+  hasActiveKcCurve,
+}: {
+  soilOk: boolean;
+  layersOk: boolean;
+  cultureName: string | null;
+  varietyName: string | null;
+  climateDays: number;
+  initialOk: boolean;
+  hasActiveKcCurve: boolean | null;
+}) {
+  const essentials: ReadyState[] = [
+    soilOk && layersOk ? "ok" : "missing",
+    cultureName ? "ok" : "missing",
+    climateDays > 0 ? "ok" : "missing",
+  ];
+  const missingCount = essentials.filter((s) => s === "missing").length;
+  return (
+    <Card className="p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h3 className="text-[14px] font-bold text-graphite-900 dark:text-white">Para calcular o balanço deste pivô</h3>
+          <p className="mt-0.5 text-[12px] text-graphite-400 dark:text-gray-500">
+            {missingCount === 0
+              ? "Tudo essencial está pronto. Ajuste o período ou aguarde a sincronização do clima."
+              : `${missingCount} ${missingCount === 1 ? "item essencial pendente" : "itens essenciais pendentes"}.`}
+          </p>
+        </div>
+      </div>
+      <ul className="mt-3 divide-y divide-gray-100 dark:divide-white/[0.06]">
+        <ReadyRow
+          state={soilOk && layersOk ? "ok" : "missing"}
+          label="Solo com camadas"
+          hint={
+            !soilOk
+              ? "Nenhum solo vinculado ao pivô — define CAD e água disponível."
+              : !layersOk
+              ? "Solo sem camadas cadastradas — o perfil define a água disponível total."
+              : "Perfil de solo e camadas definidos."
+          }
+          href="/solos"
+          cta="Cadastrar solo"
+        />
+        <ReadyRow
+          state={cultureName ? "ok" : "missing"}
+          label="Cultura e cultivar"
+          hint={
+            !cultureName
+              ? "Pivô sem cultura ativa na parcela — define Kc, fenologia e raiz."
+              : `${cultureName}${varietyName ? ` · ${varietyName}` : " · cultivar não informada (opcional)"}.`
+          }
+          href="/culturas"
+          cta="Abrir culturas"
+        />
+        <ReadyRow
+          state={climateDays > 0 ? "ok" : "missing"}
+          label="Clima no período"
+          hint={
+            climateDays > 0
+              ? `${climateDays} ${climateDays === 1 ? "dia" : "dias"} com ETo e chuva disponíveis.`
+              : "Sem ETo aprovada no período — verifique a estação e a sincronização climática."
+          }
+          href="/clima"
+          cta="Ver clima"
+        />
+        <ReadyRow
+          state={initialOk ? "ok" : "warn"}
+          label="Condição inicial"
+          hint={
+            initialOk
+              ? "Umidade inicial definida na parcela."
+              : "Não definida — o balanço assume capacidade de campo no início do ciclo (recomendado medir)."
+          }
+        />
+        <ReadyRow
+          state={hasActiveKcCurve === true ? "ok" : "warn"}
+          label="Curva de Kc ativa"
+          hint={
+            hasActiveKcCurve === true
+              ? "Kc puxado da curva do cadastro (FAO-56 por DAE)."
+              : "Nenhuma curva ativa — o balanço usa o Kc das fases da cultura (recomendado ativar uma curva)."
+          }
+          href="/culturas"
+          cta="Gerar/ativar Kc"
+        />
+      </ul>
+    </Card>
   );
 }
 
