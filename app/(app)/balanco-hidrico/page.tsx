@@ -316,9 +316,15 @@ export default function BalancoHidricoPage() {
   const [notice, setNotice] = useState("");
   const [varietyName, setVarietyName] = useState<string | null>(null);
   const [seasonName, setSeasonName] = useState<string | null>(null);
-  // Curva de Kc ativa detectada no último cálculo (checklist "pivô pronto").
-  // null = ainda não avaliado; false = usando Kc das fases; true = curva do cadastro.
-  const [hasActiveKcCurve, setHasActiveKcCurve] = useState<boolean | null>(null);
+  // Origem do Kc usado no último cálculo — rastreabilidade e checklist.
+  //  cadastro-cultivar / cadastro-cultura = curva ATIVA do cadastro (DAE);
+  //  inativa = existe curva cadastrada mas NÃO ativada;
+  //  outro-eixo = existe curva ativa, porém não em DAE (ainda não suportada no gráfico);
+  //  fases = nenhuma curva → Kc das fases da cultura (fallback);
+  //  null = ainda não avaliado.
+  const [kcSource, setKcSource] = useState<
+    "cadastro-cultivar" | "cadastro-cultura" | "inativa" | "outro-eixo" | "fases" | null
+  >(null);
 
   // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
   const { states: farmStates, refresh: refreshFarm } = useFarmHydricState();
@@ -629,6 +635,7 @@ export default function BalancoHidricoPage() {
       // (comportamento anterior preservado).
       const effectiveVarietyId = assignment.culture_variety_id ?? assignment.variety_id;
       let kcPoints: { x: number; y: number }[] | null = null;
+      let resolvedKcSource: KcSource = "fases";
       {
         const findActive = (byCultivar: boolean) => {
           let q = supabase
@@ -642,13 +649,20 @@ export default function BalancoHidricoPage() {
           return q.maybeSingle();
         };
         let activeCurveId: string | null = null;
+        let matchedScope: "cultivar" | "cultura" | null = null;
         if (effectiveVarietyId) {
           const { data } = await findActive(true);
-          activeCurveId = (data as { id: string } | null)?.id ?? null;
+          if ((data as { id: string } | null)?.id) {
+            activeCurveId = (data as { id: string }).id;
+            matchedScope = "cultivar";
+          }
         }
         if (!activeCurveId) {
           const { data } = await findActive(false);
-          activeCurveId = (data as { id: string } | null)?.id ?? null;
+          if ((data as { id: string } | null)?.id) {
+            activeCurveId = (data as { id: string }).id;
+            matchedScope = "cultura";
+          }
         }
         if (activeCurveId) {
           const { data: anch } = await supabase
@@ -658,11 +672,34 @@ export default function BalancoHidricoPage() {
             .order("sequence_no");
           const pts = ((anch ?? []) as { x_value: number; kc_value: number }[])
             .map((r) => ({ x: r.x_value, y: r.kc_value }));
-          if (pts.length >= 2) kcPoints = pts;
+          if (pts.length >= 2) {
+            kcPoints = pts;
+            resolvedKcSource = matchedScope === "cultivar" ? "cadastro-cultivar" : "cadastro-cultura";
+          }
+        }
+        // Diagnóstico: por que NÃO usou o cadastro? Distingue "existe mas não
+        // ativada", "ativa em outro eixo (não DAE)" e "não existe".
+        if (!kcPoints) {
+          const cultureVariants = effectiveVarietyId
+            ? [`cultivar_id.eq.${effectiveVarietyId}`, "cultivar_id.is.null"]
+            : ["cultivar_id.is.null"];
+          const { data: anyCurves } = await supabase
+            .from("kc_curves")
+            .select("active_for_calculation,axis_type")
+            .eq("culture_id", assignment.culture_id)
+            .or(cultureVariants.join(","));
+          const curves = (anyCurves ?? []) as { active_for_calculation: boolean; axis_type: string }[];
+          if (curves.some((c) => c.active_for_calculation && c.axis_type !== "DAE")) {
+            resolvedKcSource = "outro-eixo";
+          } else if (curves.length > 0) {
+            resolvedKcSource = "inativa";
+          } else {
+            resolvedKcSource = "fases";
+          }
         }
       }
       if (isStale()) return;
-      setHasActiveKcCurve(kcPoints != null);
+      setKcSource(resolvedKcSource);
 
       // Monta o Kc por data a partir da curva (mesma base de DAE do motor).
       const daeRefMs = new Date(`${resolveDaeReferenceDate(assignment)}T00:00:00Z`).getTime();
@@ -1303,6 +1340,7 @@ export default function BalancoHidricoPage() {
                 sensoryByDate={sensoryByDate}
                 onShowDetail={() => setActiveTab("decisao")}
                 mode="dados"
+                kcSource={kcSource}
               />
               <details className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-900">
                 <summary className="cursor-pointer select-none text-[13px] font-bold text-graphite-900 dark:text-white">
@@ -1334,7 +1372,7 @@ export default function BalancoHidricoPage() {
               varietyName={varietyName}
               climateDays={Object.keys(weatherByDate).length}
               initialOk={!!hydricAnchor}
-              hasActiveKcCurve={hasActiveKcCurve}
+              kcSource={kcSource}
             />
           ) : null}
         </div>
@@ -1400,6 +1438,26 @@ export default function BalancoHidricoPage() {
 // para onde ir. Só itens essenciais bloqueiam; Kc e condição inicial são
 // recomendados (o motor assume Kc das fases / capacidade de campo sem eles).
 type ReadyState = "ok" | "warn" | "missing";
+type KcSource = "cadastro-cultivar" | "cadastro-cultura" | "inativa" | "outro-eixo" | "fases" | null;
+// Rótulo + explicação da origem do Kc, reaproveitado no gráfico e no checklist.
+// Deixa explícito se o Kc veio do CADASTRO (curva ativa) ou das FASES (fallback),
+// e, quando caiu no fallback, POR QUÊ — para o operador saber o que corrigir.
+function describeKcSource(src: KcSource): { badge: string; fromCadastro: boolean; hint: string } {
+  switch (src) {
+    case "cadastro-cultivar":
+      return { badge: "Kc: curva do cadastro (cultivar)", fromCadastro: true, hint: "Kc puxado da curva ATIVA do cultivar (FAO-56 por DAE)." };
+    case "cadastro-cultura":
+      return { badge: "Kc: curva do cadastro (cultura)", fromCadastro: true, hint: "Kc puxado da curva ATIVA da cultura (FAO-56 por DAE)." };
+    case "inativa":
+      return { badge: "Kc: fases da cultura (curva não ativada)", fromCadastro: false, hint: "Existe uma curva cadastrada, mas ela NÃO está ativada — ative-a no cadastro para o balanço usá-la. Por ora, usando o Kc das fases." };
+    case "outro-eixo":
+      return { badge: "Kc: fases da cultura (curva não é por DAE)", fromCadastro: false, hint: "A curva ativa está em outro eixo (GDA/fenologia) e ainda não é suportada no gráfico — usando o Kc das fases." };
+    case "fases":
+      return { badge: "Kc: fases da cultura (sem curva)", fromCadastro: false, hint: "Nenhuma curva cadastrada — o balanço usa o Kc das fases da cultura (recomendado gerar/ativar uma curva FAO-56)." };
+    default:
+      return { badge: "Kc: origem não avaliada", fromCadastro: false, hint: "Origem do Kc ainda não avaliada neste pivô." };
+  }
+}
 function ReadyRow({ state, label, hint, href, cta }: { state: ReadyState; label: string; hint: string; href?: string; cta?: string }) {
   const dot =
     state === "ok"
@@ -1431,7 +1489,7 @@ function ReadinessChecklist({
   varietyName,
   climateDays,
   initialOk,
-  hasActiveKcCurve,
+  kcSource,
 }: {
   soilOk: boolean;
   layersOk: boolean;
@@ -1439,7 +1497,7 @@ function ReadinessChecklist({
   varietyName: string | null;
   climateDays: number;
   initialOk: boolean;
-  hasActiveKcCurve: boolean | null;
+  kcSource: KcSource;
 }) {
   const essentials: ReadyState[] = [
     soilOk && layersOk ? "ok" : "missing",
@@ -1505,15 +1563,11 @@ function ReadinessChecklist({
           }
         />
         <ReadyRow
-          state={hasActiveKcCurve === true ? "ok" : "warn"}
+          state={kcSource === "cadastro-cultivar" || kcSource === "cadastro-cultura" ? "ok" : "warn"}
           label="Curva de Kc ativa"
-          hint={
-            hasActiveKcCurve === true
-              ? "Kc puxado da curva do cadastro (FAO-56 por DAE)."
-              : "Nenhuma curva ativa — o balanço usa o Kc das fases da cultura (recomendado ativar uma curva)."
-          }
+          hint={describeKcSource(kcSource).hint}
           href="/culturas"
-          cta="Gerar/ativar Kc"
+          cta={kcSource === "inativa" ? "Ativar curva" : "Gerar/ativar Kc"}
         />
       </ul>
     </Card>
@@ -2225,6 +2279,7 @@ function Cockpit({
   sensoryByDate,
   onShowDetail,
   mode = "dados",
+  kcSource = null,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
@@ -2236,6 +2291,8 @@ function Cockpit({
   /** "dados" = só histórico + condição atual (sem recomendação/projeção, que
    *  vivem na aba DECISÃO). "full" mantém o cockpit completo. */
   mode?: "dados" | "full";
+  /** Origem do Kc usado no balanço, para rastreabilidade no gráfico. */
+  kcSource?: KcSource;
 }) {
   const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
 
@@ -2388,7 +2445,21 @@ function Cockpit({
         <div className="space-y-4 lg:col-span-2">
           <Card className="p-4">
             <div className="mb-2">
-              <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
+                {kcSource && (
+                  <span
+                    title={describeKcSource(kcSource).hint}
+                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+                      describeKcSource(kcSource).fromCadastro
+                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300"
+                        : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300"
+                    }`}
+                  >
+                    {describeKcSource(kcSource).badge}
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · histórico até hoje ({Math.min(rows.length, 14)} dias) · sem previsão no gráfico</p>
             </div>
             <div className="mb-2.5">
