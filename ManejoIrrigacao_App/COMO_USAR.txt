@@ -1,0 +1,59 @@
+============================================================
+ APP DE MANEJO DE IRRIGACAO - OFFLINE (Karitel / RDM)
+============================================================
+
+O QUE E
+ - Um PROGRAMA de computador (abre em janela propria, NAO e navegador).
+ - Funciona 100% OFFLINE. Seus dados ficam na propria pasta.
+ - Faz o MANEJO e ja da a RECOMENDACAO: percentimetro, horas e decisao.
+
+------------------------------------------------------------
+ ARQUIVOS DESTA PASTA (mantenha todos juntos)
+------------------------------------------------------------
+ - manejo_app.py       -> o programa
+ - app_data.json       -> os dados dos pivos (nao apague)
+ - Abrir_App.bat       -> atalho para abrir no Windows
+ - manejo_estado.json  -> criado automatico: guarda o que voce preenche
+
+------------------------------------------------------------
+ COMO ABRIR (Windows) - so na 1a vez instala o Python
+------------------------------------------------------------
+ 1) Se ainda nao tem Python: baixe em  https://www.python.org/downloads/
+    -> Na instalacao MARQUE a caixa  "Add Python to PATH".
+ 2) De dois cliques em  Abrir_App.bat
+ 3) A janela do app abre. Pronto.
+
+ (O Python so e necessario para RODAR. O app em si nao usa internet.)
+
+------------------------------------------------------------
+ COMO USAR (rotina)
+------------------------------------------------------------
+ 1) INICIO            -> informe a ETo da semana (Karitel e RDM), data e chuva. Salvar.
+ 2) PLANTIO           -> duplo-clique no pivo, marque "Plantado" e a data real.
+ 3) MANEJO E RECOMENDACAO -> o app mostra DAP, DAE, Kc, ETc, necessidade e JA RECOMENDA
+                         o percentimetro e as horas, com a decisao. Verde = irrigar.
+ 4) OS DO DIA         -> escolha a data; duplo-clique p/ horimetro e observacoes;
+                         "Exportar OS (Excel/CSV)" gera o arquivo p/ imprimir/enviar.
+
+------------------------------------------------------------
+ QUER UM .EXE (sem precisar do Python)?  -> fazer UMA vez no Windows
+------------------------------------------------------------
+ No Windows com Python instalado, abra o Prompt de Comando nesta pasta e rode:
+     pip install pyinstaller
+     pyinstaller --onefile --windowed --add-data "app_data.json;." manejo_app.py
+ O programa pronto fica em  dist\manejo_app.exe  (leve a pasta inteira junto do
+ app_data.json, ou use a opcao --add-data acima que ja embute os dados).
+
+------------------------------------------------------------
+ CELULAR (fase 2)
+------------------------------------------------------------
+ O mesmo app pode virar aplicativo de Android, mas isso exige uma montagem
+ separada (toolchain Android). Quando quiser, a gente faz essa etapa.
+
+------------------------------------------------------------
+ BASE TECNICA
+------------------------------------------------------------
+ Kc FAO-56 linear por DAE; emergencia 5 dias (soja/algodao); necessidade bruta =
+ liquida / eficiencia; horas = necessidade / vazao de lamina; gargalo > 168 h/semana;
+ perda por deficit via Ky (FAO-33). Energia = potencia do pivo x horas (so pivos).
+============================================================
