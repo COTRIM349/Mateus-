@@ -470,12 +470,77 @@ C(s,f"A{r+2}","OS por modulo: para cada pivo, os dias (Seg..Dom) e as horas/ener
   "Preencha o % no dia na aba da cultura e os valores aparecem aqui. Energia = apenas pivos (pressurizacao).",C_NOTE)
 s.merge_cells(start_row=r+2,start_column=1,end_row=r+2,end_column=len(OH))
 
+# ========== OS_DIA (ordem de servico DO DIA, automatica, por modulo, p/ imprimir)
+AREA_L=IDX["Area(ha)"];CE_L=IDX["CE(kWh/m3)"]
+s=ws("OS_DIA","C55A11")
+DH=["Modulo","Pivo","Cod","Casa b.","Cultura","Percentimetro","Lamina (mm)","Horas prev.",
+    "Horimetro inicial","Horimetro final","H. rodadas","Energia (kWh)","Observacoes","Irriga hoje?"]
+DIDX={h:get_column_letter(i+1) for i,h in enumerate(DH)}
+HID=get_column_letter(len(DH)+1)  # coluna oculta: % do dia (bruto)
+wmap={"A":9,"B":9,"C":6,"D":7,"E":9,"F":11,"G":9,"H":9,"I":12,"J":12,"K":9,"L":11,"M":22,"N":9,HID:6}
+setw(s,wmap)
+title(s,"OS DO DIA - ordem de servico automatica por modulo (para imprimir e entregar)",
+      "Escolha a DATA: a planilha pega o % que voce programou para aquele dia (Seg..Dom) nas abas de cultura e monta a OS por modulo. "
+      "Preencha horimetro inicial/final e observacoes no campo. Filtro Irriga hoje=SIM mostra so quem roda.")
+C(s,"A2","Data da OS:",C_TXT,None,RIGHT);C(s,"B2",f"={DREF}",C_INPUT,F_INPUT,CENTER,DATE)
+C(s,"C2","Dia:",C_TXT,None,RIGHT)
+C(s,"D2",'=CHOOSE(WEEKDAY($B$2,2),"Seg","Ter","Qua","Qui","Sex","Sab","Dom")',C_LINK,F_OK,CENTER)
+C(s,"E2","Responsavel:",C_TXT,None,RIGHT);C(s,"F2",None,C_INPUT,F_INPUT,LEFT)
+s.column_dimensions[HID].hidden=True
+hrow(s,4,DH);s.freeze_panes="A5"
+dsel="$D$2"  # dia da semana escolhido
+r=5;dfirst=5;dsub=[]
+for m in mods:
+    mr=sorted([it for it in ROWS if it["cod"] and it["plantio"] and it["plantio"]<=HOJE and it["modop"]==m],
+              key=lambda x:int(x["num"]) if x["num"].isdigit() else 999)
+    if not mr: continue
+    sc=s.cell(row=r,column=1,value=f"{m}");sc.font=Font(name=FONT,size=11,bold=True,color="FFFFFF")
+    sc.fill=PatternFill("solid",fgColor="2E5496");sc.alignment=LEFT
+    s.merge_cells(start_row=r,start_column=1,end_row=r,end_column=len(DH));r+=1
+    mfirst=r
+    for it in mr:
+        cod=it["cod"];cq=f'"{cod}"'
+        C(s,f'{DIDX["Modulo"]}{r}',it["modop"],C_LINK,F_IMP,CENTER)
+        C(s,f'{DIDX["Pivo"]}{r}',it["pivo"],C_LINK,F_IMP,CENTER)
+        C(s,f'{DIDX["Cod"]}{r}',cod,C_LINK,F_IMP,CENTER)
+        C(s,f'{DIDX["Casa b."]}{r}',it["casa"],C_LINK,F_IMP,CENTER)
+        C(s,f'{DIDX["Cultura"]}{r}',it["cultura"],C_LINK,F_IMP,CENTER)
+        # % do dia = mistura dos 7 dias conforme o dia escolhido (coluna oculta)
+        blend="+".join([f'({xs_cod(DIA_L[d],cq)})*({dsel}="{d}")' for d in DIAS])
+        C(s,f'{HID}{r}',f'={blend}',C_TXT,F_CALC,CENTER,INT)
+        raw=f'${HID}{r}'
+        C(s,f'{DIDX["Percentimetro"]}{r}',f'=IF({raw}=0,"",{raw})',Font(name=FONT,bold=True),F_CALC,CENTER,INT)
+        C(s,f'{DIDX["Lamina (mm)"]}{r}',f'=IF({raw}=0,"",IFERROR(INDEX({LAM_RANGE},MATCH("{cod}",{COD_COL},0),MATCH({raw},{LAM_PCT},0)),"?"))',C_TXT,F_CALC,CENTER,NUM1)
+        C(s,f'{DIDX["Horas prev."]}{r}',f'=IF({raw}=0,"",IFERROR(INDEX({HOR_RANGE},MATCH("{cod}",{COD_COL},0),MATCH({raw},{HOR_PCT},0)),"?"))',Font(name=FONT,bold=True),F_CALC,CENTER,NUM1)
+        C(s,f'{DIDX["Horimetro inicial"]}{r}',None,C_INPUT,F_INPUT,CENTER,NUM1)
+        C(s,f'{DIDX["Horimetro final"]}{r}',None,C_INPUT,F_INPUT,CENTER,NUM1)
+        hi=f'${DIDX["Horimetro inicial"]}{r}';hf=f'${DIDX["Horimetro final"]}{r}'
+        C(s,f'{DIDX["H. rodadas"]}{r}',f'=IF(OR({hi}="",{hf}=""),"",{hf}-{hi})',C_TXT,F_CALC,CENTER,NUM1)
+        lam=f'${DIDX["Lamina (mm)"]}{r}'
+        C(s,f'{DIDX["Energia (kWh)"]}{r}',f'=IF({lam}="","",{lam}*({xs_cod(AREA_L,cq)})*10*({xs_cod(CE_L,cq)}))',C_TXT,F_CALC,RIGHT,M3)
+        C(s,f'{DIDX["Observacoes"]}{r}',None,C_INPUT,F_INPUT,LEFT)
+        C(s,f'{DIDX["Irriga hoje?"]}{r}',f'=IF({raw}>0,"SIM","NAO")',C_TXT,F_CALC,CENTER)
+        r+=1
+    # subtotal do modulo (horas prev + energia)
+    C(s,f'{DIDX["Cultura"]}{r}',f"Subtotal {m}",Font(name=FONT,bold=True),F_OK,RIGHT)
+    for h,fmt in [("Horas prev.",NUM1),("Energia (kWh)",M3)]:
+        col=DIDX[h];C(s,f'{col}{r}',f'=SUM({col}{mfirst}:{col}{r-1})',Font(name=FONT,bold=True),F_OK,CENTER if h=="Horas prev." else RIGHT,fmt)
+    dsub.append(r);r+=2
+dlast=r-1
+C(s,f'{DIDX["Cultura"]}{r}',"TOTAL DO DIA",Font(name=FONT,bold=True,color="FFFFFF"),F_HEAD2,RIGHT)
+for h,fmt in [("Horas prev.",NUM1),("Energia (kWh)",M3)]:
+    col=DIDX[h];C(s,f'{col}{r}',f'=SUM({"+".join(f"{col}{sr}" for sr in dsub)})' if dsub else "0",Font(name=FONT,bold=True),F_OK,CENTER if h=="Horas prev." else RIGHT,fmt)
+C(s,f"A{r+2}","OS DO DIA automatica: muda a DATA e a OS se refaz com o % que voce programou para aquele dia da semana nas abas de cultura. "
+  "Horimetro inicial/final e observacoes sao preenchidos no campo (impressao). H. rodadas = final - inicial (confere com Horas prev.).",C_NOTE)
+s.merge_cells(start_row=r+2,start_column=1,end_row=r+2,end_column=len(DH))
+
 # ========== LEIA-ME
 s=ws("LEIA-ME","1F3864");setw(s,{"A":2,"B":100})
 title(s,"Manejo de Irrigacao Karitel/RDM - v9","Programacao semanal (Seg..Dom) em cada aba de cultura -> OS por modulo automatica.")
 for i,(a,b) in enumerate([
 ("PROGRAMACAO SEMANAL","Em cada aba de cultura tem as colunas Seg..Dom. Ponha o % (percentimetro) no dia que o pivo vai rodar. A planilha soma lamina, horas, volume e energia da semana."),
-("OS POR MODULO","A aba OS_GERAL gera a ordem de servico em secoes por modulo (M1, M2, M3, RDM), puxando por Cod os dias/horas/energia que voce programou. Filtro Irriga=SIM mostra so quem vai rodar."),
+("OS DO DIA","A aba OS_DIA gera a ordem AUTOMATICA do dia: escolha a DATA e ela pega o % programado para aquele dia da semana, por modulo (M1/M2/M3/RDM), com percentimetro, lamina, horas, horimetro inicial/final e observacoes para imprimir."),
+("OS DA SEMANA","A aba OS_GERAL mostra a semana inteira por modulo (Seg..Dom), puxando por Cod os dias/horas/energia que voce programou. Filtro Irriga=SIM mostra so quem vai rodar."),
 ("DASHBOARD","Demanda de energia (kW) por modulo e por dia da semana, com o pico. Use o pico para dimensionar energia."),
 ("DUAS CAMADAS","Aba de MANEJO por cultura (operacao da semana) + aba CADASTRO (dados fixos: variedade, populacao, plantas/m, GRM, Ky, ciclo, ocupacao). O manejo puxa ciclo/ocupacao/curva Kc do CADASTRO por Cod."),
 ("Ky","Na aba CADASTRO. Fator de resposta da cultura (FAO-33): soja/algodao 0,85; milho 1,25. Tabaco 0,90 (conferir); cacau em branco (nao consolidado). Serve p/ estimar perda de produtividade no deficit."),
@@ -490,7 +555,7 @@ for i,(a,b) in enumerate([
 ("MODULOS","Coluna Modulo: M1 (1-34+75,76), M2 (R8-R12), M3 (R13-R18), RDM (101-133). De para filtrar/ordenar por modulo."),],0):
     s.cell(row=i+4,column=2,value=f"{a}:  {b}").font=C_TXT;s.cell(row=i+4,column=2).alignment=LEFT;s.row_dimensions[i+4].height=40
 
-ordem=["LEIA-ME","DASHBOARD","OS_GERAL","SOJA","ALGODAO","TABACO","CACAU","MILHO","CADASTRO","ETO_SEMANAL","CURVAS_KC","LAMINA_HORA","PARAMETROS"]
+ordem=["LEIA-ME","DASHBOARD","OS_DIA","OS_GERAL","SOJA","ALGODAO","TABACO","CACAU","MILHO","CADASTRO","ETO_SEMANAL","CURVAS_KC","LAMINA_HORA","PARAMETROS"]
 wb._sheets.sort(key=lambda x: ordem.index(x.title) if x.title in ordem else 99)
 wb.active=wb.sheetnames.index("SOJA")
 try:
