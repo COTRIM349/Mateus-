@@ -1,0 +1,80 @@
+========================================================================
+ MACRO - OS AUTOMATICA (so aparece quem vai irrigar, sem clicar em Reaplicar)
+ Planilha: Manejo_Irrigacao_Karitel_RDM
+========================================================================
+
+O QUE A MACRO FAZ
+ - Toda vez que voce abre a planilha OU clica na aba OS_DIA / OS_GERAL,
+   ela recalcula e reaplica sozinha o filtro "Irriga = SIM".
+ - Resultado: a OS do dia e a da semana ja aparecem so com os pivos que
+   vao rodar, sem precisar de Dados > Reaplicar.
+
+------------------------------------------------------------------------
+ PASSO A PASSO (faz UMA vez; depois fica automatico pra sempre)
+------------------------------------------------------------------------
+ 1) Abra o arquivo Manejo_Irrigacao_Karitel_RDM.xlsx no Excel.
+ 2) Tecle  ALT + F11   (abre o editor de macros - VBA).
+ 3) Na arvore da esquerda (Project), ache o seu arquivo e de DOIS CLIQUES
+    em "EstaPasta_de_trabalho" (ou "ThisWorkbook").
+ 4) Cole, na janela que abrir, TODO o codigo que esta abaixo (entre as linhas).
+ 5) Feche o editor (ALT + Q).
+ 6) Arquivo > Salvar Como > escolha o tipo:
+       "Pasta de Trabalho Habilitada para Macro do Excel (*.xlsm)"
+    e salve. (Guarde esse .xlsm - e a sua versao com macro.)
+ 7) Ao reabrir, se aparecer a barra amarela, clique em "Habilitar Conteudo".
+
+ Pronto. Programe o % nos dias nas abas de cultura e abra a OS: ja vem filtrada.
+
+------------------------------------------------------------------------
+ CODIGO - cole dentro de "EstaPasta_de_trabalho" (ThisWorkbook)
+------------------------------------------------------------------------
+
+Private Sub Workbook_Open()
+    AtualizarOS
+End Sub
+
+Private Sub Workbook_SheetActivate(ByVal Sh As Object)
+    If Sh.Name = "OS_DIA" Or Sh.Name = "OS_GERAL" Then AtualizarOS
+End Sub
+
+Public Sub AtualizarOS()
+    Application.EnableEvents = False
+    On Error Resume Next
+    ' OS_DIA: coluna "Irriga hoje?" = 14 (N) ; OS_GERAL: "Irriga?" = 17 (Q)
+    AplicarFiltroOS ThisWorkbook.Worksheets("OS_DIA"), 14
+    AplicarFiltroOS ThisWorkbook.Worksheets("OS_GERAL"), 17
+    On Error GoTo 0
+    Application.EnableEvents = True
+End Sub
+
+Private Sub AplicarFiltroOS(ws As Worksheet, campo As Long)
+    Dim r As Long, last As Long
+    ws.Calculate
+    ' remove filtro anterior
+    If ws.AutoFilterMode Then ws.AutoFilterMode = False
+    ' acha a ultima linha da TABELA (codigos comecam com "P"; ignora o resumo)
+    last = 4
+    For r = 5 To ws.Cells(ws.Rows.Count, 3).End(xlUp).Row
+        If Left(CStr(ws.Cells(r, 3).Value), 1) = "P" Then last = r
+    Next r
+    ' aplica o filtro so na area da tabela, mostrando apenas SIM
+    If last > 4 Then
+        ws.Range(ws.Cells(4, 1), ws.Cells(last, campo)).AutoFilter Field:=campo, Criteria1:="SIM"
+    End If
+End Sub
+
+------------------------------------------------------------------------
+ OPCIONAL - botao "Atualizar OS" na propria aba
+------------------------------------------------------------------------
+ Se quiser um botao: aba Desenvolvedor > Inserir > Botao (Controle de
+ Formulario) > desenhe na aba OS_DIA > associe a macro "AtualizarOS".
+
+------------------------------------------------------------------------
+ OBSERVACOES
+------------------------------------------------------------------------
+ - Sem a macro habilitada, o filtro continua funcionando no modo manual:
+   Dados > Reaplicar (ou Ctrl+Alt+F5 para recalcular e reaplicar).
+ - A macro nao altera nenhum calculo: so liga/atualiza o filtro "Irriga=SIM".
+ - Se a sua TI bloquear macros, use o modo manual (Reaplicar) - o resultado
+   e o mesmo, so nao e automatico.
+========================================================================
