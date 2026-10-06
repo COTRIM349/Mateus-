@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manejo de Irrigação — Karitel / RDM</title>
+<style>
+:root{
+  --verde:#1f6b3b;--verde2:#2e8b51;--terra:#7a5230;--areia:#f5f2ea;--cinza:#5b6168;
+  --borda:#ddd7c8;--azul:#17607d;--alerta:#b5361f;--amar:#c9972b;--sombra:0 1px 3px rgba(0,0,0,.12);
+  --m1:#e2efda;--m2:#ddebf7;--m3:#fce4d6;--rdm:#fff2cc;
+}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--areia);color:#232a25;font-size:15px}
+header{background:var(--verde);color:#fff;padding:10px 16px;display:flex;align-items:center;gap:12px;position:sticky;top:0;z-index:50;box-shadow:var(--sombra)}
+header h1{font-size:16px;margin:0;font-weight:700;line-height:1.1}
+header small{opacity:.85;font-weight:400;font-size:12px}
+nav{display:flex;flex-wrap:wrap;gap:2px;background:var(--verde2);padding:0 6px;position:sticky;top:44px;z-index:49}
+nav button{background:transparent;border:0;color:#eafbe8;padding:10px 12px;font-size:13px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap}
+nav button.active{color:#fff;font-weight:700;border-bottom-color:#fff;background:rgba(255,255,255,.08)}
+main{padding:14px;max-width:1280px;margin:0 auto}
+.card{background:#fff;border:1px solid var(--borda);border-radius:10px;padding:14px;margin-bottom:14px;box-shadow:var(--sombra)}
+.card h2{margin:0 0 4px;font-size:16px;color:var(--verde)}
+.hint{color:var(--cinza);font-size:12.5px;margin:0 0 10px;line-height:1.45}
+.grid{display:grid;gap:10px}
+.g2{grid-template-columns:repeat(auto-fit,minmax(190px,1fr))}
+label{display:block;font-size:12px;color:var(--cinza);margin-bottom:3px;font-weight:600}
+input,select{width:100%;padding:8px;border:1px solid var(--borda);border-radius:7px;font-size:14px;background:#fff}
+input:focus,select:focus{outline:2px solid var(--verde2);border-color:var(--verde2)}
+.btn{background:var(--verde);color:#fff;border:0;border-radius:8px;padding:10px 15px;font-size:14px;font-weight:600;cursor:pointer}
+.btn.sec{background:#fff;color:var(--verde);border:1.5px solid var(--verde)}
+.btn.azul{background:var(--azul)}
+.btn.terra{background:var(--terra)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.tbl-wrap{overflow:auto;max-height:68vh;border:1px solid var(--borda);border-radius:8px}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{padding:6px 8px;text-align:right;border-bottom:1px solid #ececec;white-space:nowrap}
+th:first-child,td:first-child,th.l,td.l{text-align:left}
+thead th{background:var(--verde);color:#fff;position:sticky;top:0;font-size:11.5px;font-weight:600;z-index:1}
+tbody tr:nth-child(even){background:#faf9f4}
+tfoot td{font-weight:700;background:#eef3ee}
+input.mini{width:62px;padding:5px;text-align:center}
+input.mid{width:92px;padding:5px;text-align:center}
+.tag{display:inline-block;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700}
+.t-irr{background:#fde8e4;color:var(--alerta)}.t-ok{background:#e4f3e8;color:var(--verde)}
+.t-esp{background:#fdf4e0;color:var(--amar)}.t-garg{background:#fde3de;color:var(--alerta)}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-bottom:12px}
+.kpi .b{background:linear-gradient(135deg,#fff,#f2f6f2);border:1px solid var(--borda);border-radius:10px;padding:11px}
+.kpi .b .n{font-size:21px;font-weight:800;color:var(--verde)}
+.kpi .b .t{font-size:11.5px;color:var(--cinza)}
+.modpill{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:middle}
+.sec-mod{font-weight:800;color:#fff;padding:7px 10px;border-radius:6px 6px 0 0;margin-top:6px}
+.badge{font-size:11px;font-weight:700;padding:2px 7px;border-radius:5px;background:#eef3ee;color:var(--verde)}
+.warn{background:#fdf4e0;border:1px solid var(--amar);border-radius:8px;padding:10px;font-size:13px;color:#7a5a12;margin-bottom:12px}
+select.cult{max-width:220px;display:inline-block;width:auto}
+@media(max-width:640px){main{padding:9px}header h1{font-size:14px}}
+@media print{
+  header,nav,.noprint{display:none!important}
+  body{background:#fff;font-size:11px}
+  main{max-width:100%;padding:0}
+  .card{box-shadow:none;border:1px solid #999;page-break-inside:avoid}
+  .tbl-wrap{max-height:none;overflow:visible;border:0}
+  thead th{background:#ddd!important;color:#000!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  @page{size:landscape;margin:10mm}
+}
+</style>
+</head>
+<body>
+<header>
+  <div style="font-size:24px">🌱</div>
+  <div><h1>Manejo de Irrigação <small>Karitel · Rio do Meio</small></h1>
+  <small>Via clima · ETo/Kc FAO-56 · OS por módulo · energia por pivô</small></div>
+</header>
+<nav id="nav"></nav>
+<main id="app"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script>
+const DATA=__APP_DATA__;
+const KY={SOJA:0.85,"ALGODÃO":0.85,MILHO:1.25,TABACO:0.90,CACAU:null};
+const DIAS=["Seg","Ter","Qua","Qui","Sex","Sab","Dom"];
+const MODS=["M1","M2","M3","RDM"];
+const MODNOME={M1:"Módulo 1",M2:"Módulo 2",M3:"Módulo 3",RDM:"RDM"};
+const MODCOR={M1:"#2e8b51",M2:"#17607d",M3:"#c0622a",RDM:"#b58b1f"};
+const MODBG={M1:"var(--m1)",M2:"var(--m2)",M3:"var(--m3)",RDM:"var(--rdm)"};
+const TABS=[["config","⚙️ Config"],["cadastro","📇 Cadastro"],["plantio","🌾 Plantio"],
+  ["manejo","💧 Manejo"],["prog","🗓️ Programação"],["osdia","📋 OS do dia"],
+  ["ossem","📆 OS da semana"],["dash","📊 Dashboard"],["ajuda","❓ Ajuda"]];
+
+/* ---------- estado ---------- */
+const SKEY="manejo_app2_karitel";
+let S=load();
+function load(){try{const r=JSON.parse(localStorage.getItem(SKEY));if(r)return migrate(r);}catch(e){}
+  return {dataRef:today(),etoK:"",etoR:"",chuva:"0",ef:0.9,resp:"",piv:{},cad:{},os:{}};}
+function migrate(r){r.piv=r.piv||{};r.cad=r.cad||{};r.os=r.os||{};if(r.ef==null)r.ef=0.9;return r;}
+function save(){try{localStorage.setItem(SKEY,JSON.stringify(S));}catch(e){}}
+function today(){return new Date().toISOString().slice(0,10);}
+function P(num){if(!S.piv[num])S.piv[num]={plantado:false,plantio:"",ultIrrig:"",chuva:"",prog:{}};
+  if(!S.piv[num].prog)S.piv[num].prog={};return S.piv[num];}
+function cadOf(num){ // cadastro editavel sobre o default do crop
+  const c=DATA.crops[String(num)]||{};const o=S.cad[num]||{};
+  const cultura=o.cultura??c.cultura??"";
+  const classe=o.classe??c.classe??"";
+  const colk=o.colk??c.colk??colkFrom(cultura,classe);
+  return {cultura,variedade:o.variedade??c.variedade??"",classe,colk,
+    ciclo:o.ciclo??c.ocup??"",ocup:o.ocup??o.ciclo??c.ocup??"",
+    pop:o.pop??c.pop??"",espac:o.espac??0.5,grm:o.grm??c.grm??"",
+    ky:o.ky??(KY[cultura]??"")};}
+function setCad(num,k,v){S.cad[num]=S.cad[num]||{};S.cad[num][k]=v;save();}
+function colkFrom(cult,classe){
+  if(cult==="SOJA")return "SOJA_"+(classe==="PRECOCE"?"PRECOCE":classe==="TARDIA"?"TARDIA":"MEDIA");
+  if(cult==="ALGODÃO")return "ALG_"+(classe==="PRECOCE"?"PRECOCE":classe==="TARDIO"?"TARDIO":"MEDIO");
+  if(cult==="MILHO")return "MILHO";if(cult==="TABACO")return "TABACO";if(cult==="CACAU")return "CACAU";return"";}
+
+/* ---------- agronomia ---------- */
+function pivoByNum(num){return DATA.pivos.find(p=>p.num===num);}
+function modShort(mod){return mod;} // ja vem M1..RDM
+function dias(a,b){if(!a||!b)return null;return Math.round((new Date(b+"T00:00:00")-new Date(a+"T00:00:00"))/864e5);}
+function ehSojaAlg(c){return c==="SOJA"||c==="ALGODÃO";}
+function kcDia(colk,dae){const a=DATA.kc[colk];if(!a||dae<1)return null;return a[Math.min(dae,a.length)-1];}
+function etoFaz(faz){const v=faz==="RDM"?S.etoR:S.etoK;const n=parseFloat(v);return isNaN(n)?null:n;}
+function lamAt(pivo,pct){const i=DATA.pcts.indexOf(pct);return i<0?null:pivo.lam[i];}
+function horAt(pivo,pct){const i=DATA.pcts.indexOf(pct);return i<0?null:pivo.hor[i];}
+function calc(num){
+  const pivo=pivoByNum(num);if(!pivo)return null;
+  const cad=cadOf(num);const st=P(num);
+  const plantio=st.plantio||DATA.crops[String(num)]?.plantio||"";
+  const ultIrrig=st.ultIrrig||plantio;
+  const dataRef=S.dataRef||today();
+  const dap=dias(plantio,dataRef);
+  const dae=dap==null?null:(ehSojaAlg(cad.cultura)?dap-5:dap);
+  const kc=(cad.colk&&dae!=null)?kcDia(cad.colk,dae):null;
+  const eto=etoFaz(pivo.faz);
+  const etc=(kc!=null&&eto!=null)?kc*eto:null;
+  const chuva=parseFloat(st.chuva!==""?st.chuva:S.chuva)||0;
+  const necLiq=etc!=null?Math.max(etc-chuva,0):null;
+  const necBruta=necLiq!=null?necLiq/(S.ef||0.9):null;
+  // programacao semanal
+  const prog=st.prog||{};
+  let lamSem=0,horSem=0,anyProg=false;
+  const vLam=pivo.lam[0]/pivo.hor[0];
+  DIAS.forEach(d=>{const pct=parseInt(prog[d]);if(pct>0){const l=lamAt(pivo,pct),h=horAt(pivo,pct);
+    if(l!=null){lamSem+=l;horSem+=h;anyProg=true;}}});
+  const volSem=anyProg?lamSem*pivo.area*10:0;
+  const eneSem=anyProg?volSem*(pivo.ce||0):0;
+  return {pivo,cad,st,plantio,ultIrrig,dap,dae,kc,eto,etc,chuva,necLiq,necBruta,
+    prog,lamSem,horSem,volSem,eneSem,anyProg,vLam};
+}
+function diaSemana(dstr){const wd=new Date(dstr+"T00:00:00").getDay();return DIAS[(wd+6)%7];} // getDay:0=Dom
+function calcDia(num,diaN){ // % no dia escolhido
+  const r=calc(num);if(!r)return null;const pct=parseInt(r.prog[diaN]);
+  if(!(pct>0))return {...r,pctDia:null,lamDia:null,horDia:null,eneDia:null};
+  const l=lamAt(r.pivo,pct),h=horAt(r.pivo,pct);const vol=l*r.pivo.area*10;
+  return {...r,pctDia:pct,lamDia:l,horDia:h,eneDia:vol*(r.pivo.ce||0)};
+}
+function plantados(){return DATA.pivos.filter(p=>P(p.num).plantado);}
+function fmt(n,d=1){return(n==null||isNaN(n))?"—":Number(n).toLocaleString("pt-BR",{minimumFractionDigits:d,maximumFractionDigits:d});}
+function round(n,d){if(n==null||isNaN(n)||n==="")return"";const f=10**d;return Math.round(n*f)/f;}
+
+/* ---------- navegação ---------- */
+let TAB="config";
+function buildNav(){const n=document.getElementById("nav");n.innerHTML="";
+  TABS.forEach(([id,lbl])=>{const b=document.createElement("button");b.textContent=lbl;
+    b.className=id===TAB?"active":"";b.onclick=()=>{TAB=id;buildNav();render();};n.appendChild(b);});}
+function render(){window.scrollTo(0,0);({config:vConfig,cadastro:vCad,plantio:vPlantio,manejo:vManejo,
+  prog:vProg,osdia:vOSdia,ossem:vOSsem,dash:vDash,ajuda:vAjuda}[TAB])();}
+const app=()=>document.getElementById("app");
+function g(id){return document.getElementById(id);}
+
+/* ---------- CONFIG ---------- */
+function vConfig(){
+  app().innerHTML=`
+  <div class="card"><h2>⚙️ Parâmetros da semana</h2>
+    <p class="hint">Todo o manejo é via clima. Informe a ETo acumulada da semana (mm) — é o único dado climático. O Kc vem da curva FAO-56 pelo DAE.</p>
+    <div class="grid g2">
+      <div><label>Data de referência (hoje)</label><input type="date" id="c_ref" value="${S.dataRef}"></div>
+      <div><label>ETo semana — Karitel (mm)</label><input type="number" step="0.1" id="c_etok" value="${S.etoK}" placeholder="ex: 42"></div>
+      <div><label>ETo semana — RDM (mm)</label><input type="number" step="0.1" id="c_etor" value="${S.etoR}" placeholder="ex: 40"></div>
+      <div><label>Chuva padrão da semana (mm)</label><input type="number" step="0.1" id="c_ch" value="${S.chuva}"></div>
+      <div><label>Eficiência de aplicação</label><input type="number" step="0.01" id="c_ef" value="${S.ef}"></div>
+      <div><label>Responsável (OS)</label><input id="c_resp" value="${S.resp||""}" placeholder="quem recebe a OS"></div>
+    </div>
+    <div class="row" style="margin-top:12px"><button class="btn" onclick="salvarCfg()">💾 Salvar</button><span class="hint" id="c_ok"></span></div>
+  </div>
+  <div class="card"><h2>📊 Base</h2>
+    <div class="kpi">
+      <div class="b"><div class="n">${DATA.pivos.length}</div><div class="t">pivôs cadastrados</div></div>
+      <div class="b"><div class="n">${plantados().length}</div><div class="t">plantados</div></div>
+      <div class="b"><div class="n">${Object.keys(DATA.crops).length}</div><div class="t">talhões safra 26/27</div></div>
+    </div>
+    <p class="hint">Funciona offline. Tudo que você digita fica salvo neste aparelho. Para outro celular/PC, copie o arquivo.</p>
+  </div>`;
+  g("c_ref").onchange=e=>{S.dataRef=e.target.value;save();};
+}
+function salvarCfg(){S.dataRef=g("c_ref").value;S.etoK=g("c_etok").value;S.etoR=g("c_etor").value;
+  S.chuva=g("c_ch").value;S.ef=parseFloat(g("c_ef").value)||0.9;S.resp=g("c_resp").value;save();
+  g("c_ok").textContent="✓ salvo";}
+
+/* ---------- CADASTRO ---------- */
+function vCad(){
+  const rows=DATA.pivos.map(p=>{const c=cadOf(p.num);
+    return `<tr>
+      <td class="l"><b>${p.nome}</b></td><td class="l"><span class="modpill" style="background:${MODCOR[p.mod]}"></span>${p.mod}</td>
+      <td class="l">${c.cultura||"—"}</td>
+      <td><input class="mid" value="${c.variedade||""}" onchange="setCad(${p.num},'variedade',this.value)"></td>
+      <td><input class="mini" value="${c.classe||""}" onchange="setCad(${p.num},'classe',this.value);render()"></td>
+      <td><input class="mini" type="number" value="${c.ciclo||""}" onchange="setCad(${p.num},'ciclo',+this.value)"></td>
+      <td><input class="mini" type="number" value="${c.ocup||""}" onchange="setCad(${p.num},'ocup',+this.value)"></td>
+      <td><input class="mid" type="number" value="${c.pop||""}" onchange="setCad(${p.num},'pop',+this.value)"></td>
+      <td><input class="mini" type="number" step="0.01" value="${c.espac||""}" onchange="setCad(${p.num},'espac',+this.value)"></td>
+      <td>${c.pop&&c.espac?fmt(c.pop*c.espac/10000,1):"—"}</td>
+      <td><input class="mini" type="number" step="0.1" value="${c.grm||""}" onchange="setCad(${p.num},'grm',+this.value)"></td>
+      <td><input class="mini" type="number" step="0.01" value="${c.ky??""}" onchange="setCad(${p.num},'ky',+this.value)"></td>
+    </tr>`;}).join("");
+  app().innerHTML=`<div class="card"><h2>📇 Cadastro agronômico</h2>
+    <p class="hint">Dados fixos da lavoura, por pivô: variedade, classe, ciclo, ocupação, população, espaçamento, plantas/m (calculado), GRM e Ky. Fonte única — o manejo usa isto.</p>
+    <div class="warn">Ky (FAO-33): soja/algodão 0,85 · milho 1,25 (literatura). Tabaco 0,90 = referência, confira. Cacau não é consolidado na FAO-33 — preencha se tiver o seu.</div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th class="l">Pivô</th><th class="l">Mód.</th><th class="l">Cultura</th><th>Variedade</th><th>Classe</th>
+      <th>Ciclo</th><th>Ocup.</th><th>Pop (pl/ha)</th><th>Espaç</th><th>Plantas/m</th><th>GRM</th><th>Ky</th>
+    </tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+
+/* ---------- PLANTIO ---------- */
+function vPlantio(){
+  const rows=DATA.pivos.map(p=>{const c=cadOf(p.num),st=P(p.num);
+    const plantio=st.plantio||DATA.crops[String(p.num)]?.plantio||"";
+    return `<tr>
+      <td class="l"><b>${p.nome}</b> <span class="hint">${p.mod}·${p.area}ha</span></td>
+      <td class="l">${c.cultura||"—"}</td>
+      <td><input type="date" class="mid" style="width:140px" value="${plantio}" onchange="setPlantio(${p.num},this.value)"></td>
+      <td style="text-align:center"><input type="checkbox" ${st.plantado?"checked":""} onchange="setPlant(${p.num},this.checked)" style="width:20px;height:20px"></td>
+    </tr>`;}).join("");
+  app().innerHTML=`<div class="card"><h2>🌾 Plantio</h2>
+    <p class="hint">Só pivô marcado como <b>plantado</b> entra no manejo e nas OS. Ajuste a data de plantio real; o DAP/DAE conta a partir dela.</p>
+    <div class="row noprint" style="margin-bottom:10px">
+      <button class="btn sec" onclick="todos(true)">Marcar todos</button>
+      <button class="btn sec" onclick="todos(false)">Desmarcar todos</button></div>
+    <div class="tbl-wrap"><table><thead><tr><th class="l">Pivô</th><th class="l">Cultura</th><th>Data plantio</th><th>Plantado?</th></tr></thead>
+    <tbody>${rows}</tbody></table></div></div>`;
+}
+function setPlantio(n,v){P(n).plantio=v;save();}
+function setPlant(n,v){P(n).plantado=v;save();}
+function todos(v){DATA.pivos.forEach(p=>P(p.num).plantado=v);save();vPlantio();}
+
+/* ---------- MANEJO (por cultura) ---------- */
+let MCULT="(todas)";
+function vManejo(){
+  const falta=[];if(!S.etoK)falta.push("ETo Karitel");if(!S.etoR)falta.push("ETo RDM");
+  const aviso=falta.length?`<div class="warn">⚠️ Falta informar: ${falta.join(", ")}. Vá em Config.</div>`:"";
+  const pls=plantados();
+  if(!pls.length){app().innerHTML=aviso+`<div class="card"><h2>💧 Manejo</h2><p class="hint">Nenhum pivô plantado. Vá em Plantio.</p></div>`;return;}
+  const culturas=["(todas)",...Array.from(new Set(pls.map(p=>cadOf(p.num).cultura).filter(Boolean)))];
+  const lista=pls.filter(p=>MCULT==="(todas)"||cadOf(p.num).cultura===MCULT);
+  const rows=lista.map(p=>{const r=calc(p.num);if(!r)return"";
+    let dec,cls;if(r.necBruta==null){dec="dados incompletos";cls="t-esp";}
+      else if(r.necBruta<=0.1){dec="não irrigar";cls="t-ok";}
+      else{dec="IRRIGAR";cls="t-irr";}
+    return `<tr>
+      <td class="l"><b>${p.nome}</b> <span class="hint">${p.mod}</span></td>
+      <td class="l">${r.cad.cultura}</td><td class="l">${r.cad.variedade||"—"}</td>
+      <td>${r.dap??"—"}</td><td>${r.dae??"—"}</td><td>${r.cad.ciclo||"—"}</td>
+      <td>${fmt(r.kc,2)}</td><td>${fmt(r.eto)}</td><td>${fmt(r.etc)}</td>
+      <td><input class="mini" type="number" step="0.1" value="${r.st.chuva}" placeholder="${S.chuva}" onchange="setChuva(${p.num},this.value)"></td>
+      <td>${fmt(r.necLiq)}</td><td><b>${fmt(r.necBruta)}</b></td>
+      <td><span class="tag ${cls}">${dec}</span></td></tr>`;}).join("");
+  app().innerHTML=aviso+`<div class="card"><h2>💧 Manejo da semana</h2>
+    <p class="hint">DAP=dias após plantio · DAE=DAP−5 (soja/algodão) · Kc da curva FAO-56 no DAE · ETc=Kc×ETo · Nec.líq=ETc−chuva · Nec.bruta=Nec.líq÷${S.ef}.</p>
+    <div class="row noprint" style="margin-bottom:8px"><label style="margin:0">Cultura:</label>
+      <select class="cult" onchange="MCULT=this.value;vManejo()">${culturas.map(c=>`<option ${c===MCULT?"selected":""}>${c}</option>`).join("")}</select></div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th class="l">Pivô</th><th class="l">Cultura</th><th class="l">Variedade</th><th>DAP</th><th>DAE</th><th>Ciclo</th>
+      <th>Kc</th><th>ETo</th><th>ETc</th><th>Chuva</th><th>Nec.líq</th><th>Nec.bruta</th><th>Decisão</th>
+    </tr></thead><tbody>${rows}</tbody></table></div></div>`;
+}
+function setChuva(n,v){P(n).chuva=v;save();}
+
+/* ---------- PROGRAMAÇÃO (grade Seg..Dom por módulo) ---------- */
+function vProg(){
+  const pls=plantados();
+  if(!pls.length){app().innerHTML=`<div class="card"><h2>🗓️ Programação</h2><p class="hint">Nenhum pivô plantado.</p></div>`;return;}
+  let html=`<div class="card"><h2>🗓️ Programação semanal</h2>
+    <p class="hint">Em cada dia que o pivô vai rodar, ponha o <b>%</b> (percentímetro). A lâmina, as horas e a energia da semana somam automático. Depois vá em OS do dia / OS da semana.</p></div>`;
+  MODS.forEach(m=>{const ps=pls.filter(p=>p.mod===m);if(!ps.length)return;
+    const rows=ps.map(p=>{const r=calc(p.num);const prog=r.prog;
+      const inputs=DIAS.map(d=>`<td><input class="mini" type="number" value="${prog[d]||""}" placeholder="%" onchange="setProg(${p.num},'${d}',this.value)"></td>`).join("");
+      const garg=r.horSem>168;
+      return `<tr>
+        <td class="l"><b>${p.nome}</b></td><td class="l">${r.cad.cultura}</td>
+        <td>${fmt(r.necBruta)}</td>${inputs}
+        <td><b>${r.anyProg?fmt(r.lamSem):"—"}</b></td>
+        <td><b>${r.anyProg?fmt(r.horSem):"—"}</b>${garg?' <span class="tag t-garg">⚠</span>':""}</td>
+        <td>${r.anyProg?fmt(r.eneSem,0):"—"}</td></tr>`;}).join("");
+    html+=`<div class="card" style="padding:0;overflow:hidden">
+      <div class="sec-mod" style="background:${MODCOR[m]}">${MODNOME[m]} — ${ps.length} pivôs</div>
+      <div class="tbl-wrap" style="border:0"><table><thead><tr>
+        <th class="l">Pivô</th><th class="l">Cultura</th><th>Nec.bruta</th>
+        ${DIAS.map(d=>`<th>${d}</th>`).join("")}<th>Lâm.sem</th><th>Horas sem</th><th>kWh sem</th>
+      </tr></thead><tbody>${rows}</tbody></table></div></div>`;});
+  html+=`<div class="warn noprint">⚠ = a soma de horas da semana passou de 168 h (o pivô não repõe a demanda no tempo). Reveja o % ou os dias.</div>`;
+  app().innerHTML=html;
+}
+function setProg(n,d,v){P(n).prog[d]=v;save();}
+
+/* ---------- OS DO DIA ---------- */
+function osDiaData(){return S._osdate||S.dataRef||today();}
+function vOSdia(){
+  const date=osDiaData();const dia=diaSemana(date);
+  const pls=plantados();
+  let html=`<div class="card noprint"><h2>📋 OS do dia</h2>
+    <p class="hint">Escolha a data: o app pega o % que você programou para aquele dia (${dia}) e monta a OS por módulo, só com quem vai rodar. Horímetro e observações você preenche no campo.</p>
+    <div class="grid g2">
+      <div><label>Data da OS</label><input type="date" id="od_date" value="${date}" onchange="S._osdate=this.value;vOSdia()"></div>
+      <div><label>Dia da semana</label><input value="${dia}" disabled></div>
+      <div><label>Responsável</label><input id="od_resp" value="${S.resp||""}" onchange="S.resp=this.value;save()"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="btn terra" onclick="window.print()">🖨️ PDF (imprimir)</button>
+      <button class="btn azul" onclick="exportDia()">📗 Excel</button>
+      <label style="margin:0;display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" style="width:auto" ${S._soIrriga?"checked":""} onchange="S._soIrriga=this.checked;vOSdia()"> mostrar só quem irriga</label></div>
+  </div>`;
+  // cabecalho impressao
+  html+=`<div class="card"><div style="display:flex;justify-content:space-between;border-bottom:2px solid var(--verde);padding-bottom:6px;margin-bottom:8px">
+    <div><b style="font-size:16px">ORDEM DE SERVIÇO — ${date.split("-").reverse().join("/")}</b><br><span class="hint">Karitel / Rio do Meio · ${dia}</span></div>
+    <div style="text-align:right" class="hint">Resp.: ${S.resp||"—"}</div></div>`;
+  let totH=0,totE=0,any=false;
+  MODS.forEach(m=>{
+    let list=pls.filter(p=>p.mod===m).map(p=>calcDia(p.num,dia));
+    if(S._soIrriga)list=list.filter(r=>r&&r.pctDia>0);
+    if(!list.length)return;any=true;let mH=0,mE=0,mKW=0,nIrr=0;
+    const rows=list.map(r=>{const irr=r.pctDia>0;if(irr){mH+=r.horDia;mE+=r.eneDia;mKW+=r.pivo.potkw;nIrr++;}
+      const osd=(S.os[date]&&S.os[date][r.pivo.cod])||{};
+      return `<tr${irr?'':' style="opacity:.6"'}>
+        <td class="l"><b>${r.pivo.nome}</b> <span class="hint">${r.pivo.casa}</span></td>
+        <td class="l">${r.cad.cultura}</td>
+        <td>${irr?'<span class="tag t-irr">SIM</span>':'<span class="tag t-ok">não</span>'}</td>
+        <td><b>${irr?r.pctDia+"%":"—"}</b></td>
+        <td>${irr?fmt(r.lamDia):"—"}</td><td><b>${irr?fmt(r.horDia):"—"}</b></td>
+        <td><input class="mid" type="number" value="${osd.hi??""}" onchange="setOS('${date}','${r.pivo.cod}','hi',this.value)"></td>
+        <td><input class="mid" type="number" value="${osd.hf??""}" onchange="setOS('${date}','${r.pivo.cod}','hf',this.value)"></td>
+        <td>${(osd.hi!=null&&osd.hf!=null&&osd.hi!==""&&osd.hf!=="")?fmt(osd.hf-osd.hi):"—"}</td>
+        <td>${irr?fmt(r.eneDia,0):"—"}</td>
+        <td><input class="mid" style="width:150px" value="${osd.obs??""}" onchange="setOS('${date}','${r.pivo.cod}','obs',this.value)"></td>
+      </tr>`;}).join("");
+    totH+=mH;totE+=mE;
+    html+=`<div style="margin-top:10px"><div class="sec-mod" style="background:${MODCOR[m]}">${MODNOME[m]} — ${nIrr} irrigando / ${list.length} pivôs · ${fmt(mKW,0)} kW · ${fmt(mH)} h</div>
+      <div class="tbl-wrap" style="border:1px solid var(--borda);border-top:0"><table><thead><tr>
+        <th class="l">Pivô</th><th class="l">Cultura</th><th>Irriga?</th><th>%</th><th>Lâm.(mm)</th><th>Horas</th>
+        <th>Horím. inicial</th><th>Horím. final</th><th>H. rodadas</th><th>kWh</th><th class="l">Observações</th>
+      </tr></thead><tbody>${rows}</tbody></table></div></div>`;});
+  if(!any)html+=`<p class="hint">Nenhum pivô plantado neste módulo. Vá em Plantio.</p>`;
+  else html+=`<div class="kpi" style="margin-top:12px">
+    <div class="b"><div class="n">${fmt(totH)}</div><div class="t">horas no dia</div></div>
+    <div class="b"><div class="n">${fmt(totE,0)}</div><div class="t">kWh no dia</div></div></div>`;
+  html+=`</div>`;
+  app().innerHTML=html;
+}
+function setOS(date,cod,k,v){S.os[date]=S.os[date]||{};S.os[date][cod]=S.os[date][cod]||{};S.os[date][cod][k]=v;save();}
+
+/* ---------- OS DA SEMANA ---------- */
+function vOSsem(){
+  const pls=plantados();
+  let html=`<div class="card noprint"><h2>📆 OS da semana</h2>
+    <p class="hint">Por módulo, a semana toda (Seg→Dom). Mostra todos os pivôs plantados; quem não tem % fica em branco.</p>
+    <div class="row"><button class="btn terra" onclick="window.print()">🖨️ PDF</button>
+      <button class="btn azul" onclick="exportSem()">📗 Excel</button>
+      <label style="margin:0;display:flex;align-items:center;gap:6px;font-weight:600"><input type="checkbox" style="width:auto" ${S._soIrrigaS?"checked":""} onchange="S._soIrrigaS=this.checked;vOSsem()"> mostrar só quem irriga</label></div></div>`;
+  let gH=0,gE=0,gV=0,any=false;
+  MODS.forEach(m=>{
+    let list=pls.filter(p=>p.mod===m).map(p=>calc(p.num));
+    if(S._soIrrigaS)list=list.filter(r=>r&&r.anyProg);
+    if(!list.length)return;any=true;let mH=0,mE=0,mV=0;
+    const rows=list.map(r=>{mH+=r.horSem;mE+=r.eneSem;mV+=r.volSem;
+      const dcell=DIAS.map(d=>{const pct=parseInt(r.prog[d]);return `<td>${pct>0?pct:""}</td>`;}).join("");
+      return `<tr${r.anyProg?'':' style="opacity:.6"'}><td class="l"><b>${r.pivo.nome}</b> <span class="hint">${r.pivo.casa}</span></td><td class="l">${r.cad.cultura}</td>
+        ${dcell}<td>${r.anyProg?fmt(r.lamSem):"—"}</td><td><b>${r.anyProg?fmt(r.horSem):"—"}</b></td><td>${r.anyProg?fmt(r.volSem,0):"—"}</td><td>${r.anyProg?fmt(r.eneSem,0):"—"}</td></tr>`;}).join("");
+    gH+=mH;gE+=mE;gV+=mV;
+    html+=`<div class="card" style="padding:0;overflow:hidden"><div class="sec-mod" style="background:${MODCOR[m]}">${MODNOME[m]} — ${list.length} pivôs</div>
+      <div class="tbl-wrap" style="border:0"><table><thead><tr><th class="l">Pivô</th><th class="l">Cultura</th>
+      ${DIAS.map(d=>`<th>${d}</th>`).join("")}<th>Lâm.sem</th><th>Horas</th><th>Vol.(m³)</th><th>kWh</th></tr></thead>
+      <tbody>${rows}</tbody><tfoot><tr><td class="l" colspan="${2+DIAS.length}">Subtotal ${MODNOME[m]}</td><td>${fmt(gqLam(list))}</td><td>${fmt(mH)}</td><td>${fmt(mV,0)}</td><td>${fmt(mE,0)}</td></tr></tfoot></table></div></div>`;});
+  if(!any)html+=`<div class="card"><p class="hint">Nada programado ainda. Vá em Programação.</p></div>`;
+  else html+=`<div class="card"><div class="kpi">
+    <div class="b"><div class="n">${fmt(gH)}</div><div class="t">horas na semana</div></div>
+    <div class="b"><div class="n">${fmt(gV,0)}</div><div class="t">m³ na semana</div></div>
+    <div class="b"><div class="n">${fmt(gE,0)}</div><div class="t">kWh na semana</div></div></div></div>`;
+  app().innerHTML=html;
+}
+function gqLam(list){return list.reduce((a,r)=>a+r.lamSem,0);}
+
+/* ---------- DASHBOARD ---------- */
+function vDash(){
+  const pls=plantados();
+  const head=`<th class="l">Módulo</th>${DIAS.map(d=>`<th>${d}</th>`).join("")}<th>Pico (kW)</th><th>kWh sem</th><th>Pivôs</th>`;
+  let rows="";let tDay=DIAS.map(()=>0),tE=0,tN=0;
+  MODS.forEach(m=>{const ps=pls.filter(p=>p.mod===m);
+    const dayKW=DIAS.map(d=>ps.reduce((a,p)=>{const pct=parseInt(P(p.num).prog[d]);return a+(pct>0?p.potkw:0);},0));
+    const pico=Math.max(0,...dayKW);
+    const eSem=ps.reduce((a,p)=>{const r=calc(p.num);return a+(r?r.eneSem:0);},0);
+    const nIrr=ps.filter(p=>{const r=calc(p.num);return r&&r.anyProg;}).length;
+    dayKW.forEach((v,i)=>tDay[i]+=v);tE+=eSem;tN+=nIrr;
+    rows+=`<tr><td class="l"><span class="modpill" style="background:${MODCOR[m]}"></span>${MODNOME[m]}</td>
+      ${dayKW.map(v=>`<td>${fmt(v,0)}</td>`).join("")}<td><b>${fmt(pico,0)}</b></td><td>${fmt(eSem,0)}</td><td>${nIrr}</td></tr>`;});
+  app().innerHTML=`<div class="card"><h2>📊 Dashboard — demanda de energia</h2>
+    <p class="hint">Demanda (kW) por módulo e por dia = soma da potência dos pivôs programados naquele dia. Pico = maior dia. Use pra dimensionar energia.</p>
+    <div class="tbl-wrap"><table><thead><tr>${head}</tr></thead><tbody>${rows}</tbody>
+    <tfoot><tr><td class="l">TOTAL</td>${tDay.map(v=>`<td>${fmt(v,0)}</td>`).join("")}<td><b>${fmt(Math.max(0,...tDay),0)}</b></td><td>${fmt(tE,0)}</td><td>${tN}</td></tr></tfoot></table></div></div>`;
+}
+
+/* ---------- AJUDA ---------- */
+function vAjuda(){
+  app().innerHTML=`<div class="card"><h2>❓ Como usar</h2>
+    <ol style="line-height:1.8">
+      <li><b>Config:</b> ETo da semana (Karitel/RDM), data, chuva, eficiência.</li>
+      <li><b>Cadastro:</b> confira variedade, ciclo, população, GRM, Ky de cada pivô.</li>
+      <li><b>Plantio:</b> marque o que está plantado e a data real.</li>
+      <li><b>Manejo:</b> veja Kc, ETc, necessidade e a decisão por cultura.</li>
+      <li><b>Programação:</b> ponha o % no dia que cada pivô vai rodar (Seg→Dom).</li>
+      <li><b>OS do dia:</b> escolha a data → sai a ordem por módulo só de quem roda, com horímetro e observações. Baixe em <b>PDF</b> (imprimir) ou <b>Excel</b>.</li>
+      <li><b>OS da semana / Dashboard:</b> visão geral e demanda de energia por módulo/dia.</li>
+    </ol>
+    <h2 style="margin-top:14px">Base técnica</h2>
+    <p class="hint">Kc FAO-56 linear por estágio; emergência 5 dias (soja/algodão) no DAE; necessidade bruta = líquida ÷ eficiência; horas/lâmina da matriz real de cada pivô; energia = volume × consumo específico (só pivôs). Ky FAO-33 para estimar perda no déficit.</p>
+    <p class="hint"><b>Offline:</b> salve este arquivo no celular/PC e abra no navegador. O Excel baixa a biblioteca de exportação na 1ª vez (precisa de internet uma vez); o PDF funciona sempre.</p>
+  </div>`;
+}
+
+/* ---------- EXPORT EXCEL ---------- */
+function exportDia(){
+  const date=osDiaData();const dia=diaSemana(date);const pls=plantados();
+  const head=["Módulo","Pivô","Casa","Cultura","Percentímetro","Lâmina (mm)","Horas prev.","Horím. inicial","Horím. final","H. rodadas","Energia (kWh)","Observações"];
+  const aoa=[["ORDEM DE SERVIÇO — "+date,"","Dia:",dia,"Resp.:",S.resp||""],[],head];
+  let any=false;
+  MODS.forEach(m=>{const list=pls.filter(p=>p.mod===m).map(p=>calcDia(p.num,dia)).filter(r=>r&&r.pctDia>0);
+    if(!list.length)return;any=true;
+    list.forEach(r=>{const osd=(S.os[date]&&S.os[date][r.pivo.cod])||{};
+      const hr=(osd.hi!==""&&osd.hf!==""&&osd.hi!=null&&osd.hf!=null)?round(osd.hf-osd.hi,1):"";
+      aoa.push([MODNOME[m],r.pivo.nome,r.pivo.casa,r.cad.cultura,r.pctDia+"%",round(r.lamDia,1),round(r.horDia,1),
+        osd.hi??"",osd.hf??"",hr,round(r.eneDia,0),osd.obs??""]);});});
+  if(!any){alert("Nenhum pivô programado para "+dia+". Programe antes de exportar.");return;}
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);
+  ws["!cols"]=head.map((h,i)=>({wch:i===11?26:(i===1?12:11)}));
+  XLSX.utils.book_append_sheet(wb,ws,"OS "+date.slice(5));
+  XLSX.writeFile(wb,`OS_dia_${date}.xlsx`);
+}
+function exportSem(){
+  const pls=plantados();
+  const head=["Módulo","Pivô","Casa","Cultura",...DIAS,"Lâm.sem (mm)","Horas sem","Volume (m³)","Energia (kWh)"];
+  const aoa=[["OS DA SEMANA — ref "+S.dataRef],[],head];let any=false;
+  MODS.forEach(m=>{const list=pls.filter(p=>p.mod===m).map(p=>calc(p.num)).filter(r=>r&&r.anyProg);
+    if(!list.length)return;any=true;
+    list.forEach(r=>{aoa.push([MODNOME[m],r.pivo.nome,r.pivo.casa,r.cad.cultura,
+      ...DIAS.map(d=>{const p=parseInt(r.prog[d]);return p>0?p+"%":"";}),
+      round(r.lamSem,1),round(r.horSem,1),round(r.volSem,0),round(r.eneSem,0)]);});});
+  if(!any){alert("Nada programado ainda.");return;}
+  const wb=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet(aoa);
+  XLSX.utils.book_append_sheet(wb,ws,"OS semana");
+  XLSX.writeFile(wb,`OS_semana_${S.dataRef}.xlsx`);
+}
+
+buildNav();render();
+</script>
+</body>
+</html>
