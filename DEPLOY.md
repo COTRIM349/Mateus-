@@ -15,12 +15,14 @@ App Next.js 14 + Supabase. Planejamento **por clima** (ETo/Kc). Offline não se 
    supabase db push
    ```
    (ou cole cada arquivo novo no **SQL Editor** do Supabase, na ordem do nome)
-3. Migrations de cadastro que criamos:
-   - `20261006120000_seed_culture_phases_fao56.sql`  — Kc por fase (Kc/DAE)
-   - `20261006130000_seed_cotrim_pivots.sql`         — 108 pivôs + módulos + casas de bomba
+3. Migrations de cadastro que criamos (todas **seguras/idempotentes** — podem ser
+   aplicadas em ordem sem apagar o que já existe):
+   - `20261006120000_seed_culture_phases_fao56.sql`  — Kc por fase (Kc/DAE). **Não destrutivo**: só cria a curva de uma cultura que ainda não tem nenhuma fase; se o Kc já funciona, não mexe nele.
+   - `20261006130000_seed_cotrim_pivots.sql`         — 108 pivôs + módulos + casas de bomba (cria só os que faltam)
    - `20261006140000_seed_cotrim_reservoirs.sql`     — reservatórios
    - `20261006150000_seed_cotrim_varieties.sql`      — variedades (soja/algodão) + GRM/ocupação
    - `20261006160000_seed_default_soil_cerrado.sql`  — solo padrão (planejar por clima, sem gerir solo)
+   - `20261007120000_manual_eto_entries.sql`         — tabela da ETo manual (obrigatória p/ a tela Clima → ETo manual)
 
 ## 2. App (Vercel)
 

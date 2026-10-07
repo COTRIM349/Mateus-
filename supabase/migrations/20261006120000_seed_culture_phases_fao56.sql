@@ -1,8 +1,10 @@
 -- =============================================================================
 -- Seed: curvas de Kc por FASE (FAO-56) -> base do Kc por DAE
 -- Soja, Milho e Algodao. Fonte: FAO-56 (literatura), estagios pelo ciclo.
--- Idempotente: localiza a cultura pelo NOME e refaz as fases.
--- O motor (interpolateKc em modules/culture) usa culture_phases para dar o Kc/DAE.
+-- NAO DESTRUTIVO: so cria as fases de uma cultura que AINDA NAO TEM NENHUMA.
+-- Se o Kc ja existe/funciona (ex.: gerado pela plataforma), esta migration nao
+-- toca nele. Idempotente: pode rodar varias vezes sem efeito colateral.
+-- O motor (interpolateKc em modules/culture) usa culture_phases para o Kc/DAE.
 -- =============================================================================
 
 DO $$
@@ -14,8 +16,8 @@ BEGIN
   -- -------------------------------------------------------------------------
   -- SOJA  (ciclo ~120 d) — FAO-56: Kc_ini 0,40 / Kc_mid 1,15 / Kc_end 0,50
   -- -------------------------------------------------------------------------
-  IF v_soja IS NOT NULL THEN
-    DELETE FROM culture_phases WHERE culture_id = v_soja;
+  IF v_soja IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM culture_phases WHERE culture_id = v_soja) THEN
     INSERT INTO culture_phases
       (culture_id, phase_order, name, days_after_plant, duration_days,
        kc_start, kc_end, root_depth_start, root_depth_end, depletion_factor, description) VALUES
@@ -28,8 +30,8 @@ BEGIN
   -- -------------------------------------------------------------------------
   -- MILHO (ciclo ~140 d) — FAO-56: Kc_ini 0,30 / Kc_mid 1,20 / Kc_end 0,60
   -- -------------------------------------------------------------------------
-  IF v_milho IS NOT NULL THEN
-    DELETE FROM culture_phases WHERE culture_id = v_milho;
+  IF v_milho IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM culture_phases WHERE culture_id = v_milho) THEN
     INSERT INTO culture_phases
       (culture_id, phase_order, name, days_after_plant, duration_days,
        kc_start, kc_end, root_depth_start, root_depth_end, depletion_factor, description) VALUES
@@ -42,8 +44,8 @@ BEGIN
   -- -------------------------------------------------------------------------
   -- ALGODAO (ciclo ~180 d) — FAO-56: Kc_ini 0,35 / Kc_mid 1,20 / Kc_end 0,60
   -- -------------------------------------------------------------------------
-  IF v_algo IS NOT NULL THEN
-    DELETE FROM culture_phases WHERE culture_id = v_algo;
+  IF v_algo IS NOT NULL
+     AND NOT EXISTS (SELECT 1 FROM culture_phases WHERE culture_id = v_algo) THEN
     INSERT INTO culture_phases
       (culture_id, phase_order, name, days_after_plant, duration_days,
        kc_start, kc_end, root_depth_start, root_depth_end, depletion_factor, description) VALUES
