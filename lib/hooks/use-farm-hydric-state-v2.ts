@@ -316,6 +316,24 @@ export function useFarmHydricState(): FarmHydricState {
         }
       }
 
+      // ETo MANUAL (modo "por clima" sem API): operador lanca a ETo media da
+      // semana e a tela replica o valor nos 7 dias. Diferente da chuva manual,
+      // a ETo manual CRIA o dia (nao apenas sobrepoe), pois no modo manual ela e
+      // a unica fonte de ETo; quando ha selecao climatica aprovada, a ETo manual
+      // tem precedencia como observacao local. Roda fora do guard de estacoes.
+      const { data: manualEtoRows, error: manualEtoError } = await supabase.from("manual_eto_entries")
+        .select("date,eto_mm")
+        .eq("farm_id", activeFarmId)
+        .gte("date", dataStart)
+        .lte("date", dateEnd);
+      if (manualEtoError) throw manualEtoError;
+      for (const row of manualEtoRows ?? []) {
+        const eto = Number(row.eto_mm);
+        if (!Number.isFinite(eto) || eto <= 0) continue;
+        const current = weatherByDate[row.date as string];
+        weatherByDate[row.date as string] = { et0: eto, precipitation: current?.precipitation ?? 0 };
+      }
+
       const { data: manualRows, error: manualError } = await supabase.from("manual_rainfall_entries")
         .select("date,precipitation_mm")
         .eq("farm_id", activeFarmId)

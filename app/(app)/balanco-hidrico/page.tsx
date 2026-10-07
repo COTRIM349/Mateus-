@@ -701,6 +701,22 @@ export default function BalancoHidricoPage() {
         if (r?.et0_calculated != null) weatherByDate[date] = { et0: r.et0_calculated, precip: r.precipitation };
       });
 
+      // ETo manual (modo "por clima" sem API): cria/preenche a ETo do dia.
+      // Diferente da chuva manual, CRIA o dia quando não há seleção aprovada,
+      // pois é a única fonte de ETo no modo manual; com seleção, tem precedência.
+      const { data: manualEtoRows } = await supabase
+        .from("manual_eto_entries")
+        .select("date,eto_mm")
+        .eq("farm_id", activeFarmId!)
+        .gte("date", calculationStart)
+        .lte("date", dateEnd);
+      for (const row of manualEtoRows ?? []) {
+        const eto = Number(row.eto_mm);
+        if (!Number.isFinite(eto) || eto <= 0) continue;
+        const current = weatherByDate[row.date as string];
+        weatherByDate[row.date as string] = { et0: eto, precip: current?.precip ?? 0 };
+      }
+
       // Chuva manual é a observação local preferida, mas só substitui P em um
       // dia que já possui ETo operacional aprovada.
       const { data: manualRainRows } = await supabase
