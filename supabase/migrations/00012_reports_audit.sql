@@ -27,10 +27,10 @@ CREATE INDEX idx_audit_log_created ON audit_log(created_at DESC);
 ALTER TABLE audit_log ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY audit_log_select ON audit_log
-  FOR SELECT USING (farm_id IN (SELECT unnest(auth_farm_ids())));
+  FOR SELECT USING (farm_id IN (SELECT auth_farm_ids()));
 
 CREATE POLICY audit_log_insert ON audit_log
-  FOR INSERT WITH CHECK (farm_id IN (SELECT unnest(auth_farm_ids())));
+  FOR INSERT WITH CHECK (farm_id IN (SELECT auth_farm_ids()));
 
 -- ── Report history table ────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS report_history (
@@ -56,7 +56,7 @@ CREATE INDEX idx_report_history_created ON report_history(created_at DESC);
 ALTER TABLE report_history ENABLE ROW LEVEL SECURITY;
 
 CREATE POLICY report_history_select ON report_history
-  FOR SELECT USING (farm_id IN (SELECT unnest(auth_farm_ids())));
+  FOR SELECT USING (farm_id IN (SELECT auth_farm_ids()));
 
 CREATE POLICY report_history_insert ON report_history
-  FOR INSERT WITH CHECK (farm_id IN (SELECT unnest(auth_farm_ids())));
+  FOR INSERT WITH CHECK (farm_id IN (SELECT auth_farm_ids()));
