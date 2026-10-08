@@ -30,7 +30,23 @@ interface FarmHydricState {
   loading: boolean;
   /** true quando a carga falhou (erro de query/cálculo) — distinto de fazenda vazia. */
   error: boolean;
+  /** Mensagem técnica da falha (quando houver), para a tela mostrar a causa real
+   *  em vez de um aviso genérico. null quando não houve erro. */
+  errorMessage: string | null;
   refresh: () => void;
+}
+
+/** Descreve o erro capturado em texto curto e legível para a tela. Não inventa:
+ *  usa a mensagem do Supabase/JS quando existe. */
+function describeLoadError(err: unknown): string {
+  if (err && typeof err === "object") {
+    const e = err as { message?: unknown; details?: unknown; hint?: unknown; code?: unknown };
+    const parts = [e.message, e.details, e.hint].filter((p): p is string => typeof p === "string" && p.length > 0);
+    const code = typeof e.code === "string" && e.code ? ` (código ${e.code})` : "";
+    if (parts.length) return `${parts.join(" — ")}${code}`;
+  }
+  if (typeof err === "string" && err) return err;
+  return "Erro desconhecido ao carregar o estado hídrico.";
 }
 
 type Anchor = {
@@ -106,6 +122,7 @@ export function useFarmHydricState(): FarmHydricState {
   const [summary, setSummary] = useState<FarmHydricSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const supabase = createClient();
   // Versionamento das cargas: só a mais recente escreve no estado, para que uma
   // carga antiga (ex.: da fazenda anterior) não sobreponha a atual ao resolver
@@ -119,12 +136,14 @@ export function useFarmHydricState(): FarmHydricState {
       setStates([]);
       setSummary(null);
       setError(false);
+      setErrorMessage(null);
       setLoading(false);
       return;
     }
 
     setLoading(true);
     setError(false);
+    setErrorMessage(null);
     const dateEnd = todayLocalIso();
 
     try {
@@ -415,7 +434,13 @@ export function useFarmHydricState(): FarmHydricState {
           const endAngleDeg = (assignment.end_angle_deg as number|null) ?? null;
           const area = parcelManagedAreaHa(Number(pivot.area)||0, assignment.planted_area as number|null, startAngleDeg, endAngleDeg);
 
-          const state = computePivotCurrentState({
+          // Isola o cálculo por parcela: um dado inesperado em UMA parcela não
+          // pode derrubar o estado hídrico da fazenda inteira. Erro esperado de
+          // entrada (OperationalInputError) já é tratado dentro do motor; aqui
+          // capturamos o inesperado e seguimos com a parcela como incompleta.
+          let state: PivotHydricState;
+          try {
+          state = computePivotCurrentState({
             pivotId:pivot.id as string,
             pivotName:pivot.name as string,
             cultureName:culture.name as string,
@@ -477,6 +502,11 @@ export function useFarmHydricState(): FarmHydricState {
             dateStart:start.dateStart,
             dateEnd,
           });
+          } catch (parcelErr) {
+            console.error("Falha ao calcular balanço de uma parcela (seguindo com as demais)", { pivotId: pivot.id, parcelId: assignment.id }, parcelErr);
+            pushIncomplete(pivot, assignment, culture.name as string, soil.name as string);
+            continue;
+          }
           result.push({ ...state, initialConditionAssumed: start.assumeFieldCapacity });
         }
       }
@@ -490,6 +520,7 @@ export function useFarmHydricState(): FarmHydricState {
       setStates([]);
       setSummary(null);
       setError(true);
+      setErrorMessage(describeLoadError(err));
     } finally {
       if (!isStale()) setLoading(false);
     }
@@ -499,5 +530,5 @@ export function useFarmHydricState(): FarmHydricState {
     if (!authLoading) load();
   }, [authLoading, load]);
 
-  return { states, summary, loading:authLoading || loading, error, refresh:load };
+  return { states, summary, loading:authLoading || loading, error, errorMessage, refresh:load };
 }
