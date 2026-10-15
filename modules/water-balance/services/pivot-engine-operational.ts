@@ -88,8 +88,8 @@ function hasCompleteAgronomicCoverage(input: PivotEngineInput): boolean {
     return Boolean(
       day &&
       Number.isFinite(day.kc) && day.kc >= 0 && day.kc <= 2.5 &&
-      Number.isFinite(day.rootDepthM) && day.rootDepthM > 0 &&
-      Number.isFinite(day.depletionFractionP) &&
+      day.rootDepthM != null && Number.isFinite(day.rootDepthM) && day.rootDepthM > 0 &&
+      day.depletionFractionP != null && Number.isFinite(day.depletionFractionP) &&
       day.depletionFractionP > 0 && day.depletionFractionP < 1
     );
   });

@@ -62,7 +62,7 @@ export default function CentralDeManejoPage() {
   const router = useRouter();
   const { farms, activeFarmId } = useAuth();
   const activeFarm = farms.find((f) => f.id === activeFarmId);
-  const { states, summary, loading, error } = useFarmHydricState();
+  const { states, summary, loading, error, errorMessage, refresh } = useFarmHydricState();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const dates = useMemo(() => hydricMapDates(states), [states]);
@@ -178,7 +178,19 @@ export default function CentralDeManejoPage() {
       {error ? (
         <Card className="py-16 text-center">
           <p className="font-semibold text-red-600 dark:text-red-400">Não foi possível carregar o estado hídrico da fazenda.</p>
-          <p className="mt-1 text-[13px] text-graphite-500 dark:text-gray-400">Falha ao consultar clima, solo ou balanço. Tente recarregar a página.</p>
+          <p className="mt-1 text-[13px] text-graphite-500 dark:text-gray-400">Falha ao consultar clima, solo ou balanço. Tente recarregar.</p>
+          {errorMessage && (
+            <p className="mx-auto mt-3 max-w-xl rounded-lg bg-red-50 px-3 py-2 text-[12px] font-mono leading-snug text-red-700 dark:bg-red-900/20 dark:text-red-300">
+              {errorMessage}
+            </p>
+          )}
+          <button
+            type="button"
+            onClick={() => refresh()}
+            className="mt-4 inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-4 py-2 text-[13px] font-semibold text-graphite-700 transition-colors hover:bg-gray-50 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-200 dark:hover:bg-white/[0.08]"
+          >
+            Recarregar
+          </button>
         </Card>
       ) : states.length === 0 ? (
         <Card className="py-16 text-center">
