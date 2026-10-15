@@ -249,6 +249,18 @@ export function AgronomicRootWaterTab({
       const anchorsPayload=rootPreview.map(a=>({curve_id:createdCurveId,sequence_no:a.sequence_no,marker_id:null,x_value:a.x_value,root_depth_m:a.root_depth_m,source_id:sourceId,confidence:conf,notes:a.stage}));
       const {error:anchErr}=await supabase.from("root_depth_anchor_points").insert(anchorsPayload);
       if(anchErr)throw anchErr;
+      // Evita acumular rascunhos de p ao regenerar: remove rascunhos ANTERIORES
+      // auto-gerados (mesma fonte FAO, não ativados, ainda em rascunho) para o
+      // mesmo escopo. Não toca em p aprovado/ativo nem em p manual de outra fonte.
+      let delDraftP=supabase.from("agronomic_parameter_values").delete()
+        .eq("parameter_code","depletion_fraction_p")
+        .eq("culture_id",selectedCultureId)
+        .eq("source_id",sourceId)
+        .eq("validation_status","draft")
+        .eq("active_for_calculation",false);
+      delDraftP=cultivarId?delDraftP.eq("cultivar_id",cultivarId):delDraftP.is("cultivar_id",null);
+      const {error:delPErr}=await delDraftP;
+      if(delPErr)throw delPErr;
       const {error:pErr}=await supabase.from("agronomic_parameter_values").insert({
         parameter_code:"depletion_fraction_p",scope_type:cultivarId?"cultivar":"culture",
         culture_id:selectedCultureId,cultivar_id:cultivarId||null,farm_id:null,season_id:null,planting_window_id:null,
