@@ -306,10 +306,17 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       ? { ...normalized.assignment, depletion_factor: adjustedP }
       : normalized.assignment;
 
+    // Só aplica o p ajustado por demanda quando o CHAMADOR forneceu um p próprio
+    // (ex.: curva de raiz/p ativa). Se o conjunto diário traz apenas Kc (curva de
+    // Kc ativa, sem p), NÃO injeta um p: deixa o núcleo V2 resolver pelo mesmo
+    // caminho de sempre (Tabela 2 por grupo / FAO-56), para o Balanço não divergir
+    // da Central de Manejo no mesmo pivô só por ativar uma curva de Kc.
     const dailyAgronomicByDate = agronomic
       ? {
           ...normalized.agronomicByDate,
-          [date]: { ...agronomic, depletionFractionP: adjustedP },
+          [date]: agronomic.depletionFractionP != null
+            ? { ...agronomic, depletionFractionP: adjustedP }
+            : agronomic,
         }
       : normalized.agronomicByDate;
 

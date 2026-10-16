@@ -11,7 +11,7 @@ import {
   ensureVirtualStation,
   syncVirtualStationWithFarm,
 } from "@/modules/weather/services/virtual-station.service";
-import { parseCoordinate } from "@/utils/coord";
+import { parseCoordinate, hasValidGeographicCoordinates } from "@/utils/coord";
 
 interface Farm {
   id: string;
@@ -101,7 +101,19 @@ function FarmsTab() {
   };
 
   const columns: Column<Farm>[] = [
-    { header: "Nome", render: (r) => <span className="font-medium">{r.name}</span> },
+    {
+      header: "Nome",
+      render: (r) => (
+        <div className="flex flex-col gap-0.5">
+          <span className="font-medium">{r.name}</span>
+          {!hasValidGeographicCoordinates(r.latitude, r.longitude) && (
+            <span className="inline-flex w-fit items-center gap-1 rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10.5px] font-semibold text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300">
+              Sem coordenadas — indisponível no manejo
+            </span>
+          )}
+        </div>
+      ),
+    },
     { header: "Cidade", render: (r) => r.city },
     { header: "UF", render: (r) => r.state },
     { header: "Área total (ha)", render: (r) => r.total_area.toLocaleString("pt-BR"), align: "right" },

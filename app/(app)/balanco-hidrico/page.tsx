@@ -698,13 +698,19 @@ export default function BalancoHidricoPage() {
           }
         }
       }
+      // Monta o Kc por data a partir da curva (mesma base de DAE do motor).
+      // Sem data de referência (parcela sem emergência nem plantio), o DAE é
+      // indefinido: não aplica a curva (o motor cai no Kc das fases) em vez de
+      // estourar o cálculo com um DAE NaN.
+      const daeRefIso = resolveDaeReferenceDate(assignment);
+      const daeRefMs = daeRefIso ? new Date(`${daeRefIso}T00:00:00Z`).getTime() : NaN;
+      const canApplyCurve = kcPoints != null && Number.isFinite(daeRefMs);
+      if (kcPoints != null && !canApplyCurve) resolvedKcSource = "fases";
       if (isStale()) return;
       setKcSource(resolvedKcSource);
 
-      // Monta o Kc por data a partir da curva (mesma base de DAE do motor).
-      const daeRefMs = new Date(`${resolveDaeReferenceDate(assignment)}T00:00:00Z`).getTime();
       const agronomicByDate: Record<string, { kc: number }> = {};
-      if (kcPoints) {
+      if (canApplyCurve && kcPoints) {
         for (const d of datesInRange(calculationStart, addDaysIso(dateEnd, 30))) {
           const ms = new Date(`${d}T00:00:00Z`).getTime();
           const dae = Math.max(0, Math.floor((ms - daeRefMs) / 86400000));
@@ -1031,6 +1037,50 @@ export default function BalancoHidricoPage() {
   const [ops, setOps] = useState<{ volumeM3: number | null; hours: number | null; energyKwh: number | null }>({ volumeM3: null, hours: null, energyKwh: null });
   const [weatherByDate, setWeatherByDate] = useState<Record<string, WeatherExtra>>({});
   const [sensoryByDate, setSensoryByDate] = useState<Record<string, number>>({});
+
+  // Dias do período com ETo OPERACIONAL utilizável (seleção aprovada com
+  // et0_calculated OU ETo manual > 0) — a mesma fonte que o balanço usa. É a base
+  // correta para o checklist "pivô pronto"; o mapa de apoio da estação
+  // (weatherByDate/WeatherExtra) ignora aprovação e não enxerga a ETo manual.
+  // null = ainda não avaliado.
+  const [climateDaysOperational, setClimateDaysOperational] = useState<number | null>(null);
+  useEffect(() => {
+    if (!activeFarmId || !dateStart || !dateEnd) { setClimateDaysOperational(null); return; }
+    let cancelled = false;
+    (async () => {
+      const days = new Set<string>();
+      const { data: sel } = await supabase
+        .from("weather_daily_selection")
+        .select("date,selected_reading_id,operational_approved")
+        .eq("farm_id", activeFarmId)
+        .eq("operational_approved", true)
+        .gte("date", dateStart)
+        .lte("date", dateEnd);
+      const readingIds = (sel ?? [])
+        .filter((s) => s.selected_reading_id && s.operational_approved === true)
+        .map((s) => s.selected_reading_id as string);
+      if (readingIds.length > 0) {
+        const { data: reads } = await supabase
+          .from("weather_readings")
+          .select("id,date,et0_calculated")
+          .in("id", readingIds);
+        for (const r of (reads ?? []) as Array<{ date: string; et0_calculated: number | null }>) {
+          if (r.et0_calculated != null) days.add(r.date);
+        }
+      }
+      const { data: manual } = await supabase
+        .from("manual_eto_entries")
+        .select("date,eto_mm")
+        .eq("farm_id", activeFarmId)
+        .gte("date", dateStart)
+        .lte("date", dateEnd);
+      for (const m of (manual ?? []) as Array<{ date: string; eto_mm: number | null }>) {
+        if (Number(m.eto_mm) > 0) days.add(m.date);
+      }
+      if (!cancelled) setClimateDaysOperational(days.size);
+    })();
+    return () => { cancelled = true; };
+  }, [activeFarmId, dateStart, dateEnd, supabase]);
 
   useEffect(() => {
     if (!activeFarmId || !selectedPivotId || !dateStart || !dateEnd) {
@@ -1386,7 +1436,7 @@ export default function BalancoHidricoPage() {
               layersOk={soilLayers.length > 0}
               cultureName={culture?.name ?? null}
               varietyName={varietyName}
-              climateDays={Object.keys(weatherByDate).length}
+              climateDays={climateDaysOperational}
               initialOk={!!hydricAnchor}
               kcSource={kcSource}
             />
@@ -1511,14 +1561,16 @@ function ReadinessChecklist({
   layersOk: boolean;
   cultureName: string | null;
   varietyName: string | null;
-  climateDays: number;
+  climateDays: number | null;
   initialOk: boolean;
   kcSource: KcSource;
 }) {
+  // climateDays null = ainda verificando (não conta como pendência).
+  const climateState: ReadyState = climateDays == null ? "warn" : climateDays > 0 ? "ok" : "missing";
   const essentials: ReadyState[] = [
     soilOk && layersOk ? "ok" : "missing",
     cultureName ? "ok" : "missing",
-    climateDays > 0 ? "ok" : "missing",
+    climateState,
   ];
   const missingCount = essentials.filter((s) => s === "missing").length;
   return (
@@ -1559,12 +1611,14 @@ function ReadinessChecklist({
           cta="Abrir culturas"
         />
         <ReadyRow
-          state={climateDays > 0 ? "ok" : "missing"}
+          state={climateState}
           label="Clima no período"
           hint={
-            climateDays > 0
-              ? `${climateDays} ${climateDays === 1 ? "dia" : "dias"} com ETo e chuva disponíveis.`
-              : "Sem ETo aprovada no período — verifique a estação e a sincronização climática."
+            climateDays == null
+              ? "Verificando a ETo disponível no período…"
+              : climateDays > 0
+              ? `${climateDays} ${climateDays === 1 ? "dia" : "dias"} com ETo utilizável (estação aprovada ou ETo manual).`
+              : "Sem ETo no período — aprove a seleção climática ou lance a ETo manual (modo por clima)."
           }
           href="/clima"
           cta="Ver clima"
