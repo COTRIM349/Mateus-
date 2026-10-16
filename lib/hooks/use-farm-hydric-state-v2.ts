@@ -23,6 +23,7 @@ import {
 import { resolvePivotMapGeometry, sumGrossDepthByDate } from "@/modules/irrigation/services";
 import { parcelManagedAreaHa } from "@/modules/assignment/services/parcel-geometry";
 import { cropGroupByName } from "@/modules/water-balance/services/availability-factor";
+import { isMissingTableError } from "@/lib/supabase/errors";
 
 interface FarmHydricState {
   states: PivotHydricState[];
@@ -345,7 +346,9 @@ export function useFarmHydricState(): FarmHydricState {
         .eq("farm_id", activeFarmId)
         .gte("date", dataStart)
         .lte("date", dateEnd);
-      if (manualEtoError) throw manualEtoError;
+      // ETo manual é recurso OPCIONAL: se a tabela ainda não existe no banco
+      // (migration não aplicada), segue sem ela em vez de derrubar a fazenda toda.
+      if (manualEtoError && !isMissingTableError(manualEtoError)) throw manualEtoError;
       for (const row of manualEtoRows ?? []) {
         const eto = Number(row.eto_mm);
         if (!Number.isFinite(eto) || eto <= 0) continue;
@@ -358,7 +361,8 @@ export function useFarmHydricState(): FarmHydricState {
         .eq("farm_id", activeFarmId)
         .gte("date", dataStart)
         .lte("date", dateEnd);
-      if (manualError) throw manualError;
+      // Chuva manual também é opcional: tolera a tabela ausente.
+      if (manualError && !isMissingTableError(manualError)) throw manualError;
       for (const row of manualRows ?? []) {
         const current = weatherByDate[row.date as string];
         const rain = Number(row.precipitation_mm);
