@@ -5,232 +5,232 @@
    "casa": "RM01",
    "area_ha": 98.31,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 9.93,
-   "dias_com_lamina": 98
+   "lamina_media_mm_dia": 10.16,
+   "dias_com_lamina": 85
   },
   {
    "pivo": "PV 106",
    "casa": "RM02",
    "area_ha": 100.59,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.43,
-   "dias_com_lamina": 98
+   "lamina_media_mm_dia": 10.42,
+   "dias_com_lamina": 90
   },
   {
    "pivo": "PV 108",
    "casa": "RM02",
    "area_ha": 100.06,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.56,
-   "dias_com_lamina": 97
+   "lamina_media_mm_dia": 10.5,
+   "dias_com_lamina": 90
   },
   {
    "pivo": "PV 105",
    "casa": "RM03",
    "area_ha": 98.2,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.58,
-   "dias_com_lamina": 68
+   "lamina_media_mm_dia": 10.48,
+   "dias_com_lamina": 85
   },
   {
    "pivo": "PV 107",
    "casa": "RM03",
    "area_ha": 99.58,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.4,
-   "dias_com_lamina": 70
+   "lamina_media_mm_dia": 10.37,
+   "dias_com_lamina": 87
   },
   {
    "pivo": "PV 101",
    "casa": "RM04",
    "area_ha": 129.16,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.14,
-   "dias_com_lamina": 120
+   "lamina_media_mm_dia": 10.16,
+   "dias_com_lamina": 118
   },
   {
    "pivo": "PV 102",
    "casa": "RM04",
    "area_ha": 100.07,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.69,
-   "dias_com_lamina": 58
+   "lamina_media_mm_dia": 10.41,
+   "dias_com_lamina": 76
   },
   {
    "pivo": "PV 103",
    "casa": "RM04",
    "area_ha": 99.76,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.57,
-   "dias_com_lamina": 60
+   "lamina_media_mm_dia": 10.07,
+   "dias_com_lamina": 73
   },
   {
    "pivo": "PV 104",
    "casa": "RM04",
    "area_ha": 100.41,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.13,
-   "dias_com_lamina": 121
+   "lamina_media_mm_dia": 10.2,
+   "dias_com_lamina": 111
   },
   {
    "pivo": "PV 110",
    "casa": "RM04",
    "area_ha": 110.0,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.31,
-   "dias_com_lamina": 121
+   "lamina_media_mm_dia": 10.48,
+   "dias_com_lamina": 106
   },
   {
    "pivo": "PV 112",
    "casa": "RM05",
    "area_ha": 149.98,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.51,
-   "dias_com_lamina": 62
+   "lamina_media_mm_dia": 10.31,
+   "dias_com_lamina": 85
   },
   {
    "pivo": "PV 113",
    "casa": "RM05",
    "area_ha": 149.98,
    "lamina_max_mm_dia": 13,
-   "lamina_media_mm_dia": 9.86,
-   "dias_com_lamina": 105
+   "lamina_media_mm_dia": 9.8,
+   "dias_com_lamina": 101
   },
   {
    "pivo": "PV 114",
    "casa": "RM05",
    "area_ha": 119.98,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.6,
-   "dias_com_lamina": 63
+   "lamina_media_mm_dia": 10.18,
+   "dias_com_lamina": 82
   },
   {
    "pivo": "PV 115",
    "casa": "RM05",
    "area_ha": 149.94,
    "lamina_max_mm_dia": 13,
-   "lamina_media_mm_dia": 9.87,
-   "dias_com_lamina": 105
+   "lamina_media_mm_dia": 9.8,
+   "dias_com_lamina": 102
   },
   {
    "pivo": "PV 131",
    "casa": "RM05",
    "area_ha": 99.96,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.58,
-   "dias_com_lamina": 61
+   "lamina_media_mm_dia": 10.36,
+   "dias_com_lamina": 84
   },
   {
    "pivo": "PV 132",
    "casa": "RM05",
    "area_ha": 99.96,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.55,
-   "dias_com_lamina": 64
+   "lamina_media_mm_dia": 10.17,
+   "dias_com_lamina": 92
   },
   {
    "pivo": "PV 116",
    "casa": "RM06",
    "area_ha": 149.55,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.64,
-   "dias_com_lamina": 55
+   "lamina_media_mm_dia": 10.36,
+   "dias_com_lamina": 82
   },
   {
    "pivo": "PV 117",
    "casa": "RM06",
    "area_ha": 149.94,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.83,
-   "dias_com_lamina": 54
+   "lamina_media_mm_dia": 10.49,
+   "dias_com_lamina": 81
   },
   {
    "pivo": "PV 118",
    "casa": "RM06",
    "area_ha": 146.49,
    "lamina_max_mm_dia": 13,
-   "lamina_media_mm_dia": 10.56,
-   "dias_com_lamina": 54
+   "lamina_media_mm_dia": 10.22,
+   "dias_com_lamina": 92
   },
   {
    "pivo": "PV 119",
    "casa": "RM06",
    "area_ha": 149.94,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.77,
-   "dias_com_lamina": 57
+   "lamina_media_mm_dia": 10.32,
+   "dias_com_lamina": 93
   },
   {
    "pivo": "PV 128",
    "casa": "RM06",
    "area_ha": 139.94,
    "lamina_max_mm_dia": 14,
-   "lamina_media_mm_dia": 11.15,
-   "dias_com_lamina": 55
+   "lamina_media_mm_dia": 10.6,
+   "dias_com_lamina": 87
   },
   {
    "pivo": "PV 129",
    "casa": "RM06",
    "area_ha": 99.48,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.89,
-   "dias_com_lamina": 86
+   "lamina_media_mm_dia": 10.88,
+   "dias_com_lamina": 85
   },
   {
    "pivo": "PV 130",
    "casa": "RM06",
    "area_ha": 149.94,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.83,
-   "dias_com_lamina": 54
+   "lamina_media_mm_dia": 10.47,
+   "dias_com_lamina": 88
   },
   {
    "pivo": "PV 120",
    "casa": "RM07",
    "area_ha": 145.67,
    "lamina_max_mm_dia": 14,
-   "lamina_media_mm_dia": 11.15,
-   "dias_com_lamina": 52
+   "lamina_media_mm_dia": 10.62,
+   "dias_com_lamina": 89
   },
   {
    "pivo": "PV 121",
    "casa": "RM07",
    "area_ha": 146.95,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 11.02,
-   "dias_com_lamina": 57
+   "lamina_media_mm_dia": 10.32,
+   "dias_com_lamina": 107
   },
   {
    "pivo": "PV 122",
    "casa": "RM07",
    "area_ha": 149.98,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.62,
-   "dias_com_lamina": 119
+   "lamina_media_mm_dia": 10.61,
+   "dias_com_lamina": 112
   },
   {
    "pivo": "PV 123",
    "casa": "RM07",
    "area_ha": 149.94,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.58,
-   "dias_com_lamina": 119
+   "lamina_media_mm_dia": 10.61,
+   "dias_com_lamina": 113
   },
   {
    "pivo": "PV 124",
    "casa": "RM07",
    "area_ha": 149.94,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.04,
-   "dias_com_lamina": 70
+   "lamina_media_mm_dia": 10.01,
+   "dias_com_lamina": 93
   },
   {
    "pivo": "PV 125",
    "casa": "RM07",
    "area_ha": 99.48,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 11.04,
-   "dias_com_lamina": 113
+   "lamina_media_mm_dia": 11.05,
+   "dias_com_lamina": 112
   },
   {
    "pivo": "PV 126",
@@ -245,182 +245,180 @@
    "casa": "RM07",
    "area_ha": 99.48,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.73,
-   "dias_com_lamina": 124
+   "lamina_media_mm_dia": 10.7,
+   "dias_com_lamina": 122
   },
   {
    "pivo": "PV 133",
    "casa": "RM07",
    "area_ha": 99.48,
    "lamina_max_mm_dia": 15,
-   "lamina_media_mm_dia": 10.94,
-   "dias_com_lamina": 111
+   "lamina_media_mm_dia": 10.95,
+   "dias_com_lamina": 109
+  },
+  {
+   "pivo": "PV 134",
+   "casa": "RM08",
+   "area_ha": 79.0,
+   "lamina_max_mm_dia": 14,
+   "lamina_media_mm_dia": 10.62,
+   "dias_com_lamina": 89
+  },
+  {
+   "pivo": "PV 135",
+   "casa": "RM08",
+   "area_ha": 64.0,
+   "lamina_max_mm_dia": 15,
+   "lamina_media_mm_dia": 10.32,
+   "dias_com_lamina": 107
+  },
+  {
+   "pivo": "PV 136",
+   "casa": "RM08",
+   "area_ha": 86.0,
+   "lamina_max_mm_dia": 15,
+   "lamina_media_mm_dia": 10.61,
+   "dias_com_lamina": 112
+  },
+  {
+   "pivo": "PV 137",
+   "casa": "RM08",
+   "area_ha": 150.0,
+   "lamina_max_mm_dia": 15,
+   "lamina_media_mm_dia": 10.61,
+   "dias_com_lamina": 113
   }
  ],
  "casas": [
   {
    "casa": "RM01",
-   "pocos": [
-    "PRM01"
-   ],
-   "vazao_captacao_m3h": 500.0,
-   "turno_captacao_h": 18.0,
-   "volume_captacao_m3_dia": 9000.0,
+   "volume_captacao_m3_dia": 10500.0,
    "turno_rega_h": 21.0,
-   "reservatorio_m3": 2600,
-   "canal_m3": null,
-   "capacidade_total_m3": 2600
+   "capacidade_total_m3": 2600.0
   },
   {
    "casa": "RM02",
-   "pocos": [
-    "PRM02"
-   ],
-   "vazao_captacao_m3h": 500.0,
-   "turno_captacao_h": 18.0,
-   "volume_captacao_m3_dia": 9000.0,
+   "volume_captacao_m3_dia": 10500.0,
    "turno_rega_h": 21.0,
-   "reservatorio_m3": 5082,
-   "canal_m3": null,
-   "capacidade_total_m3": 5082
+   "capacidade_total_m3": 76648.0
   },
   {
    "casa": "RM03",
-   "pocos": [
-    "PRM03"
-   ],
-   "vazao_captacao_m3h": 500.0,
-   "turno_captacao_h": 18.0,
-   "volume_captacao_m3_dia": 9000.0,
+   "volume_captacao_m3_dia": 10500.0,
    "turno_rega_h": 21.0,
-   "reservatorio_m3": 5082,
-   "canal_m3": 69821,
-   "capacidade_total_m3": 74903
+   "capacidade_total_m3": 27377.0
   },
   {
    "casa": "RM04",
-   "pocos": [
-    "PRM04",
-    "PRM05",
-    "PRM06"
-   ],
-   "vazao_captacao_m3h": 1030.0,
-   "turno_captacao_h": 18.0,
-   "volume_captacao_m3_dia": 18540.0,
+   "volume_captacao_m3_dia": 21630.0,
    "turno_rega_h": 21.0,
-   "reservatorio_m3": 5082,
-   "canal_m3": 69821,
-   "capacidade_total_m3": 74903
+   "capacidade_total_m3": 129000.0
   },
   {
    "casa": "RM05",
-   "pocos": [
-    "PRM07",
-    "PRM08"
-   ],
-   "vazao_captacao_m3h": 623.0,
-   "turno_captacao_h": 18.0,
-   "volume_captacao_m3_dia": 11214.0,
+   "volume_captacao_m3_dia": 13083.0,
    "turno_rega_h": 21.0,
-   "reservatorio_m3": 5082,
-   "canal_m3": 69821,
-   "capacidade_total_m3": 74903
+   "capacidade_total_m3": 1000000.0
   },
   {
    "casa": "RM06",
-   "pocos": [
-    "PRM09",
-    "PRM10"
-   ],
-   "vazao_captacao_m3h": 690.0,
-   "turno_captacao_h": 18.0,
-   "volume_captacao_m3_dia": 12420.0,
+   "volume_captacao_m3_dia": 21420.0,
    "turno_rega_h": 21.0,
-   "reservatorio_m3": 5082,
-   "canal_m3": 69821,
-   "capacidade_total_m3": 39992.5
+   "capacidade_total_m3": 469821.0
   },
   {
    "casa": "RM07",
-   "pocos": [
-    "PRM11",
-    "PRM12",
-    "PRM13"
-   ],
-   "vazao_captacao_m3h": 1410.0,
-   "turno_captacao_h": 18.0,
    "volume_captacao_m3_dia": 25380.0,
    "turno_rega_h": 21.0,
-   "reservatorio_m3": 5082,
-   "canal_m3": 69821,
-   "capacidade_total_m3": 39992.5
+   "capacidade_total_m3": 440000.0
+  },
+  {
+   "casa": "RM08",
+   "volume_captacao_m3_dia": 0.0,
+   "turno_rega_h": 21.0,
+   "capacidade_total_m3": 74903.0
   }
  ],
  "pocos": [
   {
    "poco": "PRM01",
-   "id": "PCO_01",
+   "id": "PCO_PRM01",
    "vazao_m3h": 500.0
   },
   {
    "poco": "PRM02",
-   "id": "PCO_02",
+   "id": "PCO_PRM02",
    "vazao_m3h": 500.0
   },
   {
    "poco": "PRM03",
-   "id": "PCO_03",
+   "id": "PCO_PRM03",
    "vazao_m3h": 500.0
   },
   {
    "poco": "PRM04",
-   "id": "PCO_04",
+   "id": "PCO_PRM04",
    "vazao_m3h": 500.0
   },
   {
    "poco": "PRM05",
-   "id": "PCO_05",
+   "id": "PCO_PRM05",
    "vazao_m3h": 135.0
   },
   {
    "poco": "PRM06",
-   "id": "PCO_06",
+   "id": "PCO_PRM06",
    "vazao_m3h": 395.0
   },
   {
    "poco": "PRM07",
-   "id": "PCO_07",
+   "id": "PCO_PRM07",
    "vazao_m3h": 233.0
   },
   {
    "poco": "PRM08",
-   "id": "PCO_08",
+   "id": "PCO_PRM08",
    "vazao_m3h": 390.0
   },
   {
    "poco": "PRM09",
-   "id": "PCO_09",
-   "vazao_m3h": 300.0
+   "id": "PCO_PRM09",
+   "vazao_m3h": 500.0
   },
   {
    "poco": "PRM10",
-   "id": "PCO_10",
+   "id": "PCO_PRM10",
    "vazao_m3h": 190.0
   },
   {
    "poco": "PRM11",
-   "id": "PCO_11",
+   "id": "PCO_PRM11",
    "vazao_m3h": 650.0
   },
   {
    "poco": "PRM12",
-   "id": "PCO_12",
+   "id": "PCO_PRM12",
    "vazao_m3h": 350.0
   },
   {
    "poco": "PRM13",
-   "id": "PCO_13",
+   "id": "PCO_PRM13",
    "vazao_m3h": 410.0
+  },
+  {
+   "poco": "PRM19",
+   "id": "PCO_PRM19",
+   "vazao_m3h": 500.0
+  },
+  {
+   "poco": "PRM18",
+   "id": "PCO_PRM18",
+   "vazao_m3h": 500.0
+  },
+  {
+   "poco": "PRM21",
+   "id": "PCO_PRM21",
+   "vazao_m3h": 351.0
   }
  ],
  "reservacao": {
@@ -452,10 +450,188 @@
    "capacidade_total_m3": 122094.0
   }
  },
- "janela_arquivo_oficial": {
-  "data_inicio": "2026-09-01",
-  "data_fim": "2028-02-29"
- },
+ "topologia_reserva": [
+  {
+   "casa": "RM01",
+   "recebe_de": null,
+   "grupo_pivot": "RM05",
+   "poco_contribuinte": "PRM01"
+  },
+  {
+   "casa": "RM02",
+   "recebe_de": null,
+   "grupo_pivot": "RM05",
+   "poco_contribuinte": "PRM02"
+  },
+  {
+   "casa": "RM03",
+   "recebe_de": null,
+   "grupo_pivot": "RM05",
+   "poco_contribuinte": "PRM03"
+  },
+  {
+   "casa": "RM04",
+   "recebe_de": null,
+   "grupo_pivot": "RM05",
+   "poco_contribuinte": "PRM04"
+  },
+  {
+   "casa": "RM05",
+   "recebe_de": "RM01",
+   "grupo_pivot": "RM05",
+   "poco_contribuinte": "PRM05"
+  },
+  {
+   "casa": "RM05",
+   "recebe_de": "RM02",
+   "grupo_pivot": "RM05",
+   "poco_contribuinte": "PRM06"
+  },
+  {
+   "casa": "RM05",
+   "recebe_de": "RM03",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM01"
+  },
+  {
+   "casa": "RM05",
+   "recebe_de": "RM04",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM02"
+  },
+  {
+   "casa": "RM06",
+   "recebe_de": "RM01",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM03"
+  },
+  {
+   "casa": "RM06",
+   "recebe_de": "RM02",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM04"
+  },
+  {
+   "casa": "RM06",
+   "recebe_de": "RM03",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM05"
+  },
+  {
+   "casa": "RM06",
+   "recebe_de": "RM04",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM06"
+  },
+  {
+   "casa": "RM06",
+   "recebe_de": "RM05",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM07"
+  },
+  {
+   "casa": "RM07",
+   "recebe_de": "RM01",
+   "grupo_pivot": "RM06",
+   "poco_contribuinte": "PRM08"
+  },
+  {
+   "casa": "RM07",
+   "recebe_de": "RM02",
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM01"
+  },
+  {
+   "casa": "RM07",
+   "recebe_de": "RM03",
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM02"
+  },
+  {
+   "casa": "RM07",
+   "recebe_de": "RM04",
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM03"
+  },
+  {
+   "casa": "RM07",
+   "recebe_de": "RM05",
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM04"
+  },
+  {
+   "casa": "RM07",
+   "recebe_de": "RM06",
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM05"
+  },
+  {
+   "casa": "RM08",
+   "recebe_de": null,
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM06"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM07"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM08"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM09"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM10"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM07",
+   "poco_contribuinte": "PRM19"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM04",
+   "poco_contribuinte": "Sem poço contribuinte cadastrado!"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM01",
+   "poco_contribuinte": "Sem poço contribuinte cadastrado!"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM02",
+   "poco_contribuinte": "Sem poço contribuinte cadastrado!"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM03",
+   "poco_contribuinte": "Sem poço contribuinte cadastrado!"
+  },
+  {
+   "casa": null,
+   "recebe_de": null,
+   "grupo_pivot": "RM08",
+   "poco_contribuinte": "Sem poço contribuinte cadastrado!"
+  }
+ ],
  "ciclos": [
   {
    "talhao": "101",
@@ -472,23 +648,12 @@
    "talhao": "101",
    "pivo": "PV 101",
    "area_rotacao_ha": 114,
-   "ordem": "C2",
-   "rotulo": "CICLO 2",
-   "cultura": "SOJA",
-   "cultivar": "COMBATE IPRO",
-   "plantio": "2026-09-28",
-   "fim": "2027-01-20"
-  },
-  {
-   "talhao": "101",
-   "pivo": "PV 101",
-   "area_rotacao_ha": 114,
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-23",
-   "fim": "2027-08-22"
+   "cultivar": "FM 933 STP",
+   "plantio": "2026-12-03",
+   "fim": "2027-06-16"
   },
   {
    "talhao": "102",
@@ -508,9 +673,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 1949 B3RF",
-   "plantio": "2026-12-17",
-   "fim": "2027-06-30"
+   "cultivar": "IMA 5901 B2RF",
+   "plantio": "2026-12-11",
+   "fim": "2027-06-24"
   },
   {
    "talhao": "103",
@@ -530,9 +695,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "FM 979 STP",
-   "plantio": "2026-12-08",
-   "fim": "2027-07-06"
+   "cultivar": "IMA 707 B3XF",
+   "plantio": "2026-12-03",
+   "fim": "2027-06-16"
   },
   {
    "talhao": "104",
@@ -553,8 +718,8 @@
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
    "cultivar": "COMBATE IPRO",
-   "plantio": "2026-09-28",
-   "fim": "2027-01-20"
+   "plantio": "2026-09-26",
+   "fim": "2027-01-18"
   },
   {
    "talhao": "104",
@@ -563,20 +728,20 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-23",
-   "fim": "2027-08-22"
+   "cultivar": "FM 911 GLTP",
+   "plantio": "2027-02-05",
+   "fim": "2027-08-04"
   },
   {
    "talhao": "105",
    "pivo": "PV 105",
    "area_rotacao_ha": 100,
-   "ordem": "C0",
-   "rotulo": "ANTERIOR",
-   "cultura": "ALGODÃO",
-   "cultivar": "FM 974 GLT",
-   "plantio": null,
-   "fim": "2026-07-20"
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "SOJA",
+   "cultivar": "COMBATE IPRO",
+   "plantio": "2026-09-28",
+   "fim": "2027-01-20"
   },
   {
    "talhao": "105",
@@ -585,9 +750,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "IMA 5901 B2RF",
-   "plantio": "2026-12-17",
-   "fim": "2027-06-30"
+   "cultivar": "FM 933 STP",
+   "plantio": "2027-02-06",
+   "fim": "2027-08-20"
   },
   {
    "talhao": "106",
@@ -608,8 +773,8 @@
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
    "cultivar": "NEO 761 I2X",
-   "plantio": "2026-09-28",
-   "fim": "2027-01-22"
+   "plantio": "2026-09-26",
+   "fim": "2027-01-20"
   },
   {
    "talhao": "106",
@@ -618,20 +783,20 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-23",
-   "fim": "2027-08-22"
+   "cultivar": "FM 911 GLTP",
+   "plantio": "2027-02-05",
+   "fim": "2027-08-04"
   },
   {
    "talhao": "107",
    "pivo": "PV 107",
    "area_rotacao_ha": 100,
-   "ordem": "C0",
-   "rotulo": "ANTERIOR",
-   "cultura": "ALGODÃO",
-   "cultivar": "FM 974 GLT",
-   "plantio": null,
-   "fim": "2026-07-20"
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "SOJA",
+   "cultivar": "NEO 761 I2X",
+   "plantio": "2026-09-28",
+   "fim": "2027-01-22"
   },
   {
    "talhao": "107",
@@ -640,9 +805,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "IMA 5901 B2RF",
-   "plantio": "2026-12-18",
-   "fim": "2027-07-01"
+   "cultivar": "FM 933 STP",
+   "plantio": "2027-02-06",
+   "fim": "2027-08-20"
   },
   {
    "talhao": "108",
@@ -659,23 +824,12 @@
    "talhao": "108",
    "pivo": "PV 108",
    "area_rotacao_ha": 100,
-   "ordem": "C2",
-   "rotulo": "CICLO 2",
-   "cultura": "SOJA",
-   "cultivar": "NEO 761 I2X",
-   "plantio": "2026-09-26",
-   "fim": "2027-01-20"
-  },
-  {
-   "talhao": "108",
-   "pivo": "PV 108",
-   "area_rotacao_ha": 100,
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-11",
-   "fim": "2027-08-10"
+   "cultivar": "FM 933 STP",
+   "plantio": "2026-12-04",
+   "fim": "2027-06-17"
   },
   {
    "talhao": "109",
@@ -683,10 +837,10 @@
    "area_rotacao_ha": 100,
    "ordem": "C0",
    "rotulo": "ANTERIOR",
-   "cultura": "ALGODÃO",
-   "cultivar": "FM 985 GLTP",
+   "cultura": "MILHETO",
+   "cultivar": null,
    "plantio": null,
-   "fim": "2026-07-28"
+   "fim": null
   },
   {
    "talhao": "109",
@@ -695,9 +849,9 @@
    "ordem": "C2",
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
-   "cultivar": "NEO 761 I2X",
-   "plantio": "2026-09-26",
-   "fim": "2027-01-20"
+   "cultivar": "NEO 690 I2X",
+   "plantio": "2026-09-25",
+   "fim": "2027-01-11"
   },
   {
    "talhao": "109",
@@ -706,9 +860,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-11",
-   "fim": "2027-08-10"
+   "cultivar": "FM 933 STP",
+   "plantio": "2027-02-04",
+   "fim": "2027-08-18"
   },
   {
    "talhao": "110",
@@ -716,10 +870,10 @@
    "area_rotacao_ha": 100,
    "ordem": "C0",
    "rotulo": "ANTERIOR",
-   "cultura": "ALGODÃO",
-   "cultivar": "FM 985 GLTP",
+   "cultura": "MILHETO",
+   "cultivar": null,
    "plantio": null,
-   "fim": "2026-07-25"
+   "fim": null
   },
   {
    "talhao": "110",
@@ -728,9 +882,9 @@
    "ordem": "C2",
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
-   "cultivar": "NEO 761 I2X",
-   "plantio": "2026-09-28",
-   "fim": "2027-01-22"
+   "cultivar": "NEO 690 I2X",
+   "plantio": "2026-09-25",
+   "fim": "2027-01-11"
   },
   {
    "talhao": "110",
@@ -739,9 +893,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-11",
-   "fim": "2027-08-10"
+   "cultivar": "FM 933 STP",
+   "plantio": "2027-02-04",
+   "fim": "2027-08-18"
   },
   {
    "talhao": "112",
@@ -758,12 +912,23 @@
    "talhao": "112",
    "pivo": "PV 112",
    "area_rotacao_ha": 150,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "SOJA",
+   "cultivar": "NEO 761 I2X",
+   "plantio": "2026-10-12",
+   "fim": "2027-02-05"
+  },
+  {
+   "talhao": "112",
+   "pivo": "PV 112",
+   "area_rotacao_ha": 150,
    "ordem": "C3",
    "rotulo": "CICLO 3",
-   "cultura": "ALGODÃO",
-   "cultivar": "FM 979 STP",
-   "plantio": "2026-12-09",
-   "fim": "2027-07-07"
+   "cultura": "milho semente",
+   "cultivar": null,
+   "plantio": "2027-06-01",
+   "fim": "2027-10-24"
   },
   {
    "talhao": "113",
@@ -780,23 +945,23 @@
    "talhao": "113",
    "pivo": "PV 113",
    "area_rotacao_ha": 150,
-   "ordem": "C1",
-   "rotulo": "CICLO 1",
-   "cultura": "MILHO_SEMENTE",
-   "cultivar": null,
-   "plantio": "2027-05-24",
-   "fim": "2027-10-31"
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "SOJA",
+   "cultivar": "NEO 761 I2X",
+   "plantio": "2026-10-12",
+   "fim": "2027-02-05"
   },
   {
    "talhao": "113",
    "pivo": "PV 113",
    "area_rotacao_ha": 150,
-   "ordem": "C2",
-   "rotulo": "CICLO 2",
-   "cultura": "SOJA",
-   "cultivar": "BMX Olimpo IPRO",
-   "plantio": "2026-10-06",
-   "fim": "2027-02-05"
+   "ordem": "C3",
+   "rotulo": "CICLO 3",
+   "cultura": "milho semente",
+   "cultivar": null,
+   "plantio": "2027-06-04",
+   "fim": "2027-10-27"
   },
   {
    "talhao": "114",
@@ -813,12 +978,23 @@
    "talhao": "114",
    "pivo": "PV 114",
    "area_rotacao_ha": 120,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": null,
+   "cultivar": null,
+   "plantio": null,
+   "fim": "2027-02-05"
+  },
+  {
+   "talhao": "114",
+   "pivo": "PV 114",
+   "area_rotacao_ha": 120,
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "FM 979 STP",
-   "plantio": "2026-12-08",
-   "fim": "2027-07-06"
+   "cultivar": "FM 974 GLT",
+   "plantio": "2026-11-30",
+   "fim": "2027-06-13"
   },
   {
    "talhao": "115",
@@ -835,23 +1011,12 @@
    "talhao": "115",
    "pivo": "PV 115",
    "area_rotacao_ha": 150,
-   "ordem": "C1",
-   "rotulo": "CICLO 1",
-   "cultura": "MILHO_SEMENTE",
-   "cultivar": null,
-   "plantio": "2027-05-27",
-   "fim": "2027-11-03"
-  },
-  {
-   "talhao": "115",
-   "pivo": "PV 115",
-   "area_rotacao_ha": 150,
-   "ordem": "C2",
-   "rotulo": "CICLO 2",
-   "cultura": "SOJA",
-   "cultivar": "BMX Olimpo IPRO",
-   "plantio": "2026-10-06",
-   "fim": "2027-02-05"
+   "ordem": "C3",
+   "rotulo": "CICLO 3",
+   "cultura": "ALGODÃO",
+   "cultivar": "FM 974 GLT",
+   "plantio": "2026-11-30",
+   "fim": "2027-06-13"
   },
   {
    "talhao": "116",
@@ -860,7 +1025,7 @@
    "ordem": "C0",
    "rotulo": "ANTERIOR",
    "cultura": "ALGODÃO",
-   "cultivar": "FM 911 GLTP/ DP 2111 B3RF",
+   "cultivar": "DP 2111 B3RF",
    "plantio": null,
    "fim": "2026-09-11"
   },
@@ -871,9 +1036,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "FM 945 STP",
-   "plantio": "2026-12-18",
-   "fim": "2027-07-01"
+   "cultivar": "FM 974 GLT",
+   "plantio": "2026-11-29",
+   "fim": "2027-06-12"
   },
   {
    "talhao": "117",
@@ -893,53 +1058,75 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "FM 945 STP",
-   "plantio": "2026-12-21",
-   "fim": "2027-07-04"
-  },
-  {
-   "talhao": "118",
-   "pivo": "PV 118",
-   "area_rotacao_ha": 147,
-   "ordem": "C0",
-   "rotulo": "ANTERIOR",
-   "cultura": "TABACO",
-   "cultivar": "PVH-2343",
-   "plantio": null,
-   "fim": "2026-06-02"
-  },
-  {
-   "talhao": "118",
-   "pivo": "PV 118",
-   "area_rotacao_ha": 147,
-   "ordem": "C1",
-   "rotulo": "CICLO 1",
-   "cultura": "TABACO",
-   "cultivar": "PVH-2343",
-   "plantio": "2027-01-09",
-   "fim": "2027-06-18"
-  },
-  {
-   "talhao": "119",
-   "pivo": "PV 119",
-   "area_rotacao_ha": 150,
-   "ordem": "C0",
-   "rotulo": "ANTERIOR",
-   "cultura": "TABACO",
-   "cultivar": "PVH-2343",
-   "plantio": null,
-   "fim": "2026-05-21"
-  },
-  {
-   "talhao": "119",
-   "pivo": "PV 119",
-   "area_rotacao_ha": 150,
-   "ordem": "C1",
-   "rotulo": "CICLO 1",
-   "cultura": "TABACO",
-   "cultivar": "PVH-2343",
-   "plantio": "2027-01-04",
+   "cultivar": "FM 974 GLT",
+   "plantio": "2026-11-30",
    "fim": "2027-06-13"
+  },
+  {
+   "talhao": "118",
+   "pivo": "PV 118",
+   "area_rotacao_ha": 147,
+   "ordem": "C0",
+   "rotulo": "ANTERIOR",
+   "cultura": "TABACO",
+   "cultivar": "PVH-2343",
+   "plantio": null,
+   "fim": "2026-06-16"
+  },
+  {
+   "talhao": "118",
+   "pivo": "PV 118",
+   "area_rotacao_ha": 147,
+   "ordem": "C1",
+   "rotulo": "CICLO 1",
+   "cultura": "TABACO",
+   "cultivar": "PVH-2343",
+   "plantio": "2027-01-02",
+   "fim": "2027-06-11"
+  },
+  {
+   "talhao": "118",
+   "pivo": "PV 118",
+   "area_rotacao_ha": 147,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "MILHO_GRÃO",
+   "cultivar": null,
+   "plantio": "2027-06-21",
+   "fim": "2027-11-28"
+  },
+  {
+   "talhao": "119",
+   "pivo": "PV 119",
+   "area_rotacao_ha": 150,
+   "ordem": "C0",
+   "rotulo": "ANTERIOR",
+   "cultura": "TABACO",
+   "cultivar": "PVH-2343",
+   "plantio": null,
+   "fim": "2026-05-28"
+  },
+  {
+   "talhao": "119",
+   "pivo": "PV 119",
+   "area_rotacao_ha": 150,
+   "ordem": "C1",
+   "rotulo": "CICLO 1",
+   "cultura": "TABACO",
+   "cultivar": "PVH-2343",
+   "plantio": "2026-12-24",
+   "fim": "2027-06-02"
+  },
+  {
+   "talhao": "119",
+   "pivo": "PV 119",
+   "area_rotacao_ha": 150,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "MILHO_GRÃO",
+   "cultivar": null,
+   "plantio": "2027-06-12",
+   "fim": "2027-11-19"
   },
   {
    "talhao": "120",
@@ -960,8 +1147,19 @@
    "rotulo": "CICLO 1",
    "cultura": "TABACO",
    "cultivar": "PVH-2343",
-   "plantio": "2027-01-15",
-   "fim": "2027-06-24"
+   "plantio": "2027-01-12",
+   "fim": "2027-06-21"
+  },
+  {
+   "talhao": "120",
+   "pivo": "PV 120",
+   "area_rotacao_ha": 147,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "MILHO_GRÃO",
+   "cultivar": null,
+   "plantio": "2027-07-01",
+   "fim": "2027-12-08"
   },
   {
    "talhao": "121",
@@ -972,7 +1170,29 @@
    "cultura": "TABACO",
    "cultivar": "PVH-2343",
    "plantio": null,
-   "fim": "2026-05-26"
+   "fim": "2026-06-08"
+  },
+  {
+   "talhao": "121",
+   "pivo": "PV 121",
+   "area_rotacao_ha": 145,
+   "ordem": "C1",
+   "rotulo": "CICLO 1",
+   "cultura": "MILHO_SEMENTE",
+   "cultivar": null,
+   "plantio": "2027-05-24",
+   "fim": "2027-10-31"
+  },
+  {
+   "talhao": "121",
+   "pivo": "PV 121",
+   "area_rotacao_ha": 145,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "SOJA",
+   "cultivar": "BMX Olimpo IPRO",
+   "plantio": "2026-10-14",
+   "fim": "2027-02-13"
   },
   {
    "talhao": "121",
@@ -981,9 +1201,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-20",
-   "fim": "2027-08-19"
+   "cultivar": "FM 911 GLTP",
+   "plantio": "2027-02-15",
+   "fim": "2027-08-14"
   },
   {
    "talhao": "122",
@@ -992,7 +1212,7 @@
    "ordem": "C0",
    "rotulo": "ANTERIOR",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 1949 B3RF/DP 2111 B3RF",
+   "cultivar": "DP 1949 B3RF",
    "plantio": null,
    "fim": "2026-09-18"
   },
@@ -1015,8 +1235,8 @@
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
    "cultivar": "NEO 761 I2X",
-   "plantio": "2026-10-01",
-   "fim": "2027-01-14"
+   "plantio": "2026-10-15",
+   "fim": "2027-02-08"
   },
   {
    "talhao": "122",
@@ -1025,9 +1245,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-12",
-   "fim": "2027-08-11"
+   "cultivar": "FM 911 GLTP",
+   "plantio": "2027-01-30",
+   "fim": "2027-07-29"
   },
   {
    "talhao": "123",
@@ -1048,8 +1268,8 @@
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
    "cultivar": "NEO 761 I2X",
-   "plantio": "2026-10-05",
-   "fim": "2027-01-29"
+   "plantio": "2026-10-14",
+   "fim": "2027-02-07"
   },
   {
    "talhao": "123",
@@ -1058,9 +1278,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-12",
-   "fim": "2027-08-11"
+   "cultivar": "FM 911 GLTP",
+   "plantio": "2027-01-28",
+   "fim": "2027-07-27"
   },
   {
    "talhao": "124",
@@ -1071,7 +1291,18 @@
    "cultura": "TABACO",
    "cultivar": "PVH-2343",
    "plantio": null,
-   "fim": "2026-05-21"
+   "fim": "2026-05-15"
+  },
+  {
+   "talhao": "124",
+   "pivo": "PV 124",
+   "area_rotacao_ha": 150,
+   "ordem": "C1",
+   "rotulo": "CICLO 1",
+   "cultura": "MILHO_SEMENTE",
+   "cultivar": null,
+   "plantio": "2027-05-27",
+   "fim": "2027-11-03"
   },
   {
    "talhao": "124",
@@ -1079,10 +1310,10 @@
    "area_rotacao_ha": 150,
    "ordem": "C2",
    "rotulo": "CICLO 2",
-   "cultura": null,
-   "cultivar": null,
-   "plantio": null,
-   "fim": null
+   "cultura": "SOJA",
+   "cultivar": "BMX Olimpo IPRO",
+   "plantio": "2026-10-15",
+   "fim": "2027-02-14"
   },
   {
    "talhao": "124",
@@ -1091,9 +1322,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 1949 B3RF",
-   "plantio": "2026-12-08",
-   "fim": "2027-06-21"
+   "cultivar": "FM 911 GLTP",
+   "plantio": "2027-02-15",
+   "fim": "2027-08-14"
   },
   {
    "talhao": "125",
@@ -1110,23 +1341,12 @@
    "talhao": "125",
    "pivo": "PV 125",
    "area_rotacao_ha": 100,
-   "ordem": "C2",
-   "rotulo": "CICLO 2",
-   "cultura": "SOJA",
-   "cultivar": "NEO 761 I2X",
-   "plantio": "2026-10-10",
-   "fim": "2027-02-03"
-  },
-  {
-   "talhao": "125",
-   "pivo": "PV 125",
-   "area_rotacao_ha": 100,
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-23",
-   "fim": "2027-08-22"
+   "cultivar": "FM 974 GLT",
+   "plantio": "2026-12-01",
+   "fim": "2027-06-14"
   },
   {
    "talhao": "126",
@@ -1147,8 +1367,19 @@
    "rotulo": "CICLO 1",
    "cultura": "TABACO",
    "cultivar": "PVH-2343",
-   "plantio": "2026-12-25",
-   "fim": "2027-06-03"
+   "plantio": "2026-12-15",
+   "fim": "2027-05-24"
+  },
+  {
+   "talhao": "126",
+   "pivo": "PV 126",
+   "area_rotacao_ha": 140,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "MILHO_GRÃO",
+   "cultivar": null,
+   "plantio": "2027-06-03",
+   "fim": "2027-11-10"
   },
   {
    "talhao": "127",
@@ -1169,8 +1400,8 @@
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
    "cultivar": "NEO 761 I2X",
-   "plantio": "2026-10-23",
-   "fim": "2027-02-16"
+   "plantio": "2026-10-13",
+   "fim": "2027-02-06"
   },
   {
    "talhao": "127",
@@ -1180,8 +1411,8 @@
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
    "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-22",
-   "fim": "2027-08-21"
+   "plantio": "2027-02-08",
+   "fim": "2027-08-07"
   },
   {
    "talhao": "128",
@@ -1202,8 +1433,19 @@
    "rotulo": "CICLO 1",
    "cultura": "TABACO",
    "cultivar": "PVH-2343",
-   "plantio": "2026-12-05",
-   "fim": "2027-05-14"
+   "plantio": "2026-11-19",
+   "fim": "2027-04-28"
+  },
+  {
+   "talhao": "128",
+   "pivo": "PV 128",
+   "area_rotacao_ha": 140,
+   "ordem": "C2",
+   "rotulo": "CICLO 2",
+   "cultura": "MILHO_GRÃO",
+   "cultivar": null,
+   "plantio": "2027-05-08",
+   "fim": "2027-10-15"
   },
   {
    "talhao": "129",
@@ -1224,8 +1466,8 @@
    "rotulo": "CICLO 2",
    "cultura": "SOJA",
    "cultivar": "NEO 761 I2X",
-   "plantio": "2026-10-25",
-   "fim": "2027-02-18"
+   "plantio": "2026-10-13",
+   "fim": "2027-02-06"
   },
   {
    "talhao": "129",
@@ -1235,8 +1477,8 @@
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
    "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-22",
-   "fim": "2027-08-21"
+   "plantio": "2027-02-08",
+   "fim": "2027-08-07"
   },
   {
    "talhao": "130",
@@ -1256,9 +1498,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 1949 B3RF",
-   "plantio": "2026-12-21",
-   "fim": "2027-07-04"
+   "cultivar": "IMA 3764 B2RF",
+   "plantio": "2026-12-02",
+   "fim": "2027-06-30"
   },
   {
    "talhao": "131",
@@ -1278,9 +1520,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "FM 979 STP",
-   "plantio": "2026-12-10",
-   "fim": "2027-07-08"
+   "cultivar": "IMA 3764 B2RF",
+   "plantio": "2026-12-01",
+   "fim": "2027-06-29"
   },
   {
    "talhao": "132",
@@ -1300,9 +1542,9 @@
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "FM 979 STP",
-   "plantio": "2026-12-11",
-   "fim": "2027-07-09"
+   "cultivar": "IMA 3764 B2RF",
+   "plantio": "2026-12-01",
+   "fim": "2027-06-29"
   },
   {
    "talhao": "133",
@@ -1319,23 +1561,67 @@
    "talhao": "133",
    "pivo": "PV 133",
    "area_rotacao_ha": 100,
-   "ordem": "C2",
-   "rotulo": "CICLO 2",
-   "cultura": "SOJA",
-   "cultivar": "NEO 761 I2X",
-   "plantio": "2026-10-10",
-   "fim": "2027-02-03"
-  },
-  {
-   "talhao": "133",
-   "pivo": "PV 133",
-   "area_rotacao_ha": 100,
    "ordem": "C3",
    "rotulo": "CICLO 3",
    "cultura": "ALGODÃO",
-   "cultivar": "DP 2111 B3RF",
-   "plantio": "2027-02-24",
-   "fim": "2027-08-23"
+   "cultivar": "FM 974 GLT",
+   "plantio": "2026-12-01",
+   "fim": "2027-06-14"
+  },
+  {
+   "talhao": "112",
+   "pivo": "PV 112",
+   "area_rotacao_ha": 150,
+   "ordem": "MS",
+   "rotulo": "MILHO SEMENTE",
+   "cultura": "Milho Semente",
+   "cultivar": null,
+   "plantio": "2027-06-01",
+   "fim": "2027-10-24"
+  },
+  {
+   "talhao": "113",
+   "pivo": "PV 113",
+   "area_rotacao_ha": 150,
+   "ordem": "MS",
+   "rotulo": "MILHO SEMENTE",
+   "cultura": "Milho Semente",
+   "cultivar": null,
+   "plantio": "2027-06-04",
+   "fim": "2027-10-27"
+  },
+  {
+   "talhao": "125",
+   "pivo": "PV 125",
+   "area_rotacao_ha": 100,
+   "ordem": "MS",
+   "rotulo": "MILHO SEMENTE",
+   "cultura": "Milho Semente",
+   "cultivar": null,
+   "plantio": "2027-06-24",
+   "fim": "2027-11-16"
+  },
+  {
+   "talhao": "131",
+   "pivo": "PV 131",
+   "area_rotacao_ha": 100,
+   "ordem": "MS",
+   "rotulo": "MILHO SEMENTE",
+   "cultura": "Milho Semente",
+   "cultivar": null,
+   "plantio": "2027-07-02",
+   "fim": "2027-11-24"
+  },
+  {
+   "talhao": "132",
+   "pivo": "PV 132",
+   "area_rotacao_ha": 100,
+   "ordem": "MS",
+   "rotulo": "MILHO SEMENTE",
+   "cultura": "Milho Semente",
+   "cultivar": null,
+   "plantio": "2027-06-28",
+   "fim": "2027-11-20"
   }
  ],
  "cultivares": [
@@ -1349,7 +1635,7 @@
    "cultura": "ALGODAO",
    "cultivar": "DP 1949 B3RF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "MILHO_GRAO",
@@ -1367,7 +1653,7 @@
    "cultura": "ALGODAO",
    "cultivar": "FM 911 GLTP",
    "grm": "Precoce",
-   "duracao_dias": 180
+   "duracao_dias": 183
   },
   {
    "cultura": "MILHO_GRAO",
@@ -1385,7 +1671,7 @@
    "cultura": "ALGODAO",
    "cultivar": "FM 912 GLTP",
    "grm": "Precoce",
-   "duracao_dias": 180
+   "duracao_dias": 183
   },
   {
    "cultura": "MILHO_GRAO",
@@ -1403,7 +1689,7 @@
    "cultura": "ALGODAO",
    "cultivar": "FM 974 GLT",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "MILHO_GRAO",
@@ -1421,7 +1707,7 @@
    "cultura": "ALGODAO",
    "cultivar": "FM 985 GLTP",
    "grm": "Tardio",
-   "duracao_dias": 210
+   "duracao_dias": 213
   },
   {
    "cultura": "SOJA",
@@ -1433,7 +1719,7 @@
    "cultura": "ALGODAO",
    "cultivar": "FM 990 STP",
    "grm": "Tardio",
-   "duracao_dias": 210
+   "duracao_dias": 213
   },
   {
    "cultura": "SOJA",
@@ -1457,7 +1743,7 @@
    "cultura": "ALGODAO",
    "cultivar": "DP 2111 B3RF",
    "grm": "Precoce",
-   "duracao_dias": 180
+   "duracao_dias": 183
   },
   {
    "cultura": "SOJA",
@@ -1469,7 +1755,7 @@
    "cultura": "ALGODAO",
    "cultivar": "TMG 38 B3RF",
    "grm": "Tardio",
-   "duracao_dias": 210
+   "duracao_dias": 213
   },
   {
    "cultura": "SOJA",
@@ -1481,7 +1767,7 @@
    "cultura": "ALGODAO",
    "cultivar": "IMA 5901 B2RF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "SOJA",
@@ -1493,7 +1779,7 @@
    "cultura": "ALGODAO",
    "cultivar": "IMA 5801 B2RF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "SOJA",
@@ -1505,37 +1791,73 @@
    "cultura": "ALGODAO",
    "cultivar": "DP 2176 B3RF",
    "grm": "Tardio",
-   "duracao_dias": 210
+   "duracao_dias": 213
+  },
+  {
+   "cultura": "SOJA",
+   "cultivar": "GUEPARDO",
+   "grm": "6.7",
+   "duracao_dias": 105
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "DP 2104 B3XF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
+  },
+  {
+   "cultura": "SOJA",
+   "cultivar": "NEO 780 CE",
+   "grm": "7.8",
+   "duracao_dias": 120
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "TMG 83 B3XF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
+  },
+  {
+   "cultura": "SOJA",
+   "cultivar": "ST 76KA72 CE",
+   "grm": "7.6",
+   "duracao_dias": 116
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "FM 933 STP",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
+  },
+  {
+   "cultura": "SOJA",
+   "cultivar": "SPARTA I2X",
+   "grm": "7.7",
+   "duracao_dias": 120
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "FM 979 STP",
    "grm": "Tardio",
-   "duracao_dias": 210
+   "duracao_dias": 213
+  },
+  {
+   "cultura": "SOJA",
+   "cultivar": "NEO 811 I2X",
+   "grm": "8.1",
+   "duracao_dias": 125
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "FM 945 STP",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
+  },
+  {
+   "cultura": "SOJA",
+   "cultivar": "BMX Olimpo IPRO/CZ 48B18 IPRO",
+   "grm": null,
+   "duracao_dias": 125
   },
   {
    "cultura": "ALGODAO",
@@ -1547,19 +1869,19 @@
    "cultura": "ALGODAO",
    "cultivar": "IMA 3479 B2RF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "IMA 563 B3XF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "ST APEX 2156 B3RF",
    "grm": "Médio",
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "ALGODAO",
@@ -1571,25 +1893,43 @@
    "cultura": "ALGODAO",
    "cultivar": "BS 2453 GLTP",
    "grm": "Tardio",
-   "duracao_dias": 210
+   "duracao_dias": 213
+  },
+  {
+   "cultura": "ALGODAO",
+   "cultivar": "IMA 707 B3XF",
+   "grm": "Médio",
+   "duracao_dias": 198
+  },
+  {
+   "cultura": "ALGODAO",
+   "cultivar": "IMA 497 B3XF",
+   "grm": "Médio",
+   "duracao_dias": 198
+  },
+  {
+   "cultura": "ALGODAO",
+   "cultivar": "IMA 3764 B2RF",
+   "grm": "Tardio",
+   "duracao_dias": 213
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "FM 985 GLTP/ 945 GL",
    "grm": null,
-   "duracao_dias": 210
+   "duracao_dias": 213
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "DP 2297 B3XF/ DP 2252 B3XF",
    "grm": null,
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "FM 990 STP/ FM 979 STP",
    "grm": null,
-   "duracao_dias": 210
+   "duracao_dias": 213
   },
   {
    "cultura": "ALGODAO",
@@ -1607,25 +1947,37 @@
    "cultura": "ALGODAO",
    "cultivar": "DP 1949 B3RF/ TMG 44 B2RF",
    "grm": null,
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "IMA 5901 B2RF/ IMA 5801 B2RF",
    "grm": null,
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "TAURA B3XF/ IMA 3479 B2RF/ IMA 563 B3XF/ TMG 83 B3XF/ ST APEX 2156 B3RF/ BS 2441 STP/ BS 2453 GLTP/ DP 1949 B3RF",
    "grm": null,
-   "duracao_dias": 195
+   "duracao_dias": 198
   },
   {
    "cultura": "ALGODAO",
    "cultivar": "FM 911 GLTP/ FM 945 STP",
    "grm": null,
-   "duracao_dias": 195
+   "duracao_dias": 198
+  },
+  {
+   "cultura": "ALGODAO",
+   "cultivar": "FM 979 STP/IMA 303 B3XF/DP 2335 B3XF/IMA 712 B3XF/GA 912 B3XF/IMA 497 B3XF",
+   "grm": null,
+   "duracao_dias": 213
+  },
+  {
+   "cultura": "ALGODAO",
+   "cultivar": "IMA 936 B3XF",
+   "grm": null,
+   "duracao_dias": 198
   }
  ]
 }

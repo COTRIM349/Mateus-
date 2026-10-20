@@ -3,7 +3,6 @@
 from openpyxl.styles import Alignment, Border, Font, NamedStyle, PatternFill, Side
 
 FONTE = "Arial"
-
 AZUL_ESCURO = "1F3864"
 AZUL_MEDIO = "2E5C8A"
 CINZA_CLARO = "F2F2F2"
@@ -12,18 +11,16 @@ AMARELO_INPUT = "FFF2CC"
 VERMELHO_PEND = "FFC7CE"
 VERDE_OK = "C6EFCE"
 LARANJA = "FCE4D6"
-
-TXT_INPUT = "0000FF"      # entrada digitada
-TXT_FORMULA = "000000"    # calculado
-TXT_LINK = "008000"       # vem de outra aba
-TXT_PENDENTE = "C00000"   # dado pendente
+TXT_INPUT = "0000FF"
+TXT_FORMULA = "000000"
+TXT_LINK = "008000"
+TXT_PENDENTE = "C00000"
 
 _fina = Side(style="thin", color=CINZA_BORDA)
 BORDA = Border(left=_fina, right=_fina, top=_fina, bottom=_fina)
 
 
 def registrar(wb):
-    """Cria os estilos nomeados usados por toda a pasta."""
     def novo(nome, **kw):
         if nome in wb.named_styles:
             return
@@ -38,19 +35,15 @@ def registrar(wb):
             st.number_format = kw["fmt"]
         wb.add_named_style(st)
 
-    novo("tituloPagina",
-         font=Font(name=FONTE, size=16, bold=True, color="FFFFFF"),
+    novo("tituloPagina", font=Font(name=FONTE, size=16, bold=True, color="FFFFFF"),
          fill=PatternFill("solid", fgColor=AZUL_ESCURO),
          alignment=Alignment(vertical="center", horizontal="left", indent=1), borda=False)
-    novo("subtitulo",
-         font=Font(name=FONTE, size=10, italic=True, color="595959"),
+    novo("subtitulo", font=Font(name=FONTE, size=10, italic=True, color="595959"),
          alignment=Alignment(vertical="center", horizontal="left", wrap_text=True), borda=False)
-    novo("cabecalho",
-         font=Font(name=FONTE, size=10, bold=True, color="FFFFFF"),
+    novo("cabecalho", font=Font(name=FONTE, size=10, bold=True, color="FFFFFF"),
          fill=PatternFill("solid", fgColor=AZUL_MEDIO),
          alignment=Alignment(vertical="center", horizontal="center", wrap_text=True))
-    novo("secao",
-         font=Font(name=FONTE, size=11, bold=True, color=AZUL_ESCURO),
+    novo("secao", font=Font(name=FONTE, size=11, bold=True, color=AZUL_ESCURO),
          alignment=Alignment(vertical="center"), borda=False)
     novo("rotulo", font=Font(name=FONTE, size=10, bold=True))
     novo("texto")
