@@ -19,7 +19,7 @@ from openpyxl.utils import get_column_letter as gcl
 
 # indices de shared-string (ja existentes no arquivo)
 SI = {"PREPARO": 46, "SOJA": 47, "PLANTIO": 48, "ALGODAO": 49,
-      "COLHIDO": 50, "VAZIO": 51, "COLHEITA": 52, "MILHO_SEMENTE": 74}
+      "COLHIDO": 50, "VAZIO": 51, "COLHEITA": 52, "MILHO_SEMENTE": 74, "MILHO_GRAO": 84}
 
 ENTRADA, SAIDA = sys.argv[1], sys.argv[2]
 
@@ -122,6 +122,16 @@ for pid, legs in LEGS.items():
     lab = plano(legs, cel.keys())
     for d, ref in cel.items():
         alvos[ref] = lab[d]
+
+# PV126: milho grao APOS o tabaco - preenche so a janela vaga (jul/2027 -> jan/2028),
+# sem tocar nos ciclos de tabaco ja existentes no arquivo.
+from datetime import date as _date
+cel126 = celulas_por_data(126)
+_jan_ini, _jan_fim = _date(2027, 7, 12), _date(2028, 1, 3)
+_mondays_126 = [d for d in cel126 if _jan_ini <= d <= _jan_fim]
+_lab126 = plano([(SI["MILHO_GRAO"], _date(2027, 7, 19), _date(2027, 12, 20))], _mondays_126)
+for d in _mondays_126:
+    alvos[cel126[d]] = _lab126[d]
 
 print("celulas a alterar:", len(alvos))
 
