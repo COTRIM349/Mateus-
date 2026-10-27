@@ -331,15 +331,7 @@ export interface TariffRow {
   active?: boolean;
 }
 
-export function pickTariffForDate(tariffs: TariffRow[], dateYmd: string): FarmTariff | null {
-  const matches = tariffs.filter((t) => {
-    if (t.valid_from > dateYmd) return false;
-    if (t.valid_to && t.valid_to < dateYmd) return false;
-    return true;
-  });
-  matches.sort((a, b) => b.valid_from.localeCompare(a.valid_from));
-  const t = matches[0];
-  if (!t) return null;
+export function farmTariffFromRow(t: TariffRow): FarmTariff {
   return {
     id: t.id,
     ratePeak: t.rate_peak,
@@ -351,6 +343,17 @@ export function pickTariffForDate(tariffs: TariffRow[], dateYmd: string): FarmTa
     validFrom: t.valid_from,
     validTo: t.valid_to,
   };
+}
+
+export function pickTariffForDate(tariffs: TariffRow[], dateYmd: string): FarmTariff | null {
+  const matches = tariffs.filter((t) => {
+    if (t.valid_from > dateYmd) return false;
+    if (t.valid_to && t.valid_to < dateYmd) return false;
+    return true;
+  });
+  matches.sort((a, b) => b.valid_from.localeCompare(a.valid_from));
+  const t = matches[0];
+  return t ? farmTariffFromRow(t) : null;
 }
 
 export type CostGroupBy = "pivot" | "parcel" | "culture" | "season";
