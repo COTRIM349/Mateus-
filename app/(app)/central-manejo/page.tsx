@@ -55,7 +55,7 @@ function priorityOf(c: BalanceDay): Priority {
   if (c.shouldIrrigate && (a == null || a < 0.5)) return { label: "Crítico", color: "#FF5A5F", rank: 0 };
   if (c.shouldIrrigate || (a != null && a < 1.5)) return { label: "Alto", color: "#F08A3C", rank: 1 };
   if (c.status === "amarelo" || (a != null && a < 3)) return { label: "Médio", color: "#D8A928", rank: 2 };
-  return { label: "Adequado", color: "#35B96B", rank: 3 };
+  return { label: "Sem necessidade", color: "#2196F3", rank: 3 };
 }
 
 export default function CentralDeManejoPage() {
