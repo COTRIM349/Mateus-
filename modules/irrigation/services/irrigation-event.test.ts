@@ -8,10 +8,12 @@ import {
   combineStartedAt,
   deriveAppliedVolume,
   deriveDepthFromPercentimeter,
+  deriveHoursFromHorimeter,
   deriveOperatingHours,
   deriveOperatingHoursFromPercentimeter,
   eventDateKey,
   sumGrossDepthByDate,
+  validateHorimeter,
   validateIrrigationDepth,
   validateOperatingHours,
   validatePercentimeterPct,
@@ -47,6 +49,13 @@ describe("fórmulas do evento", () => {
     expect(validatePercentimeterPct(101)).not.toBeNull();
   });
 
+  it("valida horímetro inicial e final", () => {
+    expect(validateHorimeter(1234.5, 1248.25)).toBeNull();
+    expect(validateHorimeter(1248.25, 1234.5)).not.toBeNull();
+    expect(validateHorimeter(1234.5, 1234.5)).not.toBeNull();
+    expect(deriveHoursFromHorimeter(1234.5, 1248.25)).toBe(13.75);
+  });
+
   it("rejeita lâmina e horas inválidas", () => {
     expect(validateIrrigationDepth(12)).toBeNull();
     expect(validateIrrigationDepth(0)).not.toBeNull();
@@ -56,11 +65,13 @@ describe("fórmulas do evento", () => {
 
 describe("buildIrrigationEventInsert", () => {
   it("grava parcela, lâmina bruta, volume e horas", () => {
-    const row = buildIrrigationEventInsert({ pivotId: "p1", parcelId: "a1", dateYmd: "2026-08-20", timeHm: "08:30", depthMm: 12, percentimeterPct: 50, areaHa: 80, flowRateM3h: 400, fullTurnTime100H: 13.56, notes: "volta completa" });
+    const row = buildIrrigationEventInsert({ pivotId: "p1", parcelId: "a1", dateYmd: "2026-08-20", timeHm: "08:30", depthMm: 12, percentimeterPct: 50, areaHa: 80, flowRateM3h: 400, fullTurnTime100H: 13.56, horimeterInitial: 500.25, horimeterFinal: 513.75, notes: "volta completa" });
     expect(row.depth_mm).toBe(12);
     expect(row.percentimeter_pct).toBe(50);
     expect(row.volume_m3).toBe(9600);
-    expect(row.operating_hours).toBe(27.12);
+    expect(row.horimeter_initial).toBe(500.25);
+    expect(row.horimeter_final).toBe(513.75);
+    expect(row.operating_hours).toBe(13.5);
     expect(row.parcel_id).toBe("a1");
     expect(row.started_at).toBe("2026-08-20T08:30:00");
     expect(row.status).toBe("concluida");
