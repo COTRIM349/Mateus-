@@ -895,7 +895,7 @@ export default function BalancoHidricoPage() {
         const [wrRes, dsRes] = await Promise.all([
           supabase
             .from("weather_readings")
-            .select("id, date, et0_calculated, precipitation, station_id")
+            .select("id, date, et0_calculated, precipitation, station_id, data_quality, data_kind, origin")
             .in("station_id", stationIds)
             .gte("date", calculationStart)
             .lte("date", dateEnd)
@@ -959,7 +959,15 @@ export default function BalancoHidricoPage() {
       const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
       selectedIdByDate.forEach((readingId, date) => {
         const r = readingsById.get(readingId);
-        if (r?.et0_calculated != null) {
+        // Revalida a leitura no momento do balanço: uma aprovação antiga não
+        // pode continuar válida se a ingestão posterior degradou os dados.
+        const et0 = r?.et0_calculated == null ? NaN : Number(r.et0_calculated);
+        const rain = r?.precipitation == null ? NaN : Number(r.precipitation);
+        const trustedKind = r?.data_kind === "observed" || r?.data_kind === "manual"
+          || (r?.data_kind === "model_estimate" && String(r.origin ?? "").toLowerCase().replace(/_/g, "-") === "open-meteo");
+        if (r && r.data_quality === "ok" && trustedKind
+          && Number.isFinite(et0) && et0 >= 0 && et0 <= 15
+          && Number.isFinite(rain) && rain >= 0 && rain <= 200) {
           // REGRA OPERACIONAL: chuva automática não entra no manejo.
           // A precipitação começa em zero e só é preenchida pelo lançamento
           // manual em manual_rainfall_entries.
