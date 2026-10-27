@@ -12,6 +12,7 @@ describe("sidebar compacta", () => {
     expect(sidebar).toContain("bg-forest-900");
     expect(sidebar).toContain("aria-expanded");
     expect(sidebar).toContain(">SANTA COLOMBA</");
+    expect(sidebar).toContain(">IRRIGA PRO</");
     expect(nav).toContain('label: "Dashboard"');
     expect(nav).toContain("Cadastros");
     expect(nav).toContain("Manejo Diário");

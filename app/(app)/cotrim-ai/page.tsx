@@ -1,7 +1,7 @@
 import { PageHeader } from "@/components/layout/PageHeader";
 import { EmptyState } from "@/components/ui/EmptyState";
 
-export default function CotrimAIPage() {
+export default function SantaColombaAIPage() {
   return (
     <div className="space-y-8">
       <PageHeader titulo="Santa Colomba AI" descricao="Inteligência artificial para manejo" />
