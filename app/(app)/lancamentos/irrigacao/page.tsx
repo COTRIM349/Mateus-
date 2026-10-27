@@ -15,8 +15,11 @@ import {
   buildIrrigationEventInsert,
   deriveAppliedVolume,
   deriveDepthFromPercentimeter,
+  deriveHoursFromHorimeter,
   deriveOperatingHoursFromPercentimeter,
+  validateHorimeter,
   validateIrrigationDepth,
+  validateOperatingHours,
   validatePercentimeterPct,
 } from "@/modules/irrigation/services";
 import { isActiveParcel, assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
@@ -48,6 +51,8 @@ interface FormState {
   pivot_id: string;
   date: string;
   percentimeter_pct: string;
+  horimeter_initial: string;
+  horimeter_final: string;
   notes: string;
 }
 
@@ -56,6 +61,8 @@ const EMPTY: FormState = {
   pivot_id: "",
   date: today(),
   percentimeter_pct: "",
+  horimeter_initial: "",
+  horimeter_final: "",
   notes: "",
 };
 
@@ -142,9 +149,19 @@ export default function LancamentoIrrigacaoPage() {
       ? deriveOperatingHoursFromPercentimeter(percentimeterNum, selectedPivot.full_turn_time)
       : null;
 
-  const previewPrice = selectedPivot && previewVolume != null && previewHours != null && previewHours > 0
+  const horimeterInitialNum = form.horimeter_initial !== "" ? Number(form.horimeter_initial) : NaN;
+  const horimeterFinalNum = form.horimeter_final !== "" ? Number(form.horimeter_final) : NaN;
+  const actualHours =
+    Number.isFinite(horimeterInitialNum) &&
+    Number.isFinite(horimeterFinalNum) &&
+    horimeterFinalNum > horimeterInitialNum
+      ? deriveHoursFromHorimeter(horimeterInitialNum, horimeterFinalNum)
+      : null;
+  const hoursForPricing = actualHours ?? previewHours;
+
+  const previewPrice = selectedPivot && previewVolume != null && hoursForPricing != null && hoursForPricing > 0
     ? priceIrrigationEvent({
-      operatingHours: previewHours,
+      operatingHours: hoursForPricing,
       volumeM3: previewVolume,
       depthMm: depthNum,
       areaHa: selectedPivot.area,
@@ -212,6 +229,21 @@ export default function LancamentoIrrigacaoPage() {
       return;
     }
 
+    const horimeterInitial = Number(form.horimeter_initial);
+    const horimeterFinal = Number(form.horimeter_final);
+    const horimeterErr = validateHorimeter(horimeterInitial, horimeterFinal);
+    if (horimeterErr) {
+      setFormError(horimeterErr);
+      return;
+    }
+
+    const actualOperatingHours = deriveHoursFromHorimeter(horimeterInitial, horimeterFinal);
+    const actualHoursErr = validateOperatingHours(actualOperatingHours);
+    if (actualHoursErr) {
+      setFormError(actualHoursErr);
+      return;
+    }
+
     const parcel = activeParcelFor(form.pivot_id);
     const launchErr = assertParcelAcceptsOperationalLaunch(parcel);
     if (launchErr) {
@@ -229,6 +261,8 @@ export default function LancamentoIrrigacaoPage() {
       areaHa: pivot.area,
       flowRateM3h: pivot.flow_rate,
       fullTurnTime100H: pivot.full_turn_time,
+      horimeterInitial,
+      horimeterFinal,
       notes: form.notes || null,
     });
 
@@ -264,7 +298,7 @@ export default function LancamentoIrrigacaoPage() {
       } else {
         setModalOpen(false);
         setSuccessMessage(
-          `Irrigação lançada com sucesso em ${pivot.name}: ${percentimeterPct.toFixed(0)}% → ${depth.toFixed(1)} mm.`,
+          `Irrigação lançada com sucesso em ${pivot.name}: ${percentimeterPct.toFixed(0)}% → ${depth.toFixed(1)} mm · ${actualOperatingHours.toFixed(2)} h reais.`,
         );
       }
     } catch (err) {
@@ -408,6 +442,30 @@ export default function LancamentoIrrigacaoPage() {
               placeholder="Ex.: 80"
             />
 
+            <Input
+              id="horimeter_initial"
+              label="Horímetro inicial"
+              type="number"
+              min={0}
+              step={0.01}
+              required
+              value={form.horimeter_initial}
+              onChange={(e) => patch({ horimeter_initial: e.target.value })}
+              placeholder="Ex.: 1523,40"
+            />
+
+            <Input
+              id="horimeter_final"
+              label="Horímetro final"
+              type="number"
+              min={0}
+              step={0.01}
+              required
+              value={form.horimeter_final}
+              onChange={(e) => patch({ horimeter_final: e.target.value })}
+              placeholder="Ex.: 1541,10"
+            />
+
             <div>
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
                 Lâmina calculada
@@ -431,9 +489,11 @@ export default function LancamentoIrrigacaoPage() {
           {previewVolume != null && (
             <p className="text-xs text-graphite-500 dark:text-gray-400">
               Volume: <strong className="text-graphite-800 dark:text-white">{previewVolume.toLocaleString("pt-BR")} m³</strong>
-              {previewHours != null && previewHours > 0 && (
-                <> · Tempo estimado: <strong className="text-graphite-800 dark:text-white">{previewHours.toFixed(1)} h</strong></>
-              )}
+              {actualHours != null ? (
+                <> · Horas reais: <strong className="text-graphite-800 dark:text-white">{actualHours.toFixed(2)} h</strong></>
+              ) : previewHours != null && previewHours > 0 ? (
+                <> · Tempo teórico: <strong className="text-graphite-800 dark:text-white">{previewHours.toFixed(2)} h</strong></>
+              ) : null}
               {previewPrice?.energy_kwh != null && (
                 <> · Energia: <strong className="text-graphite-800 dark:text-white">{previewPrice.energy_kwh.toFixed(1)} kWh</strong></>
               )}
