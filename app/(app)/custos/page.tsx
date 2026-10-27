@@ -156,7 +156,6 @@ export default function CustosPage() {
 
   const pricedRows: PricedEventRow[] = useMemo(() => {
     return events
-      .filter((e) => !filterPivot || e.pivot_id === filterPivot)
       .filter((e) => !periodFrom || e.started_at.slice(0, 10) >= periodFrom)
       .filter((e) => !periodTo || e.started_at.slice(0, 10) <= periodTo)
       .map((e) => {
@@ -203,7 +202,7 @@ export default function CustosPage() {
         };
       })
       .filter((row): row is NonNullable<typeof row> => row != null);
-  }, [events, filterPivot, periodFrom, periodTo, pivotMap, moduleMap]);
+  }, [events, periodFrom, periodTo, pivotMap, moduleMap]);
 
   const demandAllocations = useMemo(() => calculateWeeklyDemandApportionment(
     demandOperations,
@@ -214,14 +213,14 @@ export default function CustosPage() {
     })),
   ), [demandOperations, tariffs]);
 
-  const demandByPivot = useMemo(() => {
-    const map = new Map<string, number>();
-    for (const row of demandAllocations) {
-      if (row.apportionedDemandCost == null) continue;
-      map.set(row.pivotId, (map.get(row.pivotId) ?? 0) + row.apportionedDemandCost);
-    }
-    return map;
-  }, [demandAllocations]);
+  // O filtro por pivô NÃO recalcula o pico. Primeiro calculamos o pico real
+  // com todos os pivôs do módulo; depois apenas filtramos a visualização/rateio.
+  const visibleDemandAllocations = useMemo(
+    () => filterPivot
+      ? demandAllocations.filter((row) => row.pivotId === filterPivot)
+      : demandAllocations,
+    [demandAllocations, filterPivot],
+  );
 
   const groups = useMemo(() => aggregatePricedEvents(pricedRows, groupBy), [pricedRows, groupBy]);
   const farm = useMemo(() => {
@@ -232,11 +231,11 @@ export default function CustosPage() {
     const areaByPivot = new Map<string, number>();
     for (const r of pricedRows) areaByPivot.set(r.pivotId, r.areaHa);
     const area = Array.from(areaByPivot.values()).reduce((a, b) => a + b, 0);
-    const demandCost = demandAllocations.reduce((s, r) => s + (r.apportionedDemandCost ?? 0), 0);
-    const demandMissingTariff = demandAllocations.some((r) => r.demandRate == null);
+    const demandCost = visibleDemandAllocations.reduce((s, r) => s + (r.apportionedDemandCost ?? 0), 0);
+    const demandMissingTariff = visibleDemandAllocations.some((r) => r.demandRate == null);
     const totalCost = cost + demandCost;
     return { cost, demandCost, totalCost, demandMissingTariff, energy, volume, events: pricedRows.length, area, depthArea };
-  }, [pricedRows, demandAllocations]);
+  }, [pricedRows, visibleDemandAllocations]);
 
   const saveTariff = async () => {
     if (!activeFarmId) return;
@@ -332,7 +331,7 @@ export default function CustosPage() {
     { header: "R$/ha", render: (r) => money(r.costPerHa), align: "right" },
   ];
 
-  const demandColumns: Column<(typeof demandAllocations)[number]>[] = [
+  const demandColumns: Column<(typeof visibleDemandAllocations)[number]>[] = [
     { header: "Semana", render: (r) => `${r.weekStart.split("-").reverse().join("/")} – ${r.weekEnd.split("-").reverse().join("/")}` },
     { header: "Módulo", render: (r) => <span className="font-medium">{r.moduleName}</span> },
     { header: "Pico semanal", render: (r) => `${r.peakDemandKw.toFixed(1)} kW`, align: "right" },
@@ -441,10 +440,10 @@ export default function CustosPage() {
             Maior demanda diária da semana por módulo. O custo semanal é rateado proporcionalmente à potência dos pivôs que compuseram o pico.
           </p>
         </div>
-        {demandAllocations.length === 0 ? (
+        {visibleDemandAllocations.length === 0 ? (
           <p className="py-4 text-sm text-graphite-400">Sem eventos com potência cadastrada no período.</p>
         ) : (
-          <Table columns={demandColumns} data={demandAllocations} getKey={(r) => `${r.weekStart}-${r.moduleName}-${r.pivotId}`} />
+          <Table columns={demandColumns} data={visibleDemandAllocations} getKey={(r) => `${r.weekStart}-${r.moduleName}-${r.pivotId}`} />
         )}
       </Card>
 
