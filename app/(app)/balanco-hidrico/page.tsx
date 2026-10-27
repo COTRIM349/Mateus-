@@ -29,6 +29,7 @@ import {
   type HydricStatus,
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
+import { fao56ReferenceDepletionByName } from "@/modules/water-balance/services/availability-factor";
 import { type CulturePhase } from "@/modules/culture/services";
 import {
   buildOperationalPivotSoil,
@@ -1067,7 +1068,7 @@ export default function BalancoHidricoPage() {
         },
         culture: {
           root_depth: culture.root_depth,
-          depletion_factor: culture.depletion_factor,
+          depletion_factor: culture.depletion_factor ?? fao56ReferenceDepletionByName(culture.name),
           kl: culture.kl,
           ks_function: culture.ks_function,
           ky: culture.ky,
