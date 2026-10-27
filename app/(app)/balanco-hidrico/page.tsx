@@ -45,7 +45,8 @@ import {
   filterPivotsWithActiveParcel,
   resolveDaeReferenceDate,
 } from "@/modules/assignment/services";
-import { calculateDailyKc } from "@/modules/culture/services/agronomic-engine";
+import { calculateDailyKc, calculateRootDepthMeters } from "@/modules/culture/services/agronomic-engine";
+import type { AgronomicDayInput } from "@/modules/water-balance/services/pivot-engine-v2";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
@@ -630,12 +631,24 @@ export default function BalancoHidricoPage() {
         throw new Error("Balanço bloqueado: a condição inicial é posterior ao período selecionado.");
       }
 
-      // Kc AUTOMÁTICO do cadastro: usa a curva de Kc ATIVA (cultivar → cultura),
-      // interpolada por DAE. Sem curva ativa, o motor mantém o Kc das fases
-      // (comportamento anterior preservado).
+      // PARÂMETROS AGRONÔMICOS AUTOMÁTICOS do cadastro.
+      // Hierarquia operacional: cultivar → cultura. Só parâmetros aprovados e
+      // explicitamente ATIVOS entram no balanço. CAD/CC/PMP NÃO são lidos aqui:
+      // continuam exclusivos do domínio Solo/Balanço Hídrico.
       const effectiveVarietyId = assignment.culture_variety_id ?? assignment.variety_id;
+
       let kcPoints: { x: number; y: number }[] | null = null;
+      let activeKcCurveId: string | null = null;
       let resolvedKcSource: KcSource = "fases";
+      let rootPoints: { x: number; y: number }[] | null = null;
+      let activeRootCurveId: string | null = null;
+      let rootMatchedScope: "cultivar" | "cultura" | null = null;
+      let activePValue: number | null = null;
+      let activePId: string | null = null;
+      let pMatchedScope: "cultivar" | "cultura" | null = null;
+
+      // Kc ativo — somente eixo DAE nesta etapa. Outros eixos permanecem
+      // cadastrados/rastreáveis, mas não são aplicados silenciosamente.
       {
         const findActive = (byCultivar: boolean) => {
           let q = supabase
@@ -643,53 +656,64 @@ export default function BalancoHidricoPage() {
             .select("id")
             .eq("culture_id", assignment.culture_id)
             .eq("active_for_calculation", true)
+            .eq("validation_status", "approved")
             .eq("axis_type", "DAE")
             .limit(1);
-          q = byCultivar && effectiveVarietyId ? q.eq("cultivar_id", effectiveVarietyId) : q.is("cultivar_id", null);
+          q = byCultivar && effectiveVarietyId
+            ? q.eq("cultivar_id", effectiveVarietyId)
+            : q.is("cultivar_id", null);
           return q.maybeSingle();
         };
-        let activeCurveId: string | null = null;
+
         let matchedScope: "cultivar" | "cultura" | null = null;
         if (effectiveVarietyId) {
           const { data } = await findActive(true);
           if ((data as { id: string } | null)?.id) {
-            activeCurveId = (data as { id: string }).id;
+            activeKcCurveId = (data as { id: string }).id;
             matchedScope = "cultivar";
           }
         }
-        if (!activeCurveId) {
+        if (!activeKcCurveId) {
           const { data } = await findActive(false);
           if ((data as { id: string } | null)?.id) {
-            activeCurveId = (data as { id: string }).id;
+            activeKcCurveId = (data as { id: string }).id;
             matchedScope = "cultura";
           }
         }
-        if (activeCurveId) {
-          const { data: anch } = await supabase
+
+        if (activeKcCurveId) {
+          const { data: anchors } = await supabase
             .from("kc_anchor_points")
             .select("x_value,kc_value")
-            .eq("curve_id", activeCurveId)
+            .eq("curve_id", activeKcCurveId)
             .order("sequence_no");
-          const pts = ((anch ?? []) as { x_value: number; kc_value: number }[])
-            .map((r) => ({ x: r.x_value, y: r.kc_value }));
-          if (pts.length >= 2) {
-            kcPoints = pts;
+          const points = ((anchors ?? []) as { x_value: number; kc_value: number }[])
+            .map((row) => ({ x: row.x_value, y: row.kc_value }));
+          if (points.length >= 2) {
+            kcPoints = points;
             resolvedKcSource = matchedScope === "cultivar" ? "cadastro-cultivar" : "cadastro-cultura";
           }
         }
-        // Diagnóstico: por que NÃO usou o cadastro? Distingue "existe mas não
-        // ativada", "ativa em outro eixo (não DAE)" e "não existe".
+
         if (!kcPoints) {
           const cultureVariants = effectiveVarietyId
             ? [`cultivar_id.eq.${effectiveVarietyId}`, "cultivar_id.is.null"]
             : ["cultivar_id.is.null"];
           const { data: anyCurves } = await supabase
             .from("kc_curves")
-            .select("active_for_calculation,axis_type")
+            .select("active_for_calculation,validation_status,axis_type")
             .eq("culture_id", assignment.culture_id)
             .or(cultureVariants.join(","));
-          const curves = (anyCurves ?? []) as { active_for_calculation: boolean; axis_type: string }[];
-          if (curves.some((c) => c.active_for_calculation && c.axis_type !== "DAE")) {
+          const curves = (anyCurves ?? []) as {
+            active_for_calculation: boolean;
+            validation_status: string;
+            axis_type: string;
+          }[];
+          if (curves.some((curve) =>
+            curve.active_for_calculation &&
+            curve.validation_status === "approved" &&
+            curve.axis_type !== "DAE"
+          )) {
             resolvedKcSource = "outro-eixo";
           } else if (curves.length > 0) {
             resolvedKcSource = "inativa";
@@ -698,23 +722,140 @@ export default function BalancoHidricoPage() {
           }
         }
       }
-      // Monta o Kc por data a partir da curva (mesma base de DAE do motor).
-      // Sem data de referência (parcela sem emergência nem plantio), o DAE é
-      // indefinido: não aplica a curva (o motor cai no Kc das fases) em vez de
-      // estourar o cálculo com um DAE NaN.
+
+      // Zr ativo — cultivar prevalece sobre cultura. Um override explícito da
+      // parcela (modo personalizado) continua tendo prioridade.
+      {
+        const findActiveRoot = (byCultivar: boolean) => {
+          let q = supabase
+            .from("root_depth_curves")
+            .select("id")
+            .eq("culture_id", assignment.culture_id)
+            .eq("active_for_calculation", true)
+            .eq("validation_status", "approved")
+            .eq("axis_type", "DAE")
+            .limit(1);
+          q = byCultivar && effectiveVarietyId
+            ? q.eq("cultivar_id", effectiveVarietyId)
+            : q.is("cultivar_id", null);
+          return q.maybeSingle();
+        };
+
+        if (effectiveVarietyId) {
+          const { data } = await findActiveRoot(true);
+          if ((data as { id: string } | null)?.id) {
+            activeRootCurveId = (data as { id: string }).id;
+            rootMatchedScope = "cultivar";
+          }
+        }
+        if (!activeRootCurveId) {
+          const { data } = await findActiveRoot(false);
+          if ((data as { id: string } | null)?.id) {
+            activeRootCurveId = (data as { id: string }).id;
+            rootMatchedScope = "cultura";
+          }
+        }
+
+        if (activeRootCurveId) {
+          const { data: anchors } = await supabase
+            .from("root_depth_anchor_points")
+            .select("x_value,root_depth_m")
+            .eq("curve_id", activeRootCurveId)
+            .order("sequence_no");
+          const points = ((anchors ?? []) as { x_value: number; root_depth_m: number }[])
+            .map((row) => ({ x: row.x_value, y: row.root_depth_m }));
+          if (points.length >= 2) rootPoints = points;
+        }
+      }
+
+      // p ativo — valor base fisiológico. O ajuste diário por ETc continua
+      // dentro do motor hídrico. Override explícito da parcela prevalece.
+      {
+        const findActiveP = (byCultivar: boolean) => {
+          let q = supabase
+            .from("agronomic_parameter_values")
+            .select("id,numeric_value")
+            .eq("culture_id", assignment.culture_id)
+            .eq("parameter_code", "depletion_fraction_p")
+            .eq("active_for_calculation", true)
+            .eq("validation_status", "approved")
+            .limit(1);
+          q = byCultivar && effectiveVarietyId
+            ? q.eq("cultivar_id", effectiveVarietyId)
+            : q.is("cultivar_id", null);
+          return q.maybeSingle();
+        };
+
+        if (effectiveVarietyId) {
+          const { data } = await findActiveP(true);
+          const row = data as { id: string; numeric_value: number | null } | null;
+          const value = Number(row?.numeric_value);
+          if (row?.id && Number.isFinite(value) && value > 0 && value < 1) {
+            activePId = row.id;
+            activePValue = value;
+            pMatchedScope = "cultivar";
+          }
+        }
+        if (activePValue == null) {
+          const { data } = await findActiveP(false);
+          const row = data as { id: string; numeric_value: number | null } | null;
+          const value = Number(row?.numeric_value);
+          if (row?.id && Number.isFinite(value) && value > 0 && value < 1) {
+            activePId = row.id;
+            activePValue = value;
+            pMatchedScope = "cultura";
+          }
+        }
+      }
+
       const daeRefIso = resolveDaeReferenceDate(assignment);
       const daeRefMs = daeRefIso ? new Date(`${daeRefIso}T00:00:00Z`).getTime() : NaN;
-      const canApplyCurve = kcPoints != null && Number.isFinite(daeRefMs);
-      if (kcPoints != null && !canApplyCurve) resolvedKcSource = "fases";
+      const hasDaeReference = Number.isFinite(daeRefMs);
+      const canApplyKc = kcPoints != null && hasDaeReference;
+      const hasCustomRoot = assignment.parameter_mode === "personalizado"
+        && (assignment.initial_root_depth != null || assignment.max_root_depth != null);
+      const hasCustomP = assignment.parameter_mode === "personalizado"
+        && assignment.depletion_factor != null
+        && Number.isFinite(Number(assignment.depletion_factor));
+      const canApplyRoot = rootPoints != null && hasDaeReference && !hasCustomRoot;
+      const canApplyP = activePValue != null && !hasCustomP;
+
+      if (kcPoints != null && !hasDaeReference) resolvedKcSource = "fases";
       if (isStale()) return;
       setKcSource(resolvedKcSource);
 
-      const agronomicByDate: Record<string, { kc: number }> = {};
-      if (canApplyCurve && kcPoints) {
-        for (const d of datesInRange(calculationStart, addDaysIso(dateEnd, 30))) {
-          const ms = new Date(`${d}T00:00:00Z`).getTime();
-          const dae = Math.max(0, Math.floor((ms - daeRefMs) / 86400000));
-          agronomicByDate[d] = { kc: calculateDailyKc(kcPoints, dae) };
+      const agronomicByDate: Record<string, AgronomicDayInput> = {};
+      for (const date of datesInRange(calculationStart, addDaysIso(dateEnd, 30))) {
+        const daily: AgronomicDayInput = {};
+        let dae: number | null = null;
+        if (hasDaeReference) {
+          const ms = new Date(`${date}T00:00:00Z`).getTime();
+          dae = Math.max(0, Math.floor((ms - daeRefMs) / 86_400_000));
+        }
+
+        if (canApplyKc && kcPoints && dae != null) {
+          daily.kc = calculateDailyKc(kcPoints, dae);
+        }
+        if (canApplyRoot && rootPoints && dae != null) {
+          daily.rootDepthM = calculateRootDepthMeters(rootPoints, dae);
+        }
+        if (canApplyP && activePValue != null) {
+          daily.depletionFractionP = activePValue;
+        }
+
+        if (
+          daily.kc != null ||
+          daily.rootDepthM != null ||
+          daily.depletionFractionP != null
+        ) {
+          daily.origin = {
+            kcCurveId: daily.kc != null ? activeKcCurveId : null,
+            rootCurveId: daily.rootDepthM != null ? activeRootCurveId : null,
+            rootScope: daily.rootDepthM != null ? rootMatchedScope : null,
+            pParameterId: daily.depletionFractionP != null ? activePId : null,
+            pScope: daily.depletionFractionP != null ? pMatchedScope : null,
+          };
+          agronomicByDate[date] = daily;
         }
       }
 
