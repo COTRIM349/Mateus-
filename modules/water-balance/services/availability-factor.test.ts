@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { availabilityFactor, cropGroupByName } from "./availability-factor";
+import { availabilityFactor, cropGroupByName, fao56ReferenceDepletionByName } from "./availability-factor";
 
 describe("availabilityFactor — Tabela 2 (Doorenbos & Kassam, 1979)", () => {
   it("valores exatos da tabela", () => {
@@ -52,5 +52,21 @@ describe("cropGroupByName — rodapés da Tabela 2", () => {
     expect(cropGroupByName("Melão")).toBeNull(); // melão ≠ melancia
     expect(cropGroupByName("")).toBeNull();
     expect(cropGroupByName(null)).toBeNull();
+  });
+});
+
+describe("p básico das culturas para ajuste diário FAO-56", () => {
+  it("classifica corretamente soja, algodão, milho grão, milho semente e cacau", () => {
+    expect(fao56ReferenceDepletionByName("Soja BMX")).toBe(0.50);
+    expect(fao56ReferenceDepletionByName("Algodão")).toBe(0.65);
+    expect(fao56ReferenceDepletionByName("Milho Grão")).toBe(0.55);
+    expect(fao56ReferenceDepletionByName("Milho Semente")).toBe(0.55);
+    expect(fao56ReferenceDepletionByName("Cacau")).toBe(0.30);
+  });
+
+  it("identifica tabaco como preset operacional provisório e não inventa para outros", () => {
+    expect(fao56ReferenceDepletionByName("Tabaco")).toBe(0.35);
+    expect(fao56ReferenceDepletionByName("Fumo")).toBe(0.35);
+    expect(fao56ReferenceDepletionByName("Cevada")).toBeNull();
   });
 });
