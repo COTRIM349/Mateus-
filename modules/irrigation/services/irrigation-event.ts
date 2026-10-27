@@ -56,6 +56,32 @@ export function deriveDepthFromPercentimeter(
   return roundTo((depth100PctMm * 100) / percentimeterPct, 2);
 }
 
+export function validateHorimeter(
+  initial: number,
+  final: number,
+): string | null {
+  if (!Number.isFinite(initial) || initial < 0) {
+    return "Informe um horímetro inicial válido.";
+  }
+  if (!Number.isFinite(final) || final < 0) {
+    return "Informe um horímetro final válido.";
+  }
+  if (final < initial) {
+    return "O horímetro final não pode ser menor que o inicial.";
+  }
+  if (final === initial) {
+    return "O horímetro final deve ser maior que o inicial.";
+  }
+  return null;
+}
+
+export function deriveHoursFromHorimeter(initial: number, final: number): number {
+  if (!Number.isFinite(initial) || !Number.isFinite(final) || final < initial) {
+    return Number.NaN;
+  }
+  return roundTo(final - initial, 2);
+}
+
 export function validateOperatingHours(hours: number | null | undefined): string | null {
   if (hours == null || Number.isNaN(hours)) return null;
   if (hours < 0) return "Horas de operação não podem ser negativas.";
@@ -128,6 +154,8 @@ export interface IrrigationEventDraft {
   areaHa: number;
   flowRateM3h: number;
   fullTurnTime100H?: number | null;
+  horimeterInitial?: number | null;
+  horimeterFinal?: number | null;
   hoursOverride?: number | null;
   notes?: string | null;
 }
@@ -139,6 +167,8 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
   ended_at: string | null;
   depth_mm: number;
   percentimeter_pct: number | null;
+  horimeter_initial: number | null;
+  horimeter_final: number | null;
   volume_m3: number;
   operating_hours: number;
   notes: string | null;
@@ -153,9 +183,18 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
     Number.isFinite(draft.fullTurnTime100H)
       ? deriveOperatingHoursFromPercentimeter(draft.percentimeterPct, draft.fullTurnTime100H)
       : deriveOperatingHours(depth, draft.areaHa, draft.flowRateM3h);
-  const hours = draft.hoursOverride != null && Number.isFinite(draft.hoursOverride)
-    ? roundTo(draft.hoursOverride, 2)
-    : derivedHours;
+  const horimeterHours =
+    draft.horimeterInitial != null &&
+    draft.horimeterFinal != null &&
+    Number.isFinite(draft.horimeterInitial) &&
+    Number.isFinite(draft.horimeterFinal)
+      ? deriveHoursFromHorimeter(draft.horimeterInitial, draft.horimeterFinal)
+      : Number.NaN;
+  const hours = Number.isFinite(horimeterHours)
+    ? horimeterHours
+    : draft.hoursOverride != null && Number.isFinite(draft.hoursOverride)
+      ? roundTo(draft.hoursOverride, 2)
+      : derivedHours;
   const startedAt = combineStartedAt(draft.dateYmd, draft.timeHm);
   return {
     pivot_id: draft.pivotId,
@@ -166,6 +205,14 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
     percentimeter_pct:
       draft.percentimeterPct != null && Number.isFinite(draft.percentimeterPct)
         ? roundTo(draft.percentimeterPct, 2)
+        : null,
+    horimeter_initial:
+      draft.horimeterInitial != null && Number.isFinite(draft.horimeterInitial)
+        ? roundTo(draft.horimeterInitial, 2)
+        : null,
+    horimeter_final:
+      draft.horimeterFinal != null && Number.isFinite(draft.horimeterFinal)
+        ? roundTo(draft.horimeterFinal, 2)
         : null,
     volume_m3: volume,
     operating_hours: hours,
