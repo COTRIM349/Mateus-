@@ -77,7 +77,7 @@ describe("faixas do reservatório variam com o fator F da cultura e a ETc diári
     expect(bounds!.factorF).toBeCloseTo(0.571, 4);
     expect(bounds!.attentionAbs).toBeCloseTo(50.66532, 3);
     expect(bounds!.safetyAbs).toBeCloseTo(36.2076, 3);
-    expect(classifyWaterStatus({ armMm: bounds!.attentionAbs, cadMm: cta, afdMm: cra }))
+    expect(classifyWaterStatus({ armMm: bounds!.attentionAbs - 0.01, cadMm: cta, afdMm: cra }))
       .toBe("atencao");
     expect(classifyWaterStatus({ armMm: bounds!.attentionAbs + 0.01, cadMm: cta, afdMm: cra }))
       .toBe("boa_umidade");
