@@ -11,8 +11,10 @@ import {
   COST_PER_MM_HA_FORMULA,
   ENERGY_FORMULA,
   aggregatePricedEvents,
+  calculateWeeklyDemandApportionment,
   pickTariffForDate,
   priceIrrigationEvent,
+  WEEKLY_DEMAND_FORMULA,
   type CostGroupBy,
   type PricedEventRow,
   type TariffRow,
@@ -33,6 +35,8 @@ interface PivotLite {
   id: string;
   name: string;
   area: number;
+  module_id: string | null;
+  flow_rate: number;
   pump_power: number | null;
   installed_power_kw: number | null;
   motor_efficiency: number | null;
@@ -71,6 +75,7 @@ export default function CustosPage() {
   const [parcels, setParcels] = useState<ParcelLite[]>([]);
   const [cultures, setCultures] = useState<Named[]>([]);
   const [seasons, setSeasons] = useState<Named[]>([]);
+  const [modules, setModules] = useState<Named[]>([]);
   const [tariffs, setTariffs] = useState<TariffRow[]>([]);
   const [groupBy, setGroupBy] = useState<CostGroupBy>("pivot");
   const [filterPivot, setFilterPivot] = useState("");
@@ -82,6 +87,8 @@ export default function CustosPage() {
     tariff_type: "convencional",
     rate_off_peak: "",
     rate_peak: "",
+    rate_reserved: "",
+    demand_rate: "",
     peak_start: "18",
     peak_end: "21",
     valid_from: new Date().toISOString().slice(0, 10),
@@ -90,16 +97,22 @@ export default function CustosPage() {
   const load = useCallback(async () => {
     if (!activeFarmId) return;
     setLoading(true);
-    const [pv, cu, ss, tf] = await Promise.all([
-      supabase.from("pivots").select("id, name, area, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost").eq("farm_id", activeFarmId).order("name"),
+    const [pv, cu, ss, md, tf] = await Promise.all([
+      supabase.from("pivots").select("id, name, area, module_id, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost").eq("farm_id", activeFarmId).order("name"),
       supabase.from("cultures").select("id, name").eq("active", true).order("name"),
       supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).order("start_date", { ascending: false }),
-      supabase.from("energy_tariffs").select("id, valid_from, valid_to, rate_peak, rate_off_peak, peak_start, peak_end, tariff_type").eq("farm_id", activeFarmId).order("valid_from", { ascending: false }),
+      supabase.from("production_modules").select("id, name").eq("farm_id", activeFarmId).order("name"),
+      supabase.from("energy_tariffs")
+        .select("id, valid_from, valid_to, rate_peak, rate_off_peak, rate_reserved, demand_rate, peak_start, peak_end, tariff_type, active")
+        .eq("farm_id", activeFarmId)
+        .eq("active", true)
+        .order("valid_from", { ascending: false }),
     ]);
     const pivotRows = (pv.data ?? []) as PivotLite[];
     setPivots(pivotRows);
     setCultures((cu.data ?? []) as Named[]);
     setSeasons((ss.data ?? []) as Named[]);
+    setModules((md.data ?? []) as Named[]);
     const tariffRows = (tf.data ?? []) as Array<TariffRow & { tariff_type?: string }>;
     setTariffs(tariffRows);
     const current = tariffRows[0];
@@ -109,6 +122,8 @@ export default function CustosPage() {
         tariff_type: (current as { tariff_type?: string }).tariff_type ?? "convencional",
         rate_off_peak: String(current.rate_off_peak ?? ""),
         rate_peak: String(current.rate_peak ?? ""),
+        rate_reserved: String(current.rate_reserved ?? ""),
+        demand_rate: String(current.demand_rate ?? ""),
         peak_start: String(current.peak_start ?? 18),
         peak_end: String(current.peak_end ?? 21),
         valid_from: current.valid_from,
@@ -137,6 +152,7 @@ export default function CustosPage() {
   const parcelMap = useMemo(() => new Map(parcels.map((p) => [p.id, p])), [parcels]);
   const cultureMap = useMemo(() => new Map(cultures.map((c) => [c.id, c.name])), [cultures]);
   const seasonMap = useMemo(() => new Map(seasons.map((s) => [s.id, s.name])), [seasons]);
+  const moduleMap = useMemo(() => new Map(modules.map((m) => [m.id, m.name])), [modules]);
 
   const pricedRows: PricedEventRow[] = useMemo(() => {
     return events
@@ -166,6 +182,47 @@ export default function CustosPage() {
       });
   }, [events, filterPivot, periodFrom, periodTo, pivotMap, parcelMap, cultureMap, seasonMap]);
 
+  const demandOperations = useMemo(() => {
+    return events
+      .filter((e) => !filterPivot || e.pivot_id === filterPivot)
+      .filter((e) => !periodFrom || e.started_at.slice(0, 10) >= periodFrom)
+      .filter((e) => !periodTo || e.started_at.slice(0, 10) <= periodTo)
+      .map((e) => {
+        const pivot = pivotMap.get(e.pivot_id);
+        if (!pivot) return null;
+        return {
+          pivotId: pivot.id,
+          pivotName: pivot.name,
+          moduleName: pivot.module_id ? (moduleMap.get(pivot.module_id) ?? "Sem módulo") : "Sem módulo",
+          date: e.started_at.slice(0, 10),
+          installedPowerKw: pivot.installed_power_kw,
+          specificConsumptionKwhM3: pivot.specific_consumption,
+          flowRateM3h: pivot.flow_rate,
+          pumpPowerCv: pivot.pump_power,
+          motorEfficiency: pivot.motor_efficiency,
+        };
+      })
+      .filter((row): row is NonNullable<typeof row> => row != null);
+  }, [events, filterPivot, periodFrom, periodTo, pivotMap, moduleMap]);
+
+  const demandAllocations = useMemo(() => calculateWeeklyDemandApportionment(
+    demandOperations,
+    tariffs.map((t) => ({
+      validFrom: t.valid_from,
+      validTo: t.valid_to,
+      demandRate: Number(t.demand_rate ?? 0),
+    })),
+  ), [demandOperations, tariffs]);
+
+  const demandByPivot = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const row of demandAllocations) {
+      if (row.apportionedDemandCost == null) continue;
+      map.set(row.pivotId, (map.get(row.pivotId) ?? 0) + row.apportionedDemandCost);
+    }
+    return map;
+  }, [demandAllocations]);
+
   const groups = useMemo(() => aggregatePricedEvents(pricedRows, groupBy), [pricedRows, groupBy]);
   const farm = useMemo(() => {
     const cost = pricedRows.reduce((s, r) => s + (r.cost ?? 0), 0);
@@ -175,13 +232,18 @@ export default function CustosPage() {
     const areaByPivot = new Map<string, number>();
     for (const r of pricedRows) areaByPivot.set(r.pivotId, r.areaHa);
     const area = Array.from(areaByPivot.values()).reduce((a, b) => a + b, 0);
-    return { cost, energy, volume, events: pricedRows.length, area, depthArea };
-  }, [pricedRows]);
+    const demandCost = demandAllocations.reduce((s, r) => s + (r.apportionedDemandCost ?? 0), 0);
+    const demandMissingTariff = demandAllocations.some((r) => r.demandRate == null);
+    const totalCost = cost + demandCost;
+    return { cost, demandCost, totalCost, demandMissingTariff, energy, volume, events: pricedRows.length, area, depthArea };
+  }, [pricedRows, demandAllocations]);
 
   const saveTariff = async () => {
     if (!activeFarmId) return;
     const off = Number(tariffForm.rate_off_peak);
     const peak = Number(tariffForm.rate_peak || tariffForm.rate_off_peak);
+    const reserved = Number(tariffForm.rate_reserved);
+    const demandRate = Number(tariffForm.demand_rate);
     if (!Number.isFinite(off) || off <= 0) {
       setMessage("Informe a tarifa fora de ponta (R$/kWh), maior que zero.");
       return;
@@ -193,9 +255,11 @@ export default function CustosPage() {
       tariff_type: tariffForm.tariff_type,
       rate_off_peak: off,
       rate_peak: Number.isFinite(peak) && peak > 0 ? peak : off,
+      rate_reserved: Number.isFinite(reserved) && reserved >= 0 ? reserved : 0,
+      demand_rate: Number.isFinite(demandRate) && demandRate >= 0 ? demandRate : 0,
       peak_start: Number(tariffForm.peak_start) || 18,
       peak_end: Number(tariffForm.peak_end) || 21,
-      demand_rate: 0,
+      active: true,
       valid_from: tariffForm.valid_from,
       valid_to: null,
     };
@@ -261,11 +325,23 @@ export default function CustosPage() {
     { header: "Grupo", render: (r) => <span className="font-medium">{r.label}</span> },
     { header: "Eventos", render: (r) => String(r.eventCount), align: "right" },
     { header: "Energia", render: (r) => `${r.totalEnergyKwh.toFixed(0)} kWh`, align: "right" },
-    { header: "Custo", render: (r) => money(r.totalCost), align: "right" },
+    { header: "Consumo (R$)", render: (r) => money(r.totalCost), align: "right" },
     { header: "R$/evento", render: (r) => money(r.costPerEvent), align: "right" },
     { header: "R$/m³", render: (r) => r.costPerM3 != null ? r.costPerM3.toFixed(4) : "—", align: "right" },
     { header: "R$/mm/ha", render: (r) => r.costPerMmHa != null ? r.costPerMmHa.toFixed(4) : "—", align: "right" },
     { header: "R$/ha", render: (r) => money(r.costPerHa), align: "right" },
+  ];
+
+  const demandColumns: Column<(typeof demandAllocations)[number]>[] = [
+    { header: "Semana", render: (r) => `${r.weekStart.split("-").reverse().join("/")} – ${r.weekEnd.split("-").reverse().join("/")}` },
+    { header: "Módulo", render: (r) => <span className="font-medium">{r.moduleName}</span> },
+    { header: "Pico semanal", render: (r) => `${r.peakDemandKw.toFixed(1)} kW`, align: "right" },
+    { header: "Dia(s) do pico", render: (r) => r.peakDates.map((d) => d.split("-").reverse().join("/")).join(", ") },
+    { header: "Pivô", render: (r) => <span className="font-medium">{r.pivotName}</span> },
+    { header: "Pot. no pico", render: (r) => `${r.pivotPowerAtPeakKw.toFixed(1)} kW`, align: "right" },
+    { header: "Rateio", render: (r) => `${r.sharePct.toFixed(2)}%`, align: "right" },
+    { header: "R$/kW", render: (r) => r.demandRate == null ? "—" : r.demandRate.toFixed(6), align: "right" },
+    { header: "Demanda (R$)", render: (r) => money(r.apportionedDemandCost), align: "right" },
   ];
 
   if (!activeFarmId) {
@@ -284,16 +360,18 @@ export default function CustosPage() {
         descricao="O custo nasce do evento realizado. Sem tarifa ou potência na ficha, o valor permanece vazio."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard metric={{ id: "c", title: "Custo total", value: money(farm.cost), description: `${farm.events} evento(s)` }} />
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+        <StatCard metric={{ id: "c", title: "Custo total", value: money(farm.totalCost), description: "Consumo + demanda rateada" }} />
+        <StatCard metric={{ id: "cons", title: "Consumo energia", value: money(farm.cost), description: `${farm.events} evento(s)` }} />
+        <StatCard metric={{ id: "dem", title: "Demanda rateada", value: farm.demandMissingTariff ? "Pendente" : money(farm.demandCost), description: "Pico semanal por módulo" }} />
         <StatCard metric={{ id: "e", title: "Energia", value: `${farm.energy.toFixed(0)} kWh`, description: ENERGY_FORMULA }} />
-        <StatCard metric={{ id: "m3", title: "R$/m³", value: farm.volume > 0 ? (farm.cost / farm.volume).toFixed(4) : "—", description: COST_FORMULA }} />
-        <StatCard metric={{ id: "mmha", title: "R$/mm/ha", value: farm.depthArea > 0 ? (farm.cost / farm.depthArea).toFixed(4) : "—", description: COST_PER_MM_HA_FORMULA }} />
+        <StatCard metric={{ id: "m3", title: "R$/m³ total", value: farm.volume > 0 ? (farm.totalCost / farm.volume).toFixed(4) : "—", description: COST_FORMULA }} />
+        <StatCard metric={{ id: "mmha", title: "R$/mm/ha total", value: farm.depthArea > 0 ? (farm.totalCost / farm.depthArea).toFixed(4) : "—", description: COST_PER_MM_HA_FORMULA }} />
       </div>
 
       <Card className="space-y-4">
-        <h2 className="text-sm font-semibold text-graphite-800 dark:text-white">Tarifa da fazenda (R$/kWh)</h2>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+        <h2 className="text-sm font-semibold text-graphite-800 dark:text-white">Base tarifária da fazenda</h2>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Select
             id="tariff_type" label="Tipo"
             value={tariffForm.tariff_type}
@@ -304,8 +382,10 @@ export default function CustosPage() {
               { value: "azul", label: "Azul" },
             ]}
           />
-          <Input id="rate_off" label="Fora de ponta (R$/kWh)" type="number" min={0} step={0.0001} value={tariffForm.rate_off_peak} onChange={(e) => setTariffForm((f) => ({ ...f, rate_off_peak: e.target.value }))} />
-          <Input id="rate_peak" label="Ponta (R$/kWh)" type="number" min={0} step={0.0001} value={tariffForm.rate_peak} onChange={(e) => setTariffForm((f) => ({ ...f, rate_peak: e.target.value }))} />
+          <Input id="rate_off" label="Fora de ponta HFP (R$/kWh)" type="number" min={0} step={0.000001} value={tariffForm.rate_off_peak} onChange={(e) => setTariffForm((f) => ({ ...f, rate_off_peak: e.target.value }))} />
+          <Input id="rate_peak" label="Ponta HP (R$/kWh)" type="number" min={0} step={0.000001} value={tariffForm.rate_peak} onChange={(e) => setTariffForm((f) => ({ ...f, rate_peak: e.target.value }))} />
+          <Input id="rate_reserved" label="Horário reservado HR (R$/kWh)" type="number" min={0} step={0.000001} value={tariffForm.rate_reserved} onChange={(e) => setTariffForm((f) => ({ ...f, rate_reserved: e.target.value }))} />
+          <Input id="demand_rate" label="Demanda HFP (R$/kW)" type="number" min={0} step={0.000001} value={tariffForm.demand_rate} onChange={(e) => setTariffForm((f) => ({ ...f, demand_rate: e.target.value }))} />
           <Input id="peak_start" label="Início ponta (h)" type="number" min={0} max={23} value={tariffForm.peak_start} onChange={(e) => setTariffForm((f) => ({ ...f, peak_start: e.target.value }))} />
           <Input id="peak_end" label="Fim ponta (h)" type="number" min={0} max={23} value={tariffForm.peak_end} onChange={(e) => setTariffForm((f) => ({ ...f, peak_end: e.target.value }))} />
           <Input id="valid_from" label="Vigente desde" type="date" value={tariffForm.valid_from} onChange={(e) => setTariffForm((f) => ({ ...f, valid_from: e.target.value }))} />
@@ -317,7 +397,7 @@ export default function CustosPage() {
           </Button>
         </div>
         <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-          {ENERGY_FORMULA}. Fallback da ficha: R$/kWh do pivô. Não se inventa tarifa padrão.
+          Base mensal da planilha Karitel/RDM: HP, HFP, HR e Demanda HFP. {WEEKLY_DEMAND_FORMULA}. O rateio é feito somente entre os pivôs que formaram o maior pico da semana no módulo.
         </p>
       </Card>
 
@@ -351,6 +431,20 @@ export default function CustosPage() {
           </p>
         ) : (
           <Table columns={groupColumns} data={groups} getKey={(r) => r.key} />
+        )}
+      </Card>
+
+      <Card>
+        <div className="mb-4">
+          <h2 className="text-sm font-semibold text-graphite-800 dark:text-white">Demanda semanal rateada por pivô</h2>
+          <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
+            Maior demanda diária da semana por módulo. O custo semanal é rateado proporcionalmente à potência dos pivôs que compuseram o pico.
+          </p>
+        </div>
+        {demandAllocations.length === 0 ? (
+          <p className="py-4 text-sm text-graphite-400">Sem eventos com potência cadastrada no período.</p>
+        ) : (
+          <Table columns={demandColumns} data={demandAllocations} getKey={(r) => `${r.weekStart}-${r.moduleName}-${r.pivotId}`} />
         )}
       </Card>
 
