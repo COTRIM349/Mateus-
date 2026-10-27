@@ -7,11 +7,13 @@ import {
   buildIrrigationEventInsert,
   combineStartedAt,
   deriveAppliedVolume,
+  deriveDepthFromPercentimeter,
   deriveOperatingHours,
   eventDateKey,
   sumGrossDepthByDate,
   validateIrrigationDepth,
   validateOperatingHours,
+  validatePercentimeterPct,
 } from "./irrigation-event";
 
 describe("fórmulas do evento", () => {
@@ -26,6 +28,18 @@ describe("fórmulas do evento", () => {
     expect(HOURS_FORMULA).toContain("vazão");
   });
 
+  it("calcula lâmina pela relação inversa do percentímetro", () => {
+    expect(deriveDepthFromPercentimeter(100, 5.26)).toBe(5.26);
+    expect(deriveDepthFromPercentimeter(50, 5.26)).toBe(10.52);
+    expect(deriveDepthFromPercentimeter(25, 5.26)).toBe(21.04);
+  });
+
+  it("valida percentímetro entre 1 e 100%", () => {
+    expect(validatePercentimeterPct(80)).toBeNull();
+    expect(validatePercentimeterPct(0)).not.toBeNull();
+    expect(validatePercentimeterPct(101)).not.toBeNull();
+  });
+
   it("rejeita lâmina e horas inválidas", () => {
     expect(validateIrrigationDepth(12)).toBeNull();
     expect(validateIrrigationDepth(0)).not.toBeNull();
@@ -35,8 +49,9 @@ describe("fórmulas do evento", () => {
 
 describe("buildIrrigationEventInsert", () => {
   it("grava parcela, lâmina bruta, volume e horas", () => {
-    const row = buildIrrigationEventInsert({ pivotId: "p1", parcelId: "a1", dateYmd: "2026-08-20", timeHm: "08:30", depthMm: 12, areaHa: 80, flowRateM3h: 400, notes: "volta completa" });
+    const row = buildIrrigationEventInsert({ pivotId: "p1", parcelId: "a1", dateYmd: "2026-08-20", timeHm: "08:30", depthMm: 12, percentimeterPct: 50, areaHa: 80, flowRateM3h: 400, notes: "volta completa" });
     expect(row.depth_mm).toBe(12);
+    expect(row.percentimeter_pct).toBe(50);
     expect(row.volume_m3).toBe(9600);
     expect(row.operating_hours).toBe(24);
     expect(row.parcel_id).toBe("a1");
