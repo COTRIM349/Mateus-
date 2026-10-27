@@ -65,6 +65,7 @@ import {
   type ReservatorioPoint,
   type EntradaSeriesKey,
   type ReservSeriesKey,
+  type ReservatorioZoom,
 } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 import Link from "next/link";
@@ -2592,6 +2593,7 @@ function Cockpit({
   // Escala do gráfico de reservatório: "pct" = % da água disponível (PMP=0,
   // CC=100, estilo Scheduling); "mm" = ARM em milímetros absolutos.
   const [reservUnit, setReservUnit] = useState<"pct" | "mm">("pct");
+  const [reservZoom, setReservZoom] = useState<ReservatorioZoom>("total");
   useEffect(() => {
     try {
       const e = window.localStorage.getItem("bh:entradasVis");
@@ -2831,6 +2833,29 @@ function Cockpit({
                 ))}
               </div>
             </div>
+            <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.12em] text-graphite-400 dark:text-gray-500">Escala</span>
+              {([
+                { key: "total", label: "Completa" },
+                { key: "atencao", label: "Zoom faixa amarela" },
+                { key: "arm", label: "Zoom ARM" },
+              ] as const).map((option) => (
+                <button
+                  type="button"
+                  key={option.key}
+                  aria-pressed={reservZoom === option.key}
+                  onClick={() => setReservZoom(option.key)}
+                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                    reservZoom === option.key
+                      ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
+                      : "border-gray-200 bg-gray-50 text-graphite-500 hover:border-gray-300 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-400"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
+              {reservZoom !== "total" && <span className="text-[10px] text-amber-700 dark:text-amber-300">Zoom visual — fora da janela não aparece, mas os cálculos continuam iguais</span>}
+            </div>
             <div className="mb-2.5">
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
               <CockpitSeriesToggles
@@ -2839,7 +2864,7 @@ function Cockpit({
                 onToggle={toggleReserv}
               />
             </div>
-            <div className="h-[360px] w-full"><ReservatorioChart points={series.reservatorio} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} unit={reservUnit} /></div>
+            <div className="h-[480px] w-full"><ReservatorioChart points={series.reservatorio} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} unit={reservUnit} zoom={reservZoom} /></div>
           </Card>
         </div>
 
