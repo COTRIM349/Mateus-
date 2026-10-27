@@ -45,18 +45,65 @@ export interface ResolvedManagementParams {
   maxRootDepth: number;
 }
 
-// ── DAE (dias após emergência/plantio) ───────────────────────────────────
+// ── DAE (dias após emergência) ───────────────────────────────────────────
+
+/** Regra operacional padrão: emergência prevista 6 dias após o plantio. */
+export const DEFAULT_EMERGENCE_DAYS_AFTER_PLANTING = 6;
+
+function parseYmdUtc(ymd: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month - 1 ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function formatYmdUtc(date: Date): string {
+  return [
+    String(date.getUTCFullYear()).padStart(4, "0"),
+    String(date.getUTCMonth() + 1).padStart(2, "0"),
+    String(date.getUTCDate()).padStart(2, "0"),
+  ].join("-");
+}
+
+/** Soma dias corridos a uma data YYYY-MM-DD sem depender do fuso do navegador. */
+export function addDaysToYmd(ymd: string, days: number): string {
+  const date = parseYmdUtc(ymd);
+  if (!date || !Number.isFinite(days)) return ymd;
+  date.setUTCDate(date.getUTCDate() + Math.trunc(days));
+  return formatYmdUtc(date);
+}
+
+/** Emergência prevista quando ainda não existe uma data observada em campo. */
+export function predictEmergenceDate(
+  plantingDate: string,
+  daysAfterPlanting = DEFAULT_EMERGENCE_DAYS_AFTER_PLANTING,
+): string {
+  return addDaysToYmd(plantingDate, daysAfterPlanting);
+}
 
 /**
  * Data-base para o cálculo do DAE.
- * Regra atual: usa a data de emergência quando informada; caso contrário, a
- * data de plantio. Centralizado aqui para permitir configurações futuras
- * (ex.: origem por cultura ou por fazenda) sem alterar a estrutura do banco.
+ * Prioridade:
+ * 1) emergência observada/informada;
+ * 2) emergência prevista = plantio + 6 dias.
+ *
+ * Assim, parcelas antigas sem emergência gravada também passam a usar a regra
+ * automática sem exigir atualização manual do banco.
  */
 export function resolveDaeReferenceDate(
   a: Pick<OperationalAssignment, "emergence_date" | "planting_date">,
 ): string {
-  return a.emergence_date ?? a.planting_date;
+  return a.emergence_date || predictEmergenceDate(a.planting_date);
 }
 
 /** DAE em dias entre a data-base e a data alvo (default: hoje), nunca negativo. */
