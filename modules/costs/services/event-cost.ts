@@ -11,7 +11,7 @@ import { roundTo } from "@/utils/math";
 
 export const ENERGY_FORMULA = "E kWh = (Pot CV × 0,7355 / η) × Tempo h";
 export const ENERGY_SPEC_FORMULA = "E kWh = consumo específico kWh/m³ × volume m³";
-export const COST_FORMULA = "Custo R$ = consumo tarifado + adicional da bandeira";
+export const COST_FORMULA = "Custo R$ = energia kWh × tarifa R$/kWh + energia kWh × adicional da bandeira";
 export const COST_PER_MM_HA_FORMULA = "R$/mm/ha = custo R$ / (lâmina mm × área ha)";
 export const MOTOR_EFFICIENCY_DEFAULT = 0.85;
 
@@ -122,6 +122,10 @@ export interface EventCostResult {
   pendingReason: string | null;
 }
 
+function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
 function hmFromIso(iso: string): string {
   const t = iso.includes("T") ? iso.slice(11, 16) : "";
   return /^\d{2}:\d{2}$/.test(t) ? t : "06:00";
@@ -194,8 +198,8 @@ export function deriveEventCost(input: EventCostInput): EventCostResult {
     );
     const flagSurcharge = Number(tariff.flagSurchargePerKwh ?? 0);
     const validFlagSurcharge = Number.isFinite(flagSurcharge) && flagSurcharge >= 0 ? flagSurcharge : 0;
-    const flagCost = roundTo(input.energyKwh * validFlagSurcharge, 2);
-    const cost = roundTo(baseEnergyCost + flagCost, 2);
+    const flagCost = roundCurrency(input.energyKwh * validFlagSurcharge);
+    const cost = roundCurrency(baseEnergyCost + flagCost);
     const blended =
       input.energyKwh > 0 ? roundTo(cost / input.energyKwh, 6) : tariff.rateOffPeak + validFlagSurcharge;
     return {
