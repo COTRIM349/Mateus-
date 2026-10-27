@@ -1862,6 +1862,17 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
+/** DTA = (CC - PMP) x 1000 em mm/m, para CC/PMP volumétricos.
+ * Com perfil de camadas, o motor já devolve CC/PMP ponderados na zona explorada.
+ * Fallback CTA/Zr apenas para linhas legadas sem CC e PMP. */
+function dtaMmPerMeter(r: Pick<DailyBalanceRow, "fieldCapacity" | "wiltingPoint" | "cad" | "rootDepth">): number | null {
+  if (r.fieldCapacity != null && r.wiltingPoint != null &&
+      Number.isFinite(r.fieldCapacity) && Number.isFinite(r.wiltingPoint)) {
+    return Math.max((r.fieldCapacity - r.wiltingPoint) * 1000, 0);
+  }
+  return r.rootDepth > 0 ? r.cad / r.rootDepth : null;
+}
+
 /** Entradas do solo no dia: Pe + I_ef (lâmina bruta × eficiência). */
 function soilInflowMm(r: DailyBalanceRow): number {
   return r.effectivePrecipitation + (r.effectiveIrrigation ?? r.irrigationApplied);
@@ -1956,7 +1967,7 @@ function BalanceTab({
         r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1),
         (r.effectiveIrrigation ?? r.irrigationApplied).toFixed(1),
         entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1),
-        (r.rootDepth > 0 ? r.cad / r.rootDepth : 0).toFixed(1), r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
+        dtaMmPerMeter(r)?.toFixed(1) ?? "", r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
         (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1), pctCc.toFixed(1),
         sens != null ? String(sens) : "",
         depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label,
@@ -2042,7 +2053,7 @@ function BalanceTab({
     { header: "Entradas", render: (r) => <span className="text-blue-600 dark:text-blue-400">{soilInflowMm(r).toFixed(1)}</span> },
     { header: "Saídas", render: (r) => <span className="text-amber-600 dark:text-amber-400">{r.etc.toFixed(1)}</span> },
     { header: "Saldo", render: (r) => { const s = soilInflowMm(r) - r.etc; return <span className={s >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{s >= 0 ? "+" : ""}{s.toFixed(1)}</span>; } },
-    { header: "DTA (mm/m)", render: (r) => r.rootDepth > 0 ? (r.cad / r.rootDepth).toFixed(1) : "—" },
+    { header: "DTA (mm/m)", render: (r) => dtaMmPerMeter(r)?.toFixed(1) ?? "—" },
     { header: "CTA (mm)", render: (r) => r.cad.toFixed(1) },
     { header: "CRA", render: (r) => r.afd.toFixed(1) },
     { header: "ARM", render: (r) => <span title={r.balanceFormula}>{r.storedWater.toFixed(1)}</span> },
@@ -2678,7 +2689,7 @@ function Cockpit({
     { icon: <IconWave />, label: "ETc potencial", value: fmtNum(last.etcPotential ?? last.etc), unit: "mm" },
     { icon: <IconSprout />, label: "Ks", value: fmtNum(last.ks ?? 1, 2) },
     { icon: <IconDrop />, label: "ARM", value: fmtNum(arm), unit: "mm" },
-    { icon: <IconLayers />, label: "DTA", value: last.rootDepth > 0 ? fmtNum(cad / last.rootDepth) : "—", unit: "mm/m" },
+    { icon: <IconLayers />, label: "DTA", value: dtaMmPerMeter(last) != null ? fmtNum(dtaMmPerMeter(last)!) : "—", unit: "mm/m" },
     { icon: <IconLayers />, label: "CTA", value: fmtNum(cad), unit: "mm" },
     { icon: <IconAlert />, label: "CRA", value: fmtNum(afd), unit: "mm" },
     { icon: <IconLeaf />, label: "F (FAO-56)", value: fmtNum(pFactor, 3) },
