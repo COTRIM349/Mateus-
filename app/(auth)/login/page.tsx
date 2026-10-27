@@ -6,6 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { APP_NAME } from "@/constants/app";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -44,7 +45,7 @@ export default function LoginPage() {
           </svg>
         </div>
         <h1 className="text-xl font-bold tracking-tight text-graphite-900 dark:text-white">
-          SANTA COLOMBA IRRIGA PRO
+          {APP_NAME}
         </h1>
         <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
           Entre com suas credenciais

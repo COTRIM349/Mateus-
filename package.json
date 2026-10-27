@@ -2,7 +2,7 @@
   "name": "cotrim-irrigacao-pro",
   "version": "1.0.0",
   "private": true,
-  "description": "SANTA COLOMBA IRRIGA PRO - Sistema operacional para gestão de irrigação agrícola",
+  "description": "Santa Colomba Irriga360 - Sistema operacional para gestão de irrigação agrícola",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

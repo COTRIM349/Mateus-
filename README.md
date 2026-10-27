@@ -1,4 +1,4 @@
-# Cotrim Irrigacao Pro
+# Santa Colomba Irriga360
 
 Sistema operacional completo para gestao inteligente de irrigacao agricola. Plataforma SaaS multi-tenant que integra dados climaticos, de solo, cultura, balanco hidrico, recomendacao de irrigacao, programacao operacional, energia e custos em uma central de controle unificada.
 
@@ -238,4 +238,4 @@ Consulte ROADMAP.md para detalhes completos.
 
 ## Licenca
 
-Projeto proprietario - Cotrim Irrigacao Pro. Todos os direitos reservados.
+Projeto proprietario - Santa Colomba Irriga360. Todos os direitos reservados.

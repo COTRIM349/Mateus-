@@ -109,7 +109,7 @@ export function Sidebar() {
           </div>
           <div>
             <p className="text-[14px] font-extrabold leading-none tracking-tight text-white">SANTA COLOMBA</p>
-            <p className="mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.18em] text-brand-300">IRRIGA PRO</p>
+            <p className="mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.18em] text-brand-300">IRRIGA360</p>
           </div>
         </div>
 

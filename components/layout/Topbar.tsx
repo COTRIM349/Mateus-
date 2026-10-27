@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import Link from "next/link";
+import { APP_NAME } from "@/constants/app";
 import { useAuth, useTheme } from "@/components/providers";
 import { useRouter } from "next/navigation";
 
@@ -39,7 +40,7 @@ export function Topbar() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
         </svg>
         <span className="text-[13px] font-semibold tracking-tight text-graphite-800 dark:text-white">
-          {activeFarm?.name ?? profile?.companyName ?? "SANTA COLOMBA IRRIGA PRO"}
+          {activeFarm?.name ?? profile?.companyName ?? APP_NAME}
         </span>
       </div>
 
