@@ -2746,7 +2746,7 @@ function Cockpit({
                   )}
                 </div>
                 <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-                  DAE × Kc · mesma curva usada no cálculo de ETc potencial · Ks não altera esta curva
+                  DAE × Kc · evolução acumulada até hoje · a curva cresce dia a dia com a fenologia atual
                 </p>
               </div>
               {kcCurve && (
