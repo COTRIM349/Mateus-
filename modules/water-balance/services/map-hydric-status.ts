@@ -32,6 +32,49 @@ export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
  * Paleta única do mapa hídrico.
  * Verde fica reservado à capacidade de campo.
  */
+/**
+ * Limites dinâmicos das faixas do reservatório, usando CTA e CRA do próprio
+ * dia. F=CRA/CTA já foi ajustado no motor com a ETc daquele dia.
+ * As cotas absolutas incluem o PMP, para conversão entre mm e % de CTA.
+ *
+ * Azul: ARM > CTA − 0,70×CRA; amarelo: CTA − CRA < ARM <= CTA − 0,70×CRA;
+ * vermelho: ARM <= CTA − CRA. Verde apenas próximo à CC.
+ */
+export function calculateHydricZoneBounds(input: {
+  ctaMm: number;
+  craMm: number;
+  pmpMm?: number;
+  thresholds?: Partial<MapHydricThresholds>;
+}): {
+  ccAbs: number;
+  greenFloorAbs: number;
+  attentionAbs: number;
+  safetyAbs: number;
+  pmpAbs: number;
+  ctaMm: number;
+  craMm: number;
+  factorF: number;
+} | null {
+  const { ctaMm, craMm, pmpMm = 0 } = input;
+  if (![ctaMm, craMm, pmpMm].every(Number.isFinite) ||
+      ctaMm <= 0 || craMm <= 0 || craMm > ctaMm || pmpMm < 0) return null;
+  const t = { ...MAP_HYDRIC_THRESHOLDS, ...input.thresholds };
+  if (![t.fieldCapacityRatio, t.attentionAfdRatio].every(Number.isFinite) ||
+      t.fieldCapacityRatio < 0 || t.fieldCapacityRatio > 1 ||
+      t.attentionAfdRatio < 0 || t.attentionAfdRatio > 1) return null;
+  const ccAbs = pmpMm + ctaMm;
+  return {
+    ccAbs,
+    greenFloorAbs: pmpMm + ctaMm * t.fieldCapacityRatio,
+    attentionAbs: ccAbs - craMm * t.attentionAfdRatio,
+    safetyAbs: ccAbs - craMm,
+    pmpAbs: pmpMm,
+    ctaMm,
+    craMm,
+    factorF: craMm / ctaMm,
+  };
+}
+
 export const MAP_HYDRIC_COLORS = {
   blue: "#2196F3",
   green: "#4CAF50",

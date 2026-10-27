@@ -1,5 +1,7 @@
 "use client";
 
+import { calculateHydricZoneBounds } from "@/modules/water-balance/services/map-hydric-status";
+
 /**
  * Gráficos dedicados do cockpit de Balanço Hídrico.
  *
@@ -80,7 +82,7 @@ export const RESERVATORIO_SERIES: SeriesDef<ReservSeriesKey>[] = [
   { k: "cc", label: "Capacidade de campo (CC)", color: "#16a34a" },
   { k: "seguranca", label: "Umidade de segurança (limite de manejo)", color: "#eab308" },
   { k: "pmp", label: "Ponto de murcha (PMP)", color: "#dc2626" },
-  { k: "zonas", label: "Faixas de zona (ótima/alerta/déficit)", color: "#94a3b8" },
+  { k: "zonas", label: "Faixas dinâmicas pela CRA e fator F (por dia)", color: "#94a3b8" },
   { k: "chuva", label: "Chuva efetiva", color: "#2f6bff" },
   { k: "irrig", label: "Irrigação realizada", color: "#16a34a" },
   { k: "eto", label: "ETo (demanda atmosférica)", color: "#f59e0b" },
@@ -578,8 +580,25 @@ export function ReservatorioChart({
   const pmpRef = pct ? 0 : pmpMm;
   const segRef = pct ? (cadMm > 0 ? ((safetyMm - pmpMm) / cadMm) * 100 : 0) : safetyMm;
   const attnRef = pct ? (cadMm > 0 ? ((attentionMm - pmpMm) / cadMm) * 100 : 0) : attentionMm;
-  // Verde fica restrito à proximidade imediata da capacidade de campo.
-  // A mesma tolerância operacional do mapa (98% da CAD) evita ruído numérico.
+  // Limites por data: cada dia utiliza a CTA e CRA calculadas pelo motor.
+  // Para a mesma CTA, aumentar F amplia a CRA e desloca a faixa amarela.
+  const zones = points.map((p) => {
+    if (p.ccAbs == null || p.safetyAbs == null || p.pmpAbs == null) return null;
+    const cta = p.ccAbs - p.pmpAbs;
+    const cra = p.ccAbs - p.safetyAbs;
+    const bounds = calculateHydricZoneBounds({ ctaMm: cta, craMm: cra, pmpMm: p.pmpAbs });
+    if (!bounds) return null;
+    const convert = (abs: number) => pct ? ((abs - p.pmpAbs!) / cta) * 100 : abs;
+    return {
+      cc: convert(bounds.ccAbs),
+      green: convert(bounds.greenFloorAbs),
+      attention: convert(bounds.attentionAbs),
+      safety: convert(bounds.safetyAbs),
+      pmp: convert(bounds.pmpAbs),
+      zero: 0,
+      factorF: bounds.factorF,
+    };
+  });
   const ccGreenFloor = pct ? 98 : pmpMm + cadMm * 0.98;
 
   const maxPoint = Math.max(
@@ -590,9 +609,28 @@ export function ReservatorioChart({
   const y = (v: number) => padT + plotH - (clamp(NUM(v), 0, yTop) / yTop) * plotH;
   const yPct = (v: number) => padT + plotH - (clamp(v, 0, 125) / 125) * plotH; // θ/θCC secundário (só mm)
 
-  const bandRect = (lo: number, hi: number, fill: string) => (
-    <rect x={padL} y={y(hi)} width={plotW} height={Math.max(y(lo) - y(hi), 0)} fill={fill} />
-  );
+  // Faixas interpoladas entre os limites de cada DIA, acompanhando a curva
+  // de F ao invés de espalhar os limites do último dia por todo o histórico.
+  // Lacunas de dados são omitidas, sem projetar uma zona arbitrária.
+  type Zone = NonNullable<(typeof zones)[number]>;
+  type Edge = keyof Pick<Zone, "cc" | "green" | "attention" | "safety" | "pmp" | "zero">;
+  const zoneBand = (low: Edge, high: Edge, fill: string) => {
+    if (n === 1 && zones[0]) {
+      const z = zones[0];
+      return <rect x={padL} y={y(z[high])} width={plotW} height={Math.max(y(z[low]) - y(z[high]), 0)} fill={fill} />;
+    }
+    return zones.slice(0, -1).map((z, i) => {
+      const next = zones[i + 1];
+      if (!z || !next) return null;
+      return (
+        <path
+          key={`${low}-${high}-${i}`}
+          d={`M ${x(i)},${y(z[high])} L ${x(i + 1)},${y(next[high])} L ${x(i + 1)},${y(next[low])} L ${x(i)},${y(z[low])} Z`}
+          fill={fill}
+        />
+      );
+    });
+  };
 
   // Curva de água no solo (ARM em mm, ou umidade em % da CAD).
   const waterOf = (p: ReservatorioPoint) => (pct ? availOf(p) : p.storageAbs);
@@ -602,6 +640,7 @@ export function ReservatorioChart({
   const moistureFore: string[] = [];
   const ccPts: string[] = [];
   const safetyPts: string[] = [];
+  const attentionPts: string[] = [];
   const pmpPts: string[] = [];
 
   points.forEach((p, i) => {
@@ -616,9 +655,11 @@ export function ReservatorioChart({
     }
     const ccV = pct ? 100 : p.ccAbs;
     const segV = pct ? segAvailOf(p) : p.safetyAbs;
+    const attnV = zones[i]?.attention;
     const pmpV = pct ? 0 : p.pmpAbs;
     if (ccV != null && Number.isFinite(ccV)) ccPts.push(`${x(i).toFixed(1)},${y(ccV).toFixed(1)}`);
     if (segV != null && Number.isFinite(segV)) safetyPts.push(`${x(i).toFixed(1)},${y(segV).toFixed(1)}`);
+    if (attnV != null && Number.isFinite(attnV)) attentionPts.push(`${x(i).toFixed(1)},${y(attnV).toFixed(1)}`);
     if (pmpV != null && Number.isFinite(pmpV)) pmpPts.push(`${x(i).toFixed(1)},${y(pmpV).toFixed(1)}`);
   });
   if (waterReal.length > 0 && waterFore.length > 0) waterFore.unshift(waterReal[waterReal.length - 1]);
@@ -669,16 +710,16 @@ export function ReservatorioChart({
           <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* Faixas de manejo condicionadas à decisão de irrigação.
-          Verde = somente CC; azul = sem necessidade; amarelo = atenção;
-          vermelho = limite de manejo atingido/irrigar. */}
+      {/* Limites dinâmicos por dia: azul até 70% da CRA consumida,
+          amarelo dos 70% aos 100%; vermelho quando o consumo alcança a CRA.
+          Verde apenas na capacidade de campo, como no mapa operacional. */}
       {visible.zonas && (
         <>
-          {bandRect(ccGreenFloor, ccRef, "#16a34a2b")}
-          {bandRect(attnRef, ccGreenFloor, "#2196f326")}
-          {bandRect(segRef, attnRef, "#eab3082b")}
-          {bandRect(pmpRef, segRef, "#dc26262b")}
-          {!pct && bandRect(0, pmpMm, "#7f1d1d22")}
+          {zoneBand("green", "cc", "#16a34a2b")}
+          {zoneBand("attention", "green", "#2196f326")}
+          {zoneBand("safety", "attention", "#eab30845")}
+          {zoneBand("pmp", "safety", "#dc26262b")}
+          {!pct && zoneBand("zero", "pmp", "#7f1d1d22")}
         </>
       )}
 
@@ -700,21 +741,22 @@ export function ReservatorioChart({
         </>
       )}
 
-      {visible.zonas && (
+      {visible.zonas && zones[n - 1] && (
         <>
           <ZoneLabel y={y((attnRef + ccGreenFloor) / 2)} text="Sem necessidade" color="#1976d2" x={padL + 6} />
-          <ZoneLabel y={y((segRef + attnRef) / 2)} text="Atenção" color="#b45309" x={padL + 6} />
+          <ZoneLabel y={y((segRef + attnRef) / 2)} text={`Atenção · F ${zones[n - 1]!.factorF.toFixed(3)}`} color="#b45309" x={padL + 6} />
           <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Irrigar" color="#dc2626" x={padL + 6} />
         </>
       )}
 
       {/* Referências dinâmicas do perfil explorado */}
       {visible.cc && ccPts.length > 1 && <polyline points={ccPts.join(" ")} fill="none" stroke="#16a34a" strokeWidth={1.5} opacity={0.8} />}
-      {visible.seguranca && safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="6 4" />}
+      {visible.zonas && attentionPts.length > 1 && <polyline points={attentionPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="3 4" opacity={0.9} />}
+      {visible.seguranca && safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#ca8a04" strokeWidth={1.8} strokeDasharray="6 4" />}
       {visible.pmp && pmpPts.length > 1 && <polyline points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
 
       {visible.cc && <RefLine y={y(ccRef)} label="Capacidade de campo" value={pct ? "100 %CC" : `${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
-      {visible.seguranca && <RefLine y={y(segRef)} label="Umidade de segurança" value={pct ? `${segRef.toFixed(0)} %CC` : `${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed />}
+      {visible.seguranca && <RefLine y={y(segRef)} label="Limite CRA (F atual)" value={pct ? `${segRef.toFixed(0)}% da CTA` : `${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed hideLine />}
       {visible.pmp && <RefLine y={y(pmpRef)} label="Ponto de murcha" value={pct ? "0 %CC" : `${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
 
       {/* Eventos na base: chuva efetiva e irrigação realizada. */}
@@ -769,10 +811,10 @@ function ZoneLabel({ y, text, color, x }: { y: number; text: string; color: stri
   return <text x={x} y={y + 3} fontSize={9.5} fontWeight={700} fill={color} opacity={0.85}>{text}</text>;
 }
 
-function RefLine({ y, label, value, color, plotRight, dashed }: { y: number; label: string; value: string; color: string; plotRight: number; dashed?: boolean }) {
+function RefLine({ y, label, value, color, plotRight, dashed, hideLine }: { y: number; label: string; value: string; color: string; plotRight: number; dashed?: boolean; hideLine?: boolean }) {
   return (
     <g>
-      <line x1={38} x2={plotRight} y1={y} y2={y} stroke={color} strokeWidth={1.2} strokeDasharray={dashed ? "5 4" : undefined} opacity={0.7} />
+      {!hideLine && <line x1={38} x2={plotRight} y1={y} y2={y} stroke={color} strokeWidth={1.2} strokeDasharray={dashed ? "5 4" : undefined} opacity={0.7} />}
       <text x={plotRight + 6} y={y - 1} fontSize={9.2} fontWeight={700} fill={color}>{label}</text>
       <text x={plotRight + 6} y={y + 10} fontSize={8.8} className="fill-graphite-400 dark:fill-gray-500">{value}</text>
     </g>
