@@ -153,6 +153,42 @@ export function clipLayersToRootDepth(
     .filter((l) => l.depth_end > l.depth_start);
 }
 
+/**
+ * Profundidade máxima na qual há solo cadastrado e contínuo desde a superfície.
+ *
+ * Não estende os últimos valores de CC/PMP para baixo, não atravessa lacunas entre
+ * camadas e respeita a profundidade efetiva declarada no cadastro do pivô.
+ * O crescimento fisiológico da raiz pode continuar além deste limite; a CTA não.
+ */
+export function registeredSoilProfileDepthMeters(input: {
+  effective_depth: number;
+  layers?: SoilProfileLayer[] | null;
+}): number {
+  const effective = Number.isFinite(input.effective_depth) && input.effective_depth > 0
+    ? input.effective_depth : 0;
+  if (!input.layers || input.layers.length === 0) return effective;
+  let coveredCm = 0;
+  const sorted = [...input.layers].sort((a, b) => a.depth_start - b.depth_start);
+  for (const layer of sorted) {
+    if (![layer.depth_start, layer.depth_end, layer.field_capacity, layer.wilting_point].every(Number.isFinite) ||
+        layer.field_capacity <= layer.wilting_point || layer.depth_end <= layer.depth_start) break;
+    // Uma lacuna impede extrapolar a disponibilidade de água a camadas mais fundas.
+    if (layer.depth_start > coveredCm + 0.01) break;
+    coveredCm = Math.max(coveredCm, layer.depth_end);
+  }
+  const measured = coveredCm / 100;
+  return roundTo(effective > 0 ? Math.min(measured, effective) : measured, 4);
+}
+
+/** Raiz efetiva dentro do perfil COM DADOS; não altera a raiz estimada. */
+export function rootDepthWithRegisteredSoil(
+  estimatedRootMeters: number,
+  input: { effective_depth: number; layers?: SoilProfileLayer[] | null },
+): number {
+  if (!Number.isFinite(estimatedRootMeters) || estimatedRootMeters <= 0) return 0;
+  return roundTo(Math.min(estimatedRootMeters, registeredSoilProfileDepthMeters(input)), 4);
+}
+
 function toLayerParams(layer: SoilProfileLayer): LayerParams {
   return {
     depth_start: layer.depth_start,
