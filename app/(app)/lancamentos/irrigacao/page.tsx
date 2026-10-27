@@ -15,7 +15,7 @@ import {
   buildIrrigationEventInsert,
   deriveAppliedVolume,
   deriveDepthFromPercentimeter,
-  deriveOperatingHours,
+  deriveOperatingHoursFromPercentimeter,
   validateIrrigationDepth,
   validatePercentimeterPct,
 } from "@/modules/irrigation/services";
@@ -33,6 +33,7 @@ interface PivotLite {
   specific_consumption: number | null;
   energy_cost: number | null;
   depth_100_pct: number | null;
+  full_turn_time: number | null;
 }
 
 interface ParcelLite {
@@ -46,21 +47,14 @@ interface ParcelLite {
 interface FormState {
   pivot_id: string;
   date: string;
-  time: string;
   percentimeter_pct: string;
   notes: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-const nowHm = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
 const EMPTY: FormState = {
   pivot_id: "",
   date: today(),
-  time: nowHm(),
   percentimeter_pct: "",
   notes: "",
 };
@@ -83,7 +77,7 @@ export default function LancamentoIrrigacaoPage() {
     if (!activeFarmId) return;
     supabase
       .from("pivots")
-      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost, depth_100_pct")
+      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost, depth_100_pct, full_turn_time")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name")
@@ -141,9 +135,12 @@ export default function LancamentoIrrigacaoPage() {
     ? deriveAppliedVolume(depthNum, selectedPivot.area)
     : null;
 
-  const previewHours = selectedPivot && previewVolume != null
-    ? deriveOperatingHours(depthNum, selectedPivot.area, selectedPivot.flow_rate)
-    : null;
+  const previewHours =
+    selectedPivot?.full_turn_time != null &&
+    Number.isFinite(percentimeterNum) &&
+    percentimeterNum > 0
+      ? deriveOperatingHoursFromPercentimeter(percentimeterNum, selectedPivot.full_turn_time)
+      : null;
 
   const previewPrice = selectedPivot && previewVolume != null && previewHours != null && previewHours > 0
     ? priceIrrigationEvent({
@@ -155,7 +152,7 @@ export default function LancamentoIrrigacaoPage() {
       installedPowerKw: selectedPivot.installed_power_kw,
       motorEfficiency: selectedPivot.motor_efficiency,
       specificConsumptionKwhM3: selectedPivot.specific_consumption,
-      startedAt: `${form.date}T${form.time || "06:00"}:00`,
+      startedAt: `${form.date}T06:00:00`,
       tariff: pickTariffForDate(tariffs, form.date),
       pivotEnergyCostReaisPerKwh: selectedPivot.energy_cost,
     })
@@ -171,7 +168,6 @@ export default function LancamentoIrrigacaoPage() {
       ...EMPTY,
       pivot_id: selectedPivotId,
       date: today(),
-      time: nowHm(),
     });
     setFormError("");
     setSuccessMessage("");
@@ -192,8 +188,13 @@ export default function LancamentoIrrigacaoPage() {
       return;
     }
 
-    if (pivot.depth_100_pct == null || pivot.depth_100_pct <= 0) {
-      setFormError("A ficha técnica deste pivô não possui lâmina a 100%. Complete a ficha do equipamento para calcular a lâmina pelo percentímetro.");
+    if (
+      pivot.depth_100_pct == null ||
+      pivot.depth_100_pct <= 0 ||
+      pivot.full_turn_time == null ||
+      pivot.full_turn_time <= 0
+    ) {
+      setFormError("A ficha técnica deste pivô não possui a base de lâmina/horas a 100%. Complete a ficha do equipamento.");
       return;
     }
 
@@ -222,11 +223,12 @@ export default function LancamentoIrrigacaoPage() {
       pivotId: form.pivot_id,
       parcelId: parcel?.id ?? null,
       dateYmd: form.date,
-      timeHm: form.time,
+      timeHm: "06:00",
       depthMm: depth,
       percentimeterPct,
       areaHa: pivot.area,
       flowRateM3h: pivot.flow_rate,
+      fullTurnTime100H: pivot.full_turn_time,
       notes: form.notes || null,
     });
 
@@ -322,7 +324,12 @@ export default function LancamentoIrrigacaoPage() {
 
           <Button
             onClick={openLaunch}
-            disabled={!selectedLaunchPivot || !selectedLaunchParcel || !selectedLaunchPivot.depth_100_pct}
+            disabled={
+              !selectedLaunchPivot ||
+              !selectedLaunchParcel ||
+              !selectedLaunchPivot.depth_100_pct ||
+              !selectedLaunchPivot.full_turn_time
+            }
           >
             Lançar irrigação
           </Button>
@@ -334,9 +341,11 @@ export default function LancamentoIrrigacaoPage() {
           </p>
         )}
 
-        {selectedPivotId && selectedLaunchParcel && !selectedLaunchPivot?.depth_100_pct && (
+        {selectedPivotId && selectedLaunchParcel && (
+          !selectedLaunchPivot?.depth_100_pct || !selectedLaunchPivot?.full_turn_time
+        ) && (
           <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
-            A ficha técnica deste pivô ainda não possui lâmina a 100%. Cadastre esse parâmetro no equipamento para a plataforma converter percentímetro em lâmina automaticamente.
+            A ficha técnica deste pivô ainda não possui a base completa de lâmina e horas a 100%.
           </p>
         )}
 
@@ -387,15 +396,6 @@ export default function LancamentoIrrigacaoPage() {
             />
 
             <Input
-              id="time"
-              label="Hora"
-              type="time"
-              required
-              value={form.time}
-              onChange={(e) => patch({ time: e.target.value })}
-            />
-
-            <Input
               id="percentimeter_pct"
               label="Percentímetro (%)"
               type="number"
@@ -421,7 +421,8 @@ export default function LancamentoIrrigacaoPage() {
               </div>
               {selectedPivot?.depth_100_pct != null && (
                 <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
-                  Lâmina a 100% da ficha: {selectedPivot.depth_100_pct.toFixed(2)} mm
+                  Base do pivô: {selectedPivot.depth_100_pct.toFixed(2)} mm a 100%
+                  {selectedPivot.full_turn_time != null ? ` · ${selectedPivot.full_turn_time.toFixed(2)} h a 100%` : ""}
                 </p>
               )}
             </div>
