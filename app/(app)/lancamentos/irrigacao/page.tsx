@@ -10,12 +10,14 @@ import { createClient } from "@/lib/supabase/client";
 import { PrerequisiteNotice } from "@/components/onboarding";
 import {
   HOURS_FORMULA,
+  PERCENTIMETER_FORMULA,
   VOLUME_FORMULA,
   buildIrrigationEventInsert,
   deriveAppliedVolume,
+  deriveDepthFromPercentimeter,
   deriveOperatingHours,
   validateIrrigationDepth,
-  validateOperatingHours,
+  validatePercentimeterPct,
 } from "@/modules/irrigation/services";
 import { isActiveParcel, assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
 import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
@@ -30,6 +32,7 @@ interface PivotLite {
   motor_efficiency: number | null;
   specific_consumption: number | null;
   energy_cost: number | null;
+  depth_100_pct: number | null;
 }
 
 interface ParcelLite {
@@ -44,8 +47,7 @@ interface FormState {
   pivot_id: string;
   date: string;
   time: string;
-  depth_mm: string;
-  hours: string;
+  percentimeter_pct: string;
   notes: string;
 }
 
@@ -59,8 +61,7 @@ const EMPTY: FormState = {
   pivot_id: "",
   date: today(),
   time: nowHm(),
-  depth_mm: "",
-  hours: "",
+  percentimeter_pct: "",
   notes: "",
 };
 
@@ -82,7 +83,7 @@ export default function LancamentoIrrigacaoPage() {
     if (!activeFarmId) return;
     supabase
       .from("pivots")
-      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost")
+      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost, depth_100_pct")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name")
@@ -130,7 +131,11 @@ export default function LancamentoIrrigacaoPage() {
 
   const selectedPivot = form.pivot_id ? pivotMap.get(form.pivot_id) : undefined;
   const selectedParcel = form.pivot_id ? activeParcelFor(form.pivot_id) : null;
-  const depthNum = form.depth_mm ? Number(form.depth_mm) : NaN;
+  const percentimeterNum = form.percentimeter_pct ? Number(form.percentimeter_pct) : NaN;
+  const depthNum =
+    selectedPivot?.depth_100_pct != null && Number.isFinite(percentimeterNum) && percentimeterNum > 0
+      ? deriveDepthFromPercentimeter(percentimeterNum, selectedPivot.depth_100_pct)
+      : NaN;
 
   const previewVolume = selectedPivot && Number.isFinite(depthNum) && depthNum > 0
     ? deriveAppliedVolume(depthNum, selectedPivot.area)
@@ -140,13 +145,9 @@ export default function LancamentoIrrigacaoPage() {
     ? deriveOperatingHours(depthNum, selectedPivot.area, selectedPivot.flow_rate)
     : null;
 
-  const previewHoursUsed = form.hours !== "" && Number.isFinite(Number(form.hours))
-    ? Number(form.hours)
-    : previewHours;
-
-  const previewPrice = selectedPivot && previewVolume != null && previewHoursUsed != null && previewHoursUsed > 0
+  const previewPrice = selectedPivot && previewVolume != null && previewHours != null && previewHours > 0
     ? priceIrrigationEvent({
-      operatingHours: previewHoursUsed,
+      operatingHours: previewHours,
       volumeM3: previewVolume,
       depthMm: depthNum,
       areaHa: selectedPivot.area,
@@ -177,16 +178,6 @@ export default function LancamentoIrrigacaoPage() {
     setModalOpen(true);
   };
 
-  const onDepthChange = (value: string) => {
-    const pivot = form.pivot_id ? pivotMap.get(form.pivot_id) : undefined;
-    const depth = Number(value);
-    const hours = pivot && Number.isFinite(depth) && depth > 0
-      ? String(deriveOperatingHours(depth, pivot.area, pivot.flow_rate))
-      : form.hours;
-
-    patch({ depth_mm: value, hours });
-  };
-
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -201,17 +192,22 @@ export default function LancamentoIrrigacaoPage() {
       return;
     }
 
-    const depth = Number(form.depth_mm);
-    const depthErr = validateIrrigationDepth(depth);
-    if (depthErr) {
-      setFormError(depthErr);
+    if (pivot.depth_100_pct == null || pivot.depth_100_pct <= 0) {
+      setFormError("A ficha técnica deste pivô não possui lâmina a 100%. Complete a ficha do equipamento para calcular a lâmina pelo percentímetro.");
       return;
     }
 
-    const hoursOverride = form.hours === "" ? null : Number(form.hours);
-    const hoursErr = validateOperatingHours(hoursOverride);
-    if (hoursErr) {
-      setFormError(hoursErr);
+    const percentimeterPct = Number(form.percentimeter_pct);
+    const percentimeterErr = validatePercentimeterPct(percentimeterPct);
+    if (percentimeterErr) {
+      setFormError(percentimeterErr);
+      return;
+    }
+
+    const depth = deriveDepthFromPercentimeter(percentimeterPct, pivot.depth_100_pct);
+    const depthErr = validateIrrigationDepth(depth);
+    if (depthErr) {
+      setFormError(depthErr);
       return;
     }
 
@@ -228,9 +224,9 @@ export default function LancamentoIrrigacaoPage() {
       dateYmd: form.date,
       timeHm: form.time,
       depthMm: depth,
+      percentimeterPct,
       areaHa: pivot.area,
       flowRateM3h: pivot.flow_rate,
-      hoursOverride,
       notes: form.notes || null,
     });
 
@@ -266,7 +262,7 @@ export default function LancamentoIrrigacaoPage() {
       } else {
         setModalOpen(false);
         setSuccessMessage(
-          `Irrigação lançada com sucesso em ${pivot.name}: ${depth.toFixed(1)} mm.`,
+          `Irrigação lançada com sucesso em ${pivot.name}: ${percentimeterPct.toFixed(0)}% → ${depth.toFixed(1)} mm.`,
         );
       }
     } catch (err) {
@@ -326,7 +322,7 @@ export default function LancamentoIrrigacaoPage() {
 
           <Button
             onClick={openLaunch}
-            disabled={!selectedLaunchPivot || !selectedLaunchParcel}
+            disabled={!selectedLaunchPivot || !selectedLaunchParcel || !selectedLaunchPivot.depth_100_pct}
           >
             Lançar irrigação
           </Button>
@@ -338,6 +334,12 @@ export default function LancamentoIrrigacaoPage() {
           </p>
         )}
 
+        {selectedPivotId && selectedLaunchParcel && !selectedLaunchPivot?.depth_100_pct && (
+          <p className="mt-4 rounded-xl bg-amber-50 p-3 text-sm text-amber-700 dark:bg-amber-900/20 dark:text-amber-300">
+            A ficha técnica deste pivô ainda não possui lâmina a 100%. Cadastre esse parâmetro no equipamento para a plataforma converter percentímetro em lâmina automaticamente.
+          </p>
+        )}
+
         {successMessage && (
           <p className="mt-4 rounded-xl bg-emerald-50 p-3 text-sm font-medium text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
             {successMessage}
@@ -346,7 +348,7 @@ export default function LancamentoIrrigacaoPage() {
       </Card>
 
       <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-        Esta tela não exibe histórico de lançamentos. {VOLUME_FORMULA} · {HOURS_FORMULA}
+        Esta tela não exibe histórico de lançamentos. {PERCENTIMETER_FORMULA} · {VOLUME_FORMULA} · {HOURS_FORMULA}
       </p>
 
       <Modal
@@ -394,25 +396,35 @@ export default function LancamentoIrrigacaoPage() {
             />
 
             <Input
-              id="depth_mm"
-              label="Lâmina bruta aplicada (mm)"
+              id="percentimeter_pct"
+              label="Percentímetro (%)"
               type="number"
-              min={0.1}
-              step={0.1}
+              min={1}
+              max={100}
+              step={1}
               required
-              value={form.depth_mm}
-              onChange={(e) => onDepthChange(e.target.value)}
+              value={form.percentimeter_pct}
+              onChange={(e) => patch({ percentimeter_pct: e.target.value })}
+              placeholder="Ex.: 80"
             />
 
-            <Input
-              id="hours"
-              label="Horas de operação"
-              type="number"
-              min={0}
-              step={0.1}
-              value={form.hours}
-              onChange={(e) => patch({ hours: e.target.value })}
-            />
+            <div>
+              <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
+                Lâmina calculada
+              </p>
+              <div className="flex h-10 items-center rounded-xl border border-gray-200 bg-gray-50 px-4 text-sm font-semibold text-graphite-900 dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-white">
+                {Number.isFinite(depthNum) && depthNum > 0
+                  ? `${depthNum.toFixed(2)} mm`
+                  : selectedPivot?.depth_100_pct
+                    ? "Informe o percentímetro"
+                    : "Ficha técnica sem lâmina a 100%"}
+              </div>
+              {selectedPivot?.depth_100_pct != null && (
+                <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
+                  Lâmina a 100% da ficha: {selectedPivot.depth_100_pct.toFixed(2)} mm
+                </p>
+              )}
+            </div>
           </div>
 
           {previewVolume != null && (
@@ -438,7 +450,7 @@ export default function LancamentoIrrigacaoPage() {
             label="Observação (opcional)"
             value={form.notes}
             onChange={(e) => patch({ notes: e.target.value })}
-            placeholder="Ex.: volta completa; percentímetro 80%"
+            placeholder="Ex.: volta completa; observação operacional"
           />
 
           {formError && (
