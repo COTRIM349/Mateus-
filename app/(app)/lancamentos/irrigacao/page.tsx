@@ -37,6 +37,9 @@ interface PivotLite {
   energy_cost: number | null;
   depth_100_pct: number | null;
   full_turn_time: number | null;
+  horimeter_base_value: number | null;
+  horimeter_base_date: string | null;
+  horimeter_base_source: string | null;
 }
 
 interface ParcelLite {
@@ -78,6 +81,7 @@ export default function LancamentoIrrigacaoPage() {
   const [saving, setSaving] = useState(false);
   const [loadingLastHorimeter, setLoadingLastHorimeter] = useState(false);
   const [lastHorimeterSourceDate, setLastHorimeterSourceDate] = useState<string | null>(null);
+  const [lastHorimeterSource, setLastHorimeterSource] = useState<"event" | "historical_base" | null>(null);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -86,7 +90,7 @@ export default function LancamentoIrrigacaoPage() {
     if (!activeFarmId) return;
     supabase
       .from("pivots")
-      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost, depth_100_pct, full_turn_time")
+      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost, depth_100_pct, full_turn_time, horimeter_base_value, horimeter_base_date, horimeter_base_source")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name")
@@ -188,6 +192,11 @@ export default function LancamentoIrrigacaoPage() {
     setFormError("");
     setSuccessMessage("");
     setLastHorimeterSourceDate(null);
+    setLastHorimeterSource(null);
+
+    const pivot = pivotMap.get(selectedPivotId);
+    const baseValue = pivot?.horimeter_base_value ?? null;
+    const baseDate = pivot?.horimeter_base_date ?? null;
 
     const { data, error } = await supabase
       .from("irrigation_events")
@@ -204,18 +213,44 @@ export default function LancamentoIrrigacaoPage() {
       created_at: string;
     } | undefined;
 
+    const eventValue = !error && lastEvent?.horimeter_final != null
+      ? Number(lastEvent.horimeter_final)
+      : null;
+    const eventDate = !error && lastEvent?.started_at
+      ? lastEvent.started_at.slice(0, 10)
+      : null;
+
+    const eventIsValidAfterBase =
+      eventValue != null &&
+      (
+        baseValue == null ||
+        (
+          eventValue >= baseValue &&
+          (!baseDate || !eventDate || eventDate >= baseDate)
+        )
+      );
+
+    const initialHorimeter = eventIsValidAfterBase
+      ? eventValue
+      : baseValue;
+
+    const sourceDate = eventIsValidAfterBase
+      ? eventDate
+      : baseDate;
+
     setForm({
       ...EMPTY,
       pivot_id: selectedPivotId,
       date: today(),
       horimeter_initial:
-        !error && lastEvent?.horimeter_final != null
-          ? String(lastEvent.horimeter_final)
+        initialHorimeter != null
+          ? String(initialHorimeter)
           : "",
     });
 
-    if (!error && lastEvent?.horimeter_final != null) {
-      setLastHorimeterSourceDate(lastEvent.started_at.slice(0, 10));
+    if (initialHorimeter != null) {
+      setLastHorimeterSourceDate(sourceDate);
+      setLastHorimeterSource(eventIsValidAfterBase ? "event" : "historical_base");
     }
 
     setLoadingLastHorimeter(false);
@@ -488,7 +523,11 @@ export default function LancamentoIrrigacaoPage() {
               />
               {lastHorimeterSourceDate && form.horimeter_initial !== "" && (
                 <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-                  Preenchido com o horímetro final da última irrigação ({lastHorimeterSourceDate.split("-").reverse().join("/")}).
+                  {lastHorimeterSource === "event"
+                    ? "Preenchido com o horímetro final da última irrigação da plataforma"
+                    : "Preenchido com o último horímetro da base histórica"}
+                  {" · "}
+                  {lastHorimeterSourceDate.split("-").reverse().join("/")}
                 </p>
               )}
             </div>
