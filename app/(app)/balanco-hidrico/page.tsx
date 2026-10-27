@@ -89,6 +89,7 @@ function mapBalanceDay(d: BalanceDay): DailyBalanceRow {
     effectivePrecipitation: d.effectivePrecipitation,
     irrigationApplied: d.irrigation,
     rootDepth: d.rootDepth,
+    rootDepthEstimated: d.rootDepthEstimated,
     cad: d.adt,
     afd: d.afd,
     cadProfileMm: d.cadProfileMm,
@@ -1954,7 +1955,7 @@ function BalanceTab({
     : rows;
 
   const exportCsv = () => {
-    const headers = ["Data", "Fase", "Kc", "F", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "DTA (mm/m)", "CTA (mm)", "CRA (mm)", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const headers = ["Data", "Fase", "Zr estim. (m)", "Zr CTA (m)", "Kc", "F", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "DTA (mm/m)", "CTA (mm)", "CRA (mm)", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
     const lines = filteredRows.map((r) => {
       const entr = soilInflowMm(r);
       const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
@@ -1962,7 +1963,7 @@ function BalanceTab({
       const pctCc = moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
       const sens = sensoryByDate[r.date];
       return [
-        r.date, r.phase, r.kc.toFixed(2), (r.cad > 0 ? r.afd / r.cad : 0).toFixed(3), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
+        r.date, r.phase, (r.rootDepthEstimated ?? r.rootDepth).toFixed(2), r.rootDepth.toFixed(2), r.kc.toFixed(2), (r.cad > 0 ? r.afd / r.cad : 0).toFixed(3), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
         r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1),
         r.ky != null ? r.ky.toFixed(2) : "", r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "",
         r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1),
@@ -2038,6 +2039,8 @@ function BalanceTab({
   const columns: Column<DailyBalanceRow>[] = [
     { header: "Data", render: (r) => fmtDia(r.date) },
     { header: "Fase", render: (r) => <span className="text-xs">{r.phase}</span> },
+    { header: "Zr estim. (m)", render: (r) => (r.rootDepthEstimated ?? r.rootDepth).toFixed(2) },
+    { header: "Zr CTA (m)", render: (r) => r.rootDepth.toFixed(2) },
     { header: "Kc", render: (r) => r.kc.toFixed(2) },
     { header: "F", render: (r) => r.cad > 0 ? (r.afd / r.cad).toFixed(3) : "—" },
     { header: "Ks", render: (r) => (r.ks ?? 1).toFixed(2) },
@@ -2701,7 +2704,7 @@ function Cockpit({
     { icon: <IconLayers />, label: "CTA", value: fmtNum(cad), unit: "mm" },
     { icon: <IconAlert />, label: "CRA", value: fmtNum(afd), unit: "mm" },
     { icon: <IconLeaf />, label: "F (FAO-56)", value: fmtNum(pFactor, 3) },
-    { icon: <IconRoot />, label: "Raiz efetiva", value: fmtNum(last.rootDepth, 2), unit: "m" },
+    { icon: <IconRoot />, label: "Raiz na CTA", value: fmtNum(last.rootDepth, 2), unit: "m" },
   ];
 
   return (
@@ -2918,7 +2921,7 @@ function Cockpit({
           <Card className="p-4">
             <div className="mb-3 flex items-center justify-between gap-3">
               <p className="flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconRoot /> Perfil explorado pela raiz</p>
-              <span className="text-[10.5px] font-semibold text-graphite-400 dark:text-gray-500">Zr {fmtNum(last.rootDepth, 2)} m</span>
+              <span className="text-[10.5px] font-semibold text-graphite-400 dark:text-gray-500">Estimada {fmtNum(last.rootDepthEstimated ?? last.rootDepth, 2)} m · na CTA {fmtNum(last.rootDepth, 2)} m</span>
             </div>
             {profileRows.length > 0 ? (
               <>
@@ -2941,7 +2944,7 @@ function Cockpit({
                   <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">Fator F</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
                   <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CRA</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(afd)} mm</p></div>
                 </div>
-                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA = (CC − PMP) × 1000 (mm/m). CTA por camada = DTA × espessura (m). A CTA efetiva considera a profundidade explorada pelas raízes.</p>
+                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA = (CC − PMP) × 1000 (mm/m). CTA diária = soma das camadas cadastradas exploradas pela raiz. CRA diária = CTA × F, com F ajustado pela ETc potencial medida. {last.rootDepthEstimated != null && last.rootDepthEstimated > last.rootDepth + 0.001 ? `A raiz estimada ultrapassa o perfil cadastrado em ${fmtNum((last.rootDepthEstimated - last.rootDepth) * 100, 0)} cm; essa profundidade adicional NÃO entrou no cálculo de água.` : "A profundidade usada no cálculo não excede o solo cadastrado."}</p>
               </>
             ) : (
               <p className="text-[12px] text-graphite-400 dark:text-gray-500">Perfil por camadas não cadastrado para este pivô.</p>
