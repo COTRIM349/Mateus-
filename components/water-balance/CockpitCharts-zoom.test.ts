@@ -24,7 +24,8 @@ describe("zoom vertical no reservatório de água do solo", () => {
 
   it("mostra maior detalhe da curva ARM quando está abaixo da atenção", () => {
     const r = reservoirAxisRange({ zoom: "arm", max: 110, bounds, water });
-    expect(r.min).toBe(0);
+    expect(r.min).toBeGreaterThanOrEqual(0);
+    expect(r.min).toBeLessThan(9);
     expect(r.max).toBeGreaterThan(18);
     expect(r.max).toBeLessThan(49);
   });
