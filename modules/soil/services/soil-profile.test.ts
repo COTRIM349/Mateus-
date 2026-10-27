@@ -4,6 +4,8 @@ import {
   DEFAULT_CENTER_PIVOT_KL,
   SOIL_UNITS,
   calculateADTFromLayers,
+  registeredSoilProfileDepthMeters,
+  rootDepthWithRegisteredSoil,
   clipLayersToRootDepth,
   normalizeCcPmpInput,
   normalizeSoilWaterContent,
@@ -134,5 +136,32 @@ describe("CAD recortada pela profundidade radicular Z", () => {
         effective_depth: 0,
       }),
     ).toBe(false);
+  });
+});
+
+describe("limite do perfil cadastrado para cálculo da CTA", () => {
+  it("não extrapola água além de 60 cm mesmo com raiz prevista a 130 cm", () => {
+    const soil = { effective_depth: 0.60, layers: PROFILE };
+    expect(registeredSoilProfileDepthMeters(soil)).toBe(0.6);
+    expect(rootDepthWithRegisteredSoil(1.30, soil)).toBe(0.6);
+    expect(calculateADTFromLayers(PROFILE, rootDepthWithRegisteredSoil(1.30, soil))).toBe(86);
+  });
+
+  it("a CTA cresce enquanto novas camadas cadastradas são exploradas", () => {
+    const soil = { effective_depth: 0.60, layers: PROFILE };
+    expect(rootDepthWithRegisteredSoil(0.20, soil)).toBe(0.2);
+    expect(calculateADTFromLayers(PROFILE, rootDepthWithRegisteredSoil(0.20, soil))).toBe(36);
+    expect(calculateADTFromLayers(PROFILE, rootDepthWithRegisteredSoil(0.30, soil))).toBe(50);
+    expect(calculateADTFromLayers(PROFILE, rootDepthWithRegisteredSoil(0.60, soil))).toBe(86);
+  });
+
+  it("não atravessa lacuna entre camadas nem considera camadas além da profundidade declarada", () => {
+    const withGap: SoilProfileLayer[] = [
+      PROFILE[0],
+      { ...PROFILE[2], depth_start: 40, depth_end: 60 },
+    ];
+    expect(registeredSoilProfileDepthMeters({ effective_depth: 0.60, layers: withGap })).toBe(0.2);
+    expect(rootDepthWithRegisteredSoil(1, { effective_depth: 0.60, layers: withGap })).toBe(0.2);
+    expect(registeredSoilProfileDepthMeters({ effective_depth: 0.40, layers: PROFILE })).toBe(0.4);
   });
 });

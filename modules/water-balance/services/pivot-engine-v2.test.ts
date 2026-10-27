@@ -107,3 +107,64 @@ describe("motor hídrico V2 - estabilização", () => {
     expect(hasCompletePhaseCoverage(input.phases, input)).toBe(false);
   });
 });
+
+describe("crescimento radicular diário e limite de absorção conhecido do Pivô 06", () => {
+  it("usa a Zr da curva aprovada, calcula CTA/CRA diária e nunca supera os 60 cm cadastrados", () => {
+    // CC/PMP já convertidos de % em peso usando Ds=1,85.
+    // Cada camada de 20 cm tem DTA=1,406 mm/cm e CTA=28,12 mm.
+    const layers = [
+      { depth_start: 0, depth_end: 20, field_capacity: 0.2461, wilting_point: 0.1055 },
+      { depth_start: 20, depth_end: 40, field_capacity: 0.2442, wilting_point: 0.1036 },
+      { depth_start: 40, depth_end: 60, field_capacity: 0.2442, wilting_point: 0.1036 },
+    ];
+    const input = baseInput({
+      assignment: { ...baseInput().assignment, emergence_date: "2026-08-01" },
+      culture: { root_depth: 1.30, depletion_factor: 0.5 },
+      soil: { field_capacity: 0.2448, wilting_point: 0.1042, bulk_density: 1.85, effective_depth: 0.6, layers },
+      weatherByDate: {
+        "2026-08-01": { et0: 4, precipitation: 0 },
+        "2026-08-02": { et0: 6, precipitation: 0 },
+        "2026-08-03": { et0: 5, precipitation: 0 },
+      },
+      dateEnd: "2026-08-03",
+      agronomicByDate: {
+        "2026-08-01": { rootDepthM: 0.20, kc: 1 },
+        "2026-08-02": { rootDepthM: 0.40, kc: 1 },
+        "2026-08-03": { rootDepthM: 1.00, kc: 1 }, // raiz chega abaixo da amostragem
+      },
+    });
+    const rows = computePivotBalanceSeries(input);
+    expect(rows).toHaveLength(3);
+    expect(rows.map((r) => r.dae)).toEqual([0, 1, 2]);
+    expect(rows.map((r) => r.rootDepthEstimated)).toEqual([0.2, 0.4, 1]);
+    expect(rows.map((r) => r.rootDepth)).toEqual([0.2, 0.4, 0.6]);
+    expect(rows.map((r) => r.adt)).toEqual([28.12, 56.24, 84.36]);
+    // FAO-56 diário: p = 0.50 + 0.04(5 − ETcPot)
+    expect(rows.map((r) => r.afd)).toEqual([15.18, 25.87, 42.18]);
+    expect(rows.every((r) => r.cadProfileMm === 84.36)).toBe(true);
+  });
+
+  it("também desenvolve Zr por DAE a partir das fases quando não há curva aprovada", () => {
+    const input = baseInput({
+      assignment: { ...baseInput().assignment, emergence_date: "2026-08-01" },
+      culture: { root_depth: 0.60, depletion_factor: 0.5 },
+      phases: [{
+        phase_order: 1, name: "Vegetativo", days_after_plant: 0, duration_days: 10,
+        kc_start: 0.8, kc_end: 0.8, root_depth_start: 0.15, root_depth_end: 0.55,
+        depletion_factor: 0.5,
+      }],
+      dateEnd: "2026-08-03",
+      weatherByDate: {
+        "2026-08-01": { et0: 5, precipitation: 0 },
+        "2026-08-02": { et0: 5, precipitation: 0 },
+        "2026-08-03": { et0: 5, precipitation: 0 },
+      },
+    });
+    const rows = computePivotBalanceSeries(input);
+    expect(rows).toHaveLength(3);
+    expect(rows[0].rootDepth).toBeLessThan(rows[1].rootDepth);
+    expect(rows[1].rootDepth).toBeLessThan(rows[2].rootDepth);
+    expect(rows[0].adt).toBeLessThan(rows[1].adt);
+    expect(rows[1].adt).toBeLessThan(rows[2].adt);
+  });
+});
