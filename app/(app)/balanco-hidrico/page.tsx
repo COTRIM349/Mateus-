@@ -99,7 +99,7 @@ function mapBalanceDay(d: BalanceDay): DailyBalanceRow {
     grossDepth: d.recommendedGrossDepth,
     volumeNeeded: d.recommendedVolume,
     irrigationTime: d.estimatedIrrigationTime,
-    waterStatus: HYDRIC_TO_WATER_STATUS[d.status],
+    waterStatus: d.mapStatus === "capacidade_campo" ? "saturado" : HYDRIC_TO_WATER_STATUS[d.status],
     dae: d.dae,
     ks: d.ks,
     kl: d.kl,
@@ -1870,11 +1870,11 @@ const fmtTempoH = (h: number) => {
 
 // verdicts derivados do status hídrico do motor (sem inventar dado)
 const VERDICT: Record<WaterStatus, { label: string; color: string; irrigar: boolean; texto: (mm: string) => string }> = {
-  saturado: { label: "Suspender irrigação", color: "#2f6bff", irrigar: false, texto: () => "Solo saturado — suspender irrigação para evitar drenagem." },
-  ideal: { label: "Não irrigar", color: "#1ea85b", irrigar: false, texto: () => "Água disponível dentro da faixa ideal. Manter o manejo." },
-  atencao: { label: "Monitorar", color: "#f97316", irrigar: false, texto: () => "Água disponível próxima do limite de segurança. Acompanhar de perto." },
-  deficit: { label: "Irrigar", color: "#e5484d", irrigar: true, texto: (mm) => `Aplicar ${mm} para repor a água do solo.` },
-  deficit_critico: { label: "Irrigação urgente", color: "#c0353a", irrigar: true, texto: (mm) => `Déficit crítico — aplicar ${mm} com prioridade.` },
+  saturado: { label: "Capacidade de campo", color: "#22c55e", irrigar: false, texto: () => "Solo na capacidade de campo. Não irrigar." },
+  ideal: { label: "Não irrigar", color: "#2196F3", irrigar: false, texto: () => "Há água disponível e o limite de manejo ainda não foi atingido." },
+  atencao: { label: "Monitorar", color: "#f59e0b", irrigar: false, texto: () => "A água disponível está se aproximando do limite de manejo." },
+  deficit: { label: "Irrigar", color: "#ef4444", irrigar: true, texto: (mm) => `Aplicar ${mm} para repor a água do solo.` },
+  deficit_critico: { label: "Irrigação urgente", color: "#b91c1c", irrigar: true, texto: (mm) => `Déficit crítico — aplicar ${mm} com prioridade.` },
 };
 
 function BalanceTab({
@@ -1963,7 +1963,16 @@ function BalanceTab({
   const safetyMm = last?.safetyMoistureMm ?? Math.max(cad - afd, 0);
   const safetyPct = last ? safetyPctCcForDisplay(last.safetyPctCc, last.cad, last.afd) : 0;
   const untilSafety = arm - safetyMm;
-  const classificacao = arm >= safetyMm ? { label: "Adequado", color: "#1ea85b" } : arm >= safetyMm * 0.5 ? { label: "Atenção", color: "#f97316" } : { label: "Crítico", color: "#e5484d" };
+  const fillRatio = cad > 0 ? arm / cad : 0;
+  const afdConsumed = afd > 0 ? Math.max(cad - arm, 0) / afd : Number.POSITIVE_INFINITY;
+  const classificacao =
+    fillRatio >= 0.98
+      ? { label: "Capacidade de campo", color: "#22c55e", level: "cc" as const }
+      : afdConsumed < 0.70
+        ? { label: "Sem necessidade", color: "#2196F3", level: "ok" as const }
+        : afdConsumed < 1
+          ? { label: "Atenção", color: "#f59e0b", level: "attention" as const }
+          : { label: "Irrigar", color: "#ef4444", level: "irrigate" as const };
   const variacao = (last?.storedWater ?? 0) - (first?.storedWater ?? 0);
   const tendencia = variacao < -0.5 ? { label: "queda", down: true } : variacao > 0.5 ? { label: "alta", down: false } : { label: "estável", down: false };
   const efPct = head.efficiency ?? (last ? (last.grossDepth > 0 ? (last.netDepth / last.grossDepth) * 100 : 85) : 85);
@@ -2145,7 +2154,7 @@ function BalanceTab({
               { l: "CRA consumida", v: urgency ? `${urgency.afdUsedPct.toFixed(0)}%` : "—" },
               { l: "Margem até CRA", v: urgency ? (urgency.atOrBeyondAfd ? "limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—" },
               { l: "Dias até CRA", v: daysToAfdLabel },
-              { l: "Risco faixa crítica", v: classificacao.label === "Crítico" ? "Alto" : classificacao.label === "Atenção" ? "Médio" : "Baixo", c: classificacao.color },
+              { l: "Risco faixa crítica", v: classificacao.level === "irrigate" ? "Alto" : classificacao.level === "attention" ? "Médio" : "Baixo", c: classificacao.color },
             ].map((f) => (
               <div key={f.l} className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]">
                 <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{f.l}</p>
@@ -2162,7 +2171,7 @@ function BalanceTab({
           </p>
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
-            if (arm < safetyMm) items.push({ sev: classificacao.label === "Crítico" ? "hi" : "md", title: "Solo abaixo da faixa de segurança", desc: `ARM em ${pctCc.toFixed(0)}% da CC — repor para evitar estresse.` });
+            if (arm < safetyMm) items.push({ sev: "hi", title: "Limite de manejo atingido", desc: `ARM em ${pctCc.toFixed(0)}% da CC — irrigação indicada pelo balanço.` });
             if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `Restam ${urgency.remainingToAfdMm.toFixed(1)} mm até a CRA; na demanda atual, cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).` });
             if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da capacidade de campo.` });
             if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "No período analisado houve dias em déficit crítico." });
@@ -2228,7 +2237,7 @@ function BalanceTab({
           <p className="text-[10.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Situação do solo</p>
           <p className="mt-2 text-[22px] font-extrabold leading-none" style={{ color: classificacao.color }}>{classificacao.label}</p>
           <p className="mt-2 text-[11.5px] leading-relaxed text-graphite-400 dark:text-gray-500">
-            {classificacao.label === "Adequado" ? "ARM acima da umidade de segurança." : classificacao.label === "Atenção" ? "Próximo do limite DTA − CRA." : "Déficit relevante — repor a água do solo."}
+            {classificacao.level === "cc" ? "Solo na capacidade de campo." : classificacao.level === "ok" ? "Ainda sem necessidade de irrigação." : classificacao.level === "attention" ? "Próximo do limite DTA − CRA." : "Limite de manejo atingido — irrigar."}
           </p>
         </Card>
       </div>

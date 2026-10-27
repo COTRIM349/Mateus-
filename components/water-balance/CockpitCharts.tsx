@@ -366,6 +366,9 @@ export function ReservatorioChart({
   const pmpRef = pct ? 0 : pmpMm;
   const segRef = pct ? (cadMm > 0 ? ((safetyMm - pmpMm) / cadMm) * 100 : 0) : safetyMm;
   const attnRef = pct ? (cadMm > 0 ? ((attentionMm - pmpMm) / cadMm) * 100 : 0) : attentionMm;
+  // Verde fica restrito à proximidade imediata da capacidade de campo.
+  // A mesma tolerância operacional do mapa (98% da CAD) evita ruído numérico.
+  const ccGreenFloor = pct ? 98 : pmpMm + cadMm * 0.98;
 
   const maxPoint = Math.max(
     ccMm,
@@ -454,12 +457,15 @@ export function ReservatorioChart({
           <stop offset="100%" stopColor="#3b82f6" stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* Faixas de manejo (verde/amarelo/vermelho) nas duas escalas. */}
+      {/* Faixas de manejo condicionadas à decisão de irrigação.
+          Verde = somente CC; azul = sem necessidade; amarelo = atenção;
+          vermelho = limite de manejo atingido/irrigar. */}
       {visible.zonas && (
         <>
-          {bandRect(attnRef, ccRef, "#16a34a22")}
-          {bandRect(segRef, attnRef, "#eab30826")}
-          {bandRect(pmpRef, segRef, "#dc262622")}
+          {bandRect(ccGreenFloor, ccRef, "#16a34a2b")}
+          {bandRect(attnRef, ccGreenFloor, "#2196f326")}
+          {bandRect(segRef, attnRef, "#eab3082b")}
+          {bandRect(pmpRef, segRef, "#dc26262b")}
           {!pct && bandRect(0, pmpMm, "#7f1d1d22")}
         </>
       )}
@@ -484,9 +490,9 @@ export function ReservatorioChart({
 
       {visible.zonas && (
         <>
-          <ZoneLabel y={y((attnRef + ccRef) / 2)} text="Zona ótima" color="#16a34a" x={padL + 6} />
-          <ZoneLabel y={y((segRef + attnRef) / 2)} text="Alerta" color="#b45309" x={padL + 6} />
-          <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Déficit crítico" color="#dc2626" x={padL + 6} />
+          <ZoneLabel y={y((attnRef + ccGreenFloor) / 2)} text="Sem necessidade" color="#1976d2" x={padL + 6} />
+          <ZoneLabel y={y((segRef + attnRef) / 2)} text="Atenção" color="#b45309" x={padL + 6} />
+          <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Irrigar" color="#dc2626" x={padL + 6} />
         </>
       )}
 

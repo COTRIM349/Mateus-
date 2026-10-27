@@ -48,10 +48,10 @@ describe("hydricMapStates", () => {
 });
 
 describe("toHydricMapMarkers", () => {
-  it("pinta o círculo com a cor do status do motor", () => {
+  it("pinta condição sem necessidade em azul, reservando verde para CC", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].color).toBe("#4CAF50");
+    expect(markers[0].color).toBe("#2196F3");
     expect(markers[0].radiusMeters).toBe(500);
     expect(markers[0].id).toBe("parcela-1");
   });
@@ -101,9 +101,12 @@ describe("hydricMapDates", () => {
 });
 
 describe("hydricDemandSummary", () => {
-  it("conta amarelo e vermelho como demanda", () => {
+  it("conta como demanda somente quem atingiu o limite de manejo", () => {
     const summary = hydricDemandSummary([
-      stub({}),
+      stub({
+        pivotId: "p1",
+        current: { date: "2026-08-21", mapStatus: "atencao", deficit: 35 } as PivotHydricState["current"],
+      }),
       stub({
         pivotId: "p2",
         pivotName: "P02",
