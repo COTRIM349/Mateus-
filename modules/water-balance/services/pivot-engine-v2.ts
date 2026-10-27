@@ -12,7 +12,7 @@ import { roundTo } from "@/utils/math";
 import { interpolateKc, identifyPhase, type CulturePhase } from "@/modules/culture/services";
 import { resolveDaeReferenceDate, computeRootDepth, resolveDepletionFactor } from "@/modules/assignment/services";
 import { calculateKs } from "@/modules/assignment/services/parcel-motor-adapter";
-import { calculateADTFromLayers, soilProfileIsUsable, type SoilProfileLayer } from "@/modules/soil/services";
+import { calculateADTFromLayers, soilProfileIsUsable, registeredSoilProfileDepthMeters, rootDepthWithRegisteredSoil, type SoilProfileLayer } from "@/modules/soil/services";
 import {
   formatEtcFormula,
   ksFunctionForEtc,
@@ -174,6 +174,9 @@ export interface BalanceDay {
   peFormula: string;
   irrigation: number;
   effectiveIrrigation: number;
+  /** Raiz fisiológica prevista pela curva de DAE; pode ultrapassar o perfil de solo cadastrado. */
+  rootDepthEstimated: number;
+  /** Raiz CONTABILIZADA na CTA: limitada aos dados do perfil cadastrado. */
   rootDepth: number;
   adt: number;
   afd: number;
@@ -268,7 +271,8 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
 
   // CAD/CRA do PERFIL INTEIRO (profundidade efetiva do solo). Só REFERÊNCIA de
   // exibição — o balanço em si continua pela zona radicular do dia (FAO-56).
-  const profileDepth = soil.effective_depth && soil.effective_depth > 0 ? soil.effective_depth : 0;
+  const profileDepth = registeredSoilProfileDepthMeters(soil);
+  if (profileDepth <= 0) return [];
   const cadProfileMm = profileDepth > 0
     ? (soil.layers && soil.layers.length > 0
         ? calculateADTFromLayers(soil.layers, profileDepth)
@@ -291,14 +295,20 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
 
     const legacyCultureRoot = culture.root_depth
       ?? (phaseId?.phase.root_depth_end ?? phaseId?.phase.root_depth_start ?? 0);
-    const rootDepth = agronomic?.rootDepthM ?? computeRootDepth({
+    // Zr estimada: evolui por DAE, com prioridade para curva agronômica aprovada
+    // (cultivar > cultura) ou, na ausência dela, fases da cultura.
+    const rootDepthEstimated = agronomic?.rootDepthM ?? computeRootDepth({
       phases,
       dae,
       cultureRootDepth: legacyCultureRoot,
       initialRootDepth: custom ? assignment.initial_root_depth : null,
       maxRootDepth: custom ? assignment.max_root_depth : null,
     });
-    if (!Number.isFinite(rootDepth) || rootDepth <= 0) return [];
+    if (!Number.isFinite(rootDepthEstimated) || rootDepthEstimated <= 0) return [];
+    // O solo NUNCA empresta água abaixo da última camada medida/cadastrada,
+    // nem da profundidade efetiva do registro. Mantemos Zr estimada para auditoria.
+    const rootDepth = rootDepthWithRegisteredSoil(rootDepthEstimated, soil);
+    if (rootDepth <= 0) return [];
 
     const phaseName = agronomic?.stageName ?? phaseId?.phase.name ?? "—";
     const weather = weatherByDate[date];
@@ -390,6 +400,7 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       peFormula: step.peFormula,
       irrigation: roundTo(irrigation, 2),
       effectiveIrrigation,
+      rootDepthEstimated: roundTo(rootDepthEstimated, 3),
       rootDepth: roundTo(rootDepth, 3),
       adt,
       afd,
