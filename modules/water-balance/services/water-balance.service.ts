@@ -48,6 +48,8 @@ export interface WaterBalanceResult {
 }
 
 export interface DailyBalanceRow extends WaterBalanceResult {
+  /** Raiz prevista pela cultura/cultivar (pode superar as camadas medidas). */
+  rootDepthEstimated?: number;
   date: string;
   phase: string;
   /** Dias após emergência/plantio, quando o motor persistiu. */
