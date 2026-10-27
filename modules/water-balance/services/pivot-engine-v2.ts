@@ -116,8 +116,9 @@ export interface EngineWeatherDay {
 }
 
 export interface AgronomicDayInput {
-  /** Kc potencial diário. Nunca incorporar Ks neste valor. */
-  kc: number;
+  /** Kc potencial diário. Nunca incorporar Ks neste valor. Opcional para permitir
+   *  que raiz/p rastreáveis sejam aplicados mantendo Kc das fases como fallback. */
+  kc?: number;
   /** Profundidade radicular resolvida pelo domínio de cultura (opcional: quando
    *  ausente, o motor calcula pela curva de fases/raiz). */
   rootDepthM?: number;
