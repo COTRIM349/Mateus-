@@ -127,8 +127,16 @@ export function calculateWeeklyDemandApportionment(
     }
   }
 
-  const groups = new Map<string, Array<(typeof dailyPivot extends Map<string, infer V> ? V : never)>>();
-  for (const row of dailyPivot.values()) {
+  type DailyPivotRow = {
+    weekStart: string;
+    moduleName: string;
+    date: string;
+    pivotId: string;
+    pivotName: string;
+    powerKw: number;
+  };
+  const groups = new Map<string, DailyPivotRow[]>();
+  for (const row of Array.from(dailyPivot.values())) {
     const key = `${row.weekStart}|${row.moduleName}`;
     const list = groups.get(key) ?? [];
     list.push(row);
@@ -138,7 +146,7 @@ export function calculateWeeklyDemandApportionment(
   const out: WeeklyDemandAllocation[] = [];
   const EPS = 1e-6;
 
-  for (const items of groups.values()) {
+  for (const items of Array.from(groups.values())) {
     if (items.length === 0) continue;
     const weekStart = items[0].weekStart;
     const moduleName = items[0].moduleName;
@@ -152,8 +160,8 @@ export function calculateWeeklyDemandApportionment(
 
     let peakDemandKw = 0;
     const totals = new Map<string, number>();
-    for (const [date, rows] of byDate.entries()) {
-      const total = rows.reduce((sum, row) => sum + row.powerKw, 0);
+    for (const [date, rows] of Array.from(byDate.entries())) {
+      const total = rows.reduce((sum: number, row: DailyPivotRow) => sum + row.powerKw, 0);
       totals.set(date, total);
       if (total > peakDemandKw) peakDemandKw = total;
     }
