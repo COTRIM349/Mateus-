@@ -31,8 +31,8 @@ const PivotMap = dynamic(
   {
     ssr: false,
     loading: () => (
-      <div className="flex h-full min-h-[400px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-white/[0.06] dark:bg-graphite-800">
-        <p className="text-sm text-graphite-400">Carregando mapa...</p>
+      <div className="flex h-full min-h-[400px] items-center justify-center rounded-2xl border border-gray-100 bg-gray-50/50 dark:border-[#1A2638] dark:bg-[#08111F]">
+        <p className="text-sm text-graphite-400 dark:text-[#7F8DA3]">Carregando mapa...</p>
       </div>
     ),
   },
@@ -51,11 +51,11 @@ function autonomyDays(c: BalanceDay): number | null {
 type Priority = { label: string; color: string; rank: number };
 function priorityOf(c: BalanceDay): Priority {
   const a = autonomyDays(c);
-  if (c.status === "cinza") return { label: "Sem dado", color: "#9ca3af", rank: 5 };
-  if (c.shouldIrrigate && (a == null || a < 0.5)) return { label: "Crítico", color: "#dc2626", rank: 0 };
-  if (c.shouldIrrigate || (a != null && a < 1.5)) return { label: "Alto", color: "#f97316", rank: 1 };
-  if (c.status === "amarelo" || (a != null && a < 3)) return { label: "Médio", color: "#eab308", rank: 2 };
-  return { label: "Adequado", color: "#16a34a", rank: 3 };
+  if (c.status === "cinza") return { label: "Sem dado", color: "#94A3B8", rank: 5 };
+  if (c.shouldIrrigate && (a == null || a < 0.5)) return { label: "Crítico", color: "#FF5A5F", rank: 0 };
+  if (c.shouldIrrigate || (a != null && a < 1.5)) return { label: "Alto", color: "#F08A3C", rank: 1 };
+  if (c.status === "amarelo" || (a != null && a < 3)) return { label: "Médio", color: "#D8A928", rank: 2 };
+  return { label: "Adequado", color: "#35B96B", rank: 3 };
 }
 
 export default function CentralDeManejoPage() {
@@ -176,9 +176,9 @@ export default function CentralDeManejoPage() {
       <PageHeader titulo="Central de Manejo" descricao={`${activeFarm?.name ?? "Fazenda"} · decisão hídrica da fazenda`} />
 
       {error ? (
-        <Card className="py-16 text-center">
+        <Card className="py-16 text-center dark:border-[#1A2638] dark:bg-[#0A1220]">
           <p className="font-semibold text-red-600 dark:text-red-400">Não foi possível carregar o estado hídrico da fazenda.</p>
-          <p className="mt-1 text-[13px] text-graphite-500 dark:text-gray-400">Falha ao consultar clima, solo ou balanço. Tente recarregar.</p>
+          <p className="mt-1 text-[13px] text-graphite-500 dark:text-[#9AA8BE]">Falha ao consultar clima, solo ou balanço. Tente recarregar.</p>
           {errorMessage && (
             <p className="mx-auto mt-3 max-w-xl rounded-lg bg-red-50 px-3 py-2 text-[12px] font-mono leading-snug text-red-700 dark:bg-red-900/20 dark:text-red-300">
               {errorMessage}
@@ -193,29 +193,29 @@ export default function CentralDeManejoPage() {
           </button>
         </Card>
       ) : states.length === 0 ? (
-        <Card className="py-16 text-center">
-          <p className="text-graphite-500 dark:text-gray-400">Nenhum pivô com parcela ativa nesta fazenda. Cadastre uma parcela para ativar o manejo.</p>
+        <Card className="py-16 text-center dark:border-[#1A2638] dark:bg-[#0A1220]">
+          <p className="text-graphite-500 dark:text-[#9AA8BE]">Nenhum pivô com parcela ativa nesta fazenda. Cadastre uma parcela para ativar o manejo.</p>
         </Card>
       ) : (
         <>
           {/* KPIs da fazenda */}
           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
             {kpis.map((k) => (
-              <Card key={k.label} className="p-3.5">
-                <p className="truncate text-[11px] font-medium text-graphite-400 dark:text-gray-500">{k.label}</p>
-                <p className={`mt-0.5 text-[20px] font-extrabold leading-tight tabular-nums ${k.tone ?? "text-graphite-900 dark:text-white"}`}>
-                  {k.value}{k.unit && <span className="ml-0.5 text-[12px] font-semibold text-graphite-400 dark:text-gray-500">{k.unit}</span>}
+              <Card key={k.label} className="p-3.5 dark:border-[#1A2638] dark:bg-[#0A1220] dark:shadow-[0_12px_34px_rgba(0,0,0,0.28)]">
+                <p className="truncate text-[11px] font-medium text-graphite-400 dark:text-[#7F8DA3]">{k.label}</p>
+                <p className={`mt-0.5 text-[20px] font-extrabold leading-tight tabular-nums ${k.tone ?? "text-graphite-900 dark:text-[#F3F7FF]"}`}>
+                  {k.value}{k.unit && <span className="ml-0.5 text-[12px] font-semibold text-graphite-400 dark:text-[#6E7C92]">{k.unit}</span>}
                 </p>
-                <p className="mt-0.5 truncate text-[10.5px] text-graphite-400 dark:text-gray-500">{k.sub}</p>
+                <p className="mt-0.5 truncate text-[10.5px] text-graphite-400 dark:text-[#6E7C92]">{k.sub}</p>
               </Card>
             ))}
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
             {/* Mapa operacional */}
-            <Card className="overflow-hidden p-0">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-white/[0.06]">
-                <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Mapa operacional</p>
+            <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_16px_40px_rgba(0,0,0,0.32)]">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-[#162233] dark:bg-[#0A1220]">
+                <p className="text-[13px] font-bold text-graphite-800 dark:text-[#F3F7FF]">Mapa operacional</p>
                 <span className="hidden text-[11px] text-graphite-400 sm:inline dark:text-gray-500">toque no pivô para abrir o manejo</span>
               </div>
               <PivotMap
@@ -227,15 +227,15 @@ export default function CentralDeManejoPage() {
             </Card>
 
             {/* Fila de irrigação */}
-            <Card className="overflow-hidden p-0">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-white/[0.06]">
-                <p className="text-[13px] font-bold text-graphite-800 dark:text-white">Fila de irrigação</p>
-                <span className="text-[11px] text-graphite-400 dark:text-gray-500">{fila.length} parcela(s) · por prioridade</span>
+            <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_16px_40px_rgba(0,0,0,0.32)]">
+              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-[#162233] dark:bg-[#0A1220]">
+                <p className="text-[13px] font-bold text-graphite-800 dark:text-[#F3F7FF]">Fila de irrigação</p>
+                <span className="text-[11px] text-graphite-400 dark:text-[#6E7C92]">{fila.length} parcela(s) · por prioridade</span>
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-[12px]">
                   <thead>
-                    <tr className="border-b border-gray-100 text-left text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:border-white/[0.06] dark:text-gray-500">
+                    <tr className="border-b border-gray-100 text-left text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:border-[#162233] dark:bg-[#0A1220] dark:text-[#6E7C92]">
                       <th className="px-3 py-2">Pivô</th>
                       <th className="px-2 py-2">Cultura / estádio</th>
                       <th className="px-2 py-2 text-right">AD</th>
@@ -256,19 +256,19 @@ export default function CentralDeManejoPage() {
                         <tr
                           key={hydricStateId(s)}
                           onClick={() => openPivot(s)}
-                          className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50 dark:border-white/[0.04] dark:hover:bg-white/[0.03]"
+                          className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50 dark:border-[#162233] dark:bg-[#08111F] dark:hover:bg-[#101C2D]"
                         >
                           <td className="px-3 py-2">
-                            <span className="font-bold text-graphite-800 dark:text-white">{s.pivotName}</span>
+                            <span className="font-bold text-graphite-800 dark:text-[#F3F7FF]">{s.pivotName}</span>
                             {(() => {
                               const sector = s.parcelName
                                 ?? (s.startAngleDeg != null && s.endAngleDeg != null ? formatParcelAngles(s.startAngleDeg, s.endAngleDeg) : null);
-                              return sector ? <span className="block text-[10.5px] font-normal text-graphite-400 dark:text-gray-500">{sector}</span> : null;
+                              return sector ? <span className="block text-[10.5px] font-normal text-graphite-400 dark:text-[#6E7C92]">{sector}</span> : null;
                             })()}
                           </td>
-                          <td className="px-2 py-2 text-graphite-500 dark:text-gray-400">
-                            {s.cultureName}{c?.phase ? <span className="text-graphite-400 dark:text-gray-500"> · {c.phase}</span> : ""}
-                            {c?.dae != null ? <span className="text-graphite-400 dark:text-gray-500"> · {c.dae} DAE</span> : ""}
+                          <td className="px-2 py-2 text-graphite-500 dark:text-[#9AA8BE]">
+                            {s.cultureName}{c?.phase ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.phase}</span> : ""}
+                            {c?.dae != null ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.dae} DAE</span> : ""}
                           </td>
                           <td className="px-2 py-2 text-right tabular-nums">{c ? `${fmtNum(c.storage)}` : "—"}</td>
                           <td className="px-2 py-2 text-right tabular-nums text-amber-600 dark:text-amber-400">{c ? fmtNum(c.deficit) : "—"}</td>
@@ -279,7 +279,7 @@ export default function CentralDeManejoPage() {
                           </td>
                           <td className="px-2 py-2 text-right tabular-nums">{c && c.shouldIrrigate ? `${fmtNum(c.recommendedGrossDepth)}` : "—"}</td>
                           <td className="px-3 py-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-bold" style={{ color: pr.color, background: `${pr.color}1a` }}>
+                            <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold" style={{ color: pr.color, background: `${pr.color}14`, borderColor: `${pr.color}2e` }}>
                               <span className="h-1.5 w-1.5 rounded-full" style={{ background: pr.color }} />{pr.label}
                             </span>
                           </td>
@@ -293,8 +293,8 @@ export default function CentralDeManejoPage() {
           </div>
 
           {/* Alertas e decisões */}
-          <Card className="p-4">
-            <p className="mb-3 flex items-center gap-2 text-[13px] font-bold text-graphite-900 dark:text-white">
+          <Card className="p-4 dark:border-[#1A2638] dark:bg-[#0A1220] dark:shadow-[0_14px_36px_rgba(0,0,0,0.28)]">
+            <p className="mb-3 flex items-center gap-2 text-[13px] font-bold text-graphite-900 dark:text-[#F3F7FF]">
               <svg className="h-4 w-4 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
               Alertas e decisões
             </p>
@@ -302,11 +302,11 @@ export default function CentralDeManejoPage() {
               {alerts.map((al, i) => {
                 const dot = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
                 return (
-                  <div key={i} className="flex gap-2.5 rounded-xl border border-gray-100 p-3 dark:border-white/[0.06]">
+                  <div key={i} className="flex gap-2.5 rounded-xl border border-gray-100 p-3 dark:border-[#162233] dark:bg-[#08111F]">
                     <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot[al.sev]}`} />
                     <div className="min-w-0">
-                      <p className="text-[12.5px] font-bold text-graphite-800 dark:text-white">{al.title}</p>
-                      <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">{al.desc}</p>
+                      <p className="text-[12.5px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{al.title}</p>
+                      <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-500 dark:text-[#9AA8BE]">{al.desc}</p>
                     </div>
                   </div>
                 );
@@ -315,7 +315,7 @@ export default function CentralDeManejoPage() {
           </Card>
 
           {/* rastreabilidade das cores do mapa */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-graphite-400 dark:text-gray-500">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-graphite-400 dark:text-[#6E7C92]">
             {(["verde", "amarelo", "vermelho", "cinza"] as const).map((st) => (
               <span key={st} className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full" style={{ background: HYDRIC_STATUS_CONFIG[st].color }} />
