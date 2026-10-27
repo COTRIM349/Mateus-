@@ -106,14 +106,11 @@ describe("pivot-engine-operational", () => {
     expect(rows[0].etcPotential).toBe(7);
   });
 
-  it("curva de Kc ativa (agronomic só com kc) não troca o método do fator p", () => {
-    // Regressão: ativar uma curva de Kc passava um agronomicByDate só com Kc; o
-    // motor operacional injetava um p legado nesse conjunto, fazendo o V2 ignorar
-    // a Tabela 2 (Doorenbos) e divergir da Central de Manejo no mesmo pivô.
+  it("curva de Kc ativa não troca o fator F FAO-56 nem causa dupla correção", () => {
     const input = baseInput();
     input.initialStorageMm = 60;
     input.weatherByDate["2026-01-01"] = { et0: 7, precipitation: 0 };
-    input.culture.availabilityGroup = 3; // grupo definido -> Tabela 2
+    input.culture.availabilityGroup = 3; // legado ignorado no cálculo FAO-56
 
     const semCurva = computePivotBalanceSeries(input);
     const comKc = computePivotBalanceSeries({
@@ -123,10 +120,26 @@ describe("pivot-engine-operational", () => {
 
     expect(semCurva).toHaveLength(1);
     expect(comKc).toHaveLength(1);
-    // Tabela 2, grupo 3, ETm=7 -> f=0,425 -> AFD = 60*0,425 = 25,5 mm.
-    expect(semCurva[0].afd).toBe(25.5);
-    // Ativar a curva de Kc NÃO pode mudar o p/AFD (antes caía para 25,2 da p legada).
+    // p_base=0,50; ETcPot=7 -> F=0,42 e CRA=60×0,42=25,2 mm.
+    expect(semCurva[0].afd).toBe(25.2);
     expect(comKc[0].afd).toBe(semCurva[0].afd);
+  });
+
+  it("recalcula o F por dia usando a ETo medida e o Kc, sem valor fixo", () => {
+    const input = baseInput();
+    input.dateEnd = "2026-01-02";
+    input.initialStorageMm = 60;
+    input.weatherByDate = {
+      "2026-01-01": { et0: 4, precipitation: 0 },
+      "2026-01-02": { et0: 7, precipitation: 0 },
+    };
+    const rows = computePivotBalanceSeries(input);
+    expect(rows).toHaveLength(2);
+    expect(rows.map((d) => d.et0)).toEqual([4, 7]);
+    expect(rows.map((d) => d.etcPotential)).toEqual([4, 7]);
+    expect(rows.map((d) => d.afd)).toEqual([32.4, 25.2]);
+    expect(rows[0].adt).toBe(60);
+    expect(rows[1].adt).toBe(60);
   });
 
   it("aceita raiz e p rastreáveis mantendo o Kc legado quando não há curva Kc ativa", () => {
