@@ -44,6 +44,7 @@ interface EventLite {
   parcel_id: string | null;
   started_at: string;
   depth_mm: number;
+  percentimeter_pct: number | null;
   volume_m3: number;
   operating_hours: number | null;
   energy_kwh: number | null;
@@ -131,7 +132,7 @@ export default function HistoricoOperacionalPage() {
     const [ev, se] = await Promise.all([
       supabase
         .from("irrigation_events")
-        .select("id, parcel_id, started_at, depth_mm, volume_m3, operating_hours, energy_kwh, cost, notes")
+        .select("id, parcel_id, started_at, depth_mm, percentimeter_pct, volume_m3, operating_hours, energy_kwh, cost, notes")
         .in("parcel_id", historicIds)
         .order("started_at", { ascending: false }),
       supabase
@@ -228,6 +229,7 @@ export default function HistoricoOperacionalPage() {
 
   const eventColumns: Column<EventLite>[] = [
     { header: "Data", render: (r) => fmtWhen(r.started_at) },
+    { header: "Percentímetro", render: (r) => r.percentimeter_pct != null ? `${r.percentimeter_pct.toFixed(0)}%` : "—" },
     { header: "Lâmina", render: (r) => <span className="tabular-nums">{r.depth_mm.toFixed(1)} mm</span> },
     { header: "Volume", render: (r) => <span className="tabular-nums">{r.volume_m3.toLocaleString("pt-BR")} m³</span> },
     { header: "Horas", render: (r) => r.operating_hours != null ? `${r.operating_hours.toFixed(1)} h` : "—" },
