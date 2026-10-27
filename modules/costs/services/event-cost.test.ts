@@ -79,6 +79,25 @@ describe("custo do evento", () => {
     expect(none.pendingReason).toBe(MISSING_TARIFF);
   });
 
+  it("soma o adicional de bandeira ao consumo sem alterar a demanda", () => {
+    const priced = deriveEventCost({
+      energyKwh: 100,
+      startedAt: "2026-08-20T08:00:00",
+      operatingHours: 2,
+      tariff: {
+        ...tariff,
+        tariffFlag: "amarela",
+        flagSurchargePerKwh: 0.01885,
+      },
+    });
+
+    expect(priced.baseEnergyCost).toBe(70);
+    expect(priced.flagCost).toBe(1.89);
+    expect(priced.cost).toBe(71.89);
+    expect(priced.tariffFlag).toBe("amarela");
+    expect(priced.flagSurchargePerKwh).toBe(0.01885);
+  });
+
   it("usa R$/kWh da ficha quando não há tarifa da fazenda", () => {
     const priced = deriveEventCost({
       energyKwh: 50,
@@ -139,11 +158,13 @@ describe("pickTariffForDate", () => {
     const picked = pickTariffForDate(
       [
         { id: "old", valid_from: "2025-01-01", valid_to: "2025-12-31", rate_peak: 1, rate_off_peak: 0.4, peak_start: 18, peak_end: 21 },
-        { id: "now", valid_from: "2026-01-01", valid_to: null, rate_peak: 2, rate_off_peak: 0.7, peak_start: 18, peak_end: 21 },
+        { id: "now", valid_from: "2026-01-01", valid_to: null, rate_peak: 2, rate_off_peak: 0.7, tariff_flag: "vermelha_p1", flag_surcharge_per_kwh: 0.04463, peak_start: 18, peak_end: 21 },
       ],
       "2026-08-20",
     );
     expect(picked?.id).toBe("now");
+    expect(picked?.tariffFlag).toBe("vermelha_p1");
+    expect(picked?.flagSurchargePerKwh).toBe(0.04463);
     expect(pickTariffForDate([], "2026-08-20")).toBeNull();
   });
 });
