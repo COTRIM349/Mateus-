@@ -76,6 +76,8 @@ export default function LancamentoIrrigacaoPage() {
   const [selectedPivotId, setSelectedPivotId] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [loadingLastHorimeter, setLoadingLastHorimeter] = useState(false);
+  const [lastHorimeterSourceDate, setLastHorimeterSourceDate] = useState<string | null>(null);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -179,15 +181,44 @@ export default function LancamentoIrrigacaoPage() {
     setForm((current) => ({ ...current, ...changes }));
   };
 
-  const openLaunch = () => {
+  const openLaunch = async () => {
     if (!selectedPivotId) return;
+
+    setLoadingLastHorimeter(true);
+    setFormError("");
+    setSuccessMessage("");
+    setLastHorimeterSourceDate(null);
+
+    const { data, error } = await supabase
+      .from("irrigation_events")
+      .select("horimeter_final, started_at, created_at")
+      .eq("pivot_id", selectedPivotId)
+      .not("horimeter_final", "is", null)
+      .order("started_at", { ascending: false })
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const lastEvent = data?.[0] as {
+      horimeter_final: number | null;
+      started_at: string;
+      created_at: string;
+    } | undefined;
+
     setForm({
       ...EMPTY,
       pivot_id: selectedPivotId,
       date: today(),
+      horimeter_initial:
+        !error && lastEvent?.horimeter_final != null
+          ? String(lastEvent.horimeter_final)
+          : "",
     });
-    setFormError("");
-    setSuccessMessage("");
+
+    if (!error && lastEvent?.horimeter_final != null) {
+      setLastHorimeterSourceDate(lastEvent.started_at.slice(0, 10));
+    }
+
+    setLoadingLastHorimeter(false);
     setModalOpen(true);
   };
 
@@ -359,13 +390,14 @@ export default function LancamentoIrrigacaoPage() {
           <Button
             onClick={openLaunch}
             disabled={
+              loadingLastHorimeter ||
               !selectedLaunchPivot ||
               !selectedLaunchParcel ||
               !selectedLaunchPivot.depth_100_pct ||
               !selectedLaunchPivot.full_turn_time
             }
           >
-            Lançar irrigação
+            {loadingLastHorimeter ? "Buscando horímetro..." : "Lançar irrigação"}
           </Button>
         </div>
 
@@ -442,17 +474,24 @@ export default function LancamentoIrrigacaoPage() {
               placeholder="Ex.: 80"
             />
 
-            <Input
-              id="horimeter_initial"
-              label="Horímetro inicial"
-              type="number"
-              min={0}
-              step={0.01}
-              required
-              value={form.horimeter_initial}
-              onChange={(e) => patch({ horimeter_initial: e.target.value })}
-              placeholder="Ex.: 1523,40"
-            />
+            <div>
+              <Input
+                id="horimeter_initial"
+                label="Horímetro inicial"
+                type="number"
+                min={0}
+                step={0.01}
+                required
+                value={form.horimeter_initial}
+                onChange={(e) => patch({ horimeter_initial: e.target.value })}
+                placeholder="Ex.: 1523,40"
+              />
+              {lastHorimeterSourceDate && form.horimeter_initial !== "" && (
+                <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+                  Preenchido com o horímetro final da última irrigação ({lastHorimeterSourceDate.split("-").reverse().join("/")}).
+                </p>
+              )}
+            </div>
 
             <Input
               id="horimeter_final"
