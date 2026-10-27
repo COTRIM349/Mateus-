@@ -22,11 +22,14 @@ import {
   buildParcelClosePayload,
   buildParcelInsertRow,
   closeDateToIso,
+  computeDae,
   formatParcelAngles,
   isActiveParcel,
   isHistoricParcel,
   parcelManagedAreaHa,
   parseParcelAngles,
+  predictEmergenceDate,
+  resolveDaeReferenceDate,
   snapshotCycleWater,
   suggestParcelName,
   validateParcelClose,
@@ -35,10 +38,7 @@ import {
 import { resolvePivotMapGeometry } from "@/modules/irrigation/services";
 import { snapshotCycleEnergyCost } from "@/modules/costs/services";
 import { identifyPhase } from "@/modules/culture/services";
-import {
-  daysAfterPlanting,
-  validateManagementDates,
-} from "@/modules/culture/services/culture-phases";
+import { validateManagementDates } from "@/modules/culture/services/culture-phases";
 import { ParcelQuadrantPreview } from "@/components/maps/ParcelQuadrantPreview";
 
 // ── Types ────────────────────────────────────────────────────────────────
@@ -347,7 +347,7 @@ export default function VinculacaoPage() {
       culture_id: a.culture_id,
       culture_variety_id: a.culture_variety_id ?? a.variety_id ?? "",
       planting_date: a.planting_date ?? "",
-      emergence_date: a.emergence_date ?? "",
+      emergence_date: a.emergence_date ?? predictEmergenceDate(a.planting_date),
       expected_harvest_date: a.expected_harvest_date ?? "",
       kl_override: a.kl_override != null ? String(a.kl_override) : "",
       water_source: a.water_source ?? "",
@@ -446,6 +446,13 @@ export default function VinculacaoPage() {
   // parcela: validação e persistência leem diretamente o vínculo do equipamento.
   const handlePivotChange = (pivot_id: string) => {
     patch({ pivot_id });
+  };
+
+  const handlePlantingDateChange = (planting_date: string) => {
+    patch({
+      planting_date,
+      emergence_date: planting_date ? predictEmergenceDate(planting_date) : "",
+    });
   };
 
   const handleCultureChange = (culture_id: string) => {
@@ -646,8 +653,8 @@ export default function VinculacaoPage() {
     },
     { header: "Plantio", render: (r) => r.planting_date ? new Date(r.planting_date + "T12:00:00").toLocaleDateString("pt-BR") : "—" },
     {
-      header: "DAP",
-      render: (r) => r.planting_date ? String(daysAfterPlanting(r.planting_date)) : "—",
+      header: "DAE",
+      render: (r) => r.planting_date ? String(computeDae(resolveDaeReferenceDate(r))) : "—",
       align: "right",
     },
     {
@@ -845,7 +852,7 @@ export default function VinculacaoPage() {
                 <Input
                   id="planting_date" label="Data de plantio" type="date" required
                   value={form.planting_date}
-                  onChange={(e) => patch({ planting_date: e.target.value })}
+                  onChange={(e) => handlePlantingDateChange(e.target.value)}
                 />
                 <Input
                   id="kl_override" label="KL (0–1, vazio = 1)" type="number" step="0.01" min="0" max="1"
@@ -955,7 +962,7 @@ export default function VinculacaoPage() {
                 disabled={!form.culture_id}
               />
               <Input
-                id="emergence_date" label="Data de emergência (opcional)" type="date"
+                id="emergence_date" label="Emergência (automática: plantio + 6 dias)" type="date"
                 value={form.emergence_date}
                 onChange={(e) => patch({ emergence_date: e.target.value })}
               />
@@ -979,10 +986,10 @@ export default function VinculacaoPage() {
                 value={form.current_phase_id}
                 onChange={(e) => patch({ current_phase_id: e.target.value })}
                 options={[
-                  { value: "auto", label: "Automático (pelo DAP)" },
+                  { value: "auto", label: "Automático (pelo DAE)" },
                   ...culturePhases.map((p) => ({
                     value: p.id,
-                    label: `${p.phase_order}. ${p.name} (DAP ${p.days_after_plant})`,
+                    label: `${p.phase_order}. ${p.name} (DAE ${p.days_after_plant})`,
                   })),
                 ]}
                 disabled={!form.culture_id}
@@ -993,14 +1000,18 @@ export default function VinculacaoPage() {
                 </p>
                 <div className="flex h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm dark:border-white/[0.08] dark:bg-white/[0.04]">
                   {form.planting_date && culturePhases.length > 0 ? (() => {
-                    const dap = daysAfterPlanting(form.planting_date);
-                    const auto = identifyPhase(culturePhases, dap);
+                    const reference = resolveDaeReferenceDate({
+                      planting_date: form.planting_date,
+                      emergence_date: form.emergence_date || null,
+                    });
+                    const dae = computeDae(reference);
+                    const auto = identifyPhase(culturePhases, dae);
                     const manual = form.current_phase_id && form.current_phase_id !== "auto"
                       ? culturePhases.find((p) => p.id === form.current_phase_id)
                       : null;
                     return (
                       <span className="text-graphite-900 dark:text-white">
-                        DAP {dap} · {auto?.phase.name ?? "—"}
+                        DAE {dae} · {auto?.phase.name ?? "—"}
                         {manual ? ` · correção: ${manual.name}` : ""}
                       </span>
                     );
@@ -1012,8 +1023,8 @@ export default function VinculacaoPage() {
                 </div>
               </div>
               <p className="sm:col-span-2 text-[11px] text-graphite-400 dark:text-gray-500">
-                Cultivar, ciclo e estádio pertencem à parcela. Fases e Kc/Ks/Ky ficam no cadastro da cultura.
-                A correção manual grava a fase atual; o motor contínuo de Kc entra na próxima etapa.
+                A emergência é prevista automaticamente 6 dias após o plantio e pode ser ajustada pela data observada em campo.
+                O DAE, a fenologia e o motor hídrico usam a emergência como referência.
               </p>
             </div>
           )}
