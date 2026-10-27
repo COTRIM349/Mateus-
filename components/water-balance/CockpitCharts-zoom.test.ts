@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { reservoirAxisRange } from "./CockpitCharts";
+import { reservoirAxisRange } from "@/modules/water-balance/services/reservoir-axis-range";
 
 const bounds = [
   { attention: 72, safety: 62 },
