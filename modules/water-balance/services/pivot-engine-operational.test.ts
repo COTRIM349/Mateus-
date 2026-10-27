@@ -129,6 +129,30 @@ describe("pivot-engine-operational", () => {
     expect(comKc[0].afd).toBe(semCurva[0].afd);
   });
 
+  it("aceita raiz e p rastreáveis mantendo o Kc legado quando não há curva Kc ativa", () => {
+    const input = baseInput();
+    input.initialStorageMm = 60;
+    input.initialCadMm = 60;
+    input.weatherByDate["2026-01-01"] = { et0: 5, precipitation: 0 };
+    input.agronomicByDate = {
+      "2026-01-01": {
+        rootDepthM: 0.3,
+        depletionFractionP: 0.4,
+      },
+    };
+
+    const rows = computePivotBalanceSeries(input);
+    expect(rows).toHaveLength(1);
+    // Kc continua vindo da fase (1,0); somente Zr e p vêm do cadastro rastreável.
+    expect(rows[0].kc).toBe(1);
+    expect(rows[0].etcPotential).toBe(5);
+    expect(rows[0].rootDepth).toBe(0.3);
+    // Solo: (0,20 - 0,10) × 0,30 m × 1000 = 30 mm.
+    expect(rows[0].adt).toBe(30);
+    // p=0,40 e ETc=5 mm/dia => sem ajuste; AFD=12 mm.
+    expect(rows[0].afd).toBe(12);
+  });
+
   it("bloqueia linha do tempo com buraco entre fases e expõe o motivo à execução operacional", () => {
     const input = baseInput();
     input.phases = [
