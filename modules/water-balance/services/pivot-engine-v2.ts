@@ -37,9 +37,11 @@ import { availabilityFactor, type CropAvailabilityGroup } from "./availability-f
 export type HydricStatus = "verde" | "amarelo" | "vermelho" | "cinza";
 
 export const HYDRIC_STATUS_CONFIG: Record<HydricStatus, { label: string; color: string; bgClass: string }> = {
-  verde: { label: "Adequado", color: "#166534", bgClass: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300" },
-  amarelo: { label: "Alerta", color: "#f97316", bgClass: "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300" },
-  vermelho: { label: "Prioritário", color: "#dc2626", bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
+  // O nome interno "verde" é legado; visualmente esta faixa fica azul.
+  // Verde fica reservado exclusivamente à capacidade de campo (mapStatus).
+  verde: { label: "Sem necessidade", color: "#2196F3", bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300" },
+  amarelo: { label: "Atenção", color: "#f59e0b", bgClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300" },
+  vermelho: { label: "Irrigar", color: "#dc2626", bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300" },
   cinza: { label: "Sem dados", color: "#9ca3af", bgClass: "bg-gray-100 text-gray-600 dark:bg-graphite-700 dark:text-gray-400" },
 };
 
