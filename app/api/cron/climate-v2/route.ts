@@ -25,7 +25,7 @@ export async function GET(request: Request) {
 
   const supabase = createAdminClient();
 
-  // O V3 pode recuperar continuidade em até 60 dias. Reprocessamos 60 dias
+  // O V3 pode recuperar continuidade em até 92 dias. Reprocessamos 92 dias
   // para não deixar a janela climática menor que a janela de recuperação do ARM.
   const { data: farms, error: farmsError } = await supabase
     .from("farms")
@@ -58,13 +58,13 @@ export async function GET(request: Request) {
 
       try {
         const runs = await ingestFarmClimate(supabase, farmId, {
-          pastDays: 60,
+          pastDays: 92,
           forecastDays: 7,
         });
         const selections = await resolveDailyRange(
           supabase,
           farmId,
-          isoDate(-59),
+          isoDate(-91),
           isoDate(0),
         );
         const audit = summarizeDailySelections(selections);
