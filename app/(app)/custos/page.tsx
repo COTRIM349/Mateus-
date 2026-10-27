@@ -12,11 +12,15 @@ import {
   ENERGY_FORMULA,
   aggregatePricedEvents,
   calculateWeeklyDemandApportionment,
+  farmTariffFromRow,
   pickTariffForDate,
   priceIrrigationEvent,
+  TARIFF_FLAG_LABELS,
+  TARIFF_FLAG_PRESETS_R_PER_KWH,
   WEEKLY_DEMAND_FORMULA,
   type CostGroupBy,
   type PricedEventRow,
+  type TariffFlagCode,
   type TariffRow,
 } from "@/modules/costs/services";
 
@@ -30,6 +34,10 @@ interface EventRow {
   operating_hours: number | null;
   energy_kwh: number | null;
   cost: number | null;
+  base_energy_cost: number | null;
+  flag_cost: number | null;
+  tariff_flag: TariffFlagCode | null;
+  flag_surcharge_per_kwh: number | null;
 }
 interface PivotLite {
   id: string;
@@ -63,6 +71,14 @@ function money(n: number | null | undefined): string {
   return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function monthLabel(dateYmd: string): string {
+  const [year, month] = dateYmd.split("-").map(Number);
+  return new Date(year, (month || 1) - 1, 1).toLocaleDateString("pt-BR", {
+    month: "long",
+    year: "numeric",
+  });
+}
+
 export default function CustosPage() {
   const { activeFarmId } = useAuth();
   const supabase = createClient();
@@ -81,6 +97,8 @@ export default function CustosPage() {
   const [filterPivot, setFilterPivot] = useState("");
   const [periodFrom, setPeriodFrom] = useState("");
   const [periodTo, setPeriodTo] = useState("");
+  const [tariffMode, setTariffMode] = useState<"event_month" | "fixed_month">("event_month");
+  const [fixedTariffId, setFixedTariffId] = useState("");
 
   const [tariffForm, setTariffForm] = useState({
     id: "",
@@ -89,6 +107,8 @@ export default function CustosPage() {
     rate_peak: "",
     rate_reserved: "",
     demand_rate: "",
+    tariff_flag: "verde" as TariffFlagCode,
+    flag_surcharge_per_kwh: "0",
     peak_start: "18",
     peak_end: "21",
     valid_from: new Date().toISOString().slice(0, 10),
@@ -103,7 +123,7 @@ export default function CustosPage() {
       supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).order("start_date", { ascending: false }),
       supabase.from("production_modules").select("id, name").eq("farm_id", activeFarmId).order("name"),
       supabase.from("energy_tariffs")
-        .select("id, valid_from, valid_to, rate_peak, rate_off_peak, rate_reserved, demand_rate, peak_start, peak_end, tariff_type, active")
+        .select("id, valid_from, valid_to, rate_peak, rate_off_peak, rate_reserved, demand_rate, tariff_flag, flag_surcharge_per_kwh, peak_start, peak_end, tariff_type, active")
         .eq("farm_id", activeFarmId)
         .eq("active", true)
         .order("valid_from", { ascending: false }),
@@ -124,10 +144,13 @@ export default function CustosPage() {
         rate_peak: String(current.rate_peak ?? ""),
         rate_reserved: String(current.rate_reserved ?? ""),
         demand_rate: String(current.demand_rate ?? ""),
+        tariff_flag: current.tariff_flag ?? "verde",
+        flag_surcharge_per_kwh: String(current.flag_surcharge_per_kwh ?? 0),
         peak_start: String(current.peak_start ?? 18),
         peak_end: String(current.peak_end ?? 21),
         valid_from: current.valid_from,
       });
+      setFixedTariffId((prev) => prev || current.id);
     }
 
     if (pivotRows.length === 0) {
@@ -138,7 +161,7 @@ export default function CustosPage() {
     }
     const pivotIds = pivotRows.map((p) => p.id);
     const [ev, asg] = await Promise.all([
-      supabase.from("irrigation_events").select("id, pivot_id, parcel_id, started_at, depth_mm, volume_m3, operating_hours, energy_kwh, cost").in("pivot_id", pivotIds).order("started_at", { ascending: false }).limit(500),
+      supabase.from("irrigation_events").select("id, pivot_id, parcel_id, started_at, depth_mm, volume_m3, operating_hours, energy_kwh, cost, base_energy_cost, flag_cost, tariff_flag, flag_surcharge_per_kwh").in("pivot_id", pivotIds).order("started_at", { ascending: false }).limit(500),
       supabase.from("pivot_crop_assignments").select("id, name, pivot_id, culture_id, season_id").in("pivot_id", pivotIds),
     ]);
     setEvents((ev.data ?? []) as EventRow[]);
@@ -156,6 +179,7 @@ export default function CustosPage() {
 
   const pricedRows: PricedEventRow[] = useMemo(() => {
     return events
+      .filter((e) => !filterPivot || e.pivot_id === filterPivot)
       .filter((e) => !periodFrom || e.started_at.slice(0, 10) >= periodFrom)
       .filter((e) => !periodTo || e.started_at.slice(0, 10) <= periodTo)
       .map((e) => {
@@ -177,13 +201,14 @@ export default function CustosPage() {
           areaHa: pivot?.area ?? 0,
           energyKwh: e.energy_kwh,
           cost: e.cost,
+          flagCost: e.flag_cost,
+          tariffFlag: e.tariff_flag,
         };
       });
   }, [events, filterPivot, periodFrom, periodTo, pivotMap, parcelMap, cultureMap, seasonMap]);
 
   const demandOperations = useMemo(() => {
     return events
-      .filter((e) => !filterPivot || e.pivot_id === filterPivot)
       .filter((e) => !periodFrom || e.started_at.slice(0, 10) >= periodFrom)
       .filter((e) => !periodTo || e.started_at.slice(0, 10) <= periodTo)
       .map((e) => {
@@ -204,14 +229,32 @@ export default function CustosPage() {
       .filter((row): row is NonNullable<typeof row> => row != null);
   }, [events, periodFrom, periodTo, pivotMap, moduleMap]);
 
+  const selectedFixedTariff = useMemo(
+    () => tariffs.find((t) => t.id === fixedTariffId) ?? null,
+    [tariffs, fixedTariffId],
+  );
+
+  const demandTariffPeriods = useMemo(() => {
+    if (tariffMode === "event_month") {
+      return tariffs.map((t) => ({
+        validFrom: t.valid_from,
+        validTo: t.valid_to,
+        demandRate: Number(t.demand_rate ?? 0),
+      }));
+    }
+    return selectedFixedTariff
+      ? [{
+          validFrom: "1900-01-01",
+          validTo: null,
+          demandRate: Number(selectedFixedTariff.demand_rate ?? 0),
+        }]
+      : [];
+  }, [tariffMode, tariffs, selectedFixedTariff]);
+
   const demandAllocations = useMemo(() => calculateWeeklyDemandApportionment(
     demandOperations,
-    tariffs.map((t) => ({
-      validFrom: t.valid_from,
-      validTo: t.valid_to,
-      demandRate: Number(t.demand_rate ?? 0),
-    })),
-  ), [demandOperations, tariffs]);
+    demandTariffPeriods,
+  ), [demandOperations, demandTariffPeriods]);
 
   // O filtro por pivô NÃO recalcula o pico. Primeiro calculamos o pico real
   // com todos os pivôs do módulo; depois apenas filtramos a visualização/rateio.
@@ -226,6 +269,7 @@ export default function CustosPage() {
   const farm = useMemo(() => {
     const cost = pricedRows.reduce((s, r) => s + (r.cost ?? 0), 0);
     const energy = pricedRows.reduce((s, r) => s + (r.energyKwh ?? 0), 0);
+    const flagCost = pricedRows.reduce((s, r) => s + (r.flagCost ?? 0), 0);
     const volume = pricedRows.reduce((s, r) => s + r.volumeM3, 0);
     const depthArea = pricedRows.reduce((s, r) => s + r.depthMm * r.areaHa, 0);
     const areaByPivot = new Map<string, number>();
@@ -234,7 +278,7 @@ export default function CustosPage() {
     const demandCost = visibleDemandAllocations.reduce((s, r) => s + (r.apportionedDemandCost ?? 0), 0);
     const demandMissingTariff = visibleDemandAllocations.some((r) => r.demandRate == null);
     const totalCost = cost + demandCost;
-    return { cost, demandCost, totalCost, demandMissingTariff, energy, volume, events: pricedRows.length, area, depthArea };
+    return { cost, flagCost, demandCost, totalCost, demandMissingTariff, energy, volume, events: pricedRows.length, area, depthArea };
   }, [pricedRows, visibleDemandAllocations]);
 
   const saveTariff = async () => {
@@ -243,6 +287,7 @@ export default function CustosPage() {
     const peak = Number(tariffForm.rate_peak || tariffForm.rate_off_peak);
     const reserved = Number(tariffForm.rate_reserved);
     const demandRate = Number(tariffForm.demand_rate);
+    const flagSurcharge = Number(tariffForm.flag_surcharge_per_kwh);
     if (!Number.isFinite(off) || off <= 0) {
       setMessage("Informe a tarifa fora de ponta (R$/kWh), maior que zero.");
       return;
@@ -256,11 +301,13 @@ export default function CustosPage() {
       rate_peak: Number.isFinite(peak) && peak > 0 ? peak : off,
       rate_reserved: Number.isFinite(reserved) && reserved >= 0 ? reserved : 0,
       demand_rate: Number.isFinite(demandRate) && demandRate >= 0 ? demandRate : 0,
+      tariff_flag: tariffForm.tariff_flag,
+      flag_surcharge_per_kwh: Number.isFinite(flagSurcharge) && flagSurcharge >= 0 ? flagSurcharge : 0,
       peak_start: Number(tariffForm.peak_start) || 18,
       peak_end: Number(tariffForm.peak_end) || 21,
       active: true,
       valid_from: tariffForm.valid_from,
-      valid_to: null,
+      valid_to: tariffs.find((t) => t.id === tariffForm.id)?.valid_to ?? null,
     };
     const { error } = tariffForm.id
       ? await supabase.from("energy_tariffs").update(row).eq("id", tariffForm.id)
@@ -291,14 +338,22 @@ export default function CustosPage() {
         motorEfficiency: pivot.motor_efficiency,
         specificConsumptionKwhM3: pivot.specific_consumption,
         startedAt: ev.started_at,
-        tariff: pickTariffForDate(tariffs, ev.started_at.slice(0, 10)),
+        tariff: tariffMode === "event_month"
+          ? pickTariffForDate(tariffs, ev.started_at.slice(0, 10))
+          : selectedFixedTariff
+            ? farmTariffFromRow(selectedFixedTariff)
+            : null,
         pivotEnergyCostReaisPerKwh: pivot.energy_cost,
       });
       if (priced.energy_kwh == null && priced.cost == null) { skipped += 1; continue; }
       const { error } = await supabase.from("irrigation_events").update({
         energy_kwh: priced.energy_kwh,
         cost: priced.cost,
+        base_energy_cost: priced.base_energy_cost,
+        flag_cost: priced.flag_cost,
         tariff_rate: priced.tariff_rate,
+        tariff_flag: priced.tariff_flag,
+        flag_surcharge_per_kwh: priced.flag_surcharge_per_kwh,
         energy_source: priced.energy_source,
       }).eq("id", ev.id);
       if (!error) updated += 1;
@@ -317,7 +372,9 @@ export default function CustosPage() {
     { header: "Lâmina", render: (r) => <span className="tabular-nums">{r.depthMm.toFixed(1)} mm</span> },
     { header: "Volume", render: (r) => <span className="tabular-nums">{r.volumeM3.toLocaleString("pt-BR")} m³</span> },
     { header: "Energia", render: (r) => r.energyKwh != null ? `${r.energyKwh.toFixed(1)} kWh` : "—" },
-    { header: "R$/evento", render: (r) => money(r.cost) },
+    { header: "Bandeira", render: (r) => r.tariffFlag ? TARIFF_FLAG_LABELS[r.tariffFlag] : "—" },
+    { header: "Adic. bandeira", render: (r) => money(r.flagCost), align: "right" },
+    { header: "R$/evento", render: (r) => money(r.cost), align: "right" },
   ];
 
   const groupColumns: Column<ReturnType<typeof aggregatePricedEvents>[number]>[] = [
@@ -325,6 +382,7 @@ export default function CustosPage() {
     { header: "Eventos", render: (r) => String(r.eventCount), align: "right" },
     { header: "Energia", render: (r) => `${r.totalEnergyKwh.toFixed(0)} kWh`, align: "right" },
     { header: "Consumo (R$)", render: (r) => money(r.totalCost), align: "right" },
+    { header: "Bandeira (R$)", render: (r) => money(r.totalFlagCost), align: "right" },
     { header: "R$/evento", render: (r) => money(r.costPerEvent), align: "right" },
     { header: "R$/m³", render: (r) => r.costPerM3 != null ? r.costPerM3.toFixed(4) : "—", align: "right" },
     { header: "R$/mm/ha", render: (r) => r.costPerMmHa != null ? r.costPerMmHa.toFixed(4) : "—", align: "right" },
@@ -359,9 +417,10 @@ export default function CustosPage() {
         descricao="O custo nasce do evento realizado. Sem tarifa ou potência na ficha, o valor permanece vazio."
       />
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-6">
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-7">
         <StatCard metric={{ id: "c", title: "Custo total", value: money(farm.totalCost), description: "Consumo + demanda rateada" }} />
         <StatCard metric={{ id: "cons", title: "Consumo energia", value: money(farm.cost), description: `${farm.events} evento(s)` }} />
+        <StatCard metric={{ id: "flag", title: "Bandeira", value: money(farm.flagCost), description: "Adicional sobre kWh" }} />
         <StatCard metric={{ id: "dem", title: "Demanda rateada", value: farm.demandMissingTariff ? "Pendente" : money(farm.demandCost), description: "Pico semanal por módulo" }} />
         <StatCard metric={{ id: "e", title: "Energia", value: `${farm.energy.toFixed(0)} kWh`, description: ENERGY_FORMULA }} />
         <StatCard metric={{ id: "m3", title: "R$/m³ total", value: farm.volume > 0 ? (farm.totalCost / farm.volume).toFixed(4) : "—", description: COST_FORMULA }} />
@@ -370,6 +429,51 @@ export default function CustosPage() {
 
       <Card className="space-y-4">
         <h2 className="text-sm font-semibold text-graphite-800 dark:text-white">Base tarifária da fazenda</h2>
+
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <Select
+            id="tariff_mode"
+            label="Aplicação no cálculo"
+            value={tariffMode}
+            onChange={(e) => setTariffMode(e.target.value as "event_month" | "fixed_month")}
+            options={[
+              { value: "event_month", label: "Tarifa automática do mês do evento" },
+              { value: "fixed_month", label: "Usar uma competência fixa" },
+            ]}
+          />
+          <Select
+            id="fixed_tariff"
+            label="Competência fixa"
+            value={fixedTariffId}
+            disabled={tariffMode !== "fixed_month"}
+            onChange={(e) => setFixedTariffId(e.target.value)}
+            options={tariffs.map((t) => ({ value: t.id, label: monthLabel(t.valid_from) }))}
+          />
+          <Select
+            id="edit_tariff"
+            label="Competência para editar"
+            value={tariffForm.id}
+            onChange={(e) => {
+              const selected = tariffs.find((t) => t.id === e.target.value);
+              if (!selected) return;
+              setTariffForm({
+                id: selected.id,
+                tariff_type: (selected as TariffRow & { tariff_type?: string }).tariff_type ?? "convencional",
+                rate_off_peak: String(selected.rate_off_peak ?? ""),
+                rate_peak: String(selected.rate_peak ?? ""),
+                rate_reserved: String(selected.rate_reserved ?? ""),
+                demand_rate: String(selected.demand_rate ?? ""),
+                tariff_flag: selected.tariff_flag ?? "verde",
+                flag_surcharge_per_kwh: String(selected.flag_surcharge_per_kwh ?? 0),
+                peak_start: String(selected.peak_start ?? 18),
+                peak_end: String(selected.peak_end ?? 21),
+                valid_from: selected.valid_from,
+              });
+            }}
+            options={tariffs.map((t) => ({ value: t.id, label: monthLabel(t.valid_from) }))}
+          />
+        </div>
+
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
           <Select
             id="tariff_type" label="Tipo"
@@ -385,6 +489,31 @@ export default function CustosPage() {
           <Input id="rate_peak" label="Ponta HP (R$/kWh)" type="number" min={0} step={0.000001} value={tariffForm.rate_peak} onChange={(e) => setTariffForm((f) => ({ ...f, rate_peak: e.target.value }))} />
           <Input id="rate_reserved" label="Horário reservado HR (R$/kWh)" type="number" min={0} step={0.000001} value={tariffForm.rate_reserved} onChange={(e) => setTariffForm((f) => ({ ...f, rate_reserved: e.target.value }))} />
           <Input id="demand_rate" label="Demanda HFP (R$/kW)" type="number" min={0} step={0.000001} value={tariffForm.demand_rate} onChange={(e) => setTariffForm((f) => ({ ...f, demand_rate: e.target.value }))} />
+          <Select
+            id="tariff_flag"
+            label="Bandeira"
+            value={tariffForm.tariff_flag}
+            onChange={(e) => {
+              const flag = e.target.value as TariffFlagCode;
+              const preset = flag === "personalizada"
+                ? tariffForm.flag_surcharge_per_kwh
+                : String(TARIFF_FLAG_PRESETS_R_PER_KWH[flag]);
+              setTariffForm((f) => ({ ...f, tariff_flag: flag, flag_surcharge_per_kwh: preset }));
+            }}
+            options={(Object.keys(TARIFF_FLAG_LABELS) as TariffFlagCode[]).map((flag) => ({
+              value: flag,
+              label: TARIFF_FLAG_LABELS[flag],
+            }))}
+          />
+          <Input
+            id="flag_surcharge"
+            label="Adicional bandeira (R$/kWh)"
+            type="number"
+            min={0}
+            step={0.000001}
+            value={tariffForm.flag_surcharge_per_kwh}
+            onChange={(e) => setTariffForm((f) => ({ ...f, flag_surcharge_per_kwh: e.target.value }))}
+          />
           <Input id="peak_start" label="Início ponta (h)" type="number" min={0} max={23} value={tariffForm.peak_start} onChange={(e) => setTariffForm((f) => ({ ...f, peak_start: e.target.value }))} />
           <Input id="peak_end" label="Fim ponta (h)" type="number" min={0} max={23} value={tariffForm.peak_end} onChange={(e) => setTariffForm((f) => ({ ...f, peak_end: e.target.value }))} />
           <Input id="valid_from" label="Vigente desde" type="date" value={tariffForm.valid_from} onChange={(e) => setTariffForm((f) => ({ ...f, valid_from: e.target.value }))} />
@@ -396,7 +525,7 @@ export default function CustosPage() {
           </Button>
         </div>
         <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-          Base mensal da planilha Karitel/RDM: HP, HFP, HR e Demanda HFP. {WEEKLY_DEMAND_FORMULA}. O rateio é feito somente entre os pivôs que formaram o maior pico da semana no módulo.
+          No modo automático, cada evento usa a tarifa e a bandeira da própria competência mensal. A bandeira é adicional sobre a energia (kWh), nunca sobre a demanda (kW). Presets ANEEL: Verde 0; Amarela 0,01885; Vermelha P1 0,04463; Vermelha P2 0,07877 R$/kWh. O campo permanece editável para atualização futura. {WEEKLY_DEMAND_FORMULA}.
         </p>
       </Card>
 

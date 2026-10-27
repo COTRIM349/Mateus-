@@ -11,7 +11,7 @@ import { roundTo } from "@/utils/math";
 
 export const ENERGY_FORMULA = "E kWh = (Pot CV × 0,7355 / η) × Tempo h";
 export const ENERGY_SPEC_FORMULA = "E kWh = consumo específico kWh/m³ × volume m³";
-export const COST_FORMULA = "Custo R$ = energia kWh × tarifa R$/kWh";
+export const COST_FORMULA = "Custo R$ = energia kWh × tarifa R$/kWh + energia kWh × adicional da bandeira";
 export const COST_PER_MM_HA_FORMULA = "R$/mm/ha = custo R$ / (lâmina mm × área ha)";
 export const MOTOR_EFFICIENCY_DEFAULT = 0.85;
 
@@ -73,12 +73,31 @@ export function deriveEventEnergy(input: EventEnergyInput): EventEnergyResult {
   return { energyKwh: null, source: null, pendingReason: MISSING_ENERGY };
 }
 
+export type TariffFlagCode = "verde" | "amarela" | "vermelha_p1" | "vermelha_p2" | "personalizada";
+
+export const TARIFF_FLAG_PRESETS_R_PER_KWH: Record<Exclude<TariffFlagCode, "personalizada">, number> = {
+  verde: 0,
+  amarela: 0.01885,
+  vermelha_p1: 0.04463,
+  vermelha_p2: 0.07877,
+};
+
+export const TARIFF_FLAG_LABELS: Record<TariffFlagCode, string> = {
+  verde: "Verde",
+  amarela: "Amarela",
+  vermelha_p1: "Vermelha — Patamar 1",
+  vermelha_p2: "Vermelha — Patamar 2",
+  personalizada: "Personalizada",
+};
+
 export interface FarmTariff {
   id?: string | null;
   ratePeak: number;
   rateOffPeak: number;
   peakStart: number;
   peakEnd: number;
+  tariffFlag?: TariffFlagCode | null;
+  flagSurchargePerKwh?: number | null;
   validFrom?: string | null;
   validTo?: string | null;
 }
@@ -93,10 +112,18 @@ export interface EventCostInput {
 
 export interface EventCostResult {
   cost: number | null;
+  baseEnergyCost: number | null;
+  flagCost: number | null;
   tariffRate: number | null;
+  tariffFlag: TariffFlagCode | null;
+  flagSurchargePerKwh: number | null;
   peakKwh: number | null;
   offPeakKwh: number | null;
   pendingReason: string | null;
+}
+
+function roundCurrency(value: number): number {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
 }
 
 function hmFromIso(iso: string): string {
@@ -140,7 +167,11 @@ export function deriveEventCost(input: EventCostInput): EventCostResult {
   if (input.energyKwh == null || !Number.isFinite(input.energyKwh) || input.energyKwh < 0) {
     return {
       cost: null,
+      baseEnergyCost: null,
+      flagCost: null,
       tariffRate: null,
+      tariffFlag: null,
+      flagSurchargePerKwh: null,
       peakKwh: null,
       offPeakKwh: null,
       pendingReason: input.energyKwh == null ? MISSING_ENERGY : MISSING_TARIFF,
@@ -161,15 +192,23 @@ export function deriveEventCost(input: EventCostInput): EventCostResult {
       tariff.peakStart,
       tariff.peakEnd,
     );
-    const cost = roundTo(
+    const baseEnergyCost = roundTo(
       split.peakKwh * tariff.ratePeak + split.offPeakKwh * tariff.rateOffPeak,
       2,
     );
+    const flagSurcharge = Number(tariff.flagSurchargePerKwh ?? 0);
+    const validFlagSurcharge = Number.isFinite(flagSurcharge) && flagSurcharge >= 0 ? flagSurcharge : 0;
+    const flagCost = roundCurrency(input.energyKwh * validFlagSurcharge);
+    const cost = roundCurrency(baseEnergyCost + flagCost);
     const blended =
-      input.energyKwh > 0 ? roundTo(cost / input.energyKwh, 4) : tariff.rateOffPeak;
+      input.energyKwh > 0 ? roundTo(cost / input.energyKwh, 6) : tariff.rateOffPeak + validFlagSurcharge;
     return {
       cost,
+      baseEnergyCost,
+      flagCost,
       tariffRate: blended,
+      tariffFlag: tariff.tariffFlag ?? "verde",
+      flagSurchargePerKwh: validFlagSurcharge,
       peakKwh: split.peakKwh,
       offPeakKwh: split.offPeakKwh,
       pendingReason: null,
@@ -180,7 +219,11 @@ export function deriveEventCost(input: EventCostInput): EventCostResult {
   if (flat != null && Number.isFinite(flat) && flat > 0) {
     return {
       cost: roundTo(input.energyKwh * flat, 2),
+      baseEnergyCost: roundTo(input.energyKwh * flat, 2),
+      flagCost: 0,
       tariffRate: flat,
+      tariffFlag: null,
+      flagSurchargePerKwh: 0,
       peakKwh: 0,
       offPeakKwh: input.energyKwh,
       pendingReason: null,
@@ -189,7 +232,11 @@ export function deriveEventCost(input: EventCostInput): EventCostResult {
 
   return {
     cost: null,
+    baseEnergyCost: null,
+    flagCost: null,
     tariffRate: null,
+    tariffFlag: null,
+    flagSurchargePerKwh: null,
     peakKwh: null,
     offPeakKwh: null,
     pendingReason: MISSING_TARIFF,
@@ -234,7 +281,11 @@ export interface EventPricingContext extends EventEnergyInput {
 export interface PricedEventFields {
   energy_kwh: number | null;
   cost: number | null;
+  base_energy_cost: number | null;
+  flag_cost: number | null;
   tariff_rate: number | null;
+  tariff_flag: TariffFlagCode | null;
+  flag_surcharge_per_kwh: number | null;
   energy_source: EnergySource | null;
   pendingReason: string | null;
   indicators: EventIndicators;
@@ -253,7 +304,11 @@ export function priceIrrigationEvent(ctx: EventPricingContext): PricedEventField
   return {
     energy_kwh: energy.energyKwh,
     cost: priced.cost,
+    base_energy_cost: priced.baseEnergyCost,
+    flag_cost: priced.flagCost,
     tariff_rate: priced.tariffRate,
+    tariff_flag: priced.tariffFlag,
+    flag_surcharge_per_kwh: priced.flagSurchargePerKwh,
     energy_source: energy.source,
     pendingReason: priced.cost == null ? (priced.pendingReason ?? energy.pendingReason) : null,
     indicators: eventCostIndicators({
@@ -273,9 +328,25 @@ export interface TariffRow {
   rate_off_peak: number;
   rate_reserved?: number | null;
   demand_rate?: number | null;
+  tariff_flag?: TariffFlagCode | null;
+  flag_surcharge_per_kwh?: number | null;
   peak_start: number;
   peak_end: number;
   active?: boolean;
+}
+
+export function farmTariffFromRow(t: TariffRow): FarmTariff {
+  return {
+    id: t.id,
+    ratePeak: t.rate_peak,
+    rateOffPeak: t.rate_off_peak,
+    tariffFlag: t.tariff_flag ?? "verde",
+    flagSurchargePerKwh: t.flag_surcharge_per_kwh ?? 0,
+    peakStart: t.peak_start,
+    peakEnd: t.peak_end,
+    validFrom: t.valid_from,
+    validTo: t.valid_to,
+  };
 }
 
 export function pickTariffForDate(tariffs: TariffRow[], dateYmd: string): FarmTariff | null {
@@ -286,16 +357,7 @@ export function pickTariffForDate(tariffs: TariffRow[], dateYmd: string): FarmTa
   });
   matches.sort((a, b) => b.valid_from.localeCompare(a.valid_from));
   const t = matches[0];
-  if (!t) return null;
-  return {
-    id: t.id,
-    ratePeak: t.rate_peak,
-    rateOffPeak: t.rate_off_peak,
-    peakStart: t.peak_start,
-    peakEnd: t.peak_end,
-    validFrom: t.valid_from,
-    validTo: t.valid_to,
-  };
+  return t ? farmTariffFromRow(t) : null;
 }
 
 export type CostGroupBy = "pivot" | "parcel" | "culture" | "season";
@@ -316,6 +378,8 @@ export interface PricedEventRow {
   areaHa: number;
   energyKwh: number | null;
   cost: number | null;
+  flagCost?: number | null;
+  tariffFlag?: TariffFlagCode | null;
 }
 
 export interface CostGroup {
@@ -323,6 +387,7 @@ export interface CostGroup {
   label: string;
   eventCount: number;
   totalCost: number;
+  totalFlagCost: number;
   totalEnergyKwh: number;
   totalVolumeM3: number;
   totalDepthMm: number;
@@ -361,12 +426,14 @@ export function aggregatePricedEvents(rows: PricedEventRow[], by: CostGroupBy): 
   for (const [key, items] of Array.from(groups.entries())) {
     let totalCost = 0;
     let totalEnergy = 0;
+    let totalFlagCost = 0;
     let totalVolume = 0;
     let totalDepth = 0;
     const areas = new Map<string, number>();
     for (const i of items) {
       totalCost += i.cost ?? 0;
       totalEnergy += i.energyKwh ?? 0;
+      totalFlagCost += i.flagCost ?? 0;
       totalVolume += i.volumeM3;
       totalDepth += i.depthMm;
       areas.set(i.pivotId, i.areaHa);
@@ -378,6 +445,7 @@ export function aggregatePricedEvents(rows: PricedEventRow[], by: CostGroupBy): 
       label: labels.get(key) ?? key,
       eventCount: items.length,
       totalCost: roundTo(totalCost, 2),
+      totalFlagCost: roundTo(totalFlagCost, 2),
       totalEnergyKwh: roundTo(totalEnergy, 2),
       totalVolumeM3: roundTo(totalVolume, 0),
       totalDepthMm: roundTo(totalDepth, 2),
