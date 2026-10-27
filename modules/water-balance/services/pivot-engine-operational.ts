@@ -8,10 +8,9 @@
 
 export * from "./pivot-engine-v2";
 
-import { resolveDaeReferenceDate, resolveDepletionFactor } from "@/modules/assignment/services";
-import { identifyPhase, interpolateKc, type CulturePhase } from "@/modules/culture/services";
+import { resolveDaeReferenceDate } from "@/modules/assignment/services";
+import { type CulturePhase } from "@/modules/culture/services";
 import { soilProfileIsUsable } from "@/modules/soil/services";
-import { resolveManejoKl } from "./crop-coefficients";
 import {
   computePivotBalanceSeries as computePivotBalanceSeriesCore,
   type BalanceDay,
@@ -244,101 +243,14 @@ export function calculateManagementUrgency(
 }
 
 /**
- * Executa o núcleo V2 dia a dia para permitir que p seja recalculado com a
- * demanda daquele dia, preservando ARM e CAD do dia anterior. O núcleo continua
- * responsável por Ks, ETc, balanço, chuva, irrigação e recomendação.
+ * Núcleo único para todo o período. O V2 aplica F = p_base + 0,04(5-ETc)
+ * uma única vez POR DIA, usando a ETo aprovada daquele dia, sem dupla correção
+ * na curva agronômica, na Central de Manejo ou no cockpit.
  */
 export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
   const diagnosis = diagnoseOperationalInput(input);
   if (!diagnosis.operational) throw new OperationalInputError(diagnosis);
-
-  const normalized = normalizeOperationalInput(input);
-  const dates = dateRange(normalized.dateStart, normalized.dateEnd);
-  const referenceMs = new Date(`${resolveDaeReferenceDate(normalized.assignment)}T00:00:00Z`).getTime();
-  if (!Number.isFinite(referenceMs)) return [];
-
-  const result: BalanceDay[] = [];
-  let previousStorage: number | null = normalized.initialStorageMm ?? null;
-  let previousCad: number | null = normalized.initialCadMm ?? null;
-
-  for (const date of dates) {
-    const weather = normalized.weatherByDate[date];
-    if (!weather || !Number.isFinite(weather.et0) || weather.et0 < 0 || !Number.isFinite(weather.precipitation) || weather.precipitation < 0) {
-      return [];
-    }
-
-    const dateMs = new Date(`${date}T00:00:00Z`).getTime();
-    const dae = Math.max(0, Math.floor((dateMs - referenceMs) / 86_400_000));
-    const agronomic = normalized.agronomicByDate?.[date] ?? null;
-    const phase = normalized.phases.length > 0
-      ? identifyPhase(normalized.phases, dae)?.phase ?? null
-      : null;
-
-    const legacyKc = phase ? interpolateKc(normalized.phases, dae) : null;
-    const kc = agronomic?.kc ?? legacyKc;
-    if (kc == null || !Number.isFinite(kc)) return [];
-
-    const kl = resolveManejoKl({
-      parcelOverride: normalized.assignment.kl_override,
-      phaseKl: phase?.kl ?? null,
-      cultureKl: normalized.culture.kl,
-    });
-    const etcPotential = Math.max(weather.et0 * kc * kl, 0);
-
-    const legacyP = normalized.culture.depletion_factor ?? phase?.depletion_factor ?? null;
-    const baseP = agronomic?.depletionFractionP
-      ?? (legacyP == null
-        ? null
-        : resolveDepletionFactor(normalized.assignment, phase?.depletion_factor ?? null, legacyP));
-    if (baseP == null || !Number.isFinite(baseP)) return [];
-
-    const adjustedP = adjustDepletionFactorForDemand(baseP, etcPotential);
-
-    const dailyPhases = phase
-      ? normalized.phases.map((item) =>
-          item.phase_order === phase.phase_order
-            ? { ...item, depletion_factor: adjustedP }
-            : item
-        )
-      : normalized.phases;
-
-    const dailyAssignment = normalized.assignment.parameter_mode === "personalizado" && normalized.assignment.depletion_factor != null
-      ? { ...normalized.assignment, depletion_factor: adjustedP }
-      : normalized.assignment;
-
-    // Só aplica o p ajustado por demanda quando o CHAMADOR forneceu um p próprio
-    // (ex.: curva de raiz/p ativa). Se o conjunto diário traz apenas Kc (curva de
-    // Kc ativa, sem p), NÃO injeta um p: deixa o núcleo V2 resolver pelo mesmo
-    // caminho de sempre (Tabela 2 por grupo / FAO-56), para o Balanço não divergir
-    // da Central de Manejo no mesmo pivô só por ativar uma curva de Kc.
-    const dailyAgronomicByDate = agronomic
-      ? {
-          ...normalized.agronomicByDate,
-          [date]: agronomic.depletionFractionP != null
-            ? { ...agronomic, depletionFractionP: adjustedP }
-            : agronomic,
-        }
-      : normalized.agronomicByDate;
-
-    const daily = computePivotBalanceSeriesCore({
-      ...normalized,
-      assignment: dailyAssignment,
-      phases: dailyPhases,
-      agronomicByDate: dailyAgronomicByDate,
-      dateStart: date,
-      dateEnd: date,
-      initialStorageMm: previousStorage,
-      initialCadMm: previousCad,
-    });
-    if (daily.length !== 1) return [];
-
-    const row = daily[0];
-    result.push(row);
-    previousStorage = row.storage;
-    previousCad = row.adt;
-  }
-
-  return result;
+  return computePivotBalanceSeriesCore(normalizeOperationalInput(input));
 }
 
 export function computePivotCurrentState(identity: PivotIdentity, input: PivotEngineInput): PivotHydricState {
