@@ -37,7 +37,7 @@ const ICON = {
 } as const;
 
 // Menu só com telas que já operam. Rotas vazias (água, alertas, sensores,
-// reservatórios, Cotrim AI, OS, chuva manual) ficam fora até existirem.
+// reservatórios, Santa Colomba AI, OS, chuva manual) ficam fora até existirem.
 
 export const topLevelItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: ICON.home },
