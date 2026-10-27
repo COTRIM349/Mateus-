@@ -974,7 +974,7 @@ export default function BalancoHidricoPage() {
           // REGRA OPERACIONAL: chuva automática não entra no manejo.
           // A precipitação começa em zero e só é preenchida pelo lançamento
           // manual em manual_rainfall_entries.
-          weatherByDate[date] = { et0: r.et0_calculated, precip: 0 };
+          weatherByDate[date] = { et0, precip: 0 };
         }
       });
 
