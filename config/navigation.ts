@@ -73,6 +73,7 @@ export const navGroups: NavGroup[] = [
     icon: ICON.boletim,
     items: [
       { label: "Irrigação Aplicada", href: "/lancamentos/irrigacao", icon: ICON.boletim },
+      { label: "Correção de Irrigação", href: "/lancamentos/correcao-irrigacao", icon: ICON.alert },
       { label: "Sensorial de Solo", href: "/lancamentos/sensorial-solo", icon: ICON.soil },
     ],
   },
