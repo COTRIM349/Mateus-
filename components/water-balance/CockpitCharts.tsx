@@ -308,6 +308,111 @@ export function EntradasConsumoChart({
   );
 }
 
+// ── Curva Kc da cultura (somente leitura no manejo) ─────────────────────────
+
+export interface KcCurvePoint {
+  x: number;
+  y: number;
+}
+
+function interpolateCurve(points: KcCurvePoint[], xValue: number): number | null {
+  const ordered = [...points].sort((a, b) => a.x - b.x);
+  if (ordered.length === 0) return null;
+  if (xValue <= ordered[0].x) return ordered[0].y;
+  if (xValue >= ordered[ordered.length - 1].x) return ordered[ordered.length - 1].y;
+  for (let i = 1; i < ordered.length; i += 1) {
+    const a = ordered[i - 1];
+    const b = ordered[i];
+    if (xValue <= b.x) {
+      const span = b.x - a.x;
+      if (span <= 0) return b.y;
+      const t = (xValue - a.x) / span;
+      return a.y + (b.y - a.y) * t;
+    }
+  }
+  return ordered[ordered.length - 1].y;
+}
+
+export function KcCurveReadOnlyChart({
+  points,
+  currentDae,
+  currentKc,
+}: {
+  points: KcCurvePoint[];
+  currentDae?: number | null;
+  currentKc?: number | null;
+}) {
+  const ordered = [...points]
+    .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
+    .sort((a, b) => a.x - b.x);
+
+  const W = 1000;
+  const H = 300;
+  const padL = 54;
+  const padR = 28;
+  const padT = 26;
+  const padB = 48;
+  const plotW = W - padL - padR;
+  const plotH = H - padT - padB;
+
+  if (ordered.length < 2) return <EmptyChart label="Curva Kc ativa sem pontos suficientes." height={H} />;
+
+  const minX = Math.min(0, ordered[0].x);
+  const maxX = Math.max(ordered[ordered.length - 1].x, minX + 1);
+  const maxKc = Math.max(...ordered.map((p) => p.y), currentKc ?? 0, 1);
+  const yMax = Math.max(1.2, Math.ceil((maxKc + 0.1) * 10) / 10);
+  const x = (v: number) => padL + ((clamp(v, minX, maxX) - minX) / (maxX - minX)) * plotW;
+  const y = (v: number) => padT + plotH - (clamp(v, 0, yMax) / yMax) * plotH;
+
+  const coords = ordered.map((p) => ({ ...p, cx: x(p.x), cy: y(p.y) }));
+  const poly = coords.map((p) => `${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join(" ");
+  const yTicks = Array.from({ length: 5 }, (_, i) => (yMax * i) / 4);
+  const xTickEvery = Math.max(1, Math.ceil(ordered.length / 6));
+  const dae = currentDae != null && Number.isFinite(currentDae) ? currentDae : null;
+  const daeKc = dae != null ? (currentKc ?? interpolateCurve(ordered, dae)) : null;
+  const daeX = dae != null ? x(dae) : null;
+  const daeY = daeKc != null ? y(daeKc) : null;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Curva de Kc por DAE">
+      {yTicks.map((t) => (
+        <g key={t}>
+          <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="currentColor" strokeWidth={1} className="text-gray-200/70 dark:text-white/[0.06]" />
+          <text x={padL - 9} y={y(t) + 4} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={10}>{t.toFixed(2)}</text>
+        </g>
+      ))}
+
+      <line x1={padL} x2={padL} y1={padT} y2={padT + plotH} stroke="currentColor" className="text-gray-300 dark:text-white/15" />
+      <line x1={padL} x2={W - padR} y1={padT + plotH} y2={padT + plotH} stroke="currentColor" className="text-gray-300 dark:text-white/15" />
+      <text x={13} y={padT + plotH / 2} textAnchor="middle" transform={`rotate(-90 13 ${padT + plotH / 2})`} className="fill-graphite-500 dark:fill-gray-400" fontSize={11} fontWeight={700}>Kc</text>
+      <text x={padL + plotW / 2} y={H - 8} textAnchor="middle" className="fill-graphite-500 dark:fill-gray-400" fontSize={11} fontWeight={700}>DAE</text>
+
+      <polyline points={poly} fill="none" stroke="#e5e7eb" strokeWidth={3.2} strokeLinejoin="round" strokeLinecap="round" className="dark:stroke-gray-200" />
+
+      {coords.map((p, i) => (
+        <g key={`${p.x}-${i}`}>
+          <circle cx={p.cx} cy={p.cy} r={5} fill="#e5e7eb" className="dark:fill-gray-100" />
+          <text x={p.cx} y={p.cy - 11} textAnchor="middle" className="fill-graphite-700 dark:fill-gray-200" fontSize={10} fontWeight={700}>{p.y.toFixed(2)}</text>
+          {(i % xTickEvery === 0 || i === coords.length - 1) && (
+            <text x={p.cx} y={padT + plotH + 18} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={10}>{p.x}</text>
+          )}
+        </g>
+      ))}
+
+      {daeX != null && daeY != null && daeKc != null && (
+        <g>
+          <line x1={daeX} x2={daeX} y1={padT} y2={padT + plotH} stroke="#22c55e" strokeWidth={1.5} strokeDasharray="5 4" opacity={0.85} />
+          <circle cx={daeX} cy={daeY} r={7} fill="#22c55e" stroke="#ffffff" strokeWidth={2} />
+          <rect x={Math.min(daeX + 10, W - 176)} y={Math.max(padT + 4, daeY - 35)} width={150} height={27} rx={7} fill="#052e16" opacity={0.94} />
+          <text x={Math.min(daeX + 20, W - 166)} y={Math.max(padT + 22, daeY - 17)} fill="#dcfce7" fontSize={10.5} fontWeight={700}>
+            Hoje · {Math.round(dae)} DAE · Kc {daeKc.toFixed(2)}
+          </text>
+        </g>
+      )}
+    </svg>
+  );
+}
+
 // ── Reservatório de Água do Solo ────────────────────────────────────────────
 
 export function ReservatorioChart({
