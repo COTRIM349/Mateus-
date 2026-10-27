@@ -2730,9 +2730,9 @@ function Cockpit({
             </div>
             <div className="mb-2.5">
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
-              <CockpitSeriesToggles series={ENTRADAS_SERIES} visible={entradasVis} onToggle={toggleEntrada} />
+              <CockpitSeriesToggles series={ENTRADAS_SERIES.filter((s) => s.k !== "kc")} visible={entradasVis} onToggle={toggleEntrada} />
             </div>
-            <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} visible={entradasVis} /></div>
+            <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} visible={{ ...entradasVis, kc: false }} /></div>
           </Card>
           <Card className="p-4">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
@@ -2759,7 +2759,7 @@ function Cockpit({
               )}
             </div>
             {kcCurve ? (
-              <div className="h-[300px] w-full">
+              <div className="h-[370px] w-full">
                 <KcCurveReadOnlyChart
                   points={kcCurve.points}
                   currentDae={last.dae ?? null}
