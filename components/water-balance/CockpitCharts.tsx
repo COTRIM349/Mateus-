@@ -361,15 +361,6 @@ export function KcCurveReadOnlyChart({
     .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
     .sort((a, b) => a.x - b.x);
 
-  const phaseTimeline = [...phases]
-    .filter((p) => Number.isFinite(p.startDap) && Number.isFinite(p.durationDays) && p.durationDays > 0)
-    .sort((a, b) => a.startDap - b.startDap)
-    .map((p) => ({
-      ...p,
-      startDae: p.startDap - daeOffsetFromPlanting,
-      endDae: p.startDap + p.durationDays - daeOffsetFromPlanting,
-    }));
-
   const W = 1000;
   const H = 370;
   const padL = 54;
@@ -381,23 +372,49 @@ export function KcCurveReadOnlyChart({
 
   if (ordered.length < 2) return <EmptyChart label="Curva Kc sem pontos suficientes." height={H} />;
 
-  const phaseMax = phaseTimeline.length > 0
-    ? Math.max(...phaseTimeline.map((p) => p.endDae))
-    : 0;
+  const dae = currentDae != null && Number.isFinite(currentDae)
+    ? Math.max(0, currentDae)
+    : null;
+  if (dae == null) return <EmptyChart label="DAE atual indisponível para montar a curva progressiva de Kc." height={H} />;
+
+  const daeKc = currentKc ?? interpolateCurve(ordered, dae);
+  if (daeKc == null) return <EmptyChart label="Kc atual indisponível." height={H} />;
+
+  // O gráfico do Manejo é progressivo: nunca antecipa a curva futura.
+  // Mostra somente os pontos já alcançados pelo DAE atual e adiciona o ponto
+  // interpolado de hoje como extremidade da linha.
+  const visiblePoints: KcCurvePoint[] = ordered.filter((p) => p.x <= dae);
+  if (visiblePoints.length === 0 || visiblePoints[0].x > 0) {
+    const kc0 = interpolateCurve(ordered, 0);
+    if (kc0 != null) visiblePoints.unshift({ x: 0, y: kc0 });
+  }
+  const alreadyHasToday = visiblePoints.some((p) => Math.abs(p.x - dae) < 1e-9);
+  if (!alreadyHasToday) visiblePoints.push({ x: dae, y: daeKc });
+  visiblePoints.sort((a, b) => a.x - b.x);
+
+  const phaseTimeline = [...phases]
+    .filter((p) => Number.isFinite(p.startDap) && Number.isFinite(p.durationDays) && p.durationDays > 0)
+    .sort((a, b) => a.startDap - b.startDap)
+    .map((p) => ({
+      ...p,
+      startDae: p.startDap - daeOffsetFromPlanting,
+      endDae: p.startDap + p.durationDays - daeOffsetFromPlanting,
+    }))
+    .filter((p) => p.startDae <= dae)
+    .map((p) => ({ ...p, endDae: Math.min(p.endDae, dae) }));
+
   const minX = 0;
-  const maxX = Math.max(ordered[ordered.length - 1].x, phaseMax, 1);
-  const maxKc = Math.max(...ordered.map((p) => p.y), currentKc ?? 0, 1);
+  const maxX = Math.max(dae, 1);
+  const maxKc = Math.max(...visiblePoints.map((p) => p.y), daeKc, 1);
   const yMax = Math.max(1.2, Math.ceil((maxKc + 0.1) * 10) / 10);
   const x = (v: number) => padL + ((clamp(v, minX, maxX) - minX) / (maxX - minX)) * plotW;
   const y = (v: number) => padT + plotH - (clamp(v, 0, yMax) / yMax) * plotH;
 
-  const coords = ordered.map((p) => ({ ...p, cx: x(p.x), cy: y(p.y) }));
+  const coords = visiblePoints.map((p) => ({ ...p, cx: x(p.x), cy: y(p.y) }));
   const poly = coords.map((p) => `${p.cx.toFixed(1)},${p.cy.toFixed(1)}`).join(" ");
   const yTicks = Array.from({ length: 5 }, (_, i) => (yMax * i) / 4);
-  const dae = currentDae != null && Number.isFinite(currentDae) ? currentDae : null;
-  const daeKc = dae != null ? (currentKc ?? interpolateCurve(ordered, dae)) : null;
-  const daeX = dae != null ? x(dae) : null;
-  const daeY = daeKc != null ? y(daeKc) : null;
+  const daeX = x(dae);
+  const daeY = y(daeKc);
 
   const phasePalette = ["#86efac", "#4ade80", "#facc15", "#fb923c", "#f97316", "#a3a3a3", "#60a5fa"];
   const normalize = (value: string | null | undefined) =>
@@ -406,10 +423,13 @@ export function KcCurveReadOnlyChart({
   const phaseBarY = padT + plotH + 42;
   const phaseBarH = 34;
 
-  const xTicks = Array.from({ length: 7 }, (_, i) => Math.round((maxX * i) / 6));
+  const tickCount = Math.min(7, Math.max(2, Math.floor(maxX) + 1));
+  const xTicks = Array.from({ length: tickCount }, (_, i) =>
+    Math.round((maxX * i) / Math.max(tickCount - 1, 1)),
+  ).filter((v, i, arr) => i === 0 || v !== arr[i - 1]);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Curva completa de Kc e fenologia por DAE">
+    <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Curva progressiva de Kc e fenologia até o DAE atual">
       {yTicks.map((t) => (
         <g key={t}>
           <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="currentColor" strokeWidth={1} className="text-gray-200/70 dark:text-white/[0.06]" />
@@ -440,7 +460,7 @@ export function KcCurveReadOnlyChart({
 
       {phaseTimeline.map((phase, index) => {
         const start = Math.max(0, phase.startDae);
-        const end = Math.min(maxX, phase.endDae);
+        const end = Math.min(dae, phase.endDae);
         if (end <= start) return null;
         const x1 = x(start);
         const width = Math.max(x(end) - x1, 1);
@@ -481,23 +501,21 @@ export function KcCurveReadOnlyChart({
 
       {phaseTimeline.length > 0 && (
         <>
-          <text x={padL} y={phaseBarY - 7} className="fill-graphite-400 dark:fill-gray-500" fontSize={9.5} fontWeight={700}>FENOLOGIA AO LONGO DO CICLO</text>
+          <text x={padL} y={phaseBarY - 7} className="fill-graphite-400 dark:fill-gray-500" fontSize={9.5} fontWeight={700}>FENOLOGIA ATÉ HOJE</text>
           <text x={W - padR} y={phaseBarY - 7} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={9.5}>
             fase atual destacada
           </text>
         </>
       )}
 
-      {daeX != null && daeY != null && daeKc != null && (
-        <g>
-          <line x1={daeX} x2={daeX} y1={padT} y2={phaseBarY + phaseBarH} stroke="#22c55e" strokeWidth={1.6} strokeDasharray="5 4" opacity={0.9} />
-          <circle cx={daeX} cy={daeY} r={7} fill="#22c55e" stroke="#ffffff" strokeWidth={2} />
-          <rect x={Math.min(daeX + 10, W - 220)} y={Math.max(padT + 4, daeY - 36)} width={194} height={29} rx={7} fill="#052e16" opacity={0.96} />
-          <text x={Math.min(daeX + 20, W - 210)} y={Math.max(padT + 23, daeY - 17)} fill="#dcfce7" fontSize={10.5} fontWeight={700}>
-            Hoje · {Math.round(dae ?? 0)} DAE · Kc {daeKc.toFixed(2)}
-          </text>
-        </g>
-      )}
+      <g>
+        <line x1={daeX} x2={daeX} y1={padT} y2={phaseBarY + phaseBarH} stroke="#22c55e" strokeWidth={1.6} strokeDasharray="5 4" opacity={0.9} />
+        <circle cx={daeX} cy={daeY} r={7} fill="#22c55e" stroke="#ffffff" strokeWidth={2} />
+        <rect x={Math.max(padL + 6, Math.min(daeX - 204, W - 220))} y={Math.max(padT + 4, daeY - 36)} width={194} height={29} rx={7} fill="#052e16" opacity={0.96} />
+        <text x={Math.max(padL + 16, Math.min(daeX - 194, W - 210))} y={Math.max(padT + 23, daeY - 17)} fill="#dcfce7" fontSize={10.5} fontWeight={700}>
+          Hoje · {Math.round(dae)} DAE · Kc {daeKc.toFixed(2)}
+        </text>
+      </g>
     </svg>
   );
 }
