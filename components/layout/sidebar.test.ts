@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 describe("sidebar compacta", () => {
-  it("mantém identidade Cotrim, compacta, sem recorte de outra plataforma", () => {
+  it("mantém identidade Santa Colomba, compacta, sem recorte de outra plataforma", () => {
     const sidebar = readFileSync(join(process.cwd(), "components/layout/Sidebar.tsx"), "utf8");
     const nav = readFileSync(join(process.cwd(), "config/navigation.ts"), "utf8");
     const layout = readFileSync(join(process.cwd(), "app/(app)/layout.tsx"), "utf8");
@@ -11,7 +11,7 @@ describe("sidebar compacta", () => {
     expect(sidebar).toContain("w-[240px]");
     expect(sidebar).toContain("bg-forest-900");
     expect(sidebar).toContain("aria-expanded");
-    expect(sidebar).toContain(">Cotrim</");
+    expect(sidebar).toContain(">SANTA COLOMBA</");
     expect(nav).toContain('label: "Dashboard"');
     expect(nav).toContain("Cadastros");
     expect(nav).toContain("Manejo Diário");
