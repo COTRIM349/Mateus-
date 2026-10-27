@@ -4,9 +4,9 @@ import { EmptyState } from "@/components/ui/EmptyState";
 export default function CotrimAIPage() {
   return (
     <div className="space-y-8">
-      <PageHeader titulo="Cotrim AI" descricao="Inteligência artificial para manejo" />
+      <PageHeader titulo="Santa Colomba AI" descricao="Inteligência artificial para manejo" />
       <EmptyState
-        title="Cotrim AI"
+        title="Santa Colomba AI"
         description="Recomendações automatizadas de irrigação, análise de risco e otimização de programação. Disponível na próxima sprint."
       />
     </div>

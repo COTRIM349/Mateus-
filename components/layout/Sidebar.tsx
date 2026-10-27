@@ -108,8 +108,8 @@ export function Sidebar() {
             </svg>
           </div>
           <div>
-            <p className="text-[14px] font-extrabold leading-none tracking-tight text-white">Cotrim</p>
-            <p className="mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.18em] text-brand-300">Irrigação Pro</p>
+            <p className="text-[14px] font-extrabold leading-none tracking-tight text-white">SANTA COLOMBA</p>
+            <p className="mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.18em] text-brand-300">IRRIGA PRO</p>
           </div>
         </div>
 

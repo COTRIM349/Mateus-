@@ -44,7 +44,7 @@ export default function LoginPage() {
           </svg>
         </div>
         <h1 className="text-xl font-bold tracking-tight text-graphite-900 dark:text-white">
-          Cotrim Irrigação Pro
+          SANTA COLOMBA IRRIGA PRO
         </h1>
         <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
           Entre com suas credenciais
