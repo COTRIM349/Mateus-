@@ -432,6 +432,7 @@ export default function BalancoHidricoPage() {
 
   // Load assignment + culture + soil + phases when pivot changes
   useEffect(() => {
+    setKcCurveView(null);
     if (!selectedPivotId) {
       setAssignment(null);
       setCulture(null);
