@@ -54,6 +54,7 @@ import { HydricInitialConditionForm } from "@/components/water-balance/HydricIni
 import {
   EntradasConsumoChart,
   ReservatorioChart,
+  KcCurveReadOnlyChart,
   CockpitSeriesToggles,
   ENTRADAS_SERIES,
   RESERVATORIO_SERIES,
@@ -326,6 +327,7 @@ export default function BalancoHidricoPage() {
   const [kcSource, setKcSource] = useState<
     "cadastro-cultivar" | "cadastro-cultura" | "inativa" | "outro-eixo" | "fases" | null
   >(null);
+  const [kcCurveView, setKcCurveView] = useState<KcCurveView | null>(null);
 
   // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
   const { states: farmStates, refresh: refreshFarm } = useFarmHydricState();
@@ -360,6 +362,7 @@ export default function BalancoHidricoPage() {
     setPivotsLoadedFarmId(null);
     setPivotLoadError("");
     setBalanceRows([]);
+    setKcCurveView(null);
     setDateStart("");
     setDateEnd("");
 
@@ -429,6 +432,7 @@ export default function BalancoHidricoPage() {
 
   // Load assignment + culture + soil + phases when pivot changes
   useEffect(() => {
+    setKcCurveView(null);
     if (!selectedPivotId) {
       setAssignment(null);
       setCulture(null);
@@ -639,6 +643,8 @@ export default function BalancoHidricoPage() {
 
       let kcPoints: { x: number; y: number }[] | null = null;
       let activeKcCurveId: string | null = null;
+      let activeKcCurveMeta: { id: string; curve_name: string; version: number } | null = null;
+      let activeKcScope: "cultivar" | "cultura" | null = null;
       let resolvedKcSource: KcSource = "fases";
       let rootPoints: { x: number; y: number }[] | null = null;
       let activeRootCurveId: string | null = null;
@@ -653,7 +659,7 @@ export default function BalancoHidricoPage() {
         const findActive = (byCultivar: boolean) => {
           let q = supabase
             .from("kc_curves")
-            .select("id")
+            .select("id,curve_name,version")
             .eq("culture_id", assignment.culture_id)
             .eq("active_for_calculation", true)
             .eq("validation_status", "approved")
@@ -665,19 +671,22 @@ export default function BalancoHidricoPage() {
           return q.maybeSingle();
         };
 
-        let matchedScope: "cultivar" | "cultura" | null = null;
         if (effectiveVarietyId) {
           const { data } = await findActive(true);
-          if ((data as { id: string } | null)?.id) {
-            activeKcCurveId = (data as { id: string }).id;
-            matchedScope = "cultivar";
+          const row = data as { id: string; curve_name: string; version: number } | null;
+          if (row?.id) {
+            activeKcCurveId = row.id;
+            activeKcCurveMeta = row;
+            activeKcScope = "cultivar";
           }
         }
         if (!activeKcCurveId) {
           const { data } = await findActive(false);
-          if ((data as { id: string } | null)?.id) {
-            activeKcCurveId = (data as { id: string }).id;
-            matchedScope = "cultura";
+          const row = data as { id: string; curve_name: string; version: number } | null;
+          if (row?.id) {
+            activeKcCurveId = row.id;
+            activeKcCurveMeta = row;
+            activeKcScope = "cultura";
           }
         }
 
@@ -691,7 +700,7 @@ export default function BalancoHidricoPage() {
             .map((row) => ({ x: row.x_value, y: row.kc_value }));
           if (points.length >= 2) {
             kcPoints = points;
-            resolvedKcSource = matchedScope === "cultivar" ? "cadastro-cultivar" : "cadastro-cultura";
+            resolvedKcSource = activeKcScope === "cultivar" ? "cadastro-cultivar" : "cadastro-cultura";
           }
         }
 
@@ -823,6 +832,17 @@ export default function BalancoHidricoPage() {
       if (kcPoints != null && !hasDaeReference) resolvedKcSource = "fases";
       if (isStale()) return;
       setKcSource(resolvedKcSource);
+      setKcCurveView(
+        kcPoints && activeKcCurveMeta && activeKcScope && hasDaeReference
+          ? {
+              id: activeKcCurveMeta.id,
+              name: activeKcCurveMeta.curve_name,
+              version: activeKcCurveMeta.version,
+              scope: activeKcScope,
+              points: kcPoints,
+            }
+          : null,
+      );
 
       const agronomicByDate: Record<string, AgronomicDayInput> = {};
       for (const date of datesInRange(calculationStart, addDaysIso(dateEnd, 30))) {
@@ -1550,6 +1570,7 @@ export default function BalancoHidricoPage() {
                 onShowDetail={() => setActiveTab("decisao")}
                 mode="dados"
                 kcSource={kcSource}
+                kcCurve={kcCurveView}
               />
               <details className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-900">
                 <summary className="cursor-pointer select-none text-[13px] font-bold text-graphite-900 dark:text-white">
@@ -2405,6 +2426,14 @@ function FarmKpiRow({ summary, states, loading }: { summary: ReturnType<typeof u
   );
 }
 
+interface KcCurveView {
+  id: string;
+  name: string;
+  version: number;
+  scope: "cultivar" | "cultura";
+  points: { x: number; y: number }[];
+}
+
 interface CockpitIdentity {
   pivotName: string | null;
   cultureName: string | null;
@@ -2502,6 +2531,7 @@ function Cockpit({
   onShowDetail,
   mode = "dados",
   kcSource = null,
+  kcCurve = null,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
@@ -2515,6 +2545,8 @@ function Cockpit({
   mode?: "dados" | "full";
   /** Origem do Kc usado no balanço, para rastreabilidade no gráfico. */
   kcSource?: KcSource;
+  /** Curva ativa realmente usada pelo motor (cultivar prevalece sobre cultura). */
+  kcCurve?: KcCurveView | null;
 }) {
   const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
 
@@ -2689,6 +2721,43 @@ function Cockpit({
               <CockpitSeriesToggles series={ENTRADAS_SERIES} visible={entradasVis} onToggle={toggleEntrada} />
             </div>
             <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} visible={entradasVis} /></div>
+          </Card>
+          <Card className="p-4">
+            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Curva de Kc da Cultura</p>
+                  {kcCurve && (
+                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300">
+                      curva ativa · {kcCurve.scope === "cultivar" ? "cultivar" : "cultura"}
+                    </span>
+                  )}
+                </div>
+                <p className="text-[11px] text-graphite-400 dark:text-gray-500">
+                  DAE × Kc · mesma curva usada no cálculo de ETc potencial · Ks não altera esta curva
+                </p>
+              </div>
+              {kcCurve && (
+                <div className="text-right">
+                  <p className="text-[11px] font-semibold text-graphite-600 dark:text-gray-300">{kcCurve.name} · v{kcCurve.version}</p>
+                  <p className="mt-0.5 text-[10px] text-graphite-400 dark:text-gray-500">
+                    Hoje: {last.dae ?? "—"} DAE · Kc {fmtNum(last.kc, 2)}
+                  </p>
+                </div>
+              )}
+            </div>
+            {kcCurve ? (
+              <div className="h-[300px] w-full">
+                <KcCurveReadOnlyChart points={kcCurve.points} currentDae={last.dae ?? null} currentKc={last.kc} />
+              </div>
+            ) : (
+              <div className="flex h-[170px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
+                <div>
+                  <p className="text-[12px] font-semibold text-graphite-600 dark:text-gray-300">Nenhuma curva Kc ativa em DAE para esta cultura/cultivar.</p>
+                  <p className="mt-1 text-[10.5px] text-graphite-400 dark:text-gray-500">O manejo continua mostrando o Kc calculado pelo fallback das fases, quando disponível.</p>
+                </div>
+              </div>
+            )}
           </Card>
           <Card className="p-4">
             <div className="mb-2 flex items-start justify-between gap-3">
