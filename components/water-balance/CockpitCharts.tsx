@@ -1,6 +1,8 @@
 "use client";
 
 import { calculateHydricZoneBounds } from "@/modules/water-balance/services/map-hydric-status";
+import { reservoirAxisRange, type ReservatorioZoom } from "@/modules/water-balance/services/reservoir-axis-range";
+export type { ReservatorioZoom } from "@/modules/water-balance/services/reservoir-axis-range";
 
 /**
  * Gráficos dedicados do cockpit de Balanço Hídrico.
@@ -532,6 +534,7 @@ export function ReservatorioChart({
   attentionMm,
   visible = defaultReservatorioVisible,
   unit = "pct",
+  zoom = "total",
 }: {
   points: ReservatorioPoint[];
   ccMm: number;
@@ -542,9 +545,10 @@ export function ReservatorioChart({
   /** "pct" = eixo em % da água disponível (PMP=0, CC=100, estilo Scheduling);
    *  "mm" = ARM em mm absolutos com umidade θ/θCC no eixo secundário. */
   unit?: "pct" | "mm";
+  zoom?: ReservatorioZoom;
 }) {
   const W = 1000;
-  const H = 330;
+  const H = 440;
   const padL = 38;
   const padR = 116;
   const padT = 16;
@@ -606,7 +610,16 @@ export function ReservatorioChart({
     ...points.flatMap((p) => [p.storageAbs ?? 0, p.ccAbs ?? 0, p.safetyAbs ?? 0]),
   );
   const yTop = pct ? 110 : Math.max(10, Math.ceil(maxPoint / 10) * 10);
-  const y = (v: number) => padT + plotH - (clamp(NUM(v), 0, yTop) / yTop) * plotH;
+  const axis = reservoirAxisRange({
+    zoom,
+    max: yTop,
+    bounds: zones.filter((z): z is NonNullable<typeof z> => z != null)
+      .map((z) => ({ attention: z.attention, safety: z.safety })),
+    water: points.map((p) => pct ? availOf(p) : p.storageAbs)
+      .filter((v): v is number => v != null && Number.isFinite(v)),
+  });
+  const inAxis = (v: number) => v >= axis.min && v <= axis.max;
+  const y = (v: number) => padT + plotH - ((v - axis.min) / (axis.max - axis.min)) * plotH;
   const yPct = (v: number) => padT + plotH - (clamp(v, 0, 125) / 125) * plotH; // θ/θCC secundário (só mm)
 
   // Faixas interpoladas entre os limites de cada DIA, acompanhando a curva
@@ -670,7 +683,7 @@ export function ReservatorioChart({
   const waterColor = pct ? "#7c3aed" : "#3b82f6";
 
   // Curva em coordenadas numéricas (para a área sob a linha e o ponto final).
-  const baseY = y(0);
+  const baseY = y(axis.min);
   const waterXY = points
     .map((p, i) => { const w = waterOf(p); return w != null && Number.isFinite(w) ? { x: x(i), y: y(w) } : null; })
     .filter((p): p is { x: number; y: number } => p != null);
@@ -695,12 +708,15 @@ export function ReservatorioChart({
   const mmTicks: number[] = [];
   const tickStep = yTop <= 60 ? 10 : 20;
   for (let t = 0; t <= yTop; t += tickStep) mmTicks.push(t);
-  const leftTicks = pct ? [0, 25, 50, 75, 100] : mmTicks;
+  const leftTicks = zoom === "total"
+    ? (pct ? [0, 25, 50, 75, 100] : mmTicks)
+    : Array.from({ length: 5 }, (_, i) => axis.min + (axis.max - axis.min) * i / 4);
   const secTicks = [0, 25, 50, 75, 100, 125];
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Reservatório de água e umidade do solo">
       <defs>
+        <clipPath id="reserv-plot-clip"><rect x={padL} y={padT} width={plotW} height={plotH} /></clipPath>
         <linearGradient id="reserv-fill-umid" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.16" />
           <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
@@ -714,13 +730,13 @@ export function ReservatorioChart({
           amarelo dos 70% aos 100%; vermelho quando o consumo alcança a CRA.
           Verde apenas na capacidade de campo, como no mapa operacional. */}
       {visible.zonas && (
-        <>
+        <g clipPath="url(#reserv-plot-clip)">
           {zoneBand("green", "cc", "#16a34a2b")}
           {zoneBand("attention", "green", "#2196f326")}
           {zoneBand("safety", "attention", "#eab30845")}
           {zoneBand("pmp", "safety", "#dc26262b")}
           {!pct && zoneBand("zero", "pmp", "#7f1d1d22")}
-        </>
+        </g>
       )}
 
       {leftTicks.map((t) => (
@@ -729,7 +745,7 @@ export function ReservatorioChart({
           <text x={padL - 7} y={y(t) + 3} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={10}>{t}</text>
         </g>
       ))}
-      <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{pct ? "%CC" : "mm"}</text>
+      <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{pct ? "% CTA" : "mm"}</text>
 
       {/* Eixo secundário θ/θCC — só faz sentido no modo mm. */}
       {!pct && visible.umidade && (
@@ -743,21 +759,21 @@ export function ReservatorioChart({
 
       {visible.zonas && zones[n - 1] && (
         <>
-          <ZoneLabel y={y((attnRef + ccGreenFloor) / 2)} text="Sem necessidade" color="#1976d2" x={padL + 6} />
-          <ZoneLabel y={y((segRef + attnRef) / 2)} text={`Atenção · F ${zones[n - 1]!.factorF.toFixed(3)}`} color="#b45309" x={padL + 6} />
-          <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Irrigar" color="#dc2626" x={padL + 6} />
+          {inAxis((attnRef + ccGreenFloor) / 2) && <ZoneLabel y={y((attnRef + ccGreenFloor) / 2)} text="Sem necessidade" color="#1976d2" x={padL + 6} />}
+          {inAxis((segRef + attnRef) / 2) && <ZoneLabel y={y((segRef + attnRef) / 2)} text={`Atenção · F ${zones[n - 1]!.factorF.toFixed(3)}`} color="#b45309" x={padL + 6} />}
+          {inAxis((pmpRef + segRef) / 2) && <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Irrigar" color="#dc2626" x={padL + 6} />}
         </>
       )}
 
       {/* Referências dinâmicas do perfil explorado */}
-      {visible.cc && ccPts.length > 1 && <polyline points={ccPts.join(" ")} fill="none" stroke="#16a34a" strokeWidth={1.5} opacity={0.8} />}
-      {visible.zonas && attentionPts.length > 1 && <polyline points={attentionPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="3 4" opacity={0.9} />}
-      {visible.seguranca && safetyPts.length > 1 && <polyline points={safetyPts.join(" ")} fill="none" stroke="#ca8a04" strokeWidth={1.8} strokeDasharray="6 4" />}
-      {visible.pmp && pmpPts.length > 1 && <polyline points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
+      {visible.cc && ccPts.length > 1 && <polyline clipPath="url(#reserv-plot-clip)" points={ccPts.join(" ")} fill="none" stroke="#16a34a" strokeWidth={1.5} opacity={0.8} />}
+      {visible.zonas && attentionPts.length > 1 && <polyline clipPath="url(#reserv-plot-clip)" points={attentionPts.join(" ")} fill="none" stroke="#eab308" strokeWidth={1.8} strokeDasharray="3 4" opacity={0.9} />}
+      {visible.seguranca && safetyPts.length > 1 && <polyline clipPath="url(#reserv-plot-clip)" points={safetyPts.join(" ")} fill="none" stroke="#ca8a04" strokeWidth={1.8} strokeDasharray="6 4" />}
+      {visible.pmp && pmpPts.length > 1 && <polyline clipPath="url(#reserv-plot-clip)" points={pmpPts.join(" ")} fill="none" stroke="#dc2626" strokeWidth={1.3} opacity={0.75} />}
 
-      {visible.cc && <RefLine y={y(ccRef)} label="Capacidade de campo" value={pct ? "100 %CC" : `${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
-      {visible.seguranca && <RefLine y={y(segRef)} label="Limite CRA (F atual)" value={pct ? `${segRef.toFixed(0)}% da CTA` : `${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed hideLine />}
-      {visible.pmp && <RefLine y={y(pmpRef)} label="Ponto de murcha" value={pct ? "0 %CC" : `${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
+      {visible.cc && inAxis(ccRef) && <RefLine y={y(ccRef)} label="Capacidade de campo" value={pct ? "100% CTA" : `${ccMm.toFixed(0)} mm`} color="#16a34a" plotRight={padL + plotW} />}
+      {visible.seguranca && inAxis(segRef) && <RefLine y={y(segRef)} label="Limite CRA (F atual)" value={pct ? `${segRef.toFixed(0)}% da CTA` : `${safetyMm.toFixed(1)} mm`} color="#ca8a04" plotRight={padL + plotW} dashed hideLine />}
+      {visible.pmp && inAxis(pmpRef) && <RefLine y={y(pmpRef)} label="Ponto de murcha" value={pct ? "0% CTA" : `${pmpMm.toFixed(0)} mm`} color="#dc2626" plotRight={padL + plotW} />}
 
       {/* Eventos na base: chuva efetiva e irrigação realizada. */}
       {points.map((p, i) => {
@@ -787,15 +803,16 @@ export function ReservatorioChart({
       {waterVisible && waterXY.length > 1 && (
         <polygon
           points={`${waterXY[0].x.toFixed(1)},${baseY.toFixed(1)} ${waterXY.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ")} ${waterXY[waterXY.length - 1].x.toFixed(1)},${baseY.toFixed(1)}`}
+          clipPath="url(#reserv-plot-clip)"
           fill={pct ? "url(#reserv-fill-umid)" : "url(#reserv-fill-arm)"}
         />
       )}
-      {waterVisible && waterReal.length > 1 && <polyline points={waterReal.join(" ")} fill="none" stroke={waterColor} strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" />}
+      {waterVisible && waterReal.length > 1 && <polyline clipPath="url(#reserv-plot-clip)" points={waterReal.join(" ")} fill="none" stroke={waterColor} strokeWidth={2.6} strokeLinejoin="round" strokeLinecap="round" />}
 
       {/* Ponto final = estado atual do pivô (sem linha vertical "HOJE"). */}
       {waterVisible && waterXY.length > 0 && (
         <>
-          <circle cx={waterXY[waterXY.length - 1].x} cy={waterXY[waterXY.length - 1].y} r={5} fill={waterColor} stroke="#fff" strokeWidth={2} />
+          {waterOf(points[n - 1]) != null && inAxis(waterOf(points[n - 1])!) && <circle cx={waterXY[waterXY.length - 1].x} cy={waterXY[waterXY.length - 1].y} r={5} fill={waterColor} stroke="#fff" strokeWidth={2} />}
           <text x={waterXY[waterXY.length - 1].x} y={H - 6} textAnchor="middle" className="fill-brand-600 dark:fill-brand-400" fontSize={9} fontWeight={700}>hoje</text>
         </>
       )}
