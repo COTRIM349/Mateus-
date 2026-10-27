@@ -405,7 +405,7 @@ export function KcCurveReadOnlyChart({
           <circle cx={daeX} cy={daeY} r={7} fill="#22c55e" stroke="#ffffff" strokeWidth={2} />
           <rect x={Math.min(daeX + 10, W - 176)} y={Math.max(padT + 4, daeY - 35)} width={150} height={27} rx={7} fill="#052e16" opacity={0.94} />
           <text x={Math.min(daeX + 20, W - 166)} y={Math.max(padT + 22, daeY - 17)} fill="#dcfce7" fontSize={10.5} fontWeight={700}>
-            Hoje · {Math.round(dae)} DAE · Kc {daeKc.toFixed(2)}
+            Hoje · {Math.round(dae ?? 0)} DAE · Kc {daeKc.toFixed(2)}
           </text>
         </g>
       )}
