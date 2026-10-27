@@ -24,6 +24,7 @@ export type ManejoSeriesKey =
   | "pmp"
   | "seg"
   | "cad"
+  | "dta"
   | "afd"
   | "arm"
   | "sensorial"
@@ -69,11 +70,12 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
     cat: "Solo",
     items: [
       { k: "arm", label: "ARM — Água armazenada", color: "#2563eb", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
-      { k: "cc", label: "DTA / CC operacional", color: "#16a34a", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
-      { k: "seg", label: "Umidade de segurança (DTA − CRA; fator p)", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.safetyMoisture },
+      { k: "cc", label: "CTA — água disponível na zona radicular", color: "#16a34a", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cta },
+      { k: "seg", label: "Limite de segurança (CTA − CRA; F)", color: "#eab308", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.safetyMoisture },
       { k: "pmp", label: "PMP na escala de ARM (0 mm)", color: "#dc2626", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.arm },
-      { k: "afd", label: "CRA — depleção permitida (perfil)", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.afd },
-      { k: "cad", label: "DTA — Água disponível (perfil)", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cad },
+      { k: "afd", label: "CRA — consumo sem estresse (perfil)", color: "#ca8a04", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.cra },
+      { k: "cad", label: "CTA — água total disponível (perfil)", color: "#a16207", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.cta },
+      { k: "dta", label: "DTA — disponibilidade por metro de solo", color: "#a855f7", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.dta, norm: [0, 250] },
       { k: "umidade", label: "Curva de umidade do solo (% da CC)", color: "#7c3aed", kind: "line", axis: "pct", unit: MANAGEMENT_UNITS.moisturePctCc },
       { k: "sensorial", label: "Nota sensorial de campo", color: "#a855f7", kind: "marker", axis: "marker", unit: MANAGEMENT_UNITS.sensoryNote },
     ],
@@ -82,8 +84,8 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
     cat: "Cultura",
     items: [
       { k: "dap", label: "Dias após plantio (DAP)", color: "#16a34a", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.dae, norm: [0, 200] },
-      { k: "kc", label: "Kc — Curva do coeficiente da cultura", color: "#22c55e", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.kc, norm: [0, 1.5] },
-      { k: "p", label: "Fator de disponibilidade hídrica (p)", color: "#10b981", kind: "dash", axis: "norm", unit: "adimensional", norm: [0, 1] },
+      { k: "kc", label: "Kc — coeficiente da cultura", color: "#22c55e", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.kc, norm: [0, 1.5] },
+      { k: "p", label: "Fator F — disponibilidade diária (FAO-56)", color: "#f59e0b", kind: "dash", axis: "norm", unit: "adimensional", norm: [0, 1] },
       { k: "ks", label: "Ks — Coeficiente de estresse", color: "#15803d", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.ks, norm: [0, 1] },
       { k: "kl", label: "KL — Coeficiente de localização", color: "#4ade80", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.kl, norm: [0, 1.2] },
       { k: "ky", label: "Ky — Sensibilidade produtiva", color: "#65a30d", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.ky, norm: [0, 1.5] },
@@ -95,8 +97,8 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
     cat: "Clima",
     items: [
       { k: "chuva", label: "Chuva", color: "#2f6bff", kind: "bar", axis: "mm", unit: MANAGEMENT_UNITS.rain },
-      { k: "etc", label: "ETc", color: "#22c55e", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.etc },
-      { k: "eto", label: "ETo", color: "#166534", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.eto },
+      { k: "etc", label: "ETc real (com Ks)", color: "#e8793e", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.etc },
+      { k: "eto", label: "ETo medida/aprovada", color: "#2563eb", kind: "line", axis: "mm", unit: MANAGEMENT_UNITS.eto },
       { k: "etp", label: "ETP", color: "#4d7c0f", kind: "dash", axis: "mm", unit: MANAGEMENT_UNITS.etp },
       { k: "tmax", label: "Temperatura máxima", color: "#ef4444", kind: "line", axis: "norm", unit: "°C", norm: [0, 45] },
       { k: "tmean", label: "Temperatura média", color: "#eab308", kind: "line", axis: "norm", unit: "°C", norm: [0, 45] },
@@ -116,19 +118,7 @@ export const MANEJO_CHART_LAYOUT = {
 } as const;
 
 export const MANEJO_DEFAULT_ON: ManejoSeriesKey[] = [
-  "arm",
-  "umidade",
-  "cc",
-  "seg",
-  "pmp",
-  "p",
-  "kc",
-  "irrig",
-  "chuva",
-  "etc",
-  "eto",
-  "sensorial",
-  "fase",
+  "eto", "kc", "p", "etc", "fase",
 ];
 
 export function phaseRanges(rows: Array<{ phase: string }>): Array<{ phase: string; start: number; end: number }> {
@@ -175,6 +165,7 @@ export function seriesValue(
     case "seg": return Math.max(row.cadMm - row.afdMm, 0);
     case "pmp": return 0;
     case "cad": return row.cadProfileMm;
+    case "dta": return row.rootDepthM > 0 ? row.cadMm / row.rootDepthM : null;
     case "afd": return row.craProfileMm;
     case "arm": return row.armMm;
     case "sensorial": return row.sensoryNote;
@@ -222,5 +213,6 @@ export function formatSeriesValue(key: ManejoSeriesKey, row: ManagementReportRow
   if (def.axis === "mm") return `${v.toFixed(1)} mm`;
   if (key === "dap") return `${v.toFixed(0)} d`;
   if (key === "rootdepth") return `${v.toFixed(2)} m`;
+  if (key === "dta") return `${v.toFixed(1)} mm/m`;
   return `${v.toFixed(1)}${def.unit ? ` ${def.unit}` : ""}`;
 }
