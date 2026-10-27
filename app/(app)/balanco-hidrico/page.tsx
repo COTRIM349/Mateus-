@@ -1571,6 +1571,12 @@ export default function BalancoHidricoPage() {
                 mode="dados"
                 kcSource={kcSource}
                 kcCurve={kcCurveView}
+                culturePhases={phases}
+                daeOffsetFromPlanting={
+                  assignment?.planting_date && assignment?.emergence_date
+                    ? Math.max(0, daysBetweenIso(assignment.planting_date, assignment.emergence_date))
+                    : 0
+                }
               />
               <details className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-900">
                 <summary className="cursor-pointer select-none text-[13px] font-bold text-graphite-900 dark:text-white">
@@ -2532,6 +2538,8 @@ function Cockpit({
   mode = "dados",
   kcSource = null,
   kcCurve = null,
+  culturePhases = [],
+  daeOffsetFromPlanting = 0,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
@@ -2547,6 +2555,10 @@ function Cockpit({
   kcSource?: KcSource;
   /** Curva ativa realmente usada pelo motor (cultivar prevalece sobre cultura). */
   kcCurve?: KcCurveView | null;
+  /** Fases cadastradas da cultura, usadas somente para desenhar a fenologia do ciclo. */
+  culturePhases?: CulturePhase[];
+  /** Diferença plantio→emergência para alinhar DAP das fases com DAE do manejo. */
+  daeOffsetFromPlanting?: number;
 }) {
   const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
 
@@ -2748,7 +2760,19 @@ function Cockpit({
             </div>
             {kcCurve ? (
               <div className="h-[300px] w-full">
-                <KcCurveReadOnlyChart points={kcCurve.points} currentDae={last.dae ?? null} currentKc={last.kc} />
+                <KcCurveReadOnlyChart
+                  points={kcCurve.points}
+                  currentDae={last.dae ?? null}
+                  currentKc={last.kc}
+                  currentPhase={last.phase ?? null}
+                  daeOffsetFromPlanting={daeOffsetFromPlanting}
+                  phases={culturePhases.map((phase) => ({
+                    name: phase.name,
+                    phaseKey: phase.phase_key ?? null,
+                    startDap: phase.days_after_plant,
+                    durationDays: phase.duration_days,
+                  }))}
+                />
               </div>
             ) : (
               <div className="flex h-[170px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
