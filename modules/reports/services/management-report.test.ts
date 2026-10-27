@@ -147,10 +147,7 @@ describe("gráfico central de manejo", () => {
   it("tem os quatro grupos e liga por padrão as séries-chave de decisão", () => {
     expect(MANEJO_GROUPS.map((g) => g.cat)).toEqual(["Irrigação", "Solo", "Cultura", "Clima"]);
     expect(isDefaultManejoSubset()).toBe(true);
-    expect(MANEJO_DEFAULT_ON).toEqual([
-      "arm", "umidade", "cc", "seg", "pmp", "p", "kc",
-      "irrig", "chuva", "etc", "eto", "sensorial", "fase",
-    ]);
+    expect(MANEJO_DEFAULT_ON).toEqual(["eto", "kc", "p", "etc", "fase"]);
     const vis = initialManejoVisibility();
     const on = Object.values(vis).filter(Boolean).length;
     expect(on).toBe(MANEJO_DEFAULT_ON.length);
@@ -158,10 +155,10 @@ describe("gráfico central de manejo", () => {
     expect(vis.tmax).toBe(false);
     expect(vis.kc).toBe(true);
     expect(vis.eto).toBe(true);
-    expect(vis.umidade).toBe(true);
+    expect(vis.umidade).toBe(false);
     expect(vis.p).toBe(true);
-    expect(vis.cc).toBe(true);
-    expect(vis.seg).toBe(true);
+    expect(vis.cc).toBe(false);
+    expect(vis.seg).toBe(false);
     expect(vis.fase).toBe(true);
   });
 

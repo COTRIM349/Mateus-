@@ -77,3 +77,22 @@ export function cropGroupByName(cultureName: string | null | undefined): CropAva
   }
   return null;
 }
+
+
+/**
+ * Fração F básica por cultura no manejo FAO-56 (ETc ≈ 5 mm/dia).
+ * Soja, algodão, milho e cacau: Tabela 22 FAO-56.
+ * Tabaco: referência operacional PROVISÓRIA 0,35 do preset da plataforma;
+ * não consta da Tabela 22 — validar localmente.
+ * Apenas fallback quando o cadastro não possui p válido.
+ */
+export function fao56ReferenceDepletionByName(cultureName: string | null | undefined): number | null {
+  if (!cultureName) return null;
+  const tokens = new Set(normalize(cultureName).split(/[^a-z0-9]+/).filter(Boolean));
+  if (tokens.has("soja")) return 0.50;
+  if (tokens.has("algodao")) return 0.65;
+  if (tokens.has("milho")) return 0.55; // grão e semente: mesmo p fisiológico básico
+  if (tokens.has("cacau") || tokens.has("cacao")) return 0.30;
+  if (tokens.has("tabaco") || tokens.has("fumo")) return 0.35; // provisório, não tabelado na FAO-56
+  return null; // não inventar fator para cultura desconhecida
+}

@@ -77,7 +77,7 @@ export function ManejoSeriesPicker({
   onToggle: (k: ManejoSeriesKey) => void;
   rows: ManagementReportRow[];
 }) {
-  const [activeCat, setActiveCat] = useState<(typeof MANEJO_GROUPS)[number]["cat"]>("Solo");
+  const [activeCat, setActiveCat] = useState<(typeof MANEJO_GROUPS)[number]["cat"]>("Cultura");
   const etpOn = hasEtp(rows);
 
   return (
@@ -135,7 +135,7 @@ export function ManejoSeriesPicker({
         })}
       </div>
       <p className="mt-3 border-t border-gray-100 pt-2.5 text-[10px] leading-relaxed text-graphite-300 dark:border-white/[0.06] dark:text-gray-600">
-        Padrão do reservatório: ARM, DTA/CC operacional, limite DTA − CRA, PMP = 0 mm, irrigação, chuva e ETc.
+        Destaque: ETo medida, Kc, fator F, ETc e fase. Solo: DTA (mm/m), CTA e CRA (mm).
       </p>
     </div>
   );
@@ -159,11 +159,12 @@ export function ManejoChart({
   const cum = cumulativeIrrigationMm(rows);
 
   const yP = (p: number) => y1 - (clampN(p, 0, 125) / 125) * (y1 - y0);
-  const mmCandidates = rows.flatMap((r, i) => [
-    r.rainMm, r.irrigationGrossMm, r.etcMm, r.etoMm, r.etpMm ?? 0,
-    r.cadMm, Math.max(r.cadMm - r.afdMm, 0), r.afdMm, r.armMm,
-    r.recommendedGrossMm, cum[i],
-  ]);
+  // Escala em mm calculada APENAS com séries visíveis. Sem isso, a CTA
+  // (dezenas de mm) achata a ETo/ETc (mm/dia) no rodapé do gráfico.
+  const mmSeries = MANEJO_ALL.filter((def) => visible[def.k] && def.axis === "mm");
+  const mmCandidates = rows.flatMap((r, i) => mmSeries.map((def) =>
+    seriesValue(def.k, r, { cumulativeIrrigation: cum[i] }) ?? 0,
+  ));
   const mmMax = Math.max(10, Math.ceil(Math.max(1, ...mmCandidates) / 10) * 10);
   const yM = (v: number) => y1 - (clampN(v, 0, mmMax) / mmMax) * (y1 - y0);
 
@@ -177,6 +178,8 @@ export function ManejoChart({
   const hasNorm = activeVisible.some((s) => s.axis === "norm");
   const hasPct = activeVisible.some((s) => s.axis === "pct");
   const phases = phaseRanges(rows);
+  const last = rows[rows.length - 1] ?? null;
+  const showSoilBands = ["arm", "cc", "seg", "cad", "afd", "pmp"].some((key) => visible[key as ManejoSeriesKey]);
   const safetyMm = (r: ManagementReportRow) => Math.max(r.cadMm - r.afdMm, 0);
 
   // Zonas do reservatório na MESMA escala do ARM (mm):
@@ -229,6 +232,15 @@ export function ManejoChart({
 
   return (
     <div className="relative min-h-[min(68vh,720px)]" onMouseMove={onMove} onMouseLeave={() => setHover(null)}>
+      {last && (
+        <div className="mb-3 flex flex-wrap items-center gap-x-4 gap-y-1.5 rounded-xl border border-emerald-200/50 bg-emerald-50/50 px-3 py-2 text-[11px] dark:border-emerald-500/20 dark:bg-emerald-950/20">
+          <span className="font-semibold text-emerald-900 dark:text-emerald-300">Fase atual (último registro): {last.phase} · {last.dae ?? "—"} DAE · {fmtDia(last.date)}</span>
+          <span className="text-graphite-600 dark:text-gray-300">ETo {last.etoMm.toFixed(2)} mm/d</span>
+          <span className="text-graphite-600 dark:text-gray-300">Kc {last.kc.toFixed(2)}</span>
+          <span className="text-graphite-600 dark:text-gray-300">F {last.cadMm > 0 ? (last.afdMm / last.cadMm).toFixed(3) : "—"}</span>
+          <span className="text-graphite-600 dark:text-gray-300">ETc {last.etcMm.toFixed(2)} mm/d</span>
+        </div>
+      )}
       <svg viewBox={`0 0 ${W} ${H}`} width="100%" className="h-full min-h-[min(68vh,720px)] overflow-visible">
         <defs>
           <linearGradient id="manejo-umid-fill" x1="0" y1="0" x2="0" y2="1">
@@ -239,16 +251,16 @@ export function ManejoChart({
         <rect x={x0} y={y0} width={x1 - x0} height={y1 - y0} className="fill-gray-50 dark:fill-black/25" rx={6} />
 
         {/* Zonas de manejo na escala física do ARM */}
-        <path d={excessPath} fill="#3b82f6" opacity={0.08} />
-        <path d={idealPath} fill="#22c55e" opacity={0.13} />
-        <path d={criticalPath} fill="#f97316" opacity={0.10} />
-        {mid && cadMidY > y0 + 12 && (
+        {showSoilBands && <path d={excessPath} fill="#3b82f6" opacity={0.08} />}
+        {showSoilBands && <path d={idealPath} fill="#22c55e" opacity={0.13} />}
+        {showSoilBands && <path d={criticalPath} fill="#f97316" opacity={0.10} />}
+        {showSoilBands && mid && cadMidY > y0 + 12 && (
           <text x={x1 - 6} y={(y0 + cadMidY) / 2 + 3} textAnchor="end" className="fill-blue-500/70 text-[9px] font-bold uppercase tracking-wide">Excedente</text>
         )}
-        {mid && (
+        {showSoilBands && mid && (
           <text x={x1 - 6} y={(cadMidY + segMidY) / 2 + 3} textAnchor="end" className="fill-green-600/70 text-[9px] font-bold uppercase tracking-wide">Adequado</text>
         )}
-        {mid && (
+        {showSoilBands && mid && (
           <text x={x1 - 6} y={(segMidY + yM(0)) / 2 + 3} textAnchor="end" className="fill-orange-600/70 text-[9px] font-bold uppercase tracking-wide">Abaixo do limite</text>
         )}
 
@@ -412,7 +424,7 @@ export function ManejoChart({
         ))}
       </div>
       {hasNorm && (
-        <p className="mt-1 text-[10px] text-graphite-300 dark:text-gray-600">Séries de clima/cultura em escala relativa — valor real no tooltip.</p>
+        <p className="mt-1 text-[10px] text-graphite-300 dark:text-gray-600">Kc e fator F em escala relativa; ETo e ETc em mm/dia. Consulte os valores reais no tooltip.</p>
       )}
     </div>
   );

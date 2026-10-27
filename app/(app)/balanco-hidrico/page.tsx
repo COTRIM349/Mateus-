@@ -29,7 +29,7 @@ import {
   type HydricStatus,
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
-import { cropGroupByName } from "@/modules/water-balance/services/availability-factor";
+import { fao56ReferenceDepletionByName } from "@/modules/water-balance/services/availability-factor";
 import { type CulturePhase } from "@/modules/culture/services";
 import {
   buildOperationalPivotSoil,
@@ -1068,11 +1068,10 @@ export default function BalancoHidricoPage() {
         },
         culture: {
           root_depth: culture.root_depth,
-          depletion_factor: culture.depletion_factor,
+          depletion_factor: culture.depletion_factor ?? fao56ReferenceDepletionByName(culture.name),
           kl: culture.kl,
           ks_function: culture.ks_function,
           ky: culture.ky,
-          availabilityGroup: cropGroupByName(culture.name),
         },
         phases,
         soil: {
@@ -1863,6 +1862,17 @@ function HeaderChip({ label, value }: { label: string; value: string }) {
 const fmtDia = (d: string) => `${d.slice(8, 10)}/${d.slice(5, 7)}`;
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
+/** DTA = (CC - PMP) x 1000 em mm/m, para CC/PMP volumétricos.
+ * Com perfil de camadas, o motor já devolve CC/PMP ponderados na zona explorada.
+ * Fallback CTA/Zr apenas para linhas legadas sem CC e PMP. */
+function dtaMmPerMeter(r: Pick<DailyBalanceRow, "fieldCapacity" | "wiltingPoint" | "cad" | "rootDepth">): number | null {
+  if (r.fieldCapacity != null && r.wiltingPoint != null &&
+      Number.isFinite(r.fieldCapacity) && Number.isFinite(r.wiltingPoint)) {
+    return Math.max((r.fieldCapacity - r.wiltingPoint) * 1000, 0);
+  }
+  return r.rootDepth > 0 ? r.cad / r.rootDepth : null;
+}
+
 /** Entradas do solo no dia: Pe + I_ef (lâmina bruta × eficiência). */
 function soilInflowMm(r: DailyBalanceRow): number {
   return r.effectivePrecipitation + (r.effectiveIrrigation ?? r.irrigationApplied);
@@ -1943,7 +1953,7 @@ function BalanceTab({
     : rows;
 
   const exportCsv = () => {
-    const headers = ["Data", "Fase", "Kc", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "DTA", "CRA", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
+    const headers = ["Data", "Fase", "Kc", "F", "Ks", "KL", "ETo", "ETcPot", "ETc", "Ky", "Risco", "Chuva", "ChuvaEf", "Irrigacao", "Ief", "Entradas", "Saidas", "Saldo", "DTA (mm/m)", "CTA (mm)", "CRA (mm)", "ARM", "SegMm", "PctCC", "Sensorial", "Deplecao%", "Deficit", "LaminaRec", "Status"];
     const lines = filteredRows.map((r) => {
       const entr = soilInflowMm(r);
       const depl = r.cad > 0 ? Math.round(((r.cad - r.storedWater) / r.cad) * 100) : 0;
@@ -1951,13 +1961,13 @@ function BalanceTab({
       const pctCc = moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad);
       const sens = sensoryByDate[r.date];
       return [
-        r.date, r.phase, r.kc.toFixed(2), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
+        r.date, r.phase, r.kc.toFixed(2), (r.cad > 0 ? r.afd / r.cad : 0).toFixed(3), (r.ks ?? 1).toFixed(2), (r.kl ?? 1).toFixed(2),
         r.et0.toFixed(1), (r.etcPotential ?? r.etc).toFixed(1), r.etc.toFixed(1),
         r.ky != null ? r.ky.toFixed(2) : "", r.yieldRisk != null ? r.yieldRisk.toFixed(2) : "",
         r.precipitation.toFixed(1), r.effectivePrecipitation.toFixed(1), r.irrigationApplied.toFixed(1),
         (r.effectiveIrrigation ?? r.irrigationApplied).toFixed(1),
         entr.toFixed(1), r.etc.toFixed(1), (entr - r.etc).toFixed(1),
-        r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
+        dtaMmPerMeter(r)?.toFixed(1) ?? "", r.cad.toFixed(1), r.afd.toFixed(1), r.storedWater.toFixed(1),
         (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1), pctCc.toFixed(1),
         sens != null ? String(sens) : "",
         depl, r.deficit.toFixed(1), lam.toFixed(1), WATER_STATUS_CONFIG[r.waterStatus].label,
@@ -2028,6 +2038,7 @@ function BalanceTab({
     { header: "Data", render: (r) => fmtDia(r.date) },
     { header: "Fase", render: (r) => <span className="text-xs">{r.phase}</span> },
     { header: "Kc", render: (r) => r.kc.toFixed(2) },
+    { header: "F", render: (r) => r.cad > 0 ? (r.afd / r.cad).toFixed(3) : "—" },
     { header: "Ks", render: (r) => (r.ks ?? 1).toFixed(2) },
     { header: "KL", render: (r) => (r.kl ?? 1).toFixed(2) },
     { header: "ETo", render: (r) => r.et0.toFixed(1) },
@@ -2042,7 +2053,8 @@ function BalanceTab({
     { header: "Entradas", render: (r) => <span className="text-blue-600 dark:text-blue-400">{soilInflowMm(r).toFixed(1)}</span> },
     { header: "Saídas", render: (r) => <span className="text-amber-600 dark:text-amber-400">{r.etc.toFixed(1)}</span> },
     { header: "Saldo", render: (r) => { const s = soilInflowMm(r) - r.etc; return <span className={s >= 0 ? "text-green-600 dark:text-green-400" : "text-red-600 dark:text-red-400"}>{s >= 0 ? "+" : ""}{s.toFixed(1)}</span>; } },
-    { header: "DTA", render: (r) => r.cad.toFixed(1) },
+    { header: "DTA (mm/m)", render: (r) => dtaMmPerMeter(r)?.toFixed(1) ?? "—" },
+    { header: "CTA (mm)", render: (r) => r.cad.toFixed(1) },
     { header: "CRA", render: (r) => r.afd.toFixed(1) },
     { header: "ARM", render: (r) => <span title={r.balanceFormula}>{r.storedWater.toFixed(1)}</span> },
     { header: "Seg.", render: (r) => (r.safetyMoistureMm ?? Math.max(r.cad - r.afd, 0)).toFixed(1) },
@@ -2097,7 +2109,7 @@ function BalanceTab({
               {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
             </p>
             <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
-              {pctCc.toFixed(0)}% da CC · ARM {arm.toFixed(1)} mm · {classificacao.label}
+              {pctCc.toFixed(0)}% da CC · CTA {cad.toFixed(1)} mm · CRA {afd.toFixed(1)} mm · ARM {arm.toFixed(1)} mm · {classificacao.label}
             </p>
           </div>
           <span className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-bold" style={{ color: verdict.color, background: `${verdict.color}18` }}>
@@ -2166,7 +2178,7 @@ function BalanceTab({
           <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
           <p className="mt-2 text-[12.5px] leading-relaxed text-graphite-500 dark:text-gray-400">
             {arm < safetyMm
-              ? "O ARM está abaixo da umidade de segurança (DTA − CRA) e a demanda (ETc) supera as entradas recentes."
+              ? "O ARM está abaixo da umidade de segurança (CTA − CRA) e a demanda (ETc) supera as entradas recentes."
               : urgency?.daysToAfd != null
                 ? `O ARM está dentro da faixa segura. Mantida a demanda atual e sem chuva/irrigação, a CRA seria atingida em aproximadamente ${urgency.daysToAfd.toFixed(1)} dia(s).`
                 : "O ARM está dentro da faixa segura; as entradas cobrem a demanda atual."}
@@ -2174,7 +2186,7 @@ function BalanceTab({
           <div className="mt-3 grid grid-cols-2 gap-2">
             {[
               { l: "ARM atual", v: `${arm.toFixed(1)} mm` },
-              { l: "DTA / CRA", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
+              { l: "CTA / CRA", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm` },
               { l: "Umidade de segurança", v: `${safetyMm.toFixed(1)} mm` },
               { l: "% da CC", v: `${pctCc.toFixed(0)}%` },
               { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm` },
@@ -2677,15 +2689,16 @@ function Cockpit({
     { icon: <IconWave />, label: "ETc potencial", value: fmtNum(last.etcPotential ?? last.etc), unit: "mm" },
     { icon: <IconSprout />, label: "Ks", value: fmtNum(last.ks ?? 1, 2) },
     { icon: <IconDrop />, label: "ARM", value: fmtNum(arm), unit: "mm" },
-    { icon: <IconLayers />, label: "DTA", value: fmtNum(cad), unit: "mm" },
+    { icon: <IconLayers />, label: "DTA", value: dtaMmPerMeter(last) != null ? fmtNum(dtaMmPerMeter(last)!) : "—", unit: "mm/m" },
+    { icon: <IconLayers />, label: "CTA", value: fmtNum(cad), unit: "mm" },
     { icon: <IconAlert />, label: "CRA", value: fmtNum(afd), unit: "mm" },
-    { icon: <IconLeaf />, label: "p", value: fmtNum(pFactor, 2) },
+    { icon: <IconLeaf />, label: "F (FAO-56)", value: fmtNum(pFactor, 3) },
     { icon: <IconRoot />, label: "Raiz efetiva", value: fmtNum(last.rootDepth, 2), unit: "m" },
   ];
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-9">
+      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-10">
         {topKpis.map((k) => (
           <StatCard key={k.label} icon={k.icon} label={k.label} value={k.value} unit={k.unit} />
         ))}
@@ -2903,7 +2916,7 @@ function Cockpit({
               <>
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-white/[0.06]">
                   <div className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 bg-gray-50 px-2.5 py-2 text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:bg-white/[0.03] dark:text-gray-500">
-                    <span>Camada</span><span>DTA</span><span>Explorada</span><span>DTA efetiva</span>
+                    <span>Camada</span><span>CTA</span><span>Explorada</span><span>CTA efetiva</span>
                   </div>
                   {profileRows.map((row) => (
                     <div key={`${row.layer.depth_start}-${row.layer.depth_end}`} className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 border-t border-gray-100 px-2.5 py-2 text-[11.5px] tabular-nums text-graphite-600 dark:border-white/[0.05] dark:text-gray-300">
@@ -2915,12 +2928,12 @@ function Cockpit({
                   ))}
                 </div>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px]">
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">DTA perfil completo</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(ctaProfile)} mm</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">DTA efetiva hoje</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(cad)} mm</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">Fator p</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA perfil completo</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(ctaProfile)} mm</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA efetiva hoje</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(cad)} mm</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">Fator F</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
                   <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CRA</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(afd)} mm</p></div>
                 </div>
-                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA por camada = (CC − PMP) × espessura. A DTA efetiva considera somente a fração já explorada pela raiz.</p>
+                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA = (CC − PMP) × 1000 (mm/m). CTA por camada = DTA × espessura (m). A CTA efetiva considera a profundidade explorada pelas raízes.</p>
               </>
             ) : (
               <p className="text-[12px] text-graphite-400 dark:text-gray-500">Perfil por camadas não cadastrado para este pivô.</p>
