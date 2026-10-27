@@ -145,6 +145,10 @@ describe("motor hídrico operacional", () => {
       depletion_factor: 0.5,
     }];
     const series = computePivotBalanceSeries(sampleInput({
+      assignment: {
+        ...sampleInput().assignment,
+        emergence_date: "2025-12-31",
+      },
       culture: { root_depth: 0.45, depletion_factor: 0.5 },
       phases: growingPhases,
       weatherByDate: weatherDays("2026-01-01", 2, 5),
