@@ -14,6 +14,7 @@ export const IRRIGATION_VOLUME_UNIT = "m³";
 export const IRRIGATION_HOURS_UNIT = "h";
 export const VOLUME_FORMULA = "Volume m³ = lâmina mm × área ha × 10";
 export const HOURS_FORMULA = "Tempo h = volume m³ / vazão m³/h";
+export const PERCENTIMETER_FORMULA = "Lâmina mm = lâmina a 100% × 100 / percentímetro %";
 
 export function validateIrrigationDepth(depthMm: number): string | null {
   if (!Number.isFinite(depthMm) || depthMm <= 0) {
@@ -21,6 +22,38 @@ export function validateIrrigationDepth(depthMm: number): string | null {
   }
   if (depthMm > 200) return "Lâmina aplicada acima de 200 mm — confira o valor.";
   return null;
+}
+
+export function validatePercentimeterPct(percentimeterPct: number): string | null {
+  if (!Number.isFinite(percentimeterPct) || percentimeterPct <= 0) {
+    return "Informe o percentímetro (%), maior que zero.";
+  }
+  if (percentimeterPct > 100) {
+    return "O percentímetro deve estar entre 1 e 100%.";
+  }
+  return null;
+}
+
+/**
+ * Converte o ajuste do percentímetro em lâmina bruta aplicada.
+ * Em pivô central, reduzir o percentual reduz a velocidade média de avanço
+ * e aumenta o tempo de permanência; por isso a relação é inversa.
+ *
+ * L = L100 × 100 / P
+ */
+export function deriveDepthFromPercentimeter(
+  percentimeterPct: number,
+  depth100PctMm: number,
+): number {
+  if (
+    !Number.isFinite(percentimeterPct) ||
+    percentimeterPct <= 0 ||
+    !Number.isFinite(depth100PctMm) ||
+    depth100PctMm <= 0
+  ) {
+    return Number.NaN;
+  }
+  return roundTo((depth100PctMm * 100) / percentimeterPct, 2);
 }
 
 export function validateOperatingHours(hours: number | null | undefined): string | null {
@@ -72,6 +105,7 @@ export interface IrrigationEventDraft {
   dateYmd: string;
   timeHm: string;
   depthMm: number;
+  percentimeterPct?: number | null;
   areaHa: number;
   flowRateM3h: number;
   hoursOverride?: number | null;
@@ -84,6 +118,7 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
   started_at: string;
   ended_at: string | null;
   depth_mm: number;
+  percentimeter_pct: number | null;
   volume_m3: number;
   operating_hours: number;
   notes: string | null;
@@ -102,6 +137,10 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
     started_at: startedAt,
     ended_at: endedAtFromHours(startedAt, hours),
     depth_mm: depth,
+    percentimeter_pct:
+      draft.percentimeterPct != null && Number.isFinite(draft.percentimeterPct)
+        ? roundTo(draft.percentimeterPct, 2)
+        : null,
     volume_m3: volume,
     operating_hours: hours,
     notes: draft.notes ?? null,
