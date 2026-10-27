@@ -87,7 +87,7 @@ function hasCompleteAgronomicCoverage(input: PivotEngineInput): boolean {
     const day = input.agronomicByDate?.[date];
     return Boolean(
       day &&
-      Number.isFinite(day.kc) && day.kc >= 0 && day.kc <= 2.5 &&
+      day.kc != null && Number.isFinite(day.kc) && day.kc >= 0 && day.kc <= 2.5 &&
       day.rootDepthM != null && Number.isFinite(day.rootDepthM) && day.rootDepthM > 0 &&
       day.depletionFractionP != null && Number.isFinite(day.depletionFractionP) &&
       day.depletionFractionP > 0 && day.depletionFractionP < 1
