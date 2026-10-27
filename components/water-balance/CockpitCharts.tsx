@@ -596,6 +596,7 @@ export function ReservatorioChart({
       safety: convert(bounds.safetyAbs),
       pmp: convert(bounds.pmpAbs),
       zero: 0,
+      factorF: bounds.factorF,
     };
   });
   const ccGreenFloor = pct ? 98 : pmpMm + cadMm * 0.98;
@@ -743,7 +744,7 @@ export function ReservatorioChart({
       {visible.zonas && zones[n - 1] && (
         <>
           <ZoneLabel y={y((attnRef + ccGreenFloor) / 2)} text="Sem necessidade" color="#1976d2" x={padL + 6} />
-          <ZoneLabel y={y((segRef + attnRef) / 2)} text="Atenção · F atual" color="#b45309" x={padL + 6} />
+          <ZoneLabel y={y((segRef + attnRef) / 2)} text={`Atenção · F ${zones[n - 1]!.factorF.toFixed(3)}`} color="#b45309" x={padL + 6} />
           <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Irrigar" color="#dc2626" x={padL + 6} />
         </>
       )}
