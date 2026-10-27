@@ -17,6 +17,7 @@ import {
   deriveDepthFromPercentimeter,
   deriveHoursFromHorimeter,
   deriveOperatingHoursFromPercentimeter,
+  resolveHorimeterReference,
   validateHorimeter,
   validateIrrigationDepth,
   validateOperatingHours,
@@ -220,37 +221,26 @@ export default function LancamentoIrrigacaoPage() {
       ? lastEvent.started_at.slice(0, 10)
       : null;
 
-    const eventIsValidAfterBase =
-      eventValue != null &&
-      (
-        baseValue == null ||
-        (
-          eventValue >= baseValue &&
-          (!baseDate || !eventDate || eventDate >= baseDate)
-        )
-      );
-
-    const initialHorimeter = eventIsValidAfterBase
-      ? eventValue
-      : baseValue;
-
-    const sourceDate = eventIsValidAfterBase
-      ? eventDate
-      : baseDate;
+    const reference = resolveHorimeterReference({
+      baseValue,
+      baseDate,
+      eventValue,
+      eventDate,
+    });
 
     setForm({
       ...EMPTY,
       pivot_id: selectedPivotId,
       date: today(),
       horimeter_initial:
-        initialHorimeter != null
-          ? String(initialHorimeter)
+        reference.value != null
+          ? String(reference.value)
           : "",
     });
 
-    if (initialHorimeter != null) {
-      setLastHorimeterSourceDate(sourceDate);
-      setLastHorimeterSource(eventIsValidAfterBase ? "event" : "historical_base");
+    if (reference.value != null) {
+      setLastHorimeterSourceDate(reference.date);
+      setLastHorimeterSource(reference.source);
     }
 
     setLoadingLastHorimeter(false);
