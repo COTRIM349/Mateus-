@@ -30,6 +30,7 @@ import {
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
 import { fao56ReferenceDepletionByName } from "@/modules/water-balance/services/availability-factor";
+import { calculateHydricZoneBounds } from "@/modules/water-balance/services/map-hydric-status";
 import { type CulturePhase } from "@/modules/culture/services";
 import {
   buildOperationalPivotSoil,
@@ -2477,10 +2478,13 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   const afd = last.afd;
   const pmpMm = Math.max((last.wiltingPoint ?? 0) * (last.rootDepth ?? 0) * 1000, 0);
   const ccMm = pmpMm + cad;
-  const safetyArm = Math.max(cad - afd, 0);          // ARM no limite de manejo (déficit = AFD → status vermelho)
-  const attentionArm = Math.max(cad - afd * 0.7, 0); // ARM na fronteira ótima/alerta (déficit = 0,7·AFD → amarelo)
-  const safetyMm = pmpMm + safetyArm;
-  const attentionMm = pmpMm + attentionArm;
+  // Limiares exclusivos do dia, coerentes com o fator F = CRA/CTA calculado
+  // pela ETc diária. A faixa amarela acompanha o crescimento e a demanda.
+  const todayZones = calculateHydricZoneBounds({ ctaMm: cad, craMm: afd, pmpMm });
+  const safetyArm = todayZones ? todayZones.safetyAbs - pmpMm : 0;
+  const attentionArm = todayZones ? todayZones.attentionAbs - pmpMm : 0;
+  const safetyMm = todayZones?.safetyAbs ?? pmpMm;
+  const attentionMm = todayZones?.attentionAbs ?? pmpMm;
 
   // Projeção só cobre dias após o último observado (garantido no cálculo).
   const future = projection.filter((p) => p.date > last.date);
@@ -2488,20 +2492,24 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
 
   // Reservatório: histórico recente (absoluto) + projeção (absoluto por dia).
   const hist = rows.slice(-16);
-  const reservatorio: ReservatorioPoint[] = hist.map((r) => ({
-    label: fmtDia(r.date),
-    storageAbs: r.storedWater + armPmpMm(r),
-    moisturePctCc: moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad),
-    ccAbs: armPmpMm(r) + r.cad,
-    safetyAbs: armPmpMm(r) + Math.max(r.cad - r.afd, 0),
-    pmpAbs: armPmpMm(r),
-    attentionAbs: armPmpMm(r) + Math.max(r.cad - r.afd * 0.7, 0),
-    rain: r.effectivePrecipitation,
-    irr: r.effectiveIrrigation ?? r.irrigationApplied,
-    eto: r.et0,
-    kc: r.kc,
-    isForecast: false,
-  }));
+  const reservatorio: ReservatorioPoint[] = hist.map((r) => {
+    const pmpDay = armPmpMm(r);
+    const zones = calculateHydricZoneBounds({ ctaMm: r.cad, craMm: r.afd, pmpMm: pmpDay });
+    return {
+      label: fmtDia(r.date),
+      storageAbs: r.storedWater + pmpDay,
+      moisturePctCc: moisturePctCcForDisplay(r.moisturePctCc, r.storedWater, r.cad),
+      ccAbs: zones?.ccAbs ?? null,
+      safetyAbs: zones?.safetyAbs ?? null,
+      pmpAbs: zones?.pmpAbs ?? null,
+      attentionAbs: zones?.attentionAbs ?? null,
+      rain: r.effectivePrecipitation,
+      irr: r.effectiveIrrigation ?? r.irrigationApplied,
+      eto: r.et0,
+      kc: r.kc,
+      isForecast: false,
+    };
+  });
   // REGRA ABSOLUTA: o gráfico é EXCLUSIVAMENTE histórico e termina no dia atual.
   // Nenhum ponto de projeção/previsão entra nas séries — o último ponto já
   // representa o estado atual do pivô. A análise futura vive na aba DECISÃO.
@@ -2802,8 +2810,8 @@ function Cockpit({
                 <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
                 <p className="text-[11px] text-graphite-400 dark:text-gray-500">
                   {reservUnit === "pct"
-                    ? "Umidade, CC e segurança em % da água disponível (PMP = 0%, CC = 100%) · histórico até hoje"
-                    : "ARM em mm, umidade do solo (θ/θCC) e segurança calculada por CRA = p × DTA · histórico até hoje"}
+                    ? "Faixas diárias pela CRA = CTA × F (PMP = 0%, CC = 100%). Amarelo: 70–100% da CRA consumida."
+                    : "ARM em mm; atenção dinâmica a partir de 70% da CRA e irrigar ao consumir 100% da CRA · histórico até hoje"}
                 </p>
               </div>
               <div className="flex shrink-0 gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
