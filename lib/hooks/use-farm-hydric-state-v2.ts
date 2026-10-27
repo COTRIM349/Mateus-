@@ -12,6 +12,9 @@ import {
   type InitialMoistureUnit,
 } from "@/modules/water-balance/services";
 import { type CulturePhase } from "@/modules/culture/services";
+import { calculateRootDepthMeters } from "@/modules/culture/services/agronomic-engine";
+import { resolveDaeReferenceDate } from "@/modules/assignment/services";
+import type { AgronomicDayInput } from "@/modules/water-balance/services/pivot-engine-v2";
 import {
   buildOperationalPivotSoil,
   mapDbLayersToProfile,
@@ -263,6 +266,42 @@ export function useFarmHydricState(): FarmHydricState {
         phasesByCulture.set(phase.culture_id, list);
       }
 
+      // Curvas radiculares APROVADAS em DAE, resolvidas em lote (cultura e
+      // cultivar). Sem curva, o motor mantém o crescimento por fases.
+      // Evita que o mapa geral calcule Zr diferente do balanço individual.
+      const rootCurvesByCulture = new Map<string, Array<{ id: string; cultivar_id: string | null }>>();
+      const rootPointsByCurve = new Map<string, Array<{ x: number; y: number }>>();
+      if (cultureIds.length > 0) {
+        const { data: curves, error: rootError } = await supabase
+          .from("root_depth_curves")
+          .select("id,culture_id,cultivar_id")
+          .in("culture_id", cultureIds)
+          .eq("active_for_calculation", true)
+          .eq("validation_status", "approved")
+          .eq("axis_type", "DAE");
+        if (rootError) throw rootError;
+        const curveRows = (curves ?? []) as Array<{ id: string; culture_id: string; cultivar_id: string | null }>;
+        for (const curve of curveRows) {
+          const list = rootCurvesByCulture.get(curve.culture_id) ?? [];
+          list.push({ id: curve.id, cultivar_id: curve.cultivar_id });
+          rootCurvesByCulture.set(curve.culture_id, list);
+        }
+        const ids = curveRows.map((row) => row.id);
+        if (ids.length > 0) {
+          const { data: points, error: pointsError } = await supabase
+            .from("root_depth_anchor_points")
+            .select("curve_id,x_value,root_depth_m")
+            .in("curve_id", ids)
+            .order("sequence_no");
+          if (pointsError) throw pointsError;
+          for (const row of (points ?? []) as Array<{ curve_id: string; x_value: number; root_depth_m: number }>) {
+            const list = rootPointsByCurve.get(row.curve_id) ?? [];
+            list.push({ x: row.x_value, y: row.root_depth_m });
+            rootPointsByCurve.set(row.curve_id, list);
+          }
+        }
+      }
+
       const latestAnchorByAssignment = new Map<string, Anchor>();
       for (const raw of anchorsRes.data ?? []) {
         const row = raw as Record<string, unknown>;
@@ -454,6 +493,34 @@ export function useFarmHydricState(): FarmHydricState {
           })));
 
           const anchor = start.anchor;
+          const cultivarId = ((assignment.culture_variety_id as string|null) ??
+            (assignment.variety_id as string|null)) ?? null;
+          const matchingRootCurves = rootCurvesByCulture.get(assignment.culture_id as string) ?? [];
+          const rootCurve = matchingRootCurves.find((item) =>
+            item.cultivar_id === cultivarId && cultivarId !== null &&
+            (rootPointsByCurve.get(item.id)?.length ?? 0) >= 2
+          ) ?? matchingRootCurves.find((item) =>
+            item.cultivar_id === null && (rootPointsByCurve.get(item.id)?.length ?? 0) >= 2
+          );
+          const hasCustomRoot = assignment.parameter_mode === "personalizado" &&
+            (assignment.initial_root_depth != null || assignment.max_root_depth != null);
+          const agronomicByDate: Record<string, AgronomicDayInput> = {};
+          if (rootCurve && !hasCustomRoot) {
+            const points = rootPointsByCurve.get(rootCurve.id)!;
+            const daeReference = resolveDaeReferenceDate({
+              emergence_date: (assignment.emergence_date as string|null) ?? null,
+              planting_date: assignment.planting_date as string,
+            });
+            let date = start.dateStart;
+            while (date <= dateEnd) {
+              const dae = Math.max(0, daysBetween(daeReference, date));
+              agronomicByDate[date] = {
+                rootDepthM: calculateRootDepthMeters(points, dae),
+                origin: { rootCurveId: rootCurve.id, rootScope: rootCurve.cultivar_id ? "cultivar" : "cultura" },
+              };
+              date = addDays(date, 1);
+            }
+          }
           const startAngleDeg = (assignment.start_angle_deg as number|null) ?? null;
           const endAngleDeg = (assignment.end_angle_deg as number|null) ?? null;
           const area = parcelManagedAreaHa(Number(pivot.area)||0, assignment.planted_area as number|null, startAngleDeg, endAngleDeg);
@@ -500,7 +567,8 @@ export function useFarmHydricState(): FarmHydricState {
               stress_point_irrigation:(assignment.stress_point_irrigation as boolean) ?? false,
             },
             culture:{
-              root_depth:Number(culture.root_depth)||0.3,
+              root_depth:culture.root_depth != null && Number(culture.root_depth) > 0
+                ? Number(culture.root_depth) : null,
               depletion_factor:culture.depletion_factor != null && Number(culture.depletion_factor) > 0
                 ? Number(culture.depletion_factor)
                 : fao56ReferenceDepletionByName((culture.name as string|null) ?? null),
@@ -524,6 +592,7 @@ export function useFarmHydricState(): FarmHydricState {
             },
             weatherByDate,
             irrigationByDate,
+            agronomicByDate,
             dateStart:start.dateStart,
             dateEnd,
           });
