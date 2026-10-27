@@ -179,6 +179,7 @@ export default function CustosPage() {
 
   const pricedRows: PricedEventRow[] = useMemo(() => {
     return events
+      .filter((e) => !filterPivot || e.pivot_id === filterPivot)
       .filter((e) => !periodFrom || e.started_at.slice(0, 10) >= periodFrom)
       .filter((e) => !periodTo || e.started_at.slice(0, 10) <= periodTo)
       .map((e) => {
@@ -208,7 +209,6 @@ export default function CustosPage() {
 
   const demandOperations = useMemo(() => {
     return events
-      .filter((e) => !filterPivot || e.pivot_id === filterPivot)
       .filter((e) => !periodFrom || e.started_at.slice(0, 10) >= periodFrom)
       .filter((e) => !periodTo || e.started_at.slice(0, 10) <= periodTo)
       .map((e) => {
@@ -307,7 +307,7 @@ export default function CustosPage() {
       peak_end: Number(tariffForm.peak_end) || 21,
       active: true,
       valid_from: tariffForm.valid_from,
-      valid_to: null,
+      valid_to: tariffs.find((t) => t.id === tariffForm.id)?.valid_to ?? null,
     };
     const { error } = tariffForm.id
       ? await supabase.from("energy_tariffs").update(row).eq("id", tariffForm.id)
