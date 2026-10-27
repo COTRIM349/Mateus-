@@ -13,7 +13,7 @@ export const IRRIGATION_DEPTH_UNIT = "mm (lâmina bruta aplicada)";
 export const IRRIGATION_VOLUME_UNIT = "m³";
 export const IRRIGATION_HOURS_UNIT = "h";
 export const VOLUME_FORMULA = "Volume m³ = lâmina mm × área ha × 10";
-export const HOURS_FORMULA = "Tempo h = volume m³ / vazão m³/h";
+export const HOURS_FORMULA = "Tempo h = tempo a 100% × 100 / percentímetro %";
 export const PERCENTIMETER_FORMULA = "Lâmina mm = lâmina a 100% × 100 / percentímetro %";
 
 export function validateIrrigationDepth(depthMm: number): string | null {
@@ -71,6 +71,25 @@ export function deriveOperatingHours(depthMm: number, areaHa: number, flowRateM3
   return calculateIrrigationTime(deriveAppliedVolume(depthMm, areaHa), flowRateM3h);
 }
 
+/**
+ * Tempo operacional a partir da tabela do equipamento.
+ * t = t100 × 100 / P
+ */
+export function deriveOperatingHoursFromPercentimeter(
+  percentimeterPct: number,
+  fullTurnTime100H: number,
+): number {
+  if (
+    !Number.isFinite(percentimeterPct) ||
+    percentimeterPct <= 0 ||
+    !Number.isFinite(fullTurnTime100H) ||
+    fullTurnTime100H <= 0
+  ) {
+    return Number.NaN;
+  }
+  return roundTo((fullTurnTime100H * 100) / percentimeterPct, 2);
+}
+
 export function combineStartedAt(dateYmd: string, timeHm: string): string {
   const time = /^\d{2}:\d{2}$/.test(timeHm) ? timeHm : "06:00";
   return `${dateYmd}T${time}:00`;
@@ -108,6 +127,7 @@ export interface IrrigationEventDraft {
   percentimeterPct?: number | null;
   areaHa: number;
   flowRateM3h: number;
+  fullTurnTime100H?: number | null;
   hoursOverride?: number | null;
   notes?: string | null;
 }
@@ -126,7 +146,13 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
 } {
   const depth = roundTo(draft.depthMm, 2);
   const volume = deriveAppliedVolume(depth, draft.areaHa);
-  const derivedHours = deriveOperatingHours(depth, draft.areaHa, draft.flowRateM3h);
+  const derivedHours =
+    draft.percentimeterPct != null &&
+    Number.isFinite(draft.percentimeterPct) &&
+    draft.fullTurnTime100H != null &&
+    Number.isFinite(draft.fullTurnTime100H)
+      ? deriveOperatingHoursFromPercentimeter(draft.percentimeterPct, draft.fullTurnTime100H)
+      : deriveOperatingHours(depth, draft.areaHa, draft.flowRateM3h);
   const hours = draft.hoursOverride != null && Number.isFinite(draft.hoursOverride)
     ? roundTo(draft.hoursOverride, 2)
     : derivedHours;
