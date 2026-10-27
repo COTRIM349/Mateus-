@@ -165,7 +165,9 @@ export function seriesValue(
     case "seg": return Math.max(row.cadMm - row.afdMm, 0);
     case "pmp": return 0;
     case "cad": return row.cadProfileMm;
-    case "dta": return row.rootDepthM > 0 ? row.cadMm / row.rootDepthM : null;
+    case "dta": return row.fieldCapacity != null && row.wiltingPoint != null
+      ? Math.max((row.fieldCapacity - row.wiltingPoint) * 1000, 0)
+      : row.rootDepthM > 0 ? row.cadMm / row.rootDepthM : null;
     case "afd": return row.craProfileMm;
     case "arm": return row.armMm;
     case "sensorial": return row.sensoryNote;
