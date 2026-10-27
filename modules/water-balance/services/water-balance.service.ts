@@ -199,11 +199,12 @@ export const WATER_STATUS_CONFIG: Record<
   WaterStatus,
   { label: string; color: string; bgClass: string }
 > = {
-  saturado:        { label: "Saturado",        color: "#3b82f6", bgClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
-  ideal:           { label: "Ideal",           color: "#22c55e", bgClass: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
-  atencao:         { label: "Atenção",         color: "#f59e0b", bgClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" },
-  deficit:         { label: "Déficit",         color: "#f97316", bgClass: "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400" },
-  deficit_critico: { label: "Déficit Crítico", color: "#ef4444", bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  // O balanço limita ARM à CAD; portanto "saturado" aqui representa CC atingida.
+  saturado:        { label: "Capacidade de campo", color: "#22c55e", bgClass: "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" },
+  ideal:           { label: "Sem necessidade",     color: "#3b82f6", bgClass: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400" },
+  atencao:         { label: "Atenção",             color: "#f59e0b", bgClass: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400" },
+  deficit:         { label: "Irrigar",             color: "#ef4444", bgClass: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" },
+  deficit_critico: { label: "Irrigar — crítico",   color: "#b91c1c", bgClass: "bg-red-200 text-red-900 dark:bg-red-950/50 dark:text-red-300" },
 };
 
 // ── Daily Balance Engine ────────────────────────────────────────────────
