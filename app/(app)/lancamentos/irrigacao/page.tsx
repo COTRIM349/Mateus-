@@ -47,21 +47,14 @@ interface ParcelLite {
 interface FormState {
   pivot_id: string;
   date: string;
-  time: string;
   percentimeter_pct: string;
   notes: string;
 }
 
 const today = () => new Date().toISOString().slice(0, 10);
-const nowHm = () => {
-  const d = new Date();
-  return `${String(d.getHours()).padStart(2, "0")}:${String(d.getMinutes()).padStart(2, "0")}`;
-};
-
 const EMPTY: FormState = {
   pivot_id: "",
   date: today(),
-  time: nowHm(),
   percentimeter_pct: "",
   notes: "",
 };
@@ -159,7 +152,7 @@ export default function LancamentoIrrigacaoPage() {
       installedPowerKw: selectedPivot.installed_power_kw,
       motorEfficiency: selectedPivot.motor_efficiency,
       specificConsumptionKwhM3: selectedPivot.specific_consumption,
-      startedAt: `${form.date}T${form.time || "06:00"}:00`,
+      startedAt: `${form.date}T06:00:00`,
       tariff: pickTariffForDate(tariffs, form.date),
       pivotEnergyCostReaisPerKwh: selectedPivot.energy_cost,
     })
@@ -175,7 +168,6 @@ export default function LancamentoIrrigacaoPage() {
       ...EMPTY,
       pivot_id: selectedPivotId,
       date: today(),
-      time: nowHm(),
     });
     setFormError("");
     setSuccessMessage("");
@@ -231,7 +223,7 @@ export default function LancamentoIrrigacaoPage() {
       pivotId: form.pivot_id,
       parcelId: parcel?.id ?? null,
       dateYmd: form.date,
-      timeHm: form.time,
+      timeHm: "06:00",
       depthMm: depth,
       percentimeterPct,
       areaHa: pivot.area,
@@ -401,15 +393,6 @@ export default function LancamentoIrrigacaoPage() {
               required
               value={form.date}
               onChange={(e) => patch({ date: e.target.value })}
-            />
-
-            <Input
-              id="time"
-              label="Hora"
-              type="time"
-              required
-              value={form.time}
-              onChange={(e) => patch({ time: e.target.value })}
             />
 
             <Input
