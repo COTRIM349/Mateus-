@@ -938,7 +938,12 @@ export default function BalancoHidricoPage() {
       const readingsById = new Map(weatherReadings.map((r) => [r.id, r]));
       selectedIdByDate.forEach((readingId, date) => {
         const r = readingsById.get(readingId);
-        if (r?.et0_calculated != null) weatherByDate[date] = { et0: r.et0_calculated, precip: r.precipitation };
+        if (r?.et0_calculated != null) {
+          // REGRA OPERACIONAL: chuva automática não entra no manejo.
+          // A precipitação começa em zero e só é preenchida pelo lançamento
+          // manual em manual_rainfall_entries.
+          weatherByDate[date] = { et0: r.et0_calculated, precip: 0 };
+        }
       });
 
       // ETo manual (modo "por clima" sem API): cria/preenche a ETo do dia.
@@ -957,8 +962,9 @@ export default function BalancoHidricoPage() {
         weatherByDate[row.date as string] = { et0: eto, precip: current?.precip ?? 0 };
       }
 
-      // Chuva manual é a observação local preferida, mas só substitui P em um
-      // dia que já possui ETo operacional aprovada.
+      // ÚNICA chuva operacional do manejo: lançamento manual.
+      // Dados de chuva de estação/API continuam disponíveis no módulo Clima,
+      // mas não alteram automaticamente o balanço hídrico.
       const { data: manualRainRows } = await supabase
         .from("manual_rainfall_entries")
         .select("date,precipitation_mm")
@@ -1070,18 +1076,16 @@ export default function BalancoHidricoPage() {
       }
       const rows: DailyBalanceRow[] = series.filter((d) => d.date >= dateStart).map(mapBalanceDay);
 
-      // 6. Projeção pela previsão — roda o MESMO motor sobre os dias FUTUROS,
-      // usando a previsão (somente ETo calculada aprovada; nunca et0_source) como
-      // clima e sem irrigação futura. Assim Kc/fase/raiz/AFD/Ks/chuva efetiva
-      // vêm do motor por data, e não de parâmetros congelados do último dia.
+      // 6. Projeção pela previsão — usa somente ETo prevista.
+      // Chuva prevista NÃO entra no manejo: o cenário futuro considera P=0 até
+      // que uma chuva real seja lançada manualmente em Lançamentos → Chuvas.
       let projRows: DailyBalanceRow[] = [];
       try {
-        // Seleção da previsão por PRIORIDADE DE PROVEDOR (precipitação forecast:
-        // open_meteo → meteoblue, CLIMATE_SPECIFICATION §prioridades), não pela
-        // estação observada — que pode ser Davis/INMET/in-field, sem previsão.
+        // Seleção da ETo prevista por prioridade de provedor. A precipitação
+        // automática/prevista é deliberadamente ignorada no manejo.
         const { data: fcData } = await supabase
           .from("weather_forecasts")
-          .select("target_date, issued_at, et0_calculated, precipitation, provider")
+          .select("target_date, issued_at, et0_calculated, provider")
           .eq("farm_id", activeFarmId!)
           .gt("target_date", effectiveEnd)
           .order("issued_at", { ascending: false });
@@ -1091,19 +1095,17 @@ export default function BalancoHidricoPage() {
         };
         const FORECAST_FRESH_MS = 24 * 3600 * 1000; // forecast além de 24h = stale (spec)
         const now = Date.now();
-        // Por data: linha COMPLETA (ETo calculada E chuva válidas), FRESCA (<24h),
-        // do melhor provedor; empate de provedor resolve pela emissão mais nova
-        // (linhas já vêm issued_at desc). ETo sempre calculada; nunca et0_source.
-        const byDate = new Map<string, { et0: number; precip: number; rank: number }>();
-        for (const row of (fcData ?? []) as Array<{ target_date: string; issued_at: string; et0_calculated: number | null; precipitation: number | null; provider: string | null }>) {
+        // Por data: ETo calculada e fresca (<24h), do melhor provedor.
+        // A chuva prevista não é usada operacionalmente.
+        const byDate = new Map<string, { et0: number; rank: number }>();
+        for (const row of (fcData ?? []) as Array<{ target_date: string; issued_at: string; et0_calculated: number | null; provider: string | null }>) {
           const et0 = row.et0_calculated;
           if (et0 == null || !Number.isFinite(Number(et0)) || Number(et0) < 0) continue;
-          if (row.precipitation == null || !Number.isFinite(Number(row.precipitation)) || Number(row.precipitation) < 0) continue;
           const issued = Date.parse(row.issued_at);
           if (!Number.isFinite(issued) || now - issued > FORECAST_FRESH_MS) continue; // descarta previsão velha
           const rank = providerRank(row.provider);
           const cur = byDate.get(row.target_date);
-          if (!cur || rank < cur.rank) byDate.set(row.target_date, { et0: Number(et0), precip: Number(row.precipitation), rank });
+          if (!cur || rank < cur.rank) byDate.set(row.target_date, { et0: Number(et0), rank });
         }
         const projWeather: Record<string, { et0: number; precipitation: number }> = { ...engineWeatherByDate };
         let cursor = addDaysIso(effectiveEnd, 1);
@@ -1111,7 +1113,7 @@ export default function BalancoHidricoPage() {
         for (let i = 0; i < 8; i += 1) {
           const w = byDate.get(cursor);
           if (!w) break; // lacuna encerra o prefixo contíguo (não projeta com buraco).
-          projWeather[cursor] = { et0: w.et0, precipitation: w.precip };
+          projWeather[cursor] = { et0: w.et0, precipitation: 0 };
           lastForecastDate = cursor;
           cursor = addDaysIso(cursor, 1);
         }

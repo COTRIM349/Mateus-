@@ -330,9 +330,11 @@ export function useFarmHydricState(): FarmHydricState {
           const reading = readingsById.get(selection.selected_reading_id as string);
           if (!reading) continue;
           const et0 = Number(reading.et0_calculated);
-          const precipitation = Number(reading.precipitation);
-          if (!Number.isFinite(et0) || et0 < 0 || !Number.isFinite(precipitation) || precipitation < 0) continue;
-          weatherByDate[selection.date as string] = { et0, precipitation };
+          if (!Number.isFinite(et0) || et0 < 0) continue;
+          // REGRA OPERACIONAL: chuva de estação/API NÃO entra automaticamente
+          // no manejo. Precipitação só é aplicada quando existe lançamento manual
+          // em manual_rainfall_entries para a fazenda/data.
+          weatherByDate[selection.date as string] = { et0, precipitation: 0 };
         }
       }
 
