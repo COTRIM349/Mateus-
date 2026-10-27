@@ -34,8 +34,12 @@ export const MANAGEMENT_UNITS = {
   appliedDepth: "mm (lâmina bruta aplicada)",
   cc: "cm³/cm³",
   pmp: "cm³/cm³",
-  cad: "mm",
-  afd: "mm",
+  // Nomenclatura operacional: DTA (mm/m), CTA (mm) e CRA (mm).
+  dta: "mm/m",
+  cta: "mm",
+  cra: "mm",
+  cad: "mm", // alias interno legado de CTA
+  afd: "mm", // alias interno legado de CRA
   arm: "mm",
   safetyMoisture: "mm",
   moisturePctCc: "% da CC (volumétrico)",
@@ -384,8 +388,8 @@ export const MANAGEMENT_CSV_COLUMNS: Array<{ key: keyof ManagementReportRow; hea
   { key: "recommendedGrossMm", header: "Lâmina recomendada (mm)" },
   { key: "fieldCapacity", header: "CC (cm³/cm³)" },
   { key: "wiltingPoint", header: "PMP (cm³/cm³)" },
-  { key: "cadMm", header: "CAD (mm)" },
-  { key: "afdMm", header: "AFD (mm)" },
+  { key: "cadMm", header: "CTA (mm)" },
+  { key: "afdMm", header: "CRA (mm)" },
   { key: "armMm", header: "ARM (mm)" },
   { key: "safetyMoistureMm", header: "Umidade de segurança (mm)" },
   { key: "moisturePctCc", header: "% da CC" },
