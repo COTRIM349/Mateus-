@@ -219,8 +219,11 @@ interface WeatherReading {
   id: string;
   date: string;
   et0_calculated: number | null;
-  precipitation: number;
+  precipitation: number | null;
   station_id: string;
+  data_quality: string | null;
+  data_kind: string | null;
+  origin: string | null;
 }
 
 interface IrrigationEvent {
