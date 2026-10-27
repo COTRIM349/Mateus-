@@ -39,7 +39,7 @@ export function Topbar() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
         </svg>
         <span className="text-[13px] font-semibold tracking-tight text-graphite-800 dark:text-white">
-          {activeFarm?.name ?? profile?.companyName ?? "Cotrim Irrigação Pro"}
+          {activeFarm?.name ?? profile?.companyName ?? "SANTA COLOMBA IRRIGA PRO"}
         </span>
       </div>
 
