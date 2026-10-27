@@ -271,8 +271,11 @@ export interface TariffRow {
   valid_to: string | null;
   rate_peak: number;
   rate_off_peak: number;
+  rate_reserved?: number | null;
+  demand_rate?: number | null;
   peak_start: number;
   peak_end: number;
+  active?: boolean;
 }
 
 export function pickTariffForDate(tariffs: TariffRow[], dateYmd: string): FarmTariff | null {
