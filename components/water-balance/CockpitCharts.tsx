@@ -524,6 +524,33 @@ export function KcCurveReadOnlyChart({
 
 // ── Reservatório de Água do Solo ────────────────────────────────────────────
 
+/** O zoom altera somente a exibição, jamais os valores agronômicos. */
+export type ReservatorioZoom = "total" | "atencao" | "arm";
+
+export function reservoirAxisRange(input: {
+  zoom: ReservatorioZoom;
+  max: number;
+  bounds: Array<{ attention: number; safety: number }>;
+  water: number[];
+}): { min: number; max: number } {
+  if (input.zoom === "total") return { min: 0, max: input.max };
+  const values = (input.zoom === "atencao"
+    ? input.bounds.flatMap((p) => [p.attention, p.safety])
+    : input.water).filter(Number.isFinite);
+  if (!values.length) return { min: 0, max: input.max };
+  const lo = Math.min(...values), hi = Math.max(...values);
+  const margin = Math.max(5, Math.max(hi - lo, 15) * 0.22);
+  let min = Math.max(0, Math.floor(lo - margin));
+  let max = Math.min(input.max, Math.ceil(hi + margin));
+  if (max - min < 12) {
+    const mid = (max + min) / 2;
+    min = Math.max(0, Math.floor(mid - 6));
+    max = Math.min(input.max, Math.ceil(mid + 6));
+  }
+  return { min, max };
+}
+
+
 export function ReservatorioChart({
   points,
   ccMm,
@@ -532,6 +559,7 @@ export function ReservatorioChart({
   attentionMm,
   visible = defaultReservatorioVisible,
   unit = "pct",
+  zoom = "total",
 }: {
   points: ReservatorioPoint[];
   ccMm: number;
@@ -542,9 +570,10 @@ export function ReservatorioChart({
   /** "pct" = eixo em % da água disponível (PMP=0, CC=100, estilo Scheduling);
    *  "mm" = ARM em mm absolutos com umidade θ/θCC no eixo secundário. */
   unit?: "pct" | "mm";
+  zoom?: ReservatorioZoom;
 }) {
   const W = 1000;
-  const H = 330;
+  const H = 440;
   const padL = 38;
   const padR = 116;
   const padT = 16;
@@ -606,7 +635,16 @@ export function ReservatorioChart({
     ...points.flatMap((p) => [p.storageAbs ?? 0, p.ccAbs ?? 0, p.safetyAbs ?? 0]),
   );
   const yTop = pct ? 110 : Math.max(10, Math.ceil(maxPoint / 10) * 10);
-  const y = (v: number) => padT + plotH - (clamp(NUM(v), 0, yTop) / yTop) * plotH;
+  const axis = reservoirAxisRange({
+    zoom,
+    max: yTop,
+    bounds: zones.filter((z): z is NonNullable<typeof z> => z != null)
+      .map((z) => ({ attention: z.attention, safety: z.safety })),
+    water: points.map((p) => pct ? availOf(p) : p.storageAbs)
+      .filter((v): v is number => v != null && Number.isFinite(v)),
+  });
+  const inAxis = (v: number) => v >= axis.min && v <= axis.max;
+  const y = (v: number) => padT + plotH - ((v - axis.min) / (axis.max - axis.min)) * plotH;
   const yPct = (v: number) => padT + plotH - (clamp(v, 0, 125) / 125) * plotH; // θ/θCC secundário (só mm)
 
   // Faixas interpoladas entre os limites de cada DIA, acompanhando a curva
@@ -670,7 +708,7 @@ export function ReservatorioChart({
   const waterColor = pct ? "#7c3aed" : "#3b82f6";
 
   // Curva em coordenadas numéricas (para a área sob a linha e o ponto final).
-  const baseY = y(0);
+  const baseY = y(axis.min);
   const waterXY = points
     .map((p, i) => { const w = waterOf(p); return w != null && Number.isFinite(w) ? { x: x(i), y: y(w) } : null; })
     .filter((p): p is { x: number; y: number } => p != null);
@@ -695,12 +733,15 @@ export function ReservatorioChart({
   const mmTicks: number[] = [];
   const tickStep = yTop <= 60 ? 10 : 20;
   for (let t = 0; t <= yTop; t += tickStep) mmTicks.push(t);
-  const leftTicks = pct ? [0, 25, 50, 75, 100] : mmTicks;
+  const leftTicks = zoom === "total"
+    ? (pct ? [0, 25, 50, 75, 100] : mmTicks)
+    : Array.from({ length: 5 }, (_, i) => axis.min + (axis.max - axis.min) * i / 4);
   const secTicks = [0, 25, 50, 75, 100, 125];
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Reservatório de água e umidade do solo">
       <defs>
+        <clipPath id="reserv-plot-clip"><rect x={padL} y={padT} width={plotW} height={plotH} /></clipPath>
         <linearGradient id="reserv-fill-umid" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#7c3aed" stopOpacity="0.16" />
           <stop offset="100%" stopColor="#7c3aed" stopOpacity="0" />
@@ -714,13 +755,13 @@ export function ReservatorioChart({
           amarelo dos 70% aos 100%; vermelho quando o consumo alcança a CRA.
           Verde apenas na capacidade de campo, como no mapa operacional. */}
       {visible.zonas && (
-        <>
+        <g clipPath="url(#reserv-plot-clip)">
           {zoneBand("green", "cc", "#16a34a2b")}
           {zoneBand("attention", "green", "#2196f326")}
           {zoneBand("safety", "attention", "#eab30845")}
           {zoneBand("pmp", "safety", "#dc26262b")}
           {!pct && zoneBand("zero", "pmp", "#7f1d1d22")}
-        </>
+        </g>
       )}
 
       {leftTicks.map((t) => (
