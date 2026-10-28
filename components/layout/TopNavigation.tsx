@@ -10,7 +10,7 @@ import { cn } from "@/utils/cn";
 function NavIcon({ path, className }: { path: string; className?: string }) {
   return (
     <svg
-      className={cn("h-[16px] w-[16px] shrink-0", className)}
+      className={cn("h-[18px] w-[18px] shrink-0", className)}
       fill="none"
       stroke="currentColor"
       strokeWidth={1.7}
@@ -71,7 +71,7 @@ export function TopNavigation() {
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex min-h-[39px] items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px] font-semibold transition-colors",
+          "flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[15px] font-semibold transition-colors",
           active
             ? "bg-white/15 text-white ring-1 ring-white/10"
             : "text-white/80 hover:bg-white/10 hover:text-white",
@@ -91,7 +91,7 @@ export function TopNavigation() {
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[14px] font-medium",
+          "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[16px] font-medium",
           active ? "bg-santa-700 text-white" : "text-white/85 hover:bg-white/10",
         )}
       >
@@ -105,7 +105,7 @@ export function TopNavigation() {
     <div ref={navigationRef} className="relative border-t border-white/10 bg-santa-900">
       <nav
         aria-label="Navegação principal"
-        className="hidden min-h-[49px] flex-wrap items-center gap-1 px-4 py-1.5 lg:flex lg:px-7"
+        className="hidden min-h-[55px] flex-wrap items-center gap-1.5 px-4 py-1.5 lg:flex lg:px-6"
       >
         {topLevelItems.map((item) => <DesktopLink key={item.href} item={item} />)}
         {navGroups.map((group, index) => {
@@ -119,7 +119,7 @@ export function TopNavigation() {
                 aria-controls={"desktop-nav-group-" + index}
                 onClick={() => setOpenGroup(expanded ? null : group.label)}
                 className={cn(
-                  "flex min-h-[39px] items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[13px] font-semibold transition-colors",
+                  "flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[15px] font-semibold transition-colors",
                   active || expanded ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10 hover:text-white",
                 )}
               >
@@ -143,7 +143,7 @@ export function TopNavigation() {
                         onClick={onNavigate}
                         aria-current={selected ? "page" : undefined}
                         className={cn(
-                          "flex min-h-10 items-center gap-2.5 rounded-lg px-3 text-[13px] font-medium transition-colors",
+                          "flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-[15px] font-medium transition-colors",
                           selected
                             ? "bg-santa-50 text-santa-800 dark:bg-santa-900/30 dark:text-santa-200"
                             : "text-graphite-700 hover:bg-santa-50 dark:text-gray-200 dark:hover:bg-white/10",
@@ -168,7 +168,7 @@ export function TopNavigation() {
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-expanded={mobileOpen}
           aria-controls="mobile-navigation"
-          className="flex min-h-10 w-full items-center justify-between rounded-lg bg-white/10 px-3 text-[14px] font-semibold text-white"
+          className="flex min-h-11 w-full items-center justify-between rounded-lg bg-white/10 px-3 text-[16px] font-semibold text-white"
         >
           <span className="flex items-center gap-2">
             <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
@@ -199,7 +199,7 @@ export function TopNavigation() {
                   aria-controls={"mobile-nav-group-" + index}
                   onClick={() => setOpenGroup(expanded ? null : group.label)}
                   className={cn(
-                    "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[14px] font-semibold",
+                    "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[16px] font-semibold",
                     active || expanded ? "bg-white/10 text-white" : "text-white/85 hover:bg-white/10",
                   )}
                 >
