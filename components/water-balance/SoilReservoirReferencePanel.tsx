@@ -26,12 +26,12 @@ function Tile({ label, value, hint, tone = "white", symbol = "◉" }: {
   label: string; value: string; hint?: string; tone?: StatTone; symbol?: string;
 }) {
   return (
-    <div className="flex min-h-[82px] min-w-0 items-center gap-2 rounded-lg border border-white/[0.09] bg-[#0b1c23] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.045] text-[17px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
+    <div className="flex min-h-[68px] min-w-0 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0b1c23] px-2 py-1.5 shadow-[inset_0_1px_0_rgba(255,255,255,.025)]">
+      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-white/[0.045] text-[14px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
       <div className="min-w-0">
-        <div className="break-words text-[10.5px] font-medium leading-tight text-slate-300">{label}</div>
-        <div title={value} className="mt-0.5 max-w-full truncate text-[clamp(16px,1.25vw,21px)] font-extrabold leading-tight tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
-        {hint && <div className="mt-1 break-words text-[9.5px] leading-tight text-slate-400">{hint}</div>}
+        <div className="truncate text-[9.5px] font-semibold leading-tight text-slate-300">{label}</div>
+        <div title={value} className="mt-0.5 max-w-full truncate text-[clamp(15px,1.05vw,19px)] font-extrabold leading-none tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
+        {hint && <div title={hint} className="mt-1 truncate text-[8.5px] leading-none text-slate-500">{hint}</div>}
       </div>
     </div>
   );
@@ -41,12 +41,12 @@ function MiniMetric({ label, value, hint, symbol, tone = "white" }: {
   label: string; value: string; hint?: string; symbol: string; tone?: StatTone;
 }) {
   return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0a1a21] p-3">
-      <span className="text-xl" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</span>
+    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0a1a21] px-2.5 py-2">
+      <span className="text-[16px]" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</span>
       <div className="min-w-0">
-        <div className="text-[10px] text-slate-300">{label}</div>
-        <div title={value} className="mt-1 max-w-full truncate text-[clamp(18px,1.25vw,23px)] font-extrabold leading-tight tabular-nums text-white">{value}</div>
-        {hint && <div className="mt-1 text-[10px] leading-snug text-slate-400">{hint}</div>}
+        <div className="truncate text-[9.5px] font-medium text-slate-300">{label}</div>
+        <div title={value} className="mt-0.5 max-w-full truncate text-[clamp(16px,1.05vw,19px)] font-extrabold leading-tight tabular-nums text-white">{value}</div>
+        {hint && <div className="mt-0.5 truncate text-[9px] leading-tight text-slate-500">{hint}</div>}
       </div>
     </div>
   );
@@ -345,7 +345,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         <span className="text-[11px] text-slate-400">Ao retornar ao balanço, o RAS será recalculado com os novos lançamentos.</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4 min-[1550px]:grid-cols-9">
+      <div className="grid grid-cols-2 gap-1 lg:grid-cols-4 min-[1550px]:grid-cols-9">
         <Tile label="Cultura" value={cultureName ?? "—"} hint="Parcela em manejo" tone="green" symbol="❧"/>
         <Tile label="Cultivar" value={varietyName ?? "Não cadastrada"} hint="Cultivar da parcela ativa" tone="cyan" symbol="✧"/>
         <Tile label="Fase atual" value={phaseLabel} hint={last.dae!=null?`${last.dae} DAE`:undefined} tone="green" symbol="▦"/>
@@ -516,7 +516,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         )}
       </div>
 
-      <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1.25fr_.75fr]">
+      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[1.15fr_1.2fr_.72fr]">
         <div className="rounded-xl border border-white/[0.09] bg-[#0b1c23] p-3">
           <div className="mb-2 text-[13px] font-bold">Parâmetros da semana <span className="ml-1 font-normal text-slate-400">({fmtDate(weekly.start)} a {fmtDate(weekly.end)})</span></div>
           <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
@@ -536,13 +536,19 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
           </div>
         </div>
         <div className="rounded-xl border border-white/[0.09] bg-[#0b1c23] p-3">
-          <div className="mb-2 text-[13px] font-bold">Resumo da recomendação</div>
-          <div className="rounded-lg bg-gradient-to-br from-blue-600 to-blue-800 p-4">
-            <div className="text-[12px] text-blue-100">Lâmina bruta para 100% CC</div>
-            <div className="mt-1 text-[29px] font-extrabold leading-none">{mmOrDash(repl.grossMm)}</div>
-            <div className="mt-4 text-[12px] text-blue-100">Tempo estimado de irrigação</div>
-            <div className="mt-1 text-[20px] font-extrabold">{repl.hours==null?"—":n(repl.hours,1)+" horas"}</div>
-            <div className="mt-2 text-[10px] text-blue-100">{flowRateM3h!=null?`Vazão: ${n(flowRateM3h,0)} m³/h`:"Vazão não cadastrada"}</div>
+          <div className="mb-2 text-[12px] font-bold">Resumo da recomendação</div>
+          <div className="rounded-lg bg-gradient-to-br from-blue-600 to-blue-800 p-3">
+            <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
+              <div>
+                <div className="text-[10px] font-medium text-blue-100">Lâmina bruta · 100% CC</div>
+                <div className="mt-0.5 text-[24px] font-extrabold leading-none">{mmOrDash(repl.grossMm)}</div>
+              </div>
+              <div>
+                <div className="text-[10px] font-medium text-blue-100">Tempo estimado</div>
+                <div className="mt-0.5 text-[17px] font-extrabold leading-tight">{repl.hours==null?"—":n(repl.hours,1)+" h"}</div>
+              </div>
+            </div>
+            <div className="mt-2 border-t border-white/15 pt-2 text-[9.5px] text-blue-100">{flowRateM3h!=null?`Vazão ${n(flowRateM3h,0)} m³/h`:"Vazão não cadastrada"}</div>
           </div>
         </div>
       </div>
