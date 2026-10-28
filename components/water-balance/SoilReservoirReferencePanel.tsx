@@ -264,6 +264,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   flowRateM3h: number | null;
   efficiencyPercent: number | null;
 }) {
+  const [selectedUnit, setSelectedUnit] = useState<RasDisplayUnit>("cc");
   const [expanded, setExpanded] = useState<RasDisplayUnit | null>(null);
   useEffect(() => {
     if (expanded === null) return;
@@ -311,9 +312,21 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         </div>
       </header>
       <p className="px-1 text-[12px] text-slate-300">
-        Três gráficos do mesmo balanço diário. Barras de irrigação e chuva partem de 0 mm no eixo direito,
-        sem interferir na escala de umidade e na exploração radicular.
+        Selecione uma das três visualizações do mesmo balanço diário. As barras de irrigação e chuva partem de 0 mm
+        no eixo direito, sem interferir na escala de umidade e na exploração radicular.
       </p>
+
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0c232a] p-2.5"
+        role="group" aria-label="Selecionar gráfico do reservatório">
+        {cards.map((card) => (
+          <button key={card.id} type="button" aria-pressed={selectedUnit === card.id}
+            onClick={() => { setSelectedUnit(card.id); setExpanded(null); }}
+            className={"rounded-lg px-3 py-2 text-[12px] font-bold transition-colors " +
+              (selectedUnit === card.id ? "bg-santa-600 text-white" : "text-slate-200 hover:bg-white/10")}>
+            {card.title}
+          </button>
+        ))}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/lancamentos/chuvas" className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-500/20">Lançar chuva manual</Link>
@@ -333,8 +346,9 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         <Tile label="Água disponível (ARM)" value={mmOrDash(now.armMm)} hint={n(reservePct,1)+"% da CTA · "+n(now.ccPercent,1)+"% CC"} tone={now.ccPercent<=now.limitPercentCc?"red":"blue"} symbol="◉"/>
       </div>
 
-      <div className="space-y-3" aria-label="Três gráficos do reservatório de água do solo">
+      <div className="space-y-3" aria-label="Gráfico selecionado do reservatório de água do solo">
         {cards.map(card => {
+          if (card.id !== selectedUnit) return null;
           const isExpanded = expanded === card.id;
           const colour = card.id === "mm"
             ? { current:"#ced8e2", capacity:"#fa8568" }

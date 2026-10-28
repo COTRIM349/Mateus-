@@ -36,4 +36,17 @@ describe("gráfico %CC: eixo da irrigação independente à direita", () => {
     expect(source).toContain("height={Math.max(0,eventsBottom-eventY(p.rainEffectiveMm))}");
     expect(source).toContain('rasDisplayAxisCeiling(displayed, unit)');
   });
+
+  it("permite selecionar apenas um gráfico sem modificar as séries e o motor do balanço", () => {
+    const source = readFileSync(join(process.cwd(), "components/water-balance/SoilReservoirReferencePanel.tsx"), "utf8");
+    expect(source).toContain('const [selectedUnit, setSelectedUnit] = useState<RasDisplayUnit>("cc")');
+    expect(source).toContain('aria-label="Selecionar gráfico do reservatório"');
+    expect(source).toContain('aria-pressed={selectedUnit === card.id}');
+    expect(source).toContain('setSelectedUnit(card.id); setExpanded(null);');
+    expect(source).toContain('if (card.id !== selectedUnit) return null;');
+    expect(source).toContain('RasFullWidthChart points={points} displayed={card.series} unit={card.id}');
+    expect(source).toContain('rasDisplaySeries(points, "mm"');
+    expect(source).toContain('rasDisplaySeries(points, "cc"');
+    expect(source).toContain('rasDisplaySeries(points, "weight"');
+  });
 });
