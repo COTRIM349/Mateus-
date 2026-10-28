@@ -7,9 +7,10 @@ import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint }
 import { rasDisplaySeries, rasDisplayAxisCeiling, RAS_UNITS, type RasDisplayUnit, type RasDisplayPoint } from "@/modules/water-balance/services/ras-display-modes";
 import type { SoilProfileLayer } from "@/modules/soil/services/soil-profile";
 import { rasEventAxisCeiling, rasEventVerticalPosition } from "@/modules/water-balance/services/ras-event-axis";
+import { auditRasGraph } from "@/modules/water-balance/services/ras-chart-audit";
 
 type ZoomMode = "full" | "arm" | "lamina";
-type RASObservationsVisibility = { chuva: boolean; irrigacao: boolean; eto: boolean };
+type RASObservationsVisibility = { current: boolean; capacity: boolean; safety: boolean; pmp: boolean; chuva: boolean; irrigacao: boolean; eto: boolean };
 type StatTone = "green" | "blue" | "cyan" | "purple" | "orange" | "red" | "white";
 const colours: Record<StatTone, string> = {
   green: "#41d77b", blue: "#58baff", cyan: "#41e7c0", purple: "#c06bff",
@@ -117,7 +118,7 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
     });
   const lastX = x(points.length - 1);
   const lastY = y(latest.current);
-  const hasReplacement = replacementMm > 0.05;
+  const hasReplacement = replacementMm > 0.05 && visible.current && visible.capacity;
 
   // A banda inferior utiliza escala INDEPENDENTE em mm/dia. Não mistura
   // eventos de entrada/ETo com o eixo da umidade em % da capacidade de campo.
@@ -162,15 +163,15 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
         ))}
         <text x={3} y={t+8} fill="#d8e6ed" fontSize={16}>{RAS_UNITS[unit].axis}</text>
         <g clipPath="url(#rasFullClip)">
-          {unit === "mm" && (
+          {visible.current && unit === "mm" && (
             <path d={"M "+x(0)+" "+y(0)+" L "+displayed.map((p,i) => x(i)+" "+y(p.current)).join(" L ")+" L "+x(displayed.length-1)+" "+y(0)+" Z"}
               fill="rgba(179,198,215,.22)"/>
           )}
-          <polyline points={line("safety")} stroke="#ff5a60" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
-          <polyline points={line("pmp")} stroke="#a2adb8" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
-          <polyline points={line("capacity")} stroke={unit === "mm" ? "#fa8568" : "#6576ff"} fill="none" strokeWidth={2.6}/>
-          <polyline points={line("current")} stroke={unit === "mm" ? "#ced8e2" : "#b77841"} fill="none" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round"/>
-          {displayed.map((p,i)=><circle key={p.date} cx={x(i)} cy={y(p.current)} r={Math.max(2.4, Math.min(5.3, width / displayed.length / 7))} stroke="#dbe4ed" strokeWidth={1} fill={unit === "mm" ? "#d1dae5" : "#b77841"}>
+          {visible.safety && <polyline points={line("safety")} stroke="#ff5a60" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>}
+          {visible.pmp && <polyline points={line("pmp")} stroke="#a2adb8" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>}
+          {visible.capacity && <polyline points={line("capacity")} stroke={unit === "mm" ? "#fa8568" : "#6576ff"} fill="none" strokeWidth={2.6}/>}
+          {visible.current && <polyline points={line("current")} stroke={unit === "mm" ? "#ced8e2" : "#b77841"} fill="none" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round"/>}
+          {visible.current && displayed.map((p,i)=><circle key={p.date} cx={x(i)} cy={y(p.current)} r={Math.max(2.4, Math.min(5.3, width / displayed.length / 7))} stroke="#dbe4ed" strokeWidth={1} fill={unit === "mm" ? "#d1dae5" : "#b77841"}>
             <title>{p.date}: atual {n(p.current,unit==="weight"?2:1)} {RAS_UNITS[unit].axis}; CC {n(p.capacity,1)}, limite {n(p.safety,1)}, PMP {n(p.pmp,1)}; ARM {n(points[i].armMm,1)} mm, CAD {n(points[i].ctaMm,1)} mm.</title>
           </circle>)}
         </g>
@@ -244,9 +245,9 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
         <text x={summaryX} y={t+45} fill="#dce8ef" fontSize={18}>{n(newest.armMm,1)} mm</text>
         <text x={summaryX} y={t+67} fill="#dce8ef" fontSize={17}>CAD atual</text>
         <text x={summaryX} y={t+85} fill="#dce8ef" fontSize={18}>{n(newest.ctaMm,1)} mm</text>
-        <text x={l+7} y={y(latest.capacity)-10} fontSize={16} fill="#36e98a" fontWeight="bold">Capacidade de campo</text>
-        <text x={l+7} y={y(latest.safety)-10} fontSize={18} fill="#ff656c" fontWeight="bold">Limite de irrigação</text>
-        <text x={l+7} y={y(latest.pmp)-10} fontSize={18} fill="#ffae37" fontWeight="bold">PMP</text>
+        {visible.capacity && <text x={l+7} y={y(latest.capacity)-10} fontSize={16} fill="#36e98a" fontWeight="bold">Capacidade de campo</text>}
+        {visible.safety && <text x={l+7} y={y(latest.safety)-10} fontSize={18} fill="#ff656c" fontWeight="bold">Limite de irrigação</text>}
+        {visible.pmp && <text x={l+7} y={y(latest.pmp)-10} fontSize={18} fill="#ffae37" fontWeight="bold">PMP</text>}
       </svg>
       <p className="mt-1 px-1 text-[10px] text-slate-400">As séries CC, limite, PMP e umidade atual usam os valores e a zona radicular de cada dia; o ARM à direita mostra apenas o dia atual. {integratedCc ? "As barras de irrigação bruta realizada (verde) e chuva efetiva (azul) partem de 0 mm na base do mesmo gráfico; a linha amarela é a ETo diária. O eixo direito em mm/dia é independente da umidade no eixo esquerdo." : "Na banda inferior, as barras azuis representam a chuva efetiva da chuva registrada, as verdes representam a irrigação bruta realizada e a linha amarela mostra a ETo diária em mm/dia."} Somente dados observados são utilizados.</p>
     </div>
@@ -265,6 +266,11 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   efficiencyPercent: number | null;
 }) {
   const [selectedUnit, setSelectedUnit] = useState<RasDisplayUnit>("cc");
+  const [seriesVisibility, setSeriesVisibility] = useState<RASObservationsVisibility>({
+    current: true, capacity: true, safety: true, pmp: true,
+    chuva: true, irrigacao: true, eto: true,
+  });
+  const [showAudit, setShowAudit] = useState(false);
   const [expanded, setExpanded] = useState<RasDisplayUnit | null>(null);
   useEffect(() => {
     if (expanded === null) return;
@@ -284,6 +290,11 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   const ccSeries = useMemo(
     () => rasDisplaySeries(points, "cc", soilLayers, bulkDensity) ?? [],
     [points, soilLayers, bulkDensity],
+  );
+  const auditedSeries = selectedUnit === "mm" ? mmSeries : selectedUnit === "cc" ? ccSeries : gravimetric;
+  const audit = useMemo(
+    () => auditRasGraph(rows, points, auditedSeries, selectedUnit),
+    [rows, points, auditedSeries, selectedUnit],
   );
   const cards: { id: RasDisplayUnit; title: string; description: string; series: RasDisplayPoint[] | null; symbol: string }[] = [
     { id: "mm", title: "Água disponível (mm)", description: "ARM diário, CAD/CTA e limite de manejo (CAD − AFD)", series: mmSeries, symbol: "◉" },
@@ -346,6 +357,39 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         <Tile label="Água disponível (ARM)" value={mmOrDash(now.armMm)} hint={n(reservePct,1)+"% da CTA · "+n(now.ccPercent,1)+"% CC"} tone={now.ccPercent<=now.limitPercentCc?"red":"blue"} symbol="◉"/>
       </div>
 
+      <div className="rounded-xl border border-white/10 bg-[#0c232a] px-3 py-2.5">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[12px] font-semibold text-slate-200">Variáveis exibidas no gráfico</span>
+          <button type="button" className="text-[11px] font-semibold text-emerald-300 hover:underline"
+            onClick={() => setSeriesVisibility({
+              current:true, capacity:true, safety:true, pmp:true,
+              chuva:true, irrigacao:true, eto:true,
+            })}>Mostrar todas</button>
+        </div>
+        <div className="flex flex-wrap gap-2" role="group" aria-label="Escolher as variáveis do gráfico">
+          {([
+            { key:"current", name:selectedUnit === "mm" ? "ARM" : "Umidade atual", color:"#ced8e2" },
+            { key:"capacity", name:selectedUnit === "mm" ? "CAD / CTA" : "Capacidade de campo", color:"#6576ff" },
+            { key:"safety", name:"Limite de irrigação", color:"#ff6067" },
+            { key:"pmp", name:"PMP", color:"#a2adb8" },
+            { key:"chuva", name:"Chuva", color:"#2e91ff" },
+            { key:"irrigacao", name:"Irrigação", color:"#1ce0db" },
+            { key:"eto", name:"ETo", color:"#ffca42" },
+          ] as const).map(variable => (
+            <button key={variable.key} type="button" aria-pressed={seriesVisibility[variable.key]}
+              onClick={() => setSeriesVisibility(prev => ({ ...prev, [variable.key]: !prev[variable.key] }))}
+              className={"inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors " +
+                (seriesVisibility[variable.key]
+                  ? "border-white/20 bg-white/10 text-white"
+                  : "border-white/10 text-slate-500 line-through")}>
+              <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor:variable.color,
+                opacity:seriesVisibility[variable.key] ? 1 : .35 }} aria-hidden="true"/>
+              {variable.name}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <div className="space-y-3" aria-label="Gráfico selecionado do reservatório de água do solo">
         {cards.map(card => {
           if (card.id !== selectedUnit) return null;
@@ -380,16 +424,16 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
               ) : (
                 <RasFullWidthChart points={points} displayed={card.series} unit={card.id}
                   replacementMm={repl.netMm} mode="full"
-                  visible={{ chuva:true, irrigacao:true, eto:true }} expanded={isExpanded}/>
+                  visible={seriesVisibility} expanded={isExpanded}/>
               )}
               <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-2 py-2">
-                <Legend color={colour.current} text={card.id === "mm" ? "Água disponível (ARM)" : "Umidade calculada"}/>
-                <Legend color={colour.capacity} text={card.id === "mm" ? "CAD / CTA" : "Capacidade de campo"}/>
-                <Legend color="#ff6067" text="Limite de irrigação"/>
-                <Legend color="#a2adb8" text="PMP"/>
-                <Legend color="#1ce0db" text="Irrigação"/>
-                <Legend color="#2e91ff" text="Chuva"/>
-                <Legend color="#ffca42" text="ETo"/>
+                {seriesVisibility.current && <Legend color={colour.current} text={card.id === "mm" ? "Água disponível (ARM)" : "Umidade calculada"}/>}
+                {seriesVisibility.capacity && <Legend color={colour.capacity} text={card.id === "mm" ? "CAD / CTA" : "Capacidade de campo"}/>}
+                {seriesVisibility.safety && <Legend color="#ff6067" text="Limite de irrigação"/>}
+                {seriesVisibility.pmp && <Legend color="#a2adb8" text="PMP"/>}
+                {seriesVisibility.irrigacao && <Legend color="#1ce0db" text="Irrigação"/>}
+                {seriesVisibility.chuva && <Legend color="#2e91ff" text="Chuva"/>}
+                {seriesVisibility.eto && <Legend color="#ffca42" text="ETo"/>}
               </div>
               {card.id === "weight" && (
                 <p className="px-2 pb-1 text-[10px] text-slate-400">
@@ -405,6 +449,71 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
             </div>
           );
         })}
+      </div>
+
+      <div className={"rounded-xl border px-3 py-3 " +
+        (audit.passed ? "border-emerald-600/30 bg-emerald-900/10" : "border-amber-500/40 bg-amber-900/10")}>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-[12px] font-bold text-slate-100">
+              {audit.passed ? "✓ Coerência dos dados conferida" : "⚠ Inconsistências detectadas no gráfico"}
+            </div>
+            <div className="mt-1 text-[11px] text-slate-300">
+              {audit.checkedDays} dia(s) verificados · {audit.issues.length} ocorrência(s) · ARM, CAD, AFD,
+              %CC, ETc sem Kl, eventos e datas
+            </div>
+          </div>
+          <button type="button" onClick={() => setShowAudit(v => !v)} aria-expanded={showAudit}
+            className="rounded-lg border border-white/20 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-white/10">
+            {showAudit ? "Ocultar auditoria" : "Ver conferência e fórmulas"}
+          </button>
+        </div>
+        {showAudit && (
+          <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+            <p className="text-[11px] text-slate-300">
+              Validação de coerência interna do cálculo; não substitui medição de umidade,
+              conferência agronômica do solo nem verificação dos lançamentos no campo.
+              ETc potencial = ETo × Kc; ETc real = ETo × Kc × Ks. Kl não é aplicado.
+            </p>
+            <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3 xl:grid-cols-6">
+              {([
+                ["Data", now.date],
+                ["Raiz efetiva", n(now.rootDepth*100,0)+" cm"],
+                ["CAD", n(now.ctaMm,2)+" mm"],
+                ["ARM", n(now.armMm,2)+" mm"],
+                ["AFD", n(now.afdMm,2)+" mm"],
+                ["ARM limite", n(now.ctaMm-now.afdMm,2)+" mm"],
+                ["PMP", n(now.pmpPercentCc,2)+" %CC"],
+                ["Umidade atual", n(now.ccPercent,2)+" %CC"],
+                ["ETo", n(now.et0,2)+" mm/dia"],
+                ["Kc", n(now.kc,3)],
+                ["Ks", last.ks != null ? n(last.ks,3) : "—"],
+                ["ETc potencial", last.etcPotential != null ? n(last.etcPotential,2)+" mm/dia" : "—"],
+                ["ETc real", n(now.etc,2)+" mm/dia"],
+                ["Chuva manual", n(now.rainRecordedMm,2)+" mm"],
+                ["Chuva armazenada", n(now.rainEffectiveMm,2)+" mm"],
+                ["Irrigação bruta", n(now.irrigationAppliedMm,2)+" mm"],
+                ["Irrigação efetiva", n(now.irrigationEffectiveMm,2)+" mm"],
+              ] as const).map(([label,value])=>(
+                <div key={label} className="rounded-lg border border-white/10 bg-black/10 p-2">
+                  <div className="text-slate-400">{label}</div>
+                  <div className="mt-1 font-semibold text-slate-100">{value}</div>
+                </div>
+              ))}
+            </div>
+            {audit.issues.length > 0 && (
+              <div className="rounded-lg border border-amber-500/25 p-2 text-[11px] text-amber-100">
+                <div className="font-bold">Inconsistências encontradas</div>
+                {audit.issues.slice(0,12).map((issue,index)=>(
+                  <p key={index} className="mt-1">
+                    {issue.date} · {issue.field}: {issue.detail}
+                  </p>
+                ))}
+                {audit.issues.length > 12 && <p>Mais {audit.issues.length-12} ocorrência(s) não exibidas.</p>}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1.25fr_.75fr]">
