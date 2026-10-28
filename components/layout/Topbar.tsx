@@ -34,19 +34,19 @@ export function Topbar() {
   const today = new Date().toLocaleDateString("pt-BR", { day: "2-digit", month: "short", year: "numeric" });
 
   return (
-    <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-gray-100 bg-[#f4f7f5]/85 px-5 backdrop-blur-xl dark:border-white/[0.06] dark:bg-graphite-900/85 sm:px-8 lg:px-10">
-      <div className="flex items-center gap-2.5 pl-12 lg:pl-0">
+    <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-santa-100/80 bg-white/90 px-5 backdrop-blur-xl dark:border-white/[0.06] dark:bg-graphite-900/85 sm:px-8 lg:px-10">
+      <div className="flex min-w-0 items-center gap-2.5 pl-12 lg:pl-0">
         <svg className="h-4 w-4 text-santa-600 dark:text-santa-300" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M3 21h18M5 21V7l8-4v18M19 21V11l-6-4" />
         </svg>
-        <span className="text-[13px] font-semibold tracking-tight text-graphite-800 dark:text-white">
+        <span className="truncate text-[14px] font-semibold tracking-tight text-santa-900 dark:text-white">
           {activeFarm?.name ?? profile?.companyName ?? APP_NAME}
         </span>
       </div>
 
       <div className="flex items-center gap-1.5">
         {/* Data */}
-        <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-medium text-graphite-500 dark:text-gray-400 sm:flex">
+        <span className="hidden items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium text-graphite-500 dark:text-gray-400 sm:flex">
           <svg className="h-4 w-4 text-graphite-300 dark:text-gray-600" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3M3 11h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
@@ -57,7 +57,7 @@ export function Topbar() {
 
         {/* Atualização */}
         <span className="hidden items-center gap-1.5 text-[11px] font-medium text-graphite-400 dark:text-gray-500 md:flex">
-          <span className="h-1.5 w-1.5 rounded-full bg-brand-500" />
+          <span className="h-1.5 w-1.5 rounded-full bg-santa-500" />
           Atualizado
         </span>
 

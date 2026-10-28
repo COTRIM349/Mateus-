@@ -19,9 +19,9 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 
-  /* Seleção com o verde da marca — toque de identidade. */
+  /* Seleção em verde-petróleo Santa Colomba. */
   ::selection {
-    background-color: rgb(30 168 91 / 0.18);
+    background-color: rgb(40 106 107 / 0.18);
   }
 
   /* Números alinhados verticalmente em qualquer contexto tabular. */
