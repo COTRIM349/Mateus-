@@ -1,6 +1,7 @@
 "use client";
 
 import { calculateHydricZoneBounds } from "@/modules/water-balance/services/map-hydric-status";
+import { useEffect, useRef, useState } from "react";
 import type { PhenologyChartMarker } from "@/modules/culture/services/phenology-chart-markers";
 import { reservoirAxisRange, type ReservatorioZoom } from "@/modules/water-balance/services/reservoir-axis-range";
 export type { ReservatorioZoom } from "@/modules/water-balance/services/reservoir-axis-range";
@@ -179,6 +180,32 @@ function splitSeries(
   return { real, fore };
 }
 
+/**
+ * Compartilhado pelas abas de Entradas/Consumo e Fenologia/Kc.
+ * Dimensiona o SVG em coordenadas reais: o texto não distorce quando a aba
+ * ocupa largura total, em monitores 16:9, ultrawide ou no redimensionamento.
+ */
+function useResponsivePlotSize(minWidth = 900, minHeight = 560) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 1000, height: 600 });
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const measure = () => {
+      const rect = element.getBoundingClientRect();
+      const width = Math.round(rect.width);
+      const height = Math.round(rect.height);
+      if (width <= 0 || height <= 0) return;
+      setSize(previous => previous.width === width && previous.height === height ? previous : { width, height });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  return { containerRef, W: Math.max(minWidth, size.width), H: Math.max(minHeight, size.height) };
+}
+
 // ── Entradas e Consumo ──────────────────────────────────────────────────────
 
 export function EntradasConsumoChart({
@@ -190,8 +217,7 @@ export function EntradasConsumoChart({
   todayIndex: number;
   visible?: Record<EntradaSeriesKey, boolean>;
 }) {
-  const W = 1000;
-  const H = 300;
+  const { containerRef, W, H } = useResponsivePlotSize();
   const padL = 38;
   const padR = 42;
   const padT = 18;
@@ -234,7 +260,8 @@ export function EntradasConsumoChart({
   });
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Entradas, demanda e Kc">
+    <div ref={containerRef} className="h-full w-full overflow-x-auto">
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block max-w-none" preserveAspectRatio="xMinYMin meet" role="img" aria-label="Entradas, demanda e Kc">
       {forecastStart != null && (
         <rect x={forecastStart} y={padT} width={W - padR - forecastStart} height={plotH} fill="currentColor" className="text-brand-500/[0.06] dark:text-white/[0.04]" />
       )}
@@ -242,17 +269,17 @@ export function EntradasConsumoChart({
       {yTicks.map((t) => (
         <g key={t}>
           <line x1={padL} x2={W - padR} y1={yMm(t)} y2={yMm(t)} stroke="currentColor" strokeWidth={1} className="text-gray-200/70 dark:text-white/[0.06]" />
-          <text x={padL - 7} y={yMm(t) + 3} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={10}>{t}</text>
+          <text x={padL - 7} y={yMm(t) + 3} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={13}>{t}</text>
         </g>
       ))}
-      <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>mm</text>
+      <text x={4} y={padT + 4} className="fill-graphite-400 dark:fill-gray-500" fontSize={12}>mm</text>
 
       {visible.kc && (
         <>
           {kcTicks.map((t) => (
-            <text key={`kc-${t}`} x={W - padR + 7} y={yKc(t) + 3} className="fill-green-600 dark:fill-green-400" fontSize={9}>{t.toFixed(1)}</text>
+            <text key={`kc-${t}`} x={W - padR + 7} y={yKc(t) + 3} className="fill-green-600 dark:fill-green-400" fontSize={12}>{t.toFixed(1)}</text>
           ))}
-          <text x={W - 24} y={padT - 5} className="fill-green-600 dark:fill-green-400" fontSize={9} fontWeight={700}>Kc</text>
+          <text x={W - 24} y={padT - 5} className="fill-green-600 dark:fill-green-400" fontSize={12} fontWeight={700}>Kc</text>
         </>
       )}
 
@@ -289,12 +316,12 @@ export function EntradasConsumoChart({
       {forecastStart != null && (
         <>
           <line x1={forecastStart} x2={forecastStart} y1={padT} y2={padT + plotH} stroke="currentColor" strokeWidth={1} strokeDasharray="3 3" className="text-graphite-400 dark:text-gray-500" />
-          <text x={forecastStart} y={padT - 4} textAnchor="middle" className="fill-graphite-500 dark:fill-gray-400" fontSize={9} fontWeight={700}>HOJE</text>
+          <text x={forecastStart} y={padT - 4} textAnchor="middle" className="fill-graphite-500 dark:fill-gray-400" fontSize={12} fontWeight={700}>HOJE</text>
         </>
       )}
 
       {points.map((p, i) => (n <= 16 || i % Math.ceil(n / 14) === 0 || i === n - 1) ? (
-        <text key={`x${i}`} x={x(i)} y={H - 27} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{p.label}</text>
+        <text key={`x${i}`} x={x(i)} y={H - 27} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={12}>{p.label}</text>
       ) : null)}
 
       {/* Faixa fenológica — usa exatamente a fase calculada pelo motor. */}
@@ -305,11 +332,12 @@ export function EntradasConsumoChart({
         return (
           <g key={`${run.phase}-${run.start}`}>
             <rect x={x1} y={H - 18} width={width} height={12} rx={2} fill={fills[i % fills.length]} opacity={0.72} />
-            {width > 70 && <text x={x1 + width / 2} y={H - 9} textAnchor="middle" fill="#e5e7eb" fontSize={8.2} fontWeight={700}>{run.phase}</text>}
+            {width > 70 && <text x={x1 + width / 2} y={H - 9} textAnchor="middle" fill="#e5e7eb" fontSize={14} fontWeight={700}>{run.phase}</text>}
           </g>
         );
       })}
-    </svg>
+      </svg>
+    </div>
   );
 }
 
@@ -368,8 +396,7 @@ export function KcCurveReadOnlyChart({
     .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
     .sort((a, b) => a.x - b.x);
 
-  const W = 1000;
-  const H = 370;
+  const { containerRef, W, H } = useResponsivePlotSize();
   const padL = 54;
   const padR = 28;
   const padT = 26;
@@ -436,24 +463,25 @@ export function KcCurveReadOnlyChart({
   ).filter((v, i, arr) => i === 0 || v !== arr[i - 1]);
 
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="h-full w-full" preserveAspectRatio="none" role="img" aria-label="Curva progressiva de Kc e fenologia até o DAE atual">
+    <div ref={containerRef} className="h-full w-full overflow-x-auto">
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`} className="block max-w-none" preserveAspectRatio="xMinYMin meet" role="img" aria-label="Curva progressiva de Kc e fenologia até o DAE atual">
       {yTicks.map((t) => (
         <g key={t}>
           <line x1={padL} x2={W - padR} y1={y(t)} y2={y(t)} stroke="currentColor" strokeWidth={1} className="text-gray-200/70 dark:text-white/[0.06]" />
-          <text x={padL - 9} y={y(t) + 4} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={10}>{t.toFixed(2)}</text>
+          <text x={padL - 9} y={y(t) + 4} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={13}>{t.toFixed(2)}</text>
         </g>
       ))}
 
       <line x1={padL} x2={padL} y1={padT} y2={padT + plotH} stroke="currentColor" className="text-gray-300 dark:text-white/15" />
       <line x1={padL} x2={W - padR} y1={padT + plotH} y2={padT + plotH} stroke="currentColor" className="text-gray-300 dark:text-white/15" />
-      <text x={13} y={padT + plotH / 2} textAnchor="middle" transform={`rotate(-90 13 ${padT + plotH / 2})`} className="fill-graphite-500 dark:fill-gray-400" fontSize={11} fontWeight={700}>Kc</text>
+      <text x={13} y={padT + plotH / 2} textAnchor="middle" transform={`rotate(-90 13 ${padT + plotH / 2})`} className="fill-graphite-500 dark:fill-gray-400" fontSize={14} fontWeight={700}>Kc</text>
 
       <polyline points={poly} fill="none" stroke="#e5e7eb" strokeWidth={3.2} strokeLinejoin="round" strokeLinecap="round" className="dark:stroke-gray-200" />
 
       {coords.map((p, i) => (
         <g key={`${p.x}-${i}`}>
           <circle cx={p.cx} cy={p.cy} r={5} fill="#e5e7eb" className="dark:fill-gray-100" />
-          <text x={p.cx} y={p.cy - 11} textAnchor="middle" className="fill-graphite-700 dark:fill-gray-200" fontSize={10} fontWeight={700}>{p.y.toFixed(2)}</text>
+          <text x={p.cx} y={p.cy - 11} textAnchor="middle" className="fill-graphite-700 dark:fill-gray-200" fontSize={13} fontWeight={700}>{p.y.toFixed(2)}</text>
         </g>
       ))}
 
@@ -471,7 +499,7 @@ export function KcCurveReadOnlyChart({
               <line x1={markerX} x2={markerX} y1={padT} y2={padT + plotH}
                 stroke="#34d399" strokeWidth={1.5} strokeDasharray="6 6" opacity={0.8} />
               <rect x={badgeX} y={badgeY} width={40} height={19} rx={5} fill="#065f46" stroke="#6ee7b7" strokeWidth={1} />
-              <text x={badgeX + 20} y={badgeY + 13} textAnchor="middle" fill="#ecfdf5" fontSize={11} fontWeight={800}>
+              <text x={badgeX + 20} y={badgeY + 13} textAnchor="middle" fill="#ecfdf5" fontSize={14} fontWeight={800}>
                 {marker.code}
               </text>
             </g>
@@ -481,10 +509,10 @@ export function KcCurveReadOnlyChart({
       {xTicks.map((tick) => (
         <g key={`dae-${tick}`}>
           <line x1={x(tick)} x2={x(tick)} y1={padT + plotH} y2={padT + plotH + 5} stroke="currentColor" className="text-gray-300 dark:text-white/15" />
-          <text x={x(tick)} y={padT + plotH + 19} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={9.5}>{tick}</text>
+          <text x={x(tick)} y={padT + plotH + 19} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={12.5}>{tick}</text>
         </g>
       ))}
-      <text x={padL + plotW / 2} y={padT + plotH + 34} textAnchor="middle" className="fill-graphite-500 dark:fill-gray-400" fontSize={10.5} fontWeight={700}>DAE</text>
+      <text x={padL + plotW / 2} y={padT + plotH + 34} textAnchor="middle" className="fill-graphite-500 dark:fill-gray-400" fontSize={13} fontWeight={700}>DAE</text>
 
       {phaseTimeline.map((phase, index) => {
         const start = Math.max(0, phase.startDae);
@@ -517,7 +545,7 @@ export function KcCurveReadOnlyChart({
                 y={phaseBarY + 21}
                 textAnchor="middle"
                 fill={isCurrent ? "#111827" : "#1f2937"}
-                fontSize={9.2}
+                fontSize={12}
                 fontWeight={isCurrent ? 800 : 650}
               >
                 {phase.name}
@@ -529,8 +557,8 @@ export function KcCurveReadOnlyChart({
 
       {phaseTimeline.length > 0 && (
         <>
-          <text x={padL} y={phaseBarY - 7} className="fill-graphite-400 dark:fill-gray-500" fontSize={9.5} fontWeight={700}>FENOLOGIA ATÉ HOJE</text>
-          <text x={W - padR} y={phaseBarY - 7} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={9.5}>
+          <text x={padL} y={phaseBarY - 7} className="fill-graphite-400 dark:fill-gray-500" fontSize={12.5} fontWeight={700}>FENOLOGIA ATÉ HOJE</text>
+          <text x={W - padR} y={phaseBarY - 7} textAnchor="end" className="fill-graphite-400 dark:fill-gray-500" fontSize={12.5}>
             fase atual destacada
           </text>
         </>
@@ -540,11 +568,12 @@ export function KcCurveReadOnlyChart({
         <line x1={daeX} x2={daeX} y1={padT} y2={phaseBarY + phaseBarH} stroke="#22c55e" strokeWidth={1.6} strokeDasharray="5 4" opacity={0.9} />
         <circle cx={daeX} cy={daeY} r={7} fill="#22c55e" stroke="#ffffff" strokeWidth={2} />
         <rect x={Math.max(padL + 6, Math.min(daeX - 204, W - 220))} y={Math.max(padT + 4, daeY - 36)} width={194} height={29} rx={7} fill="#052e16" opacity={0.96} />
-        <text x={Math.max(padL + 16, Math.min(daeX - 194, W - 210))} y={Math.max(padT + 23, daeY - 17)} fill="#dcfce7" fontSize={10.5} fontWeight={700}>
+        <text x={Math.max(padL + 16, Math.min(daeX - 194, W - 210))} y={Math.max(padT + 23, daeY - 17)} fill="#dcfce7" fontSize={13} fontWeight={700}>
           Hoje · {Math.round(dae)} DAE · Kc {daeKc.toFixed(2)}
         </text>
       </g>
-    </svg>
+      </svg>
+    </div>
   );
 }
 
