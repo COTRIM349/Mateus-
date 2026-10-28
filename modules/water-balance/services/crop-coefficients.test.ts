@@ -52,8 +52,9 @@ describe("Ky — risco produtivo, não lâmina", () => {
     expect(resolvePhaseKy(null, null)).toBeNull();
   });
 
-  it("a fórmula de ETc deixa Ks e KL explícitos", () => {
-    expect(formatEtcFormula(5, 1.15, 1, 0.8)).toContain("ETo × Kc × KL × Ks");
-    expect(formatEtcFormula(5, 1.15, 1, 0.8)).toContain("0.8");
+  it("a fórmula apresenta ETo × Kc × Ks e ignora o Kl legado", () => {
+    expect(formatEtcFormula(5, 1.15, 0.2, 0.8)).toContain("ETo × Kc × Ks");
+    expect(formatEtcFormula(5, 1.15, 0.2, 0.8)).not.toContain("KL");
+    expect(formatEtcFormula(5, 1.15, 0.2, 0.8)).toContain("5 × 1.15 × 0.8");
   });
 });

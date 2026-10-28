@@ -1,12 +1,12 @@
 /**
  * Coeficientes do manejo (Etapa E).
  *
- * ETc potencial = ETo × Kc × KL
+ * ETc potencial = ETo × Kc
  * ETc ajustada  = ETc potencial × Ks     ← entra no balanço
  *
  * Ks: FAO-56 eq. 84 a partir da depleção no início do dia (Dr vs AFD).
  *     ks_function=fao33 NÃO entra na lâmina — Ky é risco produtivo.
- * KL: default 1 em pivô central com molhamento pleno.
+ * KL: cadastro legado; não é aplicado ao manejo de pivô central.
  * Ky: (1 − Ya/Ym) ≈ Ky × (1 − ETa/ETc). Não define lâmina diária.
  */
 
@@ -21,7 +21,7 @@ export const DEFAULT_CENTER_PIVOT_KL = 1;
 export const KS_FAO56_FORMULA =
   "Ks = 1 se Dr ≤ AFD; senão Ks = (ADT − Dr) / ((1 − p) × ADT) (FAO-56 eq. 84)";
 
-export const ETC_FORMULA = "ETc = ETo × Kc × KL × Ks";
+export const ETC_FORMULA = "ETc = ETo × Kc × Ks";
 
 const KS_FNS: KsFunctionName[] = ["linear", "fao33", "exponential", "sigmoid", "none"];
 
@@ -79,6 +79,7 @@ export function yieldRiskFraction(ky: number | null, ks: number): number | null 
   return roundTo(Math.max(0, ky * (1 - ks)), 3);
 }
 
-export function formatEtcFormula(et0: number, kc: number, kl: number, ks: number): string {
-  return `${ETC_FORMULA} = ${et0} × ${kc} × ${kl} × ${ks}`;
+export function formatEtcFormula(et0: number, kc: number, _kl: number, ks: number): string {
+  // _kl recebido para compatibilidade com os registros existentes; não participa da ETc.
+  return `${ETC_FORMULA} = ${et0} × ${kc} × ${ks}`;
 }

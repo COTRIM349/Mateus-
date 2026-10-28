@@ -108,6 +108,25 @@ describe("motor hídrico V2 - estabilização", () => {
   });
 });
 
+describe("módulo de irrigação sem Kl", () => {
+  it("independe do Kl informado em parcela, cultura ou fase, inclusive no F semanal", () => {
+    const noKl = computePivotBalanceSeries(baseInput());
+    const withKl = computePivotBalanceSeries(baseInput({
+      assignment: { ...baseInput().assignment, kl_override: 0.2 },
+      culture: { ...baseInput().culture, kl: 0.35 },
+      phases: baseInput().phases.map(p => ({ ...p, kl: 0.4 })),
+    }));
+    expect(withKl).toHaveLength(noKl.length);
+    expect(withKl.map(r => r.etcPotential)).toEqual(noKl.map(r => r.etcPotential));
+    expect(withKl.map(r => r.etc)).toEqual(noKl.map(r => r.etc));
+    expect(withKl.map(r => r.factorWeekStart)).toEqual(noKl.map(r => r.factorWeekStart));
+    expect(withKl.map(r => r.afd)).toEqual(noKl.map(r => r.afd));
+    expect(withKl.map(r => r.storage)).toEqual(noKl.map(r => r.storage));
+    expect(withKl.every(r => r.kl === 1)).toBe(true);
+    expect(withKl.every(r => r.etcFormula.includes("ETo × Kc × Ks") && !r.etcFormula.includes("KL"))).toBe(true);
+  });
+});
+
 describe("crescimento radicular diário e limite de absorção conhecido do Pivô 06", () => {
   it("usa a Zr da curva aprovada, calcula CTA/CRA diária e nunca supera os 60 cm cadastrados", () => {
     // CC/PMP já convertidos de % em peso usando Ds=1,85.
