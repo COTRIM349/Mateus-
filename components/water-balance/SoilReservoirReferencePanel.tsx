@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
-import { rasDisplaySeries, RAS_UNITS, type RasDisplayUnit, type RasDisplayPoint } from "@/modules/water-balance/services/ras-display-modes";
+import { rasDisplaySeries, rasDisplayAxisCeiling, RAS_UNITS, type RasDisplayUnit, type RasDisplayPoint } from "@/modules/water-balance/services/ras-display-modes";
 import type { SoilProfileLayer } from "@/modules/soil/services/soil-profile";
 
 type ZoomMode = "full" | "arm" | "lamina";
@@ -87,8 +87,9 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
   const latest = displayed[displayed.length - 1];
   if (!newest || !latest || points.length !== displayed.length) return null;
   // Escala por unidade, limites variáveis a cada dia (não usa CAD final para todo o ciclo).
-  const maxCapacity = Math.max(1, ...displayed.map(p => p.capacity));
-  const fullMax = unit === "cc" ? 105 : maxCapacity * 1.08;
+  // 100% CC é o topo visual exato: sem margem artificial de 5–8%.
+  // Para ARM (mm) e % em peso, a CC máxima do período define o teto.
+  const fullMax = rasDisplayAxisCeiling(displayed, unit);
   let yMin = 0, yMax = fullMax;
   if (mode !== "full") {
     const selected = mode === "lamina" ? displayed.slice(-14) : displayed;
