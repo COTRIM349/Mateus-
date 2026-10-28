@@ -1,7 +1,6 @@
 "use client";
 
 import { useMemo, useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
 import { rasDisplaySeries, rasDisplayAxisCeiling, RAS_UNITS, type RasDisplayUnit, type RasDisplayPoint } from "@/modules/water-balance/services/ras-display-modes";
@@ -337,12 +336,6 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
             {card.title}
           </button>
         ))}
-      </div>
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Link href="/lancamentos/chuvas" className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-500/20">Lançar chuva manual</Link>
-        <Link href="/lancamentos/irrigacao" className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">Lançar irrigação realizada</Link>
-        <span className="text-[11px] text-slate-400">Ao retornar ao balanço, o RAS será recalculado com os novos lançamentos.</span>
       </div>
 
       <div className="grid grid-cols-2 gap-1 lg:grid-cols-4 min-[1550px]:grid-cols-9">
