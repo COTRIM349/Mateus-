@@ -243,9 +243,9 @@ export function calculateManagementUrgency(
 }
 
 /**
- * Núcleo único para todo o período. O V2 aplica F = p_base + 0,04(5-ETc)
- * uma única vez POR DIA, usando a ETo aprovada daquele dia, sem dupla correção
- * na curva agronômica, na Central de Manejo ou no cockpit.
+ * Núcleo único para todo o período. O V2 aplica F como média SEMANAL dos
+ * ajustes FAO-56 individuais (ETo medida × Kc × KL, sem Ks) de segunda a
+ * domingo. CTA, ETc e ARM continuam diários. Não há dupla correção do F.
  */
 export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[] {
   const diagnosis = diagnoseOperationalInput(input);
