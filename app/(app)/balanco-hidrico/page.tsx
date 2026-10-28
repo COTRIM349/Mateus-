@@ -2122,12 +2122,12 @@ function BalanceTab({
 
   if (panel === "decisao") {
     const decisionMetrics = [
-      { l: "ARM atual", v: `${arm.toFixed(1)} mm`, sub: `${pctCc.toFixed(0)}% da CC` },
-      { l: "CTA / CRA", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm`, sub: "capacidade / limite" },
-      { l: "Margem até CRA", v: urgency ? (urgency.atOrBeyondAfd ? "Limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—", sub: "reserva operacional" },
-      { l: "Dias até CRA", v: daysToAfdLabel, sub: "sem chuva/irrigação" },
-      { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm`, sub: "déficit acumulado" },
-      { l: "Risco", v: classificacao.level === "irrigate" ? "Alto" : classificacao.level === "attention" ? "Médio" : "Baixo", sub: "faixa crítica", c: classificacao.color },
+      { l: "Água disponível", v: `${arm.toFixed(1)} mm`, sub: `ARM · ${pctCc.toFixed(0)}% da CC` },
+      { l: "Capacidade do solo", v: `${cad.toFixed(1)} mm`, sub: "CTA atual" },
+      { l: "Reserva até irrigar", v: urgency ? (urgency.atOrBeyondAfd ? "Limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—", sub: "margem até o limite" },
+      { l: "Tempo estimado", v: daysToAfdLabel, sub: "até o limite sem chuva" },
+      { l: "Necessidade hoje", v: `${laminaBruta.toFixed(1)} mm`, sub: "lâmina bruta recomendada" },
+      { l: "Risco", v: classificacao.level === "irrigate" ? "Alto" : classificacao.level === "attention" ? "Médio" : "Baixo", sub: "risco hídrico atual", c: classificacao.color },
     ];
 
     return (
@@ -2192,10 +2192,10 @@ function BalanceTab({
           <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
             <p className="text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">
               {arm < safetyMm
-                ? "O ARM está abaixo da faixa segura (CTA − CRA). A reposição deve priorizar o retorno da reserva hídrica."
+                ? "A água disponível no solo já atingiu o limite definido para irrigação. A recomendação é repor água."
                 : urgency?.daysToAfd != null
-                  ? `O ARM está em faixa segura. Mantida a demanda atual e sem novas entradas, a CRA seria atingida em cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).`
-                  : "O ARM está em faixa segura e as entradas recentes cobrem a demanda atual."}
+                  ? `Ainda há água suficiente no solo. Mantida a demanda atual e sem chuva ou irrigação, o limite seria atingido em cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).`
+                  : "A água disponível está em faixa segura e não há necessidade de irrigar agora."}
             </p>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -2213,7 +2213,7 @@ function BalanceTab({
         <Card className="p-3.5">
           <p className="mb-2 flex items-center gap-2 text-[12.5px] font-bold text-graphite-900 dark:text-white">
             <svg className="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
-            Alertas e observações
+            O que merece atenção
           </p>
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
