@@ -1,15 +1,21 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
-import { Button, Card, ConfirmDialog, Input, Modal, Table, type Column } from "@/components/ui";
+import { Button, Card, ConfirmDialog, Input, Modal, Select, Table, type Column } from "@/components/ui";
 import { PrerequisiteNotice } from "@/components/onboarding";
 import { useAuth } from "@/components/providers";
 import { createClient } from "@/lib/supabase/client";
 
+interface PivotLite {
+  id: string;
+  name: string;
+}
+
 interface RainEntry {
   id: string;
   farm_id: string;
+  pivot_id: string;
   date: string;
   precipitation_mm: number;
   created_at: string;
@@ -31,6 +37,8 @@ export default function LancamentoChuvasPage() {
   const { activeFarmId } = useAuth();
   const supabase = createClient();
 
+  const [pivots, setPivots] = useState<PivotLite[]>([]);
+  const [selectedPivotId, setSelectedPivotId] = useState("");
   const [rows, setRows] = useState<RainEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
@@ -40,8 +48,31 @@ export default function LancamentoChuvasPage() {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
 
-  const load = useCallback(async () => {
+  useEffect(() => {
     if (!activeFarmId) {
+      setPivots([]);
+      setSelectedPivotId("");
+      return;
+    }
+
+    supabase
+      .from("pivots")
+      .select("id,name")
+      .eq("farm_id", activeFarmId)
+      .eq("active", true)
+      .order("name")
+      .then(({ data }) => {
+        setPivots((data ?? []) as PivotLite[]);
+      });
+  }, [activeFarmId, supabase]);
+
+  const selectedPivot = useMemo(
+    () => pivots.find((pivot) => pivot.id === selectedPivotId) ?? null,
+    [pivots, selectedPivotId],
+  );
+
+  const load = useCallback(async () => {
+    if (!activeFarmId || !selectedPivotId) {
       setRows([]);
       return;
     }
@@ -49,18 +80,20 @@ export default function LancamentoChuvasPage() {
     setLoading(true);
     const { data, error } = await supabase
       .from("manual_rainfall_entries")
-      .select("id,farm_id,date,precipitation_mm,created_at")
+      .select("id,farm_id,pivot_id,date,precipitation_mm,created_at")
       .eq("farm_id", activeFarmId)
+      .eq("pivot_id", selectedPivotId)
       .order("date", { ascending: false })
       .limit(180);
 
     if (!error) setRows((data ?? []) as RainEntry[]);
     setLoading(false);
-  }, [activeFarmId, supabase]);
+  }, [activeFarmId, selectedPivotId, supabase]);
 
   useEffect(() => { void load(); }, [load]);
 
   const openNew = () => {
+    if (!selectedPivotId) return;
     setEditing(null);
     setForm({ ...EMPTY, date: today() });
     setFormError("");
@@ -79,7 +112,10 @@ export default function LancamentoChuvasPage() {
 
   const save = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (!activeFarmId) return;
+    if (!activeFarmId || !selectedPivotId) {
+      setFormError("Selecione o pivô.");
+      return;
+    }
 
     const rain = Number(form.precipitation_mm.replace(",", "."));
     if (!form.date) {
@@ -96,8 +132,10 @@ export default function LancamentoChuvasPage() {
 
     const payload = {
       farm_id: activeFarmId,
+      pivot_id: editing?.pivot_id ?? selectedPivotId,
       date: form.date,
       precipitation_mm: rain,
+      source: "pluviometer",
     };
 
     const { error } = editing
@@ -106,9 +144,10 @@ export default function LancamentoChuvasPage() {
           .update(payload)
           .eq("id", editing.id)
           .eq("farm_id", activeFarmId)
+          .eq("pivot_id", editing.pivot_id)
       : await supabase
           .from("manual_rainfall_entries")
-          .upsert(payload, { onConflict: "farm_id,date" });
+          .upsert(payload, { onConflict: "farm_id,pivot_id,date" });
 
     if (error) {
       setFormError(error.message);
@@ -129,7 +168,8 @@ export default function LancamentoChuvasPage() {
       .from("manual_rainfall_entries")
       .delete()
       .eq("id", deleteTarget.id)
-      .eq("farm_id", activeFarmId);
+      .eq("farm_id", activeFarmId)
+      .eq("pivot_id", deleteTarget.pivot_id);
     setDeleteTarget(null);
     setSaving(false);
     await load();
@@ -170,7 +210,7 @@ export default function LancamentoChuvasPage() {
       <div className="space-y-8">
         <PageHeader
           titulo="Lançamento de Chuvas"
-          descricao="Chuva operacional do manejo — registro exclusivamente manual"
+          descricao="Chuva operacional do manejo — registro manual por pivô"
         />
         <PrerequisiteNotice
           title="Selecione uma fazenda"
@@ -186,42 +226,82 @@ export default function LancamentoChuvasPage() {
     <div className="space-y-6">
       <PageHeader
         titulo="Lançamento de Chuvas"
-        descricao="Registre a chuva medida. Somente estes lançamentos entram no manejo e no balanço hídrico."
+        descricao="Selecione o pivô e registre a chuva medida. O valor entra somente no balanço hídrico daquele pivô."
       />
 
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-900/20 dark:text-amber-300">
-        <strong>Regra operacional:</strong> chuva de estação, API e previsão não é lançada automaticamente no manejo.
-        O balanço considera precipitação somente quando houver registro manual nesta tela.
-      </div>
-
-      <div className="flex justify-end">
-        <Button onClick={openNew}>Nova chuva</Button>
+        <strong>Regra operacional:</strong> chuva de estação, API e previsão não entra automaticamente no manejo.
+        Somente a chuva manual lançada para cada pivô é considerada no balanço hídrico.
       </div>
 
       <Card>
-        {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8">
-            <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-            <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
-          </div>
-        ) : rows.length === 0 ? (
-          <div className="py-8 text-center">
-            <p className="text-sm font-medium text-graphite-700 dark:text-gray-200">Nenhuma chuva manual registrada.</p>
-            <p className="mt-1 text-xs text-graphite-400 dark:text-gray-500">
-              Sem lançamento manual, o manejo considera chuva igual a 0 mm.
+        <div className="grid gap-4 p-1 lg:grid-cols-[minmax(280px,420px)_1fr_auto] lg:items-end">
+          <Select
+            id="rain_pivot"
+            label="Pivô"
+            value={selectedPivotId}
+            onChange={(event) => {
+              setSelectedPivotId(event.target.value);
+              setEditing(null);
+              setFormError("");
+            }}
+            options={pivots.map((pivot) => ({ value: pivot.id, label: pivot.name }))}
+          />
+
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
+              Chuva operacional
             </p>
+            <div className="flex min-h-10 items-center rounded-xl border border-gray-200 px-4 py-2 text-sm text-graphite-800 dark:border-white/[0.08] dark:text-gray-100">
+              {selectedPivot
+                ? `Os lançamentos abaixo pertencem somente ao ${selectedPivot.name}.`
+                : "Selecione um pivô para lançar ou consultar chuva."}
+            </div>
           </div>
-        ) : (
-          <Table columns={columns} data={rows} getKey={(row) => row.id} />
-        )}
+
+          <Button onClick={openNew} disabled={!selectedPivotId}>
+            Nova chuva
+          </Button>
+        </div>
       </Card>
+
+      {selectedPivotId && (
+        <Card>
+          {loading ? (
+            <div className="flex items-center justify-center gap-3 py-8">
+              <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+              <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+            </div>
+          ) : rows.length === 0 ? (
+            <div className="py-8 text-center">
+              <p className="text-sm font-medium text-graphite-700 dark:text-gray-200">
+                Nenhuma chuva manual registrada para este pivô.
+              </p>
+              <p className="mt-1 text-xs text-graphite-400 dark:text-gray-500">
+                Sem lançamento manual para o pivô, o manejo considera chuva igual a 0 mm.
+              </p>
+            </div>
+          ) : (
+            <Table columns={columns} data={rows} getKey={(row) => row.id} />
+          )}
+        </Card>
+      )}
 
       <Modal
         open={modalOpen}
         onClose={() => { setModalOpen(false); setEditing(null); setFormError(""); }}
-        title={editing ? "Editar chuva" : "Nova chuva"}
+        title={editing ? "Editar chuva" : `Nova chuva · ${selectedPivot?.name ?? "Pivô"}`}
       >
         <form onSubmit={save} className="space-y-5">
+          <div>
+            <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
+              Pivô
+            </p>
+            <div className="flex h-10 items-center rounded-xl border border-gray-200 px-4 text-sm font-medium text-graphite-900 dark:border-white/[0.08] dark:text-white">
+              {selectedPivot?.name ?? "—"}
+            </div>
+          </div>
+
           <Input
             id="rain_date"
             label="Data da chuva"
@@ -235,6 +315,7 @@ export default function LancamentoChuvasPage() {
             label="Precipitação medida (mm)"
             type="number"
             min={0}
+            max={500}
             step={0.1}
             required
             value={form.precipitation_mm}
@@ -242,7 +323,7 @@ export default function LancamentoChuvasPage() {
           />
 
           <div className="rounded-xl border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-300">
-            O valor lançado vale para a fazenda inteira nessa data e será a precipitação utilizada pelo manejo.
+            Esta chuva será aplicada somente ao balanço hídrico de <strong>{selectedPivot?.name ?? "este pivô"}</strong> nesta data.
           </div>
 
           {formError && <p role="alert" className="text-sm text-red-600 dark:text-red-400">{formError}</p>}
@@ -261,7 +342,7 @@ export default function LancamentoChuvasPage() {
         onClose={() => setDeleteTarget(null)}
         onConfirm={remove}
         title="Excluir chuva"
-        message={`Excluir o lançamento de ${deleteTarget?.precipitation_mm.toFixed(1) ?? "0,0"} mm em ${deleteTarget ? fmtDate(deleteTarget.date) : ""}? O manejo voltará a considerar 0 mm nessa data.`}
+        message={`Excluir o lançamento de ${deleteTarget?.precipitation_mm.toFixed(1) ?? "0,0"} mm em ${deleteTarget ? fmtDate(deleteTarget.date) : ""} para ${selectedPivot?.name ?? "este pivô"}? O manejo desse pivô voltará a considerar 0 mm nessa data.`}
         confirmLabel="Excluir"
         loading={saving}
       />
