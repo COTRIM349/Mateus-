@@ -4,6 +4,8 @@ import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
+import { rasDisplaySeries, RAS_UNITS, type RasDisplayUnit, type RasDisplayPoint } from "@/modules/water-balance/services/ras-display-modes";
+import type { SoilProfileLayer } from "@/modules/soil/services/soil-profile";
 
 type ZoomMode = "full" | "arm" | "lamina";
 type RASObservationsVisibility = { chuva: boolean; irrigacao: boolean; eto: boolean };
@@ -57,8 +59,8 @@ function Legend({ color, text, dashed = false }: { color: string; text: string; 
   );
 }
 
-function RasFullWidthChart({ points, replacementMm, mode, visible, expanded }: {
-  points: RasPoint[]; replacementMm: number; mode: ZoomMode; visible: RASObservationsVisibility; expanded: boolean;
+function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visible, expanded }: {
+  points: RasPoint[]; displayed: RasDisplayPoint[]; unit: RasDisplayUnit; replacementMm: number; mode: ZoomMode; visible: RASObservationsVisibility; expanded: boolean;
 }) {
   // O SVG recebe dimensões em pixels reais: textos, círculos e nomes não são
   // deformados pelo redimensionamento da janela ou ao entrar em tela cheia.
@@ -82,32 +84,33 @@ function RasFullWidthChart({ points, replacementMm, mode, visible, expanded }: {
   const l = 66, r = 142, t = 30, b = 190;
   const width = W - l - r, height = H - t - b;
   const newest = points[points.length - 1];
-  if (!newest || points.length === 0) return null;
-  const values = points.flatMap((p) => [p.ccPercent, p.limitPercentCc, p.pmpPercentCc]);
-  let yMin = 0, yMax = 105;
-  if (mode === "arm") {
-    yMin = clamp(Math.floor(Math.min(...values) - 12), 0, 85);
-    yMax = clamp(Math.ceil(Math.max(...values) + 8), yMin + 15, 105);
-  }
-  if (mode === "lamina") {
-    // Destaque da reposição no eixo em %CC, sem alterar as unidades físicas.
-    yMin = clamp(Math.floor(Math.min(newest.ccPercent, newest.limitPercentCc, newest.pmpPercentCc) - 12), 0, 80);
-    yMax = 105;
+  const latest = displayed[displayed.length - 1];
+  if (!newest || !latest || points.length !== displayed.length) return null;
+  // Escala por unidade, limites variáveis a cada dia (não usa CAD final para todo o ciclo).
+  const maxCapacity = Math.max(1, ...displayed.map(p => p.capacity));
+  const fullMax = unit === "cc" ? 105 : maxCapacity * 1.08;
+  let yMin = 0, yMax = fullMax;
+  if (mode !== "full") {
+    const selected = mode === "lamina" ? displayed.slice(-14) : displayed;
+    const values = selected.flatMap(p => [p.current, p.safety]);
+    const low = Math.min(...values), high = Math.max(...values);
+    const margin = Math.max(fullMax * .07, (high - low) * .20);
+    yMin = Math.max(0, low - margin);
+    yMax = Math.min(fullMax, Math.max(yMin + fullMax * .15, high + margin));
   }
   const x = (i: number) => l + (points.length === 1 ? width / 2 : i / (points.length - 1) * width);
   const y = (v: number) => t + (yMax - v) / (yMax - yMin) * height;
-  const line = (key: "ccPercent" | "limitPercentCc" | "pmpPercentCc") =>
-    points.map((p, i) => `${x(i).toFixed(2)},${y(p[key]).toFixed(2)}`).join(" ");
-  const segments = (upper: "ccPercent" | "limitPercentCc" | "pmpPercentCc", lower: "ccPercent" | "limitPercentCc" | "pmpPercentCc", fill: string) =>
-    points.slice(0, -1).map((p, i) => {
-      const q = points[i + 1];
-      const d = `M ${x(i)},${y(p[upper])} L ${x(i + 1)},${y(q[upper])} L ${x(i + 1)},${y(q[lower])} L ${x(i)},${y(p[lower])} Z`;
+  type DisplayKey = "current" | "capacity" | "safety" | "pmp";
+  const line = (key: DisplayKey) =>
+    displayed.map((p, i) => `${x(i).toFixed(2)},${y(p[key]).toFixed(2)}`).join(" ");
+  const segments = (upper: DisplayKey, lower: DisplayKey, fill: string) =>
+    displayed.slice(0, -1).map((p, i) => {
+      const next = displayed[i + 1];
+      const d = `M ${x(i)},${y(p[upper])} L ${x(i+1)},${y(next[upper])} L ${x(i+1)},${y(next[lower])} L ${x(i)},${y(p[lower])} Z`;
       return <path key={`${upper}-${lower}-${i}`} d={d} fill={fill} />;
     });
-  const thetaPmp = newest.pmpPercentCc;
-  const mmAt = (pct: number) => (pct - thetaPmp) / (100 - thetaPmp) * newest.ctaMm;
   const lastX = x(points.length - 1);
-  const lastY = y(newest.ccPercent);
+  const lastY = y(latest.current);
   const hasReplacement = replacementMm > 0.05;
 
   // A banda inferior utiliza escala INDEPENDENTE em mm/dia. Não mistura
@@ -134,7 +137,7 @@ function RasFullWidthChart({ points, replacementMm, mode, visible, expanded }: {
   return (
     <div ref={containerRef} className={`w-full overflow-x-auto ${expanded ? "h-[calc(100dvh-170px)] min-h-[420px] max-h-none" : "h-[74vh] min-h-[580px] max-h-[900px]"}`}>
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img"
-        aria-label="Evolução da umidade em porcentagem da capacidade de campo, com linhas de PMP e limite de irrigação"
+        aria-label={`Reservatório em ${RAS_UNITS[unit].axis}: água atual, capacidade de campo, limite de manejo, PMP e eventos diários`}
         className="block max-w-none" preserveAspectRatio="xMinYMin meet">
         <defs>
           <clipPath id="rasFullClip"><rect x={l} y={t} width={width} height={height} /></clipPath>
@@ -143,30 +146,32 @@ function RasFullWidthChart({ points, replacementMm, mode, visible, expanded }: {
             <stop offset="100%" stopColor="#b81e43" stopOpacity=".24" />
           </linearGradient>
         </defs>
-        {[0,25,50,75,100].filter((q)=>q>=yMin&&q<=yMax).map((q) => (
+        {Array.from({ length: 5 }, (_, i) => yMin + i * (yMax - yMin) / 4).map((q) => (
           <g key={q}>
             <line x1={l} x2={l+width} y1={y(q)} y2={y(q)} stroke="#ffffff" strokeOpacity=".10" strokeWidth={1}/>
-            <text x={l-12} y={y(q)+5} fill="#d7e4eb" textAnchor="end" fontSize={14}>{q}</text>
+            <text x={l-12} y={y(q)+5} fill="#d7e4eb" textAnchor="end" fontSize={12}>{n(q,unit==="weight"?2:1)}</text>
           </g>
         ))}
-        <text x={3} y={t+8} fill="#d8e6ed" fontSize={13}>% da CC</text>
+        <text x={3} y={t+8} fill="#d8e6ed" fontSize={13}>{RAS_UNITS[unit].axis}</text>
         <g clipPath="url(#rasFullClip)">
-          {segments("ccPercent","limitPercentCc","rgba(12,113,81,.35)")}
-          {segments("limitPercentCc","pmpPercentCc","rgba(182,48,54,.25)")}
-          {points.slice(0,-1).map((p,i) => <path key={i} d={`M ${x(i)} ${y(p.pmpPercentCc)} L ${x(i+1)} ${y(points[i+1].pmpPercentCc)} L ${x(i+1)} ${y(0)} L ${x(i)} ${y(0)} Z`} fill="rgba(113,29,31,.25)"/>)}
-          <polyline points={line("limitPercentCc")} stroke="#ff5a60" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
-          <polyline points={line("pmpPercentCc")} stroke="#ff9f23" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
-          <line x1={l} x2={l+width} y1={y(100)} y2={y(100)} stroke="#1ce277" strokeWidth={2.6} strokeDasharray="10 7"/>
-          <polyline points={line("ccPercent")} stroke="#ba4bff" fill="none" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round"/>
-          {points.map((p,i)=><circle key={p.date} cx={x(i)} cy={y(p.ccPercent)} r={5.3} stroke="#eacbff" strokeWidth={1.7} fill="#b449ff"/>)}
+          {segments("capacity","safety","rgba(12,113,81,.35)")}
+          {segments("safety","pmp","rgba(182,48,54,.25)")}
+          {displayed.slice(0,-1).map((p,i) => <path key={i} d={`M ${x(i)} ${y(p.pmp)} L ${x(i+1)} ${y(displayed[i+1].pmp)} L ${x(i+1)} ${y(0)} L ${x(i)} ${y(0)} Z`} fill="rgba(113,29,31,.14)"/>)}
+          <polyline points={line("safety")} stroke="#ff5a60" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
+          <polyline points={line("pmp")} stroke="#ff9f23" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
+          <polyline points={line("capacity")} stroke="#1ce277" fill="none" strokeWidth={2.6} strokeDasharray="10 7"/>
+          <polyline points={line("current")} stroke="#ba4bff" fill="none" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round"/>
+          {displayed.map((p,i)=><circle key={p.date} cx={x(i)} cy={y(p.current)} r={Math.max(2.4, Math.min(5.3, width / displayed.length / 7))} stroke="#eacbff" strokeWidth={1.2} fill="#b449ff">
+            <title>{p.date}: atual {n(p.current,unit==="weight"?2:1)} {RAS_UNITS[unit].axis}; CC {n(p.capacity,1)}, limite {n(p.safety,1)}, PMP {n(p.pmp,1)}; ARM {n(points[i].armMm,1)} mm, CAD {n(points[i].ctaMm,1)} mm.</title>
+          </circle>)}
         </g>
         {hasReplacement && (
           <g>
-            <line x1={lastX+18} y1={lastY} x2={lastX+18} y2={y(100)+5} stroke="#24baff" strokeWidth={5} strokeLinecap="round"/>
-            <polygon points={`${lastX+18},${y(100)-5} ${lastX+10},${y(100)+10} ${lastX+26},${y(100)+10}`} fill="#24baff"/>
-            <rect x={lastX-125} y={y(Math.min(95,Math.max(newest.ccPercent+15,75)))} width={118} height={51} rx={7} fill="#1068db" stroke="#3baaff"/>
-            <text x={lastX-66} y={y(Math.min(95,Math.max(newest.ccPercent+15,75)))+20} textAnchor="middle" fontSize={15} fill="white" fontWeight="bold">Repor {n(replacementMm,1)} mm</text>
-            <text x={lastX-66} y={y(Math.min(95,Math.max(newest.ccPercent+15,75)))+39} textAnchor="middle" fontSize={12} fill="white">100% da CC</text>
+            <line x1={lastX+18} y1={lastY} x2={lastX+18} y2={y(latest.capacity)+5} stroke="#24baff" strokeWidth={5} strokeLinecap="round"/>
+            <polygon points={`${lastX+18},${y(latest.capacity)-5} ${lastX+10},${y(latest.capacity)+10} ${lastX+26},${y(latest.capacity)+10}`} fill="#24baff"/>
+            <rect x={lastX-125} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))} width={118} height={51} rx={7} fill="#1068db" stroke="#3baaff"/>
+            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+20} textAnchor="middle" fontSize={15} fill="white" fontWeight="bold">Repor {n(replacementMm,1)} mm</text>
+            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+39} textAnchor="middle" fontSize={12} fill="white">até CC do dia</text>
           </g>
         )}
         {/* Eventos registrados: mesma data e eixo X do reservatório, escala mm/dia separada. */}
@@ -212,22 +217,23 @@ function RasFullWidthChart({ points, replacementMm, mode, visible, expanded }: {
         </g>
         {points.map((p,i)=>(i % labelStride === 0 || i === points.length - 1)?
           <text key={p.date} x={x(i)} y={H-13} fill="#d1dae2" textAnchor="middle" fontSize={12}>{fmtDate(p.date)}</text>:null)}
-        {[0,25,50,75,100].filter((q)=>q>=yMin&&q<=yMax).map((q)=>{
-          const mm=mmAt(q);
-          return <text key={q} x={l+width+12} y={y(q)+4} fill="#b8c7d1" fontSize={11}>{q>=thetaPmp-0.1 && mm>=0 ? n(mm,1)+" mm" : "—"}</text>;
-        })}
-        <text x={l+width+12} y={t-9} fontSize={12} fill="#dce8ef">ARM atual¹</text>
-        <text x={l+7} y={y(100)-10} fontSize={14} fill="#36e98a" fontWeight="bold">Capacidade de campo · 100% CC</text>
-        <text x={l+7} y={y(newest.limitPercentCc)-10} fontSize={13} fill="#ff656c" fontWeight="bold">Limite de irrigação · {n(newest.limitPercentCc,1)}% CC</text>
-        <text x={l+7} y={y(newest.pmpPercentCc)-10} fontSize={13} fill="#ffae37" fontWeight="bold">Ponto de murcha · {n(newest.pmpPercentCc,1)}% CC</text>
+        <text x={l+width+12} y={t+9} fill="#dce8ef" fontSize={11}>ARM atual</text>
+        <text x={l+width+12} y={t+25} fill="#dce8ef" fontSize={12}>{n(newest.armMm,1)} mm</text>
+        <text x={l+width+12} y={t+41} fill="#dce8ef" fontSize={11}>CAD atual</text>
+        <text x={l+width+12} y={t+57} fill="#dce8ef" fontSize={12}>{n(newest.ctaMm,1)} mm</text>
+        <text x={l+7} y={y(latest.capacity)-10} fontSize={13} fill="#36e98a" fontWeight="bold">Capacidade de campo</text>
+        <text x={l+7} y={y(latest.safety)-10} fontSize={12} fill="#ff656c" fontWeight="bold">Limite de irrigação</text>
+        <text x={l+7} y={y(latest.pmp)-10} fontSize={12} fill="#ffae37" fontWeight="bold">PMP</text>
       </svg>
-      <p className="mt-1 px-1 text-[10px] text-slate-400">¹ O eixo direito superior é a equivalência da ARM em mm do perfil atual. Na banda inferior, as barras azuis representam a chuva efetiva da chuva registrada, as verdes representam a irrigação bruta realizada e a linha amarela mostra a ETo diária em mm/dia; somente dados observados são utilizados.</p>
+      <p className="mt-1 px-1 text-[10px] text-slate-400">As séries CC, limite, PMP e umidade atual usam os valores e a zona radicular de cada dia; o ARM à direita mostra apenas o dia atual. Na banda inferior, as barras azuis representam a chuva efetiva da chuva registrada, as verdes representam a irrigação bruta realizada e a linha amarela mostra a ETo diária em mm/dia; somente dados observados são utilizados.</p>
     </div>
   );
 }
 
-export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
+export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity = null, cultureName, varietyName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
   rows: DailyBalanceRow[];
+  soilLayers?: SoilProfileLayer[];
+  bulkDensity?: number | null;
   cultureName: string | null;
   varietyName: string | null;
   stage: string | null;
@@ -236,6 +242,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
   efficiencyPercent: number | null;
 }) {
   const [zoom, setZoom] = useState<ZoomMode>("full");
+  const [displayUnit, setDisplayUnit] = useState<RasDisplayUnit>("cc");
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     if (!expanded) return;
@@ -247,6 +254,17 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
     chuva: true, irrigacao: true, eto: true,
   });
   const points = useMemo(() => rows.map(buildRasPoint).filter((p): p is RasPoint => p != null), [rows]);
+  const gravimetric = useMemo(
+    () => rasDisplaySeries(points, "weight", soilLayers, bulkDensity),
+    [points, soilLayers, bulkDensity],
+  );
+  const selectedUnit: RasDisplayUnit = displayUnit === "weight" && gravimetric === null ? "cc" : displayUnit;
+  const displayPoints = useMemo(
+    () => selectedUnit === "weight" && gravimetric
+      ? gravimetric
+      : rasDisplaySeries(points, selectedUnit, soilLayers, bulkDensity) ?? [],
+    [points, selectedUnit, soilLayers, bulkDensity, gravimetric],
+  );
   const last = rows[rows.length-1];
   const now = points[points.length-1];
   const weekly = currentWeekStats(rows);
@@ -277,6 +295,25 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
         </div>
       </header>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0c232a] p-2.5" role="group" aria-label="Unidade do reservatório de água do solo">
+        {([
+          ["cc", "% da CC"],
+          ["mm", "Água disponível (mm)"],
+          ["weight", "% em peso"],
+        ] as const).map(([id,label]) => (
+          <button key={id} type="button" onClick={() => setDisplayUnit(id)}
+            disabled={id === "weight" && gravimetric === null}
+            aria-pressed={selectedUnit === id}
+            title={id === "weight" && gravimetric === null ? "Falta densidade válida em uma ou mais camadas da profundidade radicular" : RAS_UNITS[id].name}
+            className={`rounded-lg px-3 py-2 text-[12px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${selectedUnit === id ? "bg-santa-600 text-white" : "text-slate-300 hover:bg-white/10"}`}>
+            {label}
+          </button>
+        ))}
+        {gravimetric === null && (
+          <span className="text-[11px] text-amber-200">Informe a densidade do solo em todas as camadas para habilitar % em peso.</span>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/lancamentos/chuvas" className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-500/20">Lançar chuva manual</Link>
         <Link href="/lancamentos/irrigacao" className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">Lançar irrigação realizada</Link>
@@ -304,8 +341,8 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
             aria-label={expanded ? "Sair da tela cheia" : "Ampliar o gráfico para toda a tela"}
             aria-pressed={expanded}
             className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">{expanded ? "Sair da tela cheia (Esc)" : "Tela cheia"}</button>
-          <Legend color="#ba4bff" text="Umidade do solo (%CC)"/>
-          <Legend color="#1ce277" text="Capacidade de campo (100% CC)" dashed/>
+          <Legend color="#ba4bff" text={`Umidade atual (${RAS_UNITS[selectedUnit].axis})`}/>
+          <Legend color="#1ce277" text={selectedUnit === "cc" ? "Capacidade de campo (100% CC)" : `Capacidade de campo (${RAS_UNITS[selectedUnit].axis})`} dashed/>
           <Legend color="#ff6067" text="Limite de irrigação (F semanal)" dashed/>
           <Legend color="#ff9f23" text="Ponto de murcha (PMP)" dashed/>
         </div>
@@ -329,7 +366,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
           ))}
           <span className="text-[10px] text-slate-400">Valores em mm/dia · passe o cursor sobre cada registro</span>
         </div>
-        <RasFullWidthChart points={points} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility} expanded={expanded}/>
+        <RasFullWidthChart points={points} displayed={displayPoints} unit={selectedUnit} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility} expanded={expanded}/>
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1.25fr_.75fr]">
@@ -362,7 +399,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
           </div>
         </div>
       </div>
-      <p className="px-1 text-[10px] leading-relaxed text-slate-400">Escala principal: % da capacidade de campo (CC). PMP = θPMP/θCC × 100; não é 0% da CC. Em % da água disponível (CTA), o PMP corresponde a 0%. AFD/CRA = CTA × F médio semanal; retorno a 100% CC = CTA − ARM. Os valores vêm do balanço hídrico do pivô e não dos números ilustrativos da imagem.</p>
+      <p className="px-1 text-[10px] leading-relaxed text-slate-400">Escalas equivalentes de um mesmo balanço: % da CC (PMP acima de zero), ARM disponível em mm (PMP = zero) e % em peso (convertido usando a densidade por camada). AFD/CRA = CTA × F semanal; retorno a 100% CC = CTA − ARM. CC/PMP já são volumétricos no motor e não devem ser convertidos novamente para calcular a CAD.</p>
     </section>
   );
 }
