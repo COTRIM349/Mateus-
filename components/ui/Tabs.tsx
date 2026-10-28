@@ -19,7 +19,7 @@ export function Tabs({
           type="button"
           onClick={() => onChange(tab.id)}
           className={cn(
-            "flex-1 whitespace-nowrap rounded-xl px-5 py-2.5 text-center text-sm font-semibold transition-all duration-200",
+            "flex-1 whitespace-nowrap rounded-xl px-5 py-3 text-center text-[16px] font-semibold transition-all duration-200",
             activeTab === tab.id
               ? "bg-santa-600 text-white shadow-soft"
               : "text-graphite-600 hover:text-santa-800 dark:text-gray-500 dark:hover:text-gray-300",
