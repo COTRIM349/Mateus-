@@ -2872,41 +2872,34 @@ function Cockpit({
           )}
 
 
-          {/* Nota de umidade de campo + Alertas */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:col-span-2">
-            <Card className="p-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconDrop /> Nota de Umidade de Campo</p>
-              {latestSensory ? (
-                <div className="flex items-center gap-3">
-                  <div className="relative flex h-14 w-14 items-center justify-center">
-                    <svg viewBox="0 0 36 36" className="h-14 w-14 -rotate-90">
-                      <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" className="stroke-gray-100 dark:stroke-white/[0.08]" />
-                      <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" strokeLinecap="round" stroke={Number(latestSensory[1]) >= 7 ? "#16a34a" : Number(latestSensory[1]) >= 4 ? "#eab308" : "#dc2626"} strokeDasharray={`${(Number(latestSensory[1]) / 10) * 97.4} 97.4`} />
-                    </svg>
-                    <span className="absolute text-[13px] font-extrabold text-graphite-900 dark:text-white">{latestSensory[1]}<span className="text-[9px] text-graphite-400">/10</span></span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] text-graphite-400 dark:text-gray-500">{fmtDia(latestSensory[0])}</p>
-                    <p className="text-[12px] font-semibold text-graphite-700 dark:text-gray-200">{Number(latestSensory[1]) >= 7 ? "Solo úmido" : Number(latestSensory[1]) >= 4 ? "Umidade intermediária" : "Solo seco"}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-[12px] text-graphite-400 dark:text-gray-500">Sem leitura sensorial registrada no período.</p>
-              )}
-            </Card>
-
-            <Card className="p-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconAlert /> Alertas Inteligentes</p>
-              <div className="space-y-2">
-                {alerts.map((a, i) => (
-                  <div key={i} className="flex gap-2.5">
-                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${sevDot[a.sev]}`} />
-                    <p className="text-[12px] leading-snug text-graphite-600 dark:text-gray-300">{a.text}</p>
-                  </div>
-                ))}
+          <Card className="p-4 xl:col-span-2">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconAlert /> Alertas inteligentes</p>
+                <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-gray-500">Cruza balanço, previsão, fase da cultura e observação de campo.</p>
               </div>
-            </Card>
-          </div>
+              {latestSensory && (
+                <span className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[10.5px] font-semibold text-graphite-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-300">
+                  Campo {latestSensory[1]}/10 · {fmtDia(latestSensory[0])}
+                </span>
+              )}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {alerts.map((a, i) => {
+                const cls = a.sev === "hi"
+                  ? "border-red-500/25 bg-red-500/[0.05]"
+                  : a.sev === "md"
+                    ? "border-orange-500/25 bg-orange-500/[0.05]"
+                    : "border-emerald-500/20 bg-emerald-500/[0.04]";
+                return (
+                  <div key={i} className={`flex min-h-[58px] gap-2.5 rounded-xl border px-3 py-2.5 ${cls}`}>
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sevDot[a.sev]}`} />
+                    <p className="text-[11.5px] leading-snug text-graphite-600 dark:text-gray-300">{a.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         </div>}
       </div>
       )}
