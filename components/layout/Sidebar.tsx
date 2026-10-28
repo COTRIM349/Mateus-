@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { topLevelItems, navGroups, bottomItems } from "@/config/navigation";
@@ -103,18 +102,13 @@ export function Sidebar() {
         )}
       >
         <div className="shrink-0 border-b border-white/10 px-4 pb-3 pt-4">
-          <Image
-            src="/brand/santa-colomba-logo-branca.png"
-            alt="Santa Colomba"
-            width={190}
-            height={67}
-            priority
-            className="h-auto w-[190px] object-contain"
-          />
-          <div className="mt-2 border-t border-white/10 pt-2">
-            <p className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-santa-200">IRRIGA PRO</p>
-            <p className="mt-0.5 text-[11px] text-white/65">Gestão inteligente da irrigação</p>
+          <div className="flex items-center gap-2.5">
+            <span className="border-r border-white/20 pr-3 text-[28px] font-black tracking-tight text-white">SCA</span>
+            <span className="text-[12px] font-extrabold uppercase tracking-[0.12em] text-santa-200">
+              IRRIGA PRO
+            </span>
           </div>
+          <p className="mt-2 text-[11px] text-white/65">Gestão inteligente da irrigação</p>
         </div>
 
         {farms.length > 1 && (
