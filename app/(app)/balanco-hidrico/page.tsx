@@ -2119,117 +2119,88 @@ function BalanceTab({
   }
 
   if (panel === "decisao") {
+    const accIrr = rows.reduce((sum, row) => sum + (row.irrigationApplied ?? 0), 0);
+    const accRain = rows.reduce((sum, row) => sum + (row.precipitation ?? 0), 0);
+    const accEtcPotential = rows.reduce((sum, row) => sum + (row.etcPotential ?? row.etc ?? 0), 0);
+    const riskLabel = classificacao.level === "irrigate" ? "Alto" : classificacao.level === "attention" ? "Médio" : "Baixo";
+
     const decisionMetrics = [
-      { l: "Água disponível", v: `${arm.toFixed(1)} mm`, sub: `ARM · ${pctCc.toFixed(0)}% da CC` },
-      { l: "Capacidade do solo", v: `${cad.toFixed(1)} mm`, sub: "CTA atual" },
-      { l: "Reserva até irrigar", v: urgency ? (urgency.atOrBeyondAfd ? "Limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—", sub: "margem até o limite" },
-      { l: "Tempo estimado", v: daysToAfdLabel, sub: "até o limite sem chuva" },
-      { l: "Necessidade hoje", v: `${laminaBruta.toFixed(1)} mm`, sub: "lâmina bruta recomendada" },
-      { l: "Risco", v: classificacao.level === "irrigate" ? "Alto" : classificacao.level === "attention" ? "Médio" : "Baixo", sub: "risco hídrico atual", c: classificacao.color },
+      { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm`, sub: "situação atual", tone: (last?.deficit ?? 0) > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400" },
+      { l: "Irrigação acumulada", v: `${accIrr.toFixed(1)} mm`, sub: "lâmina realizada no período", tone: "text-cyan-600 dark:text-cyan-400" },
+      { l: "Chuva acumulada", v: `${accRain.toFixed(1)} mm`, sub: "lançamentos manuais", tone: "text-blue-600 dark:text-blue-400" },
+      { l: "ETc potencial acumulada", v: `${accEtcPotential.toFixed(1)} mm`, sub: "demanda potencial do período", tone: "text-amber-600 dark:text-amber-400" },
+      { l: "Próximo limite", v: daysToAfdLabel, sub: "estimativa sem nova entrada", tone: "text-graphite-800 dark:text-white" },
+      { l: "Risco hídrico", v: riskLabel, sub: "prioridade atual", tone: classificacao.level === "irrigate" ? "text-red-600 dark:text-red-400" : classificacao.level === "attention" ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400" },
     ];
 
     return (
-      <div className="grid items-start gap-3 xl:grid-cols-[1.05fr_1.45fr_1fr]">
-        {/* Recomendação de hoje */}
-        <Card className="overflow-hidden p-0">
-          <div className="bg-gradient-to-br from-forest-800 to-forest-900 px-4 py-3 text-white">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[9.5px] font-bold uppercase tracking-[0.12em] text-brand-300">
-                  {last?.date === new Date().toISOString().slice(0, 10)
-                    ? "Recomendação de hoje"
-                    : `Situação · ${fmtDia(last?.date ?? "")}`}
+      <div className="space-y-3">
+        <div className="grid items-stretch gap-3 xl:grid-cols-[.72fr_1.8fr]">
+          <Card className="overflow-hidden p-0">
+            <div className="h-full bg-gradient-to-br from-blue-700 to-blue-900 p-4 text-white">
+              <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-blue-100">Irrigação recomendada</p>
+              <div className="mt-2 flex items-end justify-between gap-3">
+                <div>
+                  <p className="text-[34px] font-extrabold leading-none tabular-nums">
+                    {laminaBruta.toFixed(1)} <span className="text-[16px] font-bold">mm</span>
+                  </p>
+                  <p className="mt-2 text-[13px] font-bold text-blue-50">
+                    {verdict.irrigar ? "Irrigar." : "Não irrigar hoje."}
+                  </p>
+                </div>
+                <span className="rounded-lg bg-white/10 px-2.5 py-1.5 text-[10px] font-bold">
+                  {verdict.irrigar ? "AÇÃO" : "SEM AÇÃO"}
+                </span>
+              </div>
+              <div className="mt-3 border-t border-white/15 pt-3">
+                <p className="text-[9.5px] uppercase tracking-wide text-blue-200">
+                  {verdict.irrigar ? "Tempo estimado" : "Estimativa até o limite"}
                 </p>
-                <p className="mt-1 flex items-center gap-2 text-[18px] font-extrabold" style={{ color: "#eafaf1" }}>
-                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: verdict.color }} />
-                  {verdict.label}
+                <p className="mt-0.5 text-[16px] font-extrabold">
+                  {verdict.irrigar ? fmtTempoH(last?.irrigationTime ?? 0) : daysToAfdLabel}
                 </p>
               </div>
-              <span className="rounded-lg bg-white/10 px-2 py-1 text-[10px] font-bold text-white">
-                {verdict.irrigar ? "IRRIGAR" : "NÃO IRRIGAR"}
-              </span>
             </div>
-            <p className="mt-1.5 text-[11.5px] leading-snug text-brand-100/90">{verdict.texto(`${laminaBruta.toFixed(1)} mm`)}</p>
-          </div>
+          </Card>
 
-          <div className="p-3">
-            {verdict.irrigar ? (
-              <div className="grid grid-cols-2 gap-2">
-                {[
-                  { l: "Lâmina bruta", v: `${laminaBruta.toFixed(1)} mm` },
-                  { l: "Lâmina líquida", v: `${(last?.netDepth ?? 0).toFixed(1)} mm` },
-                  { l: "Tempo", v: fmtTempoH(last?.irrigationTime ?? 0) },
-                  { l: "Eficiência", v: `${efPct.toFixed(0)}%` },
-                ].map((r) => (
-                  <div key={r.l} className="rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-white/[0.03]">
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{r.l}</p>
-                    <p className="mt-0.5 text-[13px] font-extrabold tabular-nums text-graphite-900 dark:text-white">{r.v}</p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-2">
-                {[
-                  { l: "ARM", v: `${arm.toFixed(1)} mm` },
-                  { l: "CRA", v: `${afd.toFixed(1)} mm` },
-                  { l: "Até CRA", v: daysToAfdLabel },
-                ].map((r) => (
-                  <div key={r.l} className="rounded-lg bg-gray-50 px-2 py-2 text-center dark:bg-white/[0.03]">
-                    <p className="text-[8.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{r.l}</p>
-                    <p className="mt-0.5 text-[12px] font-extrabold tabular-nums text-graphite-900 dark:text-white">{r.v}</p>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </Card>
-
-        {/* Explicação operacional */}
-        <Card className="p-3.5">
-          <p className="text-[12.5px] font-bold text-graphite-900 dark:text-white">Por que esta recomendação?</p>
-          <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
-            <p className="text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">
-              {arm < safetyMm
-                ? "A água disponível no solo já atingiu o limite definido para irrigação. A recomendação é repor água."
-                : urgency?.daysToAfd != null
-                  ? `Ainda há água suficiente no solo. Mantida a demanda atual e sem chuva ou irrigação, o limite seria atingido em cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).`
-                  : "A água disponível está em faixa segura e não há necessidade de irrigar agora."}
-            </p>
-          </div>
-          <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
-            {decisionMetrics.map((f) => (
-              <div key={f.l} className="min-w-0 rounded-lg bg-gray-50 px-2.5 py-2 dark:bg-white/[0.03]">
-                <p className="truncate text-[8.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{f.l}</p>
-                <p className="mt-0.5 truncate text-[12.5px] font-extrabold tabular-nums text-graphite-900 dark:text-white" style={{ color: f.c ?? undefined }}>{f.v}</p>
-                <p className="mt-0.5 truncate text-[8.5px] text-graphite-400 dark:text-gray-600">{f.sub}</p>
-              </div>
+          <div className="grid grid-cols-2 gap-2 md:grid-cols-3">
+            {decisionMetrics.map((metric) => (
+              <Card key={metric.l} className="min-w-0 p-3">
+                <p className="truncate text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{metric.l}</p>
+                <p className={`mt-1 truncate text-[17px] font-extrabold tabular-nums ${metric.tone}`}>{metric.v}</p>
+                <p className="mt-1 truncate text-[9.5px] text-graphite-400 dark:text-gray-500">{metric.sub}</p>
+              </Card>
             ))}
           </div>
-        </Card>
+        </div>
 
-        {/* Alertas */}
         <Card className="p-3.5">
-          <p className="mb-2 flex items-center gap-2 text-[12.5px] font-bold text-graphite-900 dark:text-white">
-            <svg className="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
-            O que merece atenção
-          </p>
+          <div className="mb-2.5 flex items-center justify-between gap-3">
+            <p className="flex items-center gap-2 text-[12.5px] font-bold text-graphite-900 dark:text-white">
+              <svg className="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
+              Alertas inteligentes
+            </p>
+            <span className="text-[9.5px] text-graphite-400 dark:text-gray-500">somente pontos que pedem atenção</span>
+          </div>
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
-            if (arm < safetyMm) items.push({ sev: "hi", title: "Limite de manejo atingido", desc: `ARM em ${pctCc.toFixed(0)}% da CC — irrigação indicada.` });
-            if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `${urgency.remainingToAfdMm.toFixed(1)} mm de margem · ~${urgency.daysToAfd.toFixed(1)} dia(s).` });
-            if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente de ${(last?.surplus ?? 0).toFixed(1)} mm acima da CC.` });
+            if (arm < safetyMm) items.push({ sev: "hi", title: "Limite de manejo atingido", desc: "Irrigação indicada para evitar avanço do déficit." });
+            if (urgency && !urgency.atOrBeyondAfd && urgency.daysToAfd != null && urgency.daysToAfd <= 2) items.push({ sev: "md", title: "Limite de manejo próximo", desc: `Estimativa de ~${urgency.daysToAfd.toFixed(1)} dia(s) sem nova entrada de água.` });
+            if ((last?.surplus ?? 0) > 0) items.push({ sev: "md", title: "Possível excesso / drenagem", desc: `Excedente calculado de ${(last?.surplus ?? 0).toFixed(1)} mm.` });
             if (summary.daysInCritical > 0) items.push({ sev: "hi", title: `${summary.daysInCritical} dia(s) em déficit crítico`, desc: "Ocorrência registrada no período analisado." });
-            if (items.length === 0) items.push({ sev: "lo", title: "Sem alerta ativo", desc: urgency?.daysToAfd != null ? `Janela estimada até CRA: ${urgency.daysToAfd.toFixed(1)} dia(s).` : "Condição dentro do esperado." });
-            const sevCls = { hi: "border-red-500/30 bg-red-500/[0.05]", md: "border-orange-500/30 bg-orange-500/[0.05]", lo: "border-brand-500/30 bg-brand-500/[0.05]" } as const;
-            const dotCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
+            if (items.length === 0) items.push({ sev: "lo", title: "Sem alerta ativo", desc: urgency?.daysToAfd != null ? `Próximo limite estimado em ${urgency.daysToAfd.toFixed(1)} dia(s).` : "Condição dentro do esperado." });
+
+            const sevCls = { hi: "border-red-500/30 bg-red-500/[0.05]", md: "border-orange-500/30 bg-orange-500/[0.05]", lo: "border-emerald-500/25 bg-emerald-500/[0.04]" } as const;
+            const dotCls = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-emerald-500" } as const;
+
             return (
-              <div className="space-y-1.5">
-                {items.map((a, i) => (
-                  <div key={i} className={`flex gap-2.5 rounded-lg border px-2.5 py-2 ${sevCls[a.sev]}`}>
-                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${dotCls[a.sev]}`} />
+              <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                {items.map((item, index) => (
+                  <div key={index} className={`flex min-h-[62px] gap-2.5 rounded-xl border px-3 py-2.5 ${sevCls[item.sev]}`}>
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dotCls[item.sev]}`} />
                     <div className="min-w-0">
-                      <p className="text-[11.5px] font-bold text-graphite-800 dark:text-white">{a.title}</p>
-                      <p className="mt-0.5 text-[10px] leading-snug text-graphite-400 dark:text-gray-500">{a.desc}</p>
+                      <p className="text-[11.5px] font-bold text-graphite-800 dark:text-white">{item.title}</p>
+                      <p className="mt-0.5 text-[10px] leading-snug text-graphite-400 dark:text-gray-500">{item.desc}</p>
                     </div>
                   </div>
                 ))}
