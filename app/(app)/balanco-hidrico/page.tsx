@@ -58,7 +58,6 @@ import {
   type ReservatorioPoint,
 } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
-import Link from "next/link";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
