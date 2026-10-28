@@ -1034,13 +1034,15 @@ export default function BalancoHidricoPage() {
         weatherByDate[row.date as string] = { et0: eto, precip: current?.precip ?? 0 };
       }
 
-      // ÚNICA chuva operacional do manejo: lançamento manual.
+      // ÚNICA chuva operacional do manejo: lançamento manual POR PIVÔ.
       // Dados de chuva de estação/API continuam disponíveis no módulo Clima,
-      // mas não alteram automaticamente o balanço hídrico.
+      // mas não alteram automaticamente o balanço hídrico. Cada pivô usa
+      // somente a chuva manual vinculada ao seu próprio cadastro.
       const { data: manualRainRows } = await supabase
         .from("manual_rainfall_entries")
         .select("date,precipitation_mm")
         .eq("farm_id", activeFarmId!)
+        .eq("pivot_id", selectedPivotId)
         .gte("date", calculationStart)
         .lte("date", dateEnd);
       for (const row of manualRainRows ?? []) {
