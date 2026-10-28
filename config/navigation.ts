@@ -41,6 +41,7 @@ const ICON = {
 
 export const topLevelItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: ICON.home },
+  { label: "Balanço Hídrico", href: "/balanco-hidrico", icon: ICON.balance },
   { label: "Histórico", href: "/historico", icon: ICON.boletim },
   { label: "Relatórios", href: "/relatorios", icon: ICON.report },
 ];
@@ -63,7 +64,6 @@ export const navGroups: NavGroup[] = [
     items: [
       { label: "Central de Manejo", href: "/central-manejo", icon: ICON.decision },
       { label: "Clima", href: "/clima", icon: ICON.cloud },
-      { label: "Balanço Hídrico", href: "/balanco-hidrico", icon: ICON.balance },
       { label: "Decisão de Irrigação", href: "/operacao/decisao", icon: ICON.decision },
       { label: "Programação de Irrigação", href: "/programacao", icon: ICON.schedule },
     ],
