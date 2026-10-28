@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
@@ -23,11 +23,11 @@ function Tile({ label, value, hint, tone = "white", symbol = "◉" }: {
 }) {
   return (
     <div className="flex min-h-[113px] min-w-0 items-center gap-3 rounded-xl border border-white/[0.09] bg-[#0b1c23] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
-      <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-[23px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-[21px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
       <div className="min-w-0">
-        <div className="text-[11px] font-medium leading-snug text-slate-300">{label}</div>
-        <div className="mt-1 whitespace-nowrap text-[23px] font-extrabold leading-none tracking-tight tabular-nums sm:text-[25px]" style={{ color: colours[tone] }}>{value}</div>
-        {hint && <div className="mt-1.5 text-[10px] leading-snug text-slate-400">{hint}</div>}
+        <div className="break-words text-[12px] font-medium leading-snug text-slate-300">{label}</div>
+        <div title={value} className="mt-1 max-w-full truncate text-[clamp(16px,1.5vw,25px)] font-extrabold leading-tight tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
+        {hint && <div className="mt-1.5 break-words text-[11px] leading-snug text-slate-400">{hint}</div>}
       </div>
     </div>
   );
@@ -41,7 +41,7 @@ function MiniMetric({ label, value, hint, symbol, tone = "white" }: {
       <span className="text-xl" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</span>
       <div className="min-w-0">
         <div className="text-[10px] text-slate-300">{label}</div>
-        <div className="mt-1 text-[18px] font-extrabold leading-none tabular-nums text-white">{value}</div>
+        <div title={value} className="mt-1 max-w-full truncate text-[clamp(16px,1.25vw,20px)] font-extrabold leading-tight tabular-nums text-white">{value}</div>
         {hint && <div className="mt-1 text-[10px] leading-snug text-slate-400">{hint}</div>}
       </div>
     </div>
@@ -57,10 +57,29 @@ function Legend({ color, text, dashed = false }: { color: string; text: string; 
   );
 }
 
-function RasFullWidthChart({ points, replacementMm, mode, visible }: {
-  points: RasPoint[]; replacementMm: number; mode: ZoomMode; visible: RASObservationsVisibility;
+function RasFullWidthChart({ points, replacementMm, mode, visible, expanded }: {
+  points: RasPoint[]; replacementMm: number; mode: ZoomMode; visible: RASObservationsVisibility; expanded: boolean;
 }) {
-  const W = 1560, H = 720, l = 57, r = 138, t = 22, b = 170;
+  // O SVG recebe dimensões em pixels reais: textos, círculos e nomes não são
+  // deformados pelo redimensionamento da janela ou ao entrar em tela cheia.
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [size, setSize] = useState({ width: 1200, height: 700 });
+  useEffect(() => {
+    const element = containerRef.current;
+    if (!element) return;
+    const measure = () => {
+      const rect = element.getBoundingClientRect();
+      const width = Math.round(rect.width), height = Math.round(rect.height);
+      if (width <= 0 || height <= 0) return;
+      setSize(prev => prev.width === width && prev.height === height ? prev : { width, height });
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+  const W = Math.max(900, size.width), H = Math.max(560, size.height);
+  const l = 66, r = 142, t = 30, b = 190;
   const width = W - l - r, height = H - t - b;
   const newest = points[points.length - 1];
   if (!newest || points.length === 0) return null;
@@ -106,16 +125,17 @@ function RasFullWidthChart({ points, replacementMm, mode, visible }: {
   const eventMax = Math.max(2, Math.ceil(eventMaxRaw / 2) * 2);
   const eventY = (mm: number) => eventsBottom - clamp(mm, 0, eventMax) / eventMax * eventsHeight;
   const eventBarWidth = Math.max(4, Math.min(11, width / Math.max(points.length, 1) / 5));
+  const labelStride = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(width / 64))));
   const etoPoints = points.filter(p => Number.isFinite(p.et0));
   const etoPath = etoPoints.map(p => {
     const index = points.findIndex(r => r.date === p.date);
     return `${x(index).toFixed(2)},${eventY(p.et0).toFixed(2)}`;
   }).join(" ");
   return (
-    <div className="w-full overflow-x-auto">
-      <svg viewBox={`0 0 ${W} ${H}`} role="img"
+    <div ref={containerRef} className={`w-full overflow-x-auto ${expanded ? "h-[calc(100dvh-170px)] min-h-[420px] max-h-none" : "h-[74vh] min-h-[580px] max-h-[900px]"}`}>
+      <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img"
         aria-label="Evolução da umidade em porcentagem da capacidade de campo, com linhas de PMP e limite de irrigação"
-        className="h-[76vh] min-h-[560px] min-w-[900px] w-full" preserveAspectRatio="none">
+        className="block max-w-none" preserveAspectRatio="xMinYMin meet">
         <defs>
           <clipPath id="rasFullClip"><rect x={l} y={t} width={width} height={height} /></clipPath>
           <linearGradient id="rasFullArea" x1="0" x2="0" y1="0" y2="1">
@@ -190,7 +210,7 @@ function RasFullWidthChart({ points, replacementMm, mode, visible }: {
             </circle>
           ):null)}
         </g>
-        {points.map((p,i)=>(i % Math.max(1, Math.ceil(points.length / 14)) === 0 || i === points.length - 1)?
+        {points.map((p,i)=>(i % labelStride === 0 || i === points.length - 1)?
           <text key={p.date} x={x(i)} y={H-13} fill="#d1dae2" textAnchor="middle" fontSize={12}>{fmtDate(p.date)}</text>:null)}
         {[0,25,50,75,100].filter((q)=>q>=yMin&&q<=yMax).map((q)=>{
           const mm=mmAt(q);
@@ -216,6 +236,13 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
   efficiencyPercent: number | null;
 }) {
   const [zoom, setZoom] = useState<ZoomMode>("full");
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    if (!expanded) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
+    document.addEventListener("keydown", onKeyDown);
+    return () => document.removeEventListener("keydown", onKeyDown);
+  }, [expanded]);
   const [eventVisibility, setEventVisibility] = useState<RASObservationsVisibility>({
     chuva: true, irrigacao: true, eto: true,
   });
@@ -256,7 +283,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
         <span className="text-[11px] text-slate-400">Ao retornar ao balanço, o RAS será recalculado com os novos lançamentos.</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 2xl:grid-cols-9">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 min-[2000px]:grid-cols-9">
         <Tile label="Cultura" value={cultureName ?? "—"} hint="Parcela em manejo" tone="green" symbol="❧"/>
         <Tile label="Cultivar" value={varietyName ?? "Não cadastrada"} hint="Cultivar da parcela ativa" tone="cyan" symbol="✧"/>
         <Tile label="Fase atual" value={phaseLabel} hint={last.dae!=null?`${last.dae} DAE`:undefined} tone="green" symbol="▦"/>
@@ -268,9 +295,15 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
         <Tile label="Água disponível (ARM)" value={mmOrDash(now.armMm)} hint={n(reservePct,1)+"% da CTA · "+n(now.ccPercent,1)+"% CC"} tone={now.ccPercent<=now.limitPercentCc?"red":"blue"} symbol="◉"/>
       </div>
 
-      <div className="rounded-xl border border-white/[0.09] bg-[#091920] p-2 sm:p-3">
+      <div className={expanded
+        ? "fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden rounded-none border border-white/[0.09] bg-[#091920] p-3 shadow-2xl sm:p-5"
+        : "rounded-xl border border-white/[0.09] bg-[#091920] p-2 sm:p-3"}>
         <div className="mb-2 flex flex-wrap items-center gap-3 px-1">
           <div className="mr-auto text-[14px] font-bold text-white">Evolução da água no solo</div>
+          <button type="button" onClick={() => setExpanded(v => !v)}
+            aria-label={expanded ? "Sair da tela cheia" : "Ampliar o gráfico para toda a tela"}
+            aria-pressed={expanded}
+            className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">{expanded ? "Sair da tela cheia (Esc)" : "Tela cheia"}</button>
           <Legend color="#ba4bff" text="Umidade do solo (%CC)"/>
           <Legend color="#1ce277" text="Capacidade de campo (100% CC)" dashed/>
           <Legend color="#ff6067" text="Limite de irrigação (F semanal)" dashed/>
@@ -296,7 +329,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
           ))}
           <span className="text-[10px] text-slate-400">Valores em mm/dia · passe o cursor sobre cada registro</span>
         </div>
-        <RasFullWidthChart points={points} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility}/>
+        <RasFullWidthChart points={points} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility} expanded={expanded}/>
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1.25fr_.75fr]">
