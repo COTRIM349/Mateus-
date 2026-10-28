@@ -109,6 +109,9 @@ function mapBalanceDay(d: BalanceDay): DailyBalanceRow {
     kl: d.kl,
     kcAdjusted: d.kcAdjusted,
     etcPotential: d.etcPotential,
+    etcPotentialWeeklyMean: d.etcPotentialWeeklyMean,
+    factorWeekStart: d.factorWeekStart,
+    factorWeekSampleDays: d.factorWeekSampleDays,
     ky: d.ky,
     yieldRisk: d.yieldRisk,
     etcFormula: d.etcFormula,
@@ -783,7 +786,7 @@ export default function BalancoHidricoPage() {
         }
       }
 
-      // p ativo — valor base fisiológico. O ajuste diário por ETc continua
+      // p ativo — valor base fisiológico. O ajuste pela ETc média semanal ocorre
       // dentro do motor hídrico. Override explícito da parcela prevalece.
       {
         const findActiveP = (byCultivar: boolean) => {
@@ -2493,8 +2496,8 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   const afd = last.afd;
   const pmpMm = Math.max((last.wiltingPoint ?? 0) * (last.rootDepth ?? 0) * 1000, 0);
   const ccMm = pmpMm + cad;
-  // Limiares exclusivos do dia, coerentes com o fator F = CRA/CTA calculado
-  // pela ETc diária. A faixa amarela acompanha o crescimento e a demanda.
+  // Limiares de CTA/CRA próprios de cada dia: CTA acompanha a raiz diariamente,
+  // enquanto F = CRA/CTA fica constante dentro de cada semana calendário.
   const todayZones = calculateHydricZoneBounds({ ctaMm: cad, craMm: afd, pmpMm });
   const safetyArm = todayZones ? todayZones.safetyAbs - pmpMm : 0;
   const attentionArm = todayZones ? todayZones.attentionAbs - pmpMm : 0;
@@ -2716,7 +2719,7 @@ function Cockpit({
     { icon: <IconLayers />, label: "DTA", value: dtaMmPerMeter(last) != null ? fmtNum(dtaMmPerMeter(last)!) : "—", unit: "mm/m" },
     { icon: <IconLayers />, label: "CTA", value: fmtNum(cad), unit: "mm" },
     { icon: <IconAlert />, label: "CRA", value: fmtNum(afd), unit: "mm" },
-    { icon: <IconLeaf />, label: "F (FAO-56)", value: fmtNum(pFactor, 3) },
+    { icon: <IconLeaf />, label: "F médio semanal", value: fmtNum(pFactor, 3) },
     { icon: <IconRoot />, label: "Raiz na CTA", value: fmtNum(last.rootDepth, 2), unit: "m" },
   ];
 
@@ -2826,8 +2829,8 @@ function Cockpit({
                 <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
                 <p className="text-[11px] text-graphite-400 dark:text-gray-500">
                   {reservUnit === "pct"
-                    ? "Faixas diárias pela CRA = CTA × F (PMP = 0%, CC = 100%). Amarelo: 70–100% da CRA consumida."
-                    : "ARM em mm; atenção dinâmica a partir de 70% da CRA e irrigar ao consumir 100% da CRA · histórico até hoje"}
+                    ? "CTA por dia × F médio semanal (segunda–domingo). Amarelo: 70–100% da CRA consumida; PMP = 0% e CC = 100%."
+                    : "ARM em mm; limites pela CTA diária × F médio semanal. Atenção a 70% da CRA consumida; irrigar a 100%."}
                 </p>
               </div>
               <div className="flex shrink-0 gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
@@ -2977,10 +2980,16 @@ function Cockpit({
                 <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px]">
                   <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA perfil completo</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(ctaProfile)} mm</p></div>
                   <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA efetiva hoje</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(cad)} mm</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">Fator F</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
+                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">F médio semanal</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
                   <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CRA</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(afd)} mm</p></div>
                 </div>
-                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA = (CC − PMP) × 1000 (mm/m). CTA diária = soma das camadas cadastradas exploradas pela raiz. CRA diária = CTA × F, com F ajustado pela ETc potencial medida. {last.rootDepthEstimated != null && last.rootDepthEstimated > last.rootDepth + 0.001 ? `A raiz estimada ultrapassa o perfil cadastrado em ${fmtNum((last.rootDepthEstimated - last.rootDepth) * 100, 0)} cm; essa profundidade adicional NÃO entrou no cálculo de água.` : "A profundidade usada no cálculo não excede o solo cadastrado."}</p>
+                {last.factorWeekStart && (
+                  <p className="mt-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                    F da semana iniciada em {fmtDia(last.factorWeekStart)} · {last.factorWeekSampleDays ?? "—"} dia(s) com dado · ETc potencial média: {last.etcPotentialWeeklyMean != null ? fmtNum(last.etcPotentialWeeklyMean, 2) : "—"} mm/dia.
+                    {(last.factorWeekSampleDays ?? 0) < 7 ? " Semana em andamento ou histórico parcial: a média pode ser atualizada com novos dias." : ""}
+                  </p>
+                )}
+                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA = (CC − PMP) × 1000 (mm/m). CTA diária = soma das camadas exploradas pela raiz. CRA diária = CTA do dia × F médio da semana, calculado pelos ajustes FAO-56 com ETc potencial dos dias disponíveis. {last.rootDepthEstimated != null && last.rootDepthEstimated > last.rootDepth + 0.001 ? `A raiz estimada ultrapassa o perfil cadastrado em ${fmtNum((last.rootDepthEstimated - last.rootDepth) * 100, 0)} cm; essa profundidade adicional NÃO entrou no cálculo de água.` : "A profundidade usada no cálculo não excede o solo cadastrado."}</p>
               </>
             ) : (
               <p className="text-[12px] text-graphite-400 dark:text-gray-500">Perfil por camadas não cadastrado para este pivô.</p>

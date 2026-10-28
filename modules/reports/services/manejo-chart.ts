@@ -85,7 +85,7 @@ export const MANEJO_GROUPS: { cat: ManejoGroup; items: ManejoSeriesDef[] }[] = [
     items: [
       { k: "dap", label: "Dias após plantio (DAP)", color: "#16a34a", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.dae, norm: [0, 200] },
       { k: "kc", label: "Kc — coeficiente da cultura", color: "#22c55e", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.kc, norm: [0, 1.5] },
-      { k: "p", label: "Fator F — disponibilidade diária (FAO-56)", color: "#f59e0b", kind: "dash", axis: "norm", unit: "adimensional", norm: [0, 1] },
+      { k: "p", label: "Fator F — média semanal (FAO-56)", color: "#f59e0b", kind: "dash", axis: "norm", unit: "adimensional", norm: [0, 1] },
       { k: "ks", label: "Ks — Coeficiente de estresse", color: "#15803d", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.ks, norm: [0, 1] },
       { k: "kl", label: "KL — Coeficiente de localização", color: "#4ade80", kind: "line", axis: "norm", unit: MANAGEMENT_UNITS.kl, norm: [0, 1.2] },
       { k: "ky", label: "Ky — Sensibilidade produtiva", color: "#65a30d", kind: "dash", axis: "norm", unit: MANAGEMENT_UNITS.ky, norm: [0, 1.5] },

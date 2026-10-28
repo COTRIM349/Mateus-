@@ -33,7 +33,7 @@ import {
 } from "./soil-water-balance";
 import { classifyWaterStatus, type MapHydricStatus } from "./map-hydric-status";
 import { type CropAvailabilityGroup } from "./availability-factor";
-import { calculateAdjustedDepletionFraction } from "@/modules/culture/services/agronomic-engine";
+import { calculateWeeklyAvailabilityFactors } from "./weekly-availability-factor";
 
 export type HydricStatus = "verde" | "amarelo" | "vermelho" | "cinza";
 
@@ -91,7 +91,7 @@ export interface EngineCulture {
   /**
    * Campo legado (Tabela 2 de Doorenbos & Kassam). Mantido para
    * compatibilidade de dados; no manejo operacional o fator F sempre segue
-   * a FAO-56, corrigido pela ETc potencial diária observada.
+   * a FAO-56, usando a média semanal dos ajustes baseados na ETc potencial medida.
    */
   availabilityGroup?: CropAvailabilityGroup | null;
 }
@@ -165,6 +165,10 @@ export interface BalanceDay {
   kl: number;
   et0: number;
   etcPotential: number;
+  /** ETc potencial média dos dias válidos desta semana, para auditar o F semanal. */
+  etcPotentialWeeklyMean?: number;
+  factorWeekStart?: string;
+  factorWeekSampleDays?: number;
   etc: number;
   etcFormula: string;
   ky: number | null;
@@ -279,19 +283,48 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
         : calculateADT(soil.field_capacity, soil.wilting_point, profileDepth, soil.effective_depth))
     : 0;
 
-  const rows: BalanceDay[] = [];
-  let previousStorage: number | null = input.initialStorageMm ?? null;
-  let previousCad: number | null = input.initialCadMm ?? null;
-
-  for (const date of dates) {
+  // Primeiro calcula as entradas POTENCIAIS diárias. Depois agrega o fator F
+  // por semana (segunda–domingo); ETc real, ARM e Zr seguem DIÁRIOS.
+  // Sem completar dias ausentes por ETo inventada ou projeção automática.
+  const potentialDays = dates.map((date) => {
     const ms = new Date(`${date}T00:00:00Z`).getTime();
     const dae = Math.max(0, Math.floor((ms - daeRefMs) / 86400000));
     const agronomic = input.agronomicByDate?.[date] ?? null;
     const phaseId = phases.length > 0 ? identifyPhase(phases, dae) : null;
-
     const legacyKc = phases.length > 0 ? interpolateKc(phases, dae) : null;
     const kc = agronomic?.kc ?? legacyKc;
-    if (kc == null || !Number.isFinite(kc) || kc < 0 || kc > 2.5) return [];
+    const weather = weatherByDate[date];
+    const kl = resolveManejoKl({ parcelOverride: assignment.kl_override, phaseKl: phaseId?.phase.kl, cultureKl: culture.kl });
+    const legacyP = culture.depletion_factor ?? phaseId?.phase.depletion_factor ?? null;
+    const baseP = agronomic?.depletionFractionP
+      ?? (legacyP == null ? null : resolveDepletionFactor(
+        assignment, phaseId?.phase.depletion_factor ?? null, legacyP,
+      ));
+    if (kc == null || !Number.isFinite(kc) || kc < 0 || kc > 2.5 ||
+        !Number.isFinite(kl) || kl < 0 || baseP == null ||
+        !Number.isFinite(baseP) || baseP <= 0 || baseP >= 1) return null;
+    return {
+      date, dae, agronomic, phaseId, kc, kl, weather, baseP,
+      etcPotentialMm: Math.max(weather.et0 * kc * kl, 0),
+    };
+  });
+  if (potentialDays.some((day) => day == null)) return [];
+
+  const weeklyFactors = calculateWeeklyAvailabilityFactors(
+    potentialDays.filter((day): day is NonNullable<typeof day> => day != null)
+      .map((day) => ({ date: day.date, baseP: day.baseP, etcPotentialMm: day.etcPotentialMm })),
+  );
+
+  const rows: BalanceDay[] = [];
+  let previousStorage: number | null = input.initialStorageMm ?? null;
+  let previousCad: number | null = input.initialCadMm ?? null;
+
+  for (const day of potentialDays) {
+    if (!day) return [];
+    const { date, dae, agronomic, phaseId, kc, weather, kl } = day;
+    const week = weeklyFactors[date];
+    const pFactor = week?.factor;
+    if (pFactor == null || !Number.isFinite(pFactor) || pFactor <= 0 || pFactor >= 1) return [];
 
     const legacyCultureRoot = culture.root_depth
       ?? (phaseId?.phase.root_depth_end ?? phaseId?.phase.root_depth_start ?? 0);
@@ -311,22 +344,6 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     if (rootDepth <= 0) return [];
 
     const phaseName = agronomic?.stageName ?? phaseId?.phase.name ?? "—";
-    const weather = weatherByDate[date];
-    const kl = resolveManejoKl({ parcelOverride: assignment.kl_override, phaseKl: phaseId?.phase.kl, cultureKl: culture.kl });
-
-    // Fator F FAO-56: base cadastral da cultura/curva e ajuste pela demanda
-    // potencial do DIA (ETo medida/aprovada × Kc × KL). Não usar ETc com Ks:
-    // isso criaria circularidade (Ks depende do próprio F).
-    const etcPotentialForF = weather ? Math.max(weather.et0 * kc * kl, 0) : null;
-    const legacyP = culture.depletion_factor ?? phaseId?.phase.depletion_factor ?? null;
-    const baseP = agronomic?.depletionFractionP
-      ?? (legacyP == null ? null : resolveDepletionFactor(
-        assignment, phaseId?.phase.depletion_factor ?? null, legacyP,
-      ));
-    const pFactor = baseP == null || etcPotentialForF == null
-      ? null
-      : calculateAdjustedDepletionFraction(baseP, etcPotentialForF);
-    if (pFactor == null || !Number.isFinite(pFactor) || pFactor <= 0 || pFactor >= 1) return [];
     const adt = soil.layers && soil.layers.length > 0
       ? calculateADTFromLayers(soil.layers, rootDepth)
       : calculateADT(soil.field_capacity, soil.wilting_point, rootDepth, soil.effective_depth);
@@ -391,6 +408,9 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
       kl,
       et0: roundTo(weather.et0, 2),
       etcPotential,
+      etcPotentialWeeklyMean: week.meanEtcPotentialMm,
+      factorWeekStart: week.weekStart,
+      factorWeekSampleDays: week.sampleDays,
       etc,
       etcFormula: formatEtcFormula(roundTo(weather.et0, 2), roundTo(kc, 3), kl, ks),
       ky,

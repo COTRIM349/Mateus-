@@ -84,7 +84,7 @@ export const RESERVATORIO_SERIES: SeriesDef<ReservSeriesKey>[] = [
   { k: "cc", label: "Capacidade de campo (CC)", color: "#16a34a" },
   { k: "seguranca", label: "Umidade de segurança (limite de manejo)", color: "#eab308" },
   { k: "pmp", label: "Ponto de murcha (PMP)", color: "#dc2626" },
-  { k: "zonas", label: "Faixas dinâmicas pela CRA e fator F (por dia)", color: "#94a3b8" },
+  { k: "zonas", label: "Faixas por CTA diária × F médio semanal (FAO-56)", color: "#94a3b8" },
   { k: "chuva", label: "Chuva efetiva", color: "#2f6bff" },
   { k: "irrig", label: "Irrigação realizada", color: "#16a34a" },
   { k: "eto", label: "ETo (demanda atmosférica)", color: "#f59e0b" },
@@ -760,7 +760,7 @@ export function ReservatorioChart({
       {visible.zonas && zones[n - 1] && (
         <>
           {inAxis((attnRef + ccGreenFloor) / 2) && <ZoneLabel y={y((attnRef + ccGreenFloor) / 2)} text="Sem necessidade" color="#1976d2" x={padL + 6} />}
-          {inAxis((segRef + attnRef) / 2) && <ZoneLabel y={y((segRef + attnRef) / 2)} text={`Atenção · F ${zones[n - 1]!.factorF.toFixed(3)}`} color="#b45309" x={padL + 6} />}
+          {inAxis((segRef + attnRef) / 2) && <ZoneLabel y={y((segRef + attnRef) / 2)} text={`Atenção · F semanal ${zones[n - 1]!.factorF.toFixed(3)}`} color="#b45309" x={padL + 6} />}
           {inAxis((pmpRef + segRef) / 2) && <ZoneLabel y={y((pmpRef + segRef) / 2)} text="Irrigar" color="#dc2626" x={padL + 6} />}
         </>
       )}

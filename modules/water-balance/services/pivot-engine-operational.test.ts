@@ -125,7 +125,7 @@ describe("pivot-engine-operational", () => {
     expect(comKc[0].afd).toBe(semCurva[0].afd);
   });
 
-  it("recalcula o F por dia usando a ETo medida e o Kc, sem valor fixo", () => {
+  it("usa o mesmo F médio semanal apesar da ETo diária variar", () => {
     const input = baseInput();
     input.dateEnd = "2026-01-02";
     input.initialStorageMm = 60;
@@ -137,7 +137,9 @@ describe("pivot-engine-operational", () => {
     expect(rows).toHaveLength(2);
     expect(rows.map((d) => d.et0)).toEqual([4, 7]);
     expect(rows.map((d) => d.etcPotential)).toEqual([4, 7]);
-    expect(rows.map((d) => d.afd)).toEqual([32.4, 25.2]);
+    // ETcPot 4 e 7 → ajustes 0,54 e 0,42; F semanal = 0,48 × CTA 60.
+    expect(rows.map((day) => day.afd)).toEqual([28.8, 28.8]);
+    expect(rows.map((day) => day.factorWeekStart)).toEqual(["2025-12-29", "2025-12-29"]);
     expect(rows[0].adt).toBe(60);
     expect(rows[1].adt).toBe(60);
   });

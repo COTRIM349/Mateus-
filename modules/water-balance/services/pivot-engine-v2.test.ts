@@ -139,8 +139,11 @@ describe("crescimento radicular diário e limite de absorção conhecido do Piv�
     expect(rows.map((r) => r.rootDepthEstimated)).toEqual([0.2, 0.4, 1]);
     expect(rows.map((r) => r.rootDepth)).toEqual([0.2, 0.4, 0.6]);
     expect(rows.map((r) => r.adt)).toEqual([28.12, 56.24, 84.36]);
-    // FAO-56 diário: p = 0.50 + 0.04(5 − ETcPot)
-    expect(rows.map((r) => r.afd)).toEqual([15.18, 25.87, 42.18]);
+    // Sábado/domingo usam a média semanal: p(4)=0,54, p(6)=0,46 => F=0,50.
+    // Segunda inicia outra semana: p(5)=0,50.
+    expect(rows.map((r) => r.afd)).toEqual([14.06, 28.12, 42.18]);
+    expect(rows.map((r) => r.factorWeekStart)).toEqual(["2026-07-27", "2026-07-27", "2026-08-03"]);
+    expect(rows.map((r) => r.factorWeekSampleDays)).toEqual([2, 2, 1]);
     expect(rows.every((r) => r.cadProfileMm === 84.36)).toBe(true);
   });
 
@@ -166,5 +169,33 @@ describe("crescimento radicular diário e limite de absorção conhecido do Piv�
     expect(rows[1].rootDepth).toBeLessThan(rows[2].rootDepth);
     expect(rows[0].adt).toBeLessThan(rows[1].adt);
     expect(rows[1].adt).toBeLessThan(rows[2].adt);
+  });
+});
+
+describe("fator F médio semanal dentro do motor hídrico", () => {
+  it("usa F constante por semana, enquanto ETo, ETc e ARM continuam diários", () => {
+    const weather: PivotEngineInput["weatherByDate"] = {};
+    for (let i = 0; i < 8; i++) {
+      const date = `2026-08-${String(i + 3).padStart(2, "0")}`;
+      weather[date] = { et0: i < 7 ? 3 + i : 2, precipitation: 0 };
+    }
+    const rows = computePivotBalanceSeries(baseInput({
+      assignment: { ...baseInput().assignment, planting_date: "2026-08-03", emergence_date: "2026-08-03" },
+      dateStart: "2026-08-03",
+      dateEnd: "2026-08-10",
+      phases: [
+        { phase_order: 1, name: "Inicial", days_after_plant: 0, duration_days: 10,
+          kc_start: 1, kc_end: 1, root_depth_start: 0.3, root_depth_end: 0.3, depletion_factor: 0.5 },
+      ],
+      weatherByDate: weather,
+    }));
+    expect(rows).toHaveLength(8);
+    expect(rows.slice(0, 7).map((r) => r.afd / r.adt)).toEqual(Array(7).fill(0.46));
+    expect(rows[7].afd / rows[7].adt).toBeCloseTo(0.62, 3);
+    expect(rows.map((r) => r.etcPotential)).toEqual([3, 4, 5, 6, 7, 8, 9, 2]);
+    expect(rows[0].storage).toBeGreaterThan(rows[1].storage);
+    expect(rows[0].factorWeekSampleDays).toBe(7);
+    expect(rows[7].factorWeekSampleDays).toBe(1);
+    expect(rows[0].etcPotentialWeeklyMean).toBe(6);
   });
 });
