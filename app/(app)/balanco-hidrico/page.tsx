@@ -53,6 +53,8 @@ import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
 import { SoilReservoirReferencePanel } from "@/components/water-balance/SoilReservoirReferencePanel";
+import { ObservedKcChart, PivotClimatePanel } from "@/components/water-balance/PivotClimatePanel";
+import { cn } from "@/utils/cn";
 import {
   EntradasConsumoChart,
   KcCurveReadOnlyChart,
@@ -1205,6 +1207,21 @@ export default function BalancoHidricoPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [assignment?.id, culture?.id, soil?.id, dateStart, dateEnd, soilLayers.length, phases.length, hydricAnchor?.effectiveDate]);
 
+  // Atualiza o RAS ao retornar da tela de lançamentos de chuva/irrigação.
+  useEffect(() => {
+    const refreshOnReturn = () => {
+      if (document.visibilityState === "visible" && assignment && culture && soil) {
+        void runCalculation();
+      }
+    };
+    window.addEventListener("focus", refreshOnReturn);
+    document.addEventListener("visibilitychange", refreshOnReturn);
+    return () => {
+      window.removeEventListener("focus", refreshOnReturn);
+      document.removeEventListener("visibilitychange", refreshOnReturn);
+    };
+  }, [assignment, culture, soil, runCalculation]);
+
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
 
   // rastreabilidade (estação climática) + operação (eventos de irrigação)
@@ -1580,6 +1597,8 @@ export default function BalancoHidricoPage() {
                   flowRateM3h: selPivot?.flow_rate ?? null,
                 }}
                 sensoryByDate={sensoryByDate}
+                weatherByDate={weatherByDate}
+                stationName={trace.stationName}
                 onShowDetail={() => setActiveTab("decisao")}
                 mode="dados"
                 kcSource={kcSource}
@@ -2533,7 +2552,7 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   const crossIndexReserv = -1;
 
   // Entradas e consumo: últimos 14 dias observados (sem previsão no gráfico).
-  const histE = rows.slice(-14);
+  const histE = rows;
   const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
     label: fmtDia(r.date),
     chuvaEf: r.effectivePrecipitation,
@@ -2570,6 +2589,8 @@ function Cockpit({
   soilLayers,
   identity,
   sensoryByDate,
+  weatherByDate,
+  stationName,
   onShowDetail,
   mode = "dados",
   kcSource = null,
@@ -2583,6 +2604,8 @@ function Cockpit({
   soilLayers: SoilProfileLayer[];
   identity: CockpitIdentity;
   sensoryByDate: Record<string, number>;
+  weatherByDate: Record<string, WeatherExtra>;
+  stationName: string | null;
   onShowDetail: () => void;
   /** "dados" = só histórico + condição atual (sem recomendação/projeção, que
    *  vivem na aba DECISÃO). "full" mantém o cockpit completo. */
@@ -2601,6 +2624,7 @@ function Cockpit({
   // Variáveis exibidas em cada gráfico — o usuário inclui/remove séries (estilo
   // Scheduling) e a escolha persiste por navegador.
   const [entradasVis, setEntradasVis] = useState<Record<EntradaSeriesKey, boolean>>(defaultEntradasVisible);
+  const [panelView, setPanelView] = useState<"solo" | "cultura" | "clima">("solo");
   // Apenas o gráfico de entradas permite séries opcionais.
   // O RAS passou a ser um painel amplo em %CC, com linhas físicas de CC/PMP.
   useEffect(() => {
@@ -2690,19 +2714,38 @@ function Cockpit({
 
   return (
     <div className="space-y-4">
-      <SoilReservoirReferencePanel
+      <div role="tablist" aria-label="Painéis de manejo do pivô" className="grid grid-cols-3 gap-2 rounded-xl border border-santa-900/60 bg-[#10252b] p-1.5">
+        {([
+          { id: "solo", label: "Solo · reservatório" },
+          { id: "cultura", label: "Cultura · fenologia e Kc" },
+          { id: "clima", label: "Clima · temperaturas e ET" },
+        ] as const).map((view) => (
+          <button key={view.id} type="button" role="tab" aria-selected={panelView === view.id}
+            onClick={() => setPanelView(view.id)}
+            className={cn(
+              "min-h-11 rounded-lg px-2 py-2 text-[12px] font-bold transition-colors sm:text-[14px]",
+              panelView === view.id ? "bg-santa-600 text-white shadow-soft" : "text-slate-300 hover:bg-white/10 hover:text-white",
+            )}>
+            {view.label}
+          </button>
+        ))}
+      </div>
+      {panelView === "solo" && <SoilReservoirReferencePanel
         rows={rows}
         cultureName={identity.cultureName}
+        varietyName={identity.varietyName}
         stage={identity.stage}
         areaHa={identity.area}
         flowRateM3h={identity.flowRateM3h}
         efficiencyPercent={identity.efficiency}
-      />
-
-      {/* Gráficos + coluna de decisão */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Card className="p-4">
+      />}
+      {panelView === "clima" && (
+        <PivotClimatePanel rows={rows} observations={weatherByDate} stationName={stationName} pivotName={identity.pivotName} />
+      )}
+      {panelView !== "clima" && (
+      <div className="space-y-4">
+        <div className="space-y-4">
+          {panelView === "solo" && <Card className="p-4">
             <div className="mb-2">
               <div className="flex flex-wrap items-center gap-2">
                 <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
@@ -2725,9 +2768,26 @@ function Cockpit({
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
               <CockpitSeriesToggles series={ENTRADAS_SERIES.filter((s) => s.k !== "kc")} visible={entradasVis} onToggle={toggleEntrada} />
             </div>
-            <div className="h-[270px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={series.hasForecast ? series.todayIndexEntradas : -1} visible={{ ...entradasVis, kc: false }} /></div>
-          </Card>
-          <Card className="p-4">
+            <div className="h-[430px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={-1} visible={{ ...entradasVis, kc: false }} /></div>
+          </Card>}
+          {panelView === "cultura" && (
+          <>
+            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
+              {[
+                { label: "Pivô", value: identity.pivotName ?? "—" },
+                { label: "Cultura", value: identity.cultureName ?? "—" },
+                { label: "Cultivar / variedade", value: identity.varietyName ?? "Não cadastrada" },
+                { label: "Fenologia atual", value: last.phase ?? identity.stage ?? "—" },
+                { label: "Idade", value: last.dae == null ? "—" : last.dae + " DAE" },
+                { label: "Kc atual", value: fmtNum(last.kc, 2) },
+              ].map((item) => (
+                <div key={item.label} className="rounded-xl border border-white/10 bg-[#10252b] p-3 text-white">
+                  <p className="text-[11px] text-slate-400">{item.label}</p>
+                  <p className="mt-1 break-words text-[16px] font-bold">{item.value}</p>
+                </div>
+              ))}
+            </div>
+            <Card className="p-4">
             <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -2739,7 +2799,7 @@ function Cockpit({
                   )}
                 </div>
                 <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-                  DAE × Kc · evolução acumulada até hoje · a curva cresce dia a dia com a fenologia atual
+                  {identity.cultureName ?? "Cultura"} · {identity.varietyName ?? "cultivar não cadastrada"} · evolução DAE × Kc com fases fenológicas do cadastro
                 </p>
               </div>
               {kcCurve && (
@@ -2752,7 +2812,7 @@ function Cockpit({
               )}
             </div>
             {kcCurve ? (
-              <div className="h-[370px] w-full">
+              <div className="h-[520px] w-full">
                 <KcCurveReadOnlyChart
                   points={kcCurve.points}
                   currentDae={last.dae ?? null}
@@ -2768,17 +2828,17 @@ function Cockpit({
                 />
               </div>
             ) : (
-              <div className="flex h-[170px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
-                <div>
-                  <p className="text-[12px] font-semibold text-graphite-600 dark:text-gray-300">Nenhuma curva Kc ativa em DAE para esta cultura/cultivar.</p>
-                  <p className="mt-1 text-[10.5px] text-graphite-400 dark:text-gray-500">O manejo continua mostrando o Kc calculado pelo fallback das fases, quando disponível.</p>
-                </div>
+              <div className="w-full rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                <p className="mb-2 text-[12px] font-semibold text-graphite-600 dark:text-gray-300">Sem curva Kc ativa em DAE no cadastro: exibindo os valores históricos realmente calculados para este pivô.</p>
+                <ObservedKcChart rows={rows} />
               </div>
             )}
           </Card>
+          </>
+          )}
         </div>
 
-        <div className="space-y-4">
+        {panelView === "solo" && <div className="grid gap-4 xl:grid-cols-2">
           {/* Recomendação de hoje — só no cockpit completo; na arquitetura de
               duas abas isto pertence à aba DECISÃO. */}
           {mode === "full" && (
@@ -2893,7 +2953,7 @@ function Cockpit({
           </Card>
 
           {/* Nota de umidade de campo + Alertas */}
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1">
+          <div className="grid gap-4 sm:grid-cols-2 xl:col-span-2">
             <Card className="p-4">
               <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconDrop /> Nota de Umidade de Campo</p>
               {latestSensory ? (
@@ -2927,8 +2987,9 @@ function Cockpit({
               </div>
             </Card>
           </div>
-        </div>
+        </div>}
       </div>
+      )}
 
 
     </div>
