@@ -4,8 +4,6 @@ export interface IrrigationDuplicateCandidate {
   started_at: string;
   depth_mm: number;
   percentimeter_pct: number | null;
-  horimeter_initial: number | null;
-  horimeter_final: number | null;
 }
 
 function stableNumber(value: number | null | undefined, digits: number): string {
@@ -23,8 +21,6 @@ export function irrigationDuplicateKey(event: IrrigationDuplicateCandidate): str
     event.started_at.slice(0, 10),
     stableNumber(event.depth_mm, 2),
     stableNumber(event.percentimeter_pct, 2),
-    stableNumber(event.horimeter_initial, 2),
-    stableNumber(event.horimeter_final, 2),
   ].join("|");
 }
 
