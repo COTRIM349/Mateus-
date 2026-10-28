@@ -59,13 +59,13 @@ export function calculateWeeklyAvailabilityFactors(
   }
 
   const result: Record<string, WeeklyAvailabilityResult> = {};
-  for (const [weekStart, days] of grouped) {
+  grouped.forEach((days, weekStart) => {
     const adjusted = days.map((day) => calculateAdjustedDepletionFraction(day.baseP, day.etcPotentialMm));
     const meanFactor = roundTo(adjusted.reduce((sum, value) => sum + value, 0) / adjusted.length, 3);
     const meanEtcPotentialMm = roundTo(days.reduce((sum, day) => sum + day.etcPotentialMm, 0) / days.length, 3);
     for (const day of days) {
       result[day.date] = { factor: meanFactor, weekStart, sampleDays: days.length, meanEtcPotentialMm };
     }
-  }
+  });
   return result;
 }
