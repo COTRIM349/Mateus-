@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { buildRasPoint } from "./ras-panel-model";
-import { rasDisplayPoint, rasDisplaySeries } from "./ras-display-modes";
+import { rasDisplayPoint, rasDisplaySeries, rasDisplayAxisCeiling } from "./ras-display-modes";
 
 const soil = {
   date: "2026-10-28", cad: 60, afd: 30, storedWater: 36, rootDepth: .6,
@@ -47,6 +47,24 @@ describe("RAS: três modos do mesmo armazenamento", () => {
     expect(weights[1].capacity).toBeCloseTo(100 * 16 / 92, 4);
     expect(weights[1].pmp).toBeCloseTo(100 * 6.8 / 92, 4);
     expect(weights[1].current).toBeCloseTo(100 * 11.4 / 92, 4);
+  });
+
+  it("limita o eixo %CC a exatamente 100%, sem faixa acima da capacidade de campo", () => {
+    const series = rasDisplaySeries([p], "cc")!;
+    expect(rasDisplayAxisCeiling(series, "cc")).toBe(100);
+  });
+
+  it("usa a CAD máxima histórica como teto em mm sem alterar ARM ou raízes", () => {
+    const earlier = buildRasPoint({...soil, date: "2026-10-27", cad: 26.7, storedWater: 20, afd: 13.35, rootDepth: .2})!;
+    const series = rasDisplaySeries([earlier, p], "mm")!;
+    expect(rasDisplayAxisCeiling(series, "mm")).toBe(60);
+    expect(series.map(v => v.capacity)).toEqual([26.7, 60]);
+    expect(series.map(v => v.current)).toEqual([20, 36]);
+  });
+
+  it("limita o eixo de peso à maior CC gravimétrica existente", () => {
+    const series = rasDisplaySeries([p], "weight", [], 1.5)!;
+    expect(rasDisplayAxisCeiling(series, "weight")).toBeCloseTo(13.33333, 4);
   });
 
   it("não inventa densidade nem completa lacunas", () => {

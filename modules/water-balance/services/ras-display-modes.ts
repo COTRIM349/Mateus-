@@ -118,3 +118,11 @@ export const RAS_UNITS: Record<RasDisplayUnit, { name: string; axis: string; dig
   mm: { name: "Água disponível (ARM mm)", axis: "mm", digits: 1 },
   weight: { name: "Umidade do Solo (% em peso)", axis: "% peso", digits: 2 },
 };
+
+// Teto gráfico, não agronômico: na escala %CC a CC ocupa exatamente o topo.
+// Nas escalas físicas, o topo é o maior valor de CC dos dias visualizados,
+// respeitando o crescimento diário do sistema radicular.
+export function rasDisplayAxisCeiling(points: RasDisplayPoint[], unit: RasDisplayUnit): number {
+  if (unit === "cc") return 100;
+  return Math.max(1, ...points.map(point => point.capacity).filter(Number.isFinite));
+}
