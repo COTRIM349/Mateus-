@@ -64,6 +64,10 @@ export interface DailyBalanceRow extends WaterBalanceResult {
   kl?: number;
   kcAdjusted?: number;
   etcPotential?: number;
+  /** Média da ETc potencial na semana usada para calcular F. */
+  etcPotentialWeeklyMean?: number;
+  factorWeekStart?: string;
+  factorWeekSampleDays?: number;
   ky?: number | null;
   yieldRisk?: number | null;
   etcFormula?: string;
