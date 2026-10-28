@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { APP_NAME } from "@/constants/app";
@@ -51,19 +50,14 @@ export function Topbar() {
         <Link
           href="/"
           title={APP_NAME}
-          aria-label="Santa Colomba Irriga Pro — início"
-          className="flex shrink-0 items-center gap-3 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
+          aria-label="SCA Irriga Pro — início"
+          className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
         >
-          <Image
-            src="/brand/santa-colomba-logo-branca.png"
-            alt="Santa Colomba"
-            width={128}
-            height={47}
-            priority
-            className="h-auto w-[116px] object-contain sm:w-[128px]"
-          />
-          <span className="hidden border-l border-white/20 pl-3 text-[14px] font-extrabold uppercase tracking-[0.14em] text-santa-200 sm:block">
-            IRRIGA PRO
+          <span className="border-r border-white/20 pr-3 text-[21px] font-black leading-none tracking-[-.04em] text-white sm:text-[26px]">
+            SCA
+          </span>
+          <span className="text-[12px] font-extrabold uppercase leading-tight tracking-[.12em] text-white sm:text-[14px]">
+            IRRIGA <span className="text-emerald-300">PRO</span>
           </span>
         </Link>
 
