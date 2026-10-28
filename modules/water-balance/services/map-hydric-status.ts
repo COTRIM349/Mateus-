@@ -34,7 +34,8 @@ export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
  */
 /**
  * Limites dinâmicos das faixas do reservatório, usando CTA e CRA do próprio
- * dia. F=CRA/CTA já foi ajustado no motor com a ETc daquele dia.
+ * dia. F=CRA/CTA é a média semanal dos ajustes FAO-56 por ETc potencial.
+ * A CTA pode evoluir diariamente com o crescimento radicular.
  * As cotas absolutas incluem o PMP, para conversão entre mm e % de CTA.
  *
  * Azul: ARM > CTA − 0,70×CRA; amarelo: CTA − CRA < ARM <= CTA − 0,70×CRA;
