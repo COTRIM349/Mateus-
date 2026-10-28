@@ -27,6 +27,11 @@ export interface RasDayInput {
 export interface RasPoint {
   date: string;
   armMm: number;
+  /** Profundidade da raiz considerada em cada dia (m). */
+  rootDepth: number;
+  /** Parâmetros volumétricos equivalentes na zona radicular daquele dia. */
+  fieldCapacity: number;
+  wiltingPoint: number;
   ctaMm: number;
   afdMm: number;
   f: number;
@@ -59,6 +64,9 @@ export function buildRasPoint(row: RasDayInput): RasPoint | null {
   return {
     date: row.date,
     armMm: cap(storedWater, 0, cad),
+    rootDepth,
+    fieldCapacity,
+    wiltingPoint,
     ctaMm: cad,
     afdMm: afd,
     f,
