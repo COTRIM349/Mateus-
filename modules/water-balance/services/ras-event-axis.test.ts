@@ -22,13 +22,18 @@ describe("gráfico %CC: eixo da irrigação independente à direita", () => {
     expect(rasEventAxisCeiling(sample, {chuva:false, irrigacao:false, eto:false})).toBe(2);
   });
 
-  it("muda apenas o modo %CC: os modos mm e peso mantêm a faixa original", () => {
+  it("os três gráficos têm eixo de eventos em mm desde zero e fontes compartilhadas", () => {
     const source = readFileSync(join(process.cwd(), "components/water-balance/SoilReservoirReferencePanel.tsx"), "utf8");
-    expect(source).toContain('const integratedCc = unit === "cc"');
-    expect(source).toContain('const eventsHeight = integratedCc ? height : 85');
-    expect(source).toContain('const eventsTop = integratedCc ? t : t + height + 46');
-    expect(source).toContain('clipPath={integratedCc ? "url(#rasFullClip)" : undefined}');
+    expect(source).toContain('id: "mm", title: "Água disponível (mm)"');
+    expect(source).toContain('id: "weight", title: "Umidade do solo (% em peso)"');
+    expect(source).toContain('id: "cc", title: "Umidade do solo (% da CC)"');
+    expect(source).toContain("cards.map(card =>");
+    expect(source).toContain("const integratedCc = true;");
+    expect(source).toContain("const eventsTop = integratedCc ? t : t + height + 46");
+    expect(source).toContain("const eventsHeight = integratedCc ? height : 85");
     expect(source).toContain('rasEventVerticalPosition(mm, eventMax, eventsTop, eventsHeight)');
-    expect(source).toContain('r = integratedCc ? 205 : 142');
+    expect(source).toContain("height={Math.max(0,eventsBottom-eventY(p.irrigationAppliedMm))}");
+    expect(source).toContain("height={Math.max(0,eventsBottom-eventY(p.rainEffectiveMm))}");
+    expect(source).toContain('rasDisplayAxisCeiling(displayed, unit)');
   });
 });
