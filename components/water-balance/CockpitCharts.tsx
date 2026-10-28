@@ -292,7 +292,7 @@ export function EntradasConsumoChart({
         </>
       )}
 
-      {points.map((p, i) => (n <= 16 || i % 2 === 0) ? (
+      {points.map((p, i) => (n <= 16 || i % Math.ceil(n / 14) === 0 || i === n - 1) ? (
         <text key={`x${i}`} x={x(i)} y={H - 27} textAnchor="middle" className="fill-graphite-400 dark:fill-gray-500" fontSize={9}>{p.label}</text>
       ) : null)}
 
