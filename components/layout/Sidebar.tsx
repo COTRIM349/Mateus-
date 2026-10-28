@@ -27,14 +27,14 @@ function NavLink({
       href={href}
       onClick={onClick}
       className={cn(
-        "group flex items-center gap-2 rounded-lg px-2.5 py-1.5 text-[12.5px] font-medium leading-tight transition-all duration-150",
+        "group flex min-h-[38px] items-center gap-2.5 rounded-lg px-3 py-2 text-[14px] font-medium leading-snug transition-all duration-150",
         active
-          ? "bg-white/[0.12] text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.06)]"
-          : "text-white/60 hover:bg-white/[0.06] hover:text-white/90",
+          ? "bg-white/[0.14] text-white shadow-[inset_0_1px_0_0_rgb(255_255_255/0.08)]"
+          : "text-white/80 hover:bg-white/[0.07] hover:text-white",
       )}
     >
       <svg
-        className={cn("h-4 w-4 shrink-0 transition-colors", active ? "text-brand-300" : "text-white/50 group-hover:text-white/80")}
+        className={cn("h-[18px] w-[18px] shrink-0 transition-colors", active ? "text-santa-200" : "text-white/65 group-hover:text-white")}
         fill="none"
         stroke="currentColor"
         strokeWidth={1.7}
@@ -97,7 +97,7 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col bg-santa-800 text-white transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-50 flex w-[264px] flex-col bg-santa-800 text-white transition-transform duration-200",
           open ? "translate-x-0" : "-translate-x-full",
           "lg:translate-x-0",
         )}
@@ -106,14 +106,14 @@ export function Sidebar() {
           <Image
             src="/brand/santa-colomba-logo-branca.png"
             alt="Santa Colomba"
-            width={178}
+            width={190}
             height={67}
             priority
-            className="h-auto w-[178px] object-contain"
+            className="h-auto w-[190px] object-contain"
           />
           <div className="mt-2 border-t border-white/10 pt-2">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.19em] text-santa-200">IRRIGA PRO</p>
-            <p className="mt-0.5 text-[10px] text-white/55">Gestão inteligente da irrigação</p>
+            <p className="text-[12px] font-extrabold uppercase tracking-[0.16em] text-santa-200">IRRIGA PRO</p>
+            <p className="mt-0.5 text-[11px] text-white/65">Gestão inteligente da irrigação</p>
           </div>
         </div>
 
@@ -122,7 +122,7 @@ export function Sidebar() {
             <select
               value={activeFarmId ?? ""}
               onChange={(e) => setActiveFarm(e.target.value)}
-              className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-[11.5px] font-medium text-white/90 outline-none transition-colors focus:border-white/20 focus:bg-white/[0.1]"
+              className="w-full rounded-lg border border-white/10 bg-white/[0.06] px-3 py-2 text-[13px] font-medium text-white/90 outline-none transition-colors focus:border-white/20 focus:bg-white/[0.1]"
             >
               {farms.map((farm) => (
                 <option key={farm.id} value={farm.id} className="text-graphite-900">
@@ -133,7 +133,7 @@ export function Sidebar() {
           </div>
         )}
 
-        <nav className="min-h-0 flex-1 overflow-y-auto px-2.5 py-1">
+        <nav aria-label="Navegação principal" className="min-h-0 flex-1 overflow-y-auto px-3 py-2">
           {topLevelItems.map((item) => (
             <NavLink key={item.href} href={item.href} icon={item.icon} label={item.label} active={isActive(item.href)} onClick={() => setOpen(false)} />
           ))}
@@ -146,7 +146,7 @@ export function Sidebar() {
                   type="button"
                   aria-expanded={expanded}
                   onClick={() => toggleGroup(group.label, group.items.map((i) => i.href))}
-                  className="flex w-full items-center justify-between rounded-lg px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.12em] text-white/40 transition-colors hover:bg-white/[0.04] hover:text-white/70"
+                  className="flex w-full items-center justify-between rounded-lg px-3 py-1.5 text-[11.5px] font-bold uppercase tracking-[0.1em] text-white/65 transition-colors hover:bg-white/[0.04] hover:text-white/70"
                 >
                   {group.label}
                   <svg
@@ -186,11 +186,11 @@ export function Sidebar() {
                 : "?"}
             </div>
             <div className="min-w-0 flex-1">
-              <p className="truncate text-[12px] font-semibold leading-tight text-white">{profile?.name ?? "Usuário"}</p>
-              <p className="truncate text-[10.5px] text-white/45">{activeFarm?.name ?? roleLabels[profile?.role ?? "viewer"]}</p>
+              <p className="truncate text-[13px] font-semibold leading-tight text-white">{profile?.name ?? "Usuário"}</p>
+              <p className="truncate text-[11.5px] text-white/55">{activeFarm?.name ?? roleLabels[profile?.role ?? "viewer"]}</p>
             </div>
           </div>
-          <p className="mt-1 px-1 text-[10px] text-white/25">v{APP_VERSION}</p>
+          <p className="mt-1 px-1 text-[11px] text-white/45">v{APP_VERSION}</p>
         </div>
       </aside>
     </>

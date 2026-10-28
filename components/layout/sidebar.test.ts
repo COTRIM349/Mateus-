@@ -10,8 +10,10 @@ describe("sidebar compacta", () => {
     const login = readFileSync(join(process.cwd(), "app/(auth)/login/page.tsx"), "utf8");
     const palette = readFileSync(join(process.cwd(), "tailwind.config.ts"), "utf8");
 
-    expect(sidebar).toContain("w-[240px]");
+    expect(sidebar).toContain("w-[264px]");
     expect(sidebar).toContain("bg-santa-800");
+    expect(sidebar).toContain("text-[14px]");
+    expect(sidebar).toContain("Navegação principal");
     expect(sidebar).toContain("aria-expanded");
     expect(sidebar).toContain('src="/brand/santa-colomba-logo-branca.png"');
     expect(login).toContain('src="/brand/santa-colomba-logo-branca.png"');
@@ -38,6 +40,6 @@ describe("sidebar compacta", () => {
     expect(nav).not.toContain('href: "/lancamentos/chuvas"');
     expect(nav).not.toContain("Infraestrutura");
     expect(sidebar).not.toContain("tracking-[0.14em] text-brand-200");
-    expect(layout).toContain("lg:pl-[240px]");
+    expect(layout).toContain("lg:pl-[264px]");
   });
 });

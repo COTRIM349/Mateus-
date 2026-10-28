@@ -21,8 +21,8 @@ export function Tabs({
           className={cn(
             "flex-1 whitespace-nowrap rounded-xl px-5 py-2.5 text-center text-sm font-semibold transition-all duration-200",
             activeTab === tab.id
-              ? "bg-brand-600 text-white shadow-glow"
-              : "text-graphite-400 hover:text-graphite-700 dark:text-gray-500 dark:hover:text-gray-300",
+              ? "bg-santa-600 text-white shadow-soft"
+              : "text-graphite-600 hover:text-santa-800 dark:text-gray-500 dark:hover:text-gray-300",
           )}
         >
           {tab.label}
