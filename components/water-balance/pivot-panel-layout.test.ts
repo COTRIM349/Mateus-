@@ -34,8 +34,10 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(panel).toContain("rows.map(buildRasPoint)");
     expect(panel).toContain("p.rainEffectiveMm");
     expect(panel).toContain("p.irrigationAppliedMm");
-    expect(panel).toContain("/lancamentos/chuvas");
-    expect(panel).toContain("/lancamentos/irrigacao");
+    expect(page).toContain("/lancamentos/chuvas?pivot=");
+    expect(page).toContain("/lancamentos/irrigacao?pivot=");
+    expect(panel).not.toContain("/lancamentos/chuvas");
+    expect(panel).not.toContain("/lancamentos/irrigacao");
     expect(source("config/navigation.ts")).toContain('href: "/lancamentos/chuvas"');
   });
 
