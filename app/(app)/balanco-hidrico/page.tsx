@@ -2019,8 +2019,6 @@ function BalanceTab({
   const columns: Column<DailyBalanceRow>[] = [
     { header: "Data", render: (r) => fmtDia(r.date) },
     { header: "Fase", render: (r) => <span className="text-xs">{r.phase}</span> },
-    { header: "Zr estim. (m)", render: (r) => (r.rootDepthEstimated ?? r.rootDepth).toFixed(2) },
-    { header: "Zr CTA (m)", render: (r) => r.rootDepth.toFixed(2) },
     { header: "Kc", render: (r) => r.kc.toFixed(2) },
     { header: "F", render: (r) => r.cad > 0 ? (r.afd / r.cad).toFixed(3) : "—" },
     { header: "Ks", render: (r) => (r.ks ?? 1).toFixed(2) },
@@ -2920,7 +2918,6 @@ function IconSun() { return <svg {...svgP}><circle cx="12" cy="12" r="4" /><path
 function IconLeaf() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20s0-8 8-8 8-8 8-8-1 16-9 16c-4 0-7-3-7-7 0 0 3-2 6-2" /></svg>; }
 function IconSprout() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 22V12m0 0C12 8 8 6 4 6c0 4 4 6 8 6zm0 0c0-3 3-5 7-5 0 3-3 5-7 5z" /></svg>; }
 function IconLayers() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l9 5-9 5-9-5 9-5zm9 9l-9 5-9-5m18 4l-9 5-9-5" /></svg>; }
-function IconRoot() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v8m0 0c0 3-3 4-3 7m3-7c0 3 3 4 3 7M9 21h6" /></svg>; }
 function IconBars() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10m5 10V4m5 16v-7m5 7V8" /></svg>; }
 function IconCloud() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 014-4 5 5 0 019.9 1H17a3 3 0 010 6H6a3 3 0 01-3-3z" /></svg>; }
 
