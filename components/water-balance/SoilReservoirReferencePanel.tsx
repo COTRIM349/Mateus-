@@ -230,8 +230,10 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
   );
 }
 
-export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
+export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity = null, cultureName, varietyName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
   rows: DailyBalanceRow[];
+  soilLayers?: SoilProfileLayer[];
+  bulkDensity?: number | null;
   cultureName: string | null;
   varietyName: string | null;
   stage: string | null;
@@ -240,6 +242,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
   efficiencyPercent: number | null;
 }) {
   const [zoom, setZoom] = useState<ZoomMode>("full");
+  const [displayUnit, setDisplayUnit] = useState<RasDisplayUnit>("cc");
   const [expanded, setExpanded] = useState(false);
   useEffect(() => {
     if (!expanded) return;
@@ -251,6 +254,17 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
     chuva: true, irrigacao: true, eto: true,
   });
   const points = useMemo(() => rows.map(buildRasPoint).filter((p): p is RasPoint => p != null), [rows]);
+  const gravimetric = useMemo(
+    () => rasDisplaySeries(points, "weight", soilLayers, bulkDensity),
+    [points, soilLayers, bulkDensity],
+  );
+  const selectedUnit: RasDisplayUnit = displayUnit === "weight" && gravimetric === null ? "cc" : displayUnit;
+  const displayPoints = useMemo(
+    () => selectedUnit === "weight" && gravimetric
+      ? gravimetric
+      : rasDisplaySeries(points, selectedUnit, soilLayers, bulkDensity) ?? [],
+    [points, selectedUnit, soilLayers, bulkDensity, gravimetric],
+  );
   const last = rows[rows.length-1];
   const now = points[points.length-1];
   const weekly = currentWeekStats(rows);
@@ -281,6 +295,25 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
         </div>
       </header>
 
+      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0c232a] p-2.5" role="group" aria-label="Unidade do reservatório de água do solo">
+        {([
+          ["cc", "% da CC"],
+          ["mm", "Água disponível (mm)"],
+          ["weight", "% em peso"],
+        ] as const).map(([id,label]) => (
+          <button key={id} type="button" onClick={() => setDisplayUnit(id)}
+            disabled={id === "weight" && gravimetric === null}
+            aria-pressed={selectedUnit === id}
+            title={id === "weight" && gravimetric === null ? "Falta densidade válida em uma ou mais camadas da profundidade radicular" : RAS_UNITS[id].name}
+            className={`rounded-lg px-3 py-2 text-[12px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${selectedUnit === id ? "bg-santa-600 text-white" : "text-slate-300 hover:bg-white/10"}`}>
+            {label}
+          </button>
+        ))}
+        {gravimetric === null && (
+          <span className="text-[11px] text-amber-200">Informe a densidade do solo em todas as camadas para habilitar % em peso.</span>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/lancamentos/chuvas" className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-500/20">Lançar chuva manual</Link>
         <Link href="/lancamentos/irrigacao" className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">Lançar irrigação realizada</Link>
@@ -308,8 +341,8 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
             aria-label={expanded ? "Sair da tela cheia" : "Ampliar o gráfico para toda a tela"}
             aria-pressed={expanded}
             className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">{expanded ? "Sair da tela cheia (Esc)" : "Tela cheia"}</button>
-          <Legend color="#ba4bff" text="Umidade do solo (%CC)"/>
-          <Legend color="#1ce277" text="Capacidade de campo (100% CC)" dashed/>
+          <Legend color="#ba4bff" text={`Umidade atual (${RAS_UNITS[selectedUnit].axis})`}/>
+          <Legend color="#1ce277" text={selectedUnit === "cc" ? "Capacidade de campo (100% CC)" : `Capacidade de campo (${RAS_UNITS[selectedUnit].axis})`} dashed/>
           <Legend color="#ff6067" text="Limite de irrigação (F semanal)" dashed/>
           <Legend color="#ff9f23" text="Ponto de murcha (PMP)" dashed/>
         </div>
@@ -333,7 +366,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
           ))}
           <span className="text-[10px] text-slate-400">Valores em mm/dia · passe o cursor sobre cada registro</span>
         </div>
-        <RasFullWidthChart points={points} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility} expanded={expanded}/>
+        <RasFullWidthChart points={points} displayed={displayPoints} unit={selectedUnit} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility} expanded={expanded}/>
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1.25fr_.75fr]">
@@ -366,7 +399,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
           </div>
         </div>
       </div>
-      <p className="px-1 text-[10px] leading-relaxed text-slate-400">Escala principal: % da capacidade de campo (CC). PMP = θPMP/θCC × 100; não é 0% da CC. Em % da água disponível (CTA), o PMP corresponde a 0%. AFD/CRA = CTA × F médio semanal; retorno a 100% CC = CTA − ARM. Os valores vêm do balanço hídrico do pivô e não dos números ilustrativos da imagem.</p>
+      <p className="px-1 text-[10px] leading-relaxed text-slate-400">Escalas equivalentes de um mesmo balanço: % da CC (PMP acima de zero), ARM disponível em mm (PMP = zero) e % em peso (convertido usando a densidade por camada). AFD/CRA = CTA × F semanal; retorno a 100% CC = CTA − ARM. CC/PMP já são volumétricos no motor e não devem ser convertidos novamente para calcular a CAD.</p>
     </section>
   );
 }
