@@ -15,14 +15,14 @@ export function Select({
   return (
     <div className="space-y-2">
       {label && (
-        <label htmlFor={id} className="block text-[13px] font-semibold tracking-wide text-graphite-600 dark:text-gray-400">
+        <label htmlFor={id} className="block text-[15px] font-semibold tracking-wide text-graphite-600 dark:text-gray-400">
           {label}
         </label>
       )}
       <select
         id={id}
         className={cn(
-          "w-full rounded-xl border bg-white px-4 py-2.5 text-sm outline-none transition-all duration-150",
+          "w-full rounded-xl border bg-white px-4 py-3 text-[16px] outline-none transition-all duration-150",
           "border-gray-200 text-graphite-800",
           "focus:border-santa-500 focus:ring-2 focus:ring-santa-100",
           "dark:border-white/[0.08] dark:bg-white/[0.04] dark:text-gray-100",
@@ -37,7 +37,7 @@ export function Select({
           <option key={opt.value} value={opt.value}>{opt.label}</option>
         ))}
       </select>
-      {error && <p className="text-xs text-red-500 dark:text-red-400">{error}</p>}
+      {error && <p className="text-sm text-red-500 dark:text-red-400">{error}</p>}
     </div>
   );
 }
