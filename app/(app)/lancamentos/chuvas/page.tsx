@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button, Card, ConfirmDialog, Input, Modal, Select, Table, type Column } from "@/components/ui";
 import { PrerequisiteNotice } from "@/components/onboarding";
@@ -47,6 +47,7 @@ export default function LancamentoChuvasPage() {
   const [form, setForm] = useState<RainForm>(EMPTY);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState("");
+  const quickLaunchHandled = useRef(false);
 
   useEffect(() => {
     if (!activeFarmId) {
@@ -70,6 +71,23 @@ export default function LancamentoChuvasPage() {
     () => pivots.find((pivot) => pivot.id === selectedPivotId) ?? null,
     [pivots, selectedPivotId],
   );
+
+  useEffect(() => {
+    if (quickLaunchHandled.current || pivots.length === 0 || typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const pivotId = params.get("pivot");
+    if (!pivotId || !pivots.some((pivot) => pivot.id === pivotId)) return;
+
+    quickLaunchHandled.current = true;
+    setSelectedPivotId(pivotId);
+
+    if (params.get("new") === "1") {
+      setEditing(null);
+      setForm({ ...EMPTY, date: today() });
+      setFormError("");
+      setModalOpen(true);
+    }
+  }, [pivots]);
 
   const load = useCallback(async () => {
     if (!activeFarmId || !selectedPivotId) {
