@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 
 describe("sidebar compacta", () => {
@@ -7,11 +7,18 @@ describe("sidebar compacta", () => {
     const sidebar = readFileSync(join(process.cwd(), "components/layout/Sidebar.tsx"), "utf8");
     const nav = readFileSync(join(process.cwd(), "config/navigation.ts"), "utf8");
     const layout = readFileSync(join(process.cwd(), "app/(app)/layout.tsx"), "utf8");
+    const login = readFileSync(join(process.cwd(), "app/(auth)/login/page.tsx"), "utf8");
+    const palette = readFileSync(join(process.cwd(), "tailwind.config.ts"), "utf8");
 
     expect(sidebar).toContain("w-[240px]");
-    expect(sidebar).toContain("bg-forest-900");
+    expect(sidebar).toContain("bg-santa-800");
     expect(sidebar).toContain("aria-expanded");
-    expect(sidebar).toContain(">SANTA COLOMBA</");
+    expect(sidebar).toContain('src="/brand/santa-colomba-logo-branca.png"');
+    expect(login).toContain('src="/brand/santa-colomba-logo-branca.png"');
+    expect(existsSync(join(process.cwd(), "public/brand/santa-colomba-logo-branca.png"))).toBe(true);
+    expect(login).toContain("bg-santa-700");
+    expect(palette).toContain('600: "#286a6b"');
+    expect(palette).toContain("brand: {");
     expect(sidebar).toContain(">IRRIGA PRO</");
     expect(nav).toContain('label: "Dashboard"');
     expect(nav).toContain("Cadastros");
