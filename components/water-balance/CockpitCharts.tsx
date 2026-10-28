@@ -381,6 +381,7 @@ export function KcCurveReadOnlyChart({
   markers = [],
   daeOffsetFromPlanting = 0,
   currentPhase = null,
+  currentRootDepthM = null,
 }: {
   points: KcCurvePoint[];
   currentDae?: number | null;
@@ -391,6 +392,8 @@ export function KcCurveReadOnlyChart({
   daeOffsetFromPlanting?: number;
   /** Fenologia atual calculada pelo motor. */
   currentPhase?: string | null;
+  /** Profundidade radicular atual, mostrada somente dentro do gráfico. */
+  currentRootDepthM?: number | null;
 }) {
   const ordered = [...points]
     .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y))
@@ -567,9 +570,9 @@ export function KcCurveReadOnlyChart({
       <g>
         <line x1={daeX} x2={daeX} y1={padT} y2={phaseBarY + phaseBarH} stroke="#22c55e" strokeWidth={1.6} strokeDasharray="5 4" opacity={0.9} />
         <circle cx={daeX} cy={daeY} r={7} fill="#22c55e" stroke="#ffffff" strokeWidth={2} />
-        <rect x={Math.max(padL + 6, Math.min(daeX - 204, W - 220))} y={Math.max(padT + 4, daeY - 36)} width={194} height={29} rx={7} fill="#052e16" opacity={0.96} />
-        <text x={Math.max(padL + 16, Math.min(daeX - 194, W - 210))} y={Math.max(padT + 23, daeY - 17)} fill="#dcfce7" fontSize={13} fontWeight={700}>
-          Hoje · {Math.round(dae)} DAE · Kc {daeKc.toFixed(2)}
+        <rect x={Math.max(padL + 6, Math.min(daeX - 272, W - 292))} y={Math.max(padT + 4, daeY - 36)} width={266} height={29} rx={7} fill="#052e16" opacity={0.96} />
+        <text x={Math.max(padL + 16, Math.min(daeX - 262, W - 282))} y={Math.max(padT + 23, daeY - 17)} fill="#dcfce7" fontSize={12.5} fontWeight={700}>
+          Hoje · {Math.round(dae)} DAE · Kc {daeKc.toFixed(2)}{currentRootDepthM != null && Number.isFinite(currentRootDepthM) ? ` · raiz ${Math.round(currentRootDepthM * 100)} cm` : ""}
         </text>
       </g>
       </svg>

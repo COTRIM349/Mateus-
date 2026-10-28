@@ -2019,8 +2019,6 @@ function BalanceTab({
   const columns: Column<DailyBalanceRow>[] = [
     { header: "Data", render: (r) => fmtDia(r.date) },
     { header: "Fase", render: (r) => <span className="text-xs">{r.phase}</span> },
-    { header: "Zr estim. (m)", render: (r) => (r.rootDepthEstimated ?? r.rootDepth).toFixed(2) },
-    { header: "Zr CTA (m)", render: (r) => r.rootDepth.toFixed(2) },
     { header: "Kc", render: (r) => r.kc.toFixed(2) },
     { header: "F", render: (r) => r.cad > 0 ? (r.afd / r.cad).toFixed(3) : "—" },
     { header: "Ks", render: (r) => (r.ks ?? 1).toFixed(2) },
@@ -2122,12 +2120,12 @@ function BalanceTab({
 
   if (panel === "decisao") {
     const decisionMetrics = [
-      { l: "ARM atual", v: `${arm.toFixed(1)} mm`, sub: `${pctCc.toFixed(0)}% da CC` },
-      { l: "CTA / CRA", v: `${cad.toFixed(1)} / ${afd.toFixed(1)} mm`, sub: "capacidade / limite" },
-      { l: "Margem até CRA", v: urgency ? (urgency.atOrBeyondAfd ? "Limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—", sub: "reserva operacional" },
-      { l: "Dias até CRA", v: daysToAfdLabel, sub: "sem chuva/irrigação" },
-      { l: "Déficit atual", v: `${(last?.deficit ?? 0).toFixed(1)} mm`, sub: "déficit acumulado" },
-      { l: "Risco", v: classificacao.level === "irrigate" ? "Alto" : classificacao.level === "attention" ? "Médio" : "Baixo", sub: "faixa crítica", c: classificacao.color },
+      { l: "Água disponível", v: `${arm.toFixed(1)} mm`, sub: `ARM · ${pctCc.toFixed(0)}% da CC` },
+      { l: "Capacidade do solo", v: `${cad.toFixed(1)} mm`, sub: "CTA atual" },
+      { l: "Reserva até irrigar", v: urgency ? (urgency.atOrBeyondAfd ? "Limite atingido" : `${urgency.remainingToAfdMm.toFixed(1)} mm`) : "—", sub: "margem até o limite" },
+      { l: "Tempo estimado", v: daysToAfdLabel, sub: "até o limite sem chuva" },
+      { l: "Necessidade hoje", v: `${laminaBruta.toFixed(1)} mm`, sub: "lâmina bruta recomendada" },
+      { l: "Risco", v: classificacao.level === "irrigate" ? "Alto" : classificacao.level === "attention" ? "Médio" : "Baixo", sub: "risco hídrico atual", c: classificacao.color },
     ];
 
     return (
@@ -2192,10 +2190,10 @@ function BalanceTab({
           <div className="mt-2 rounded-lg border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
             <p className="text-[11.5px] leading-snug text-graphite-500 dark:text-gray-400">
               {arm < safetyMm
-                ? "O ARM está abaixo da faixa segura (CTA − CRA). A reposição deve priorizar o retorno da reserva hídrica."
+                ? "A água disponível no solo já atingiu o limite definido para irrigação. A recomendação é repor água."
                 : urgency?.daysToAfd != null
-                  ? `O ARM está em faixa segura. Mantida a demanda atual e sem novas entradas, a CRA seria atingida em cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).`
-                  : "O ARM está em faixa segura e as entradas recentes cobrem a demanda atual."}
+                  ? `Ainda há água suficiente no solo. Mantida a demanda atual e sem chuva ou irrigação, o limite seria atingido em cerca de ${urgency.daysToAfd.toFixed(1)} dia(s).`
+                  : "A água disponível está em faixa segura e não há necessidade de irrigar agora."}
             </p>
           </div>
           <div className="mt-2 grid grid-cols-2 gap-1.5 sm:grid-cols-3">
@@ -2213,7 +2211,7 @@ function BalanceTab({
         <Card className="p-3.5">
           <p className="mb-2 flex items-center gap-2 text-[12.5px] font-bold text-graphite-900 dark:text-white">
             <svg className="h-3.5 w-3.5 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
-            Alertas e observações
+            O que merece atenção
           </p>
           {(() => {
             const items: { sev: "hi" | "md" | "lo"; title: string; desc: string }[] = [];
@@ -2626,42 +2624,59 @@ function Cockpit({
   const sensoryEntries = Object.entries(sensoryByDate).sort((a, b) => b[0].localeCompare(a[0]));
   const latestSensory = sensoryEntries[0] ?? null;
 
-  // alertas
+  // Alertas inteligentes: combinam balanço, previsão, fase, leitura de campo
+  // e qualidade dos parâmetros. O objetivo é destacar somente o que pede ação.
   const alerts: { sev: "hi" | "md" | "lo"; text: string }[] = [];
   const pivotLabel = identity.pivotName ?? "Pivô";
-  if (urgency.atOrBeyondAfd) {
-    alerts.push({ sev: "hi", text: `${pivotLabel} atingiu o limite de manejo.` });
+
+  if (grossDepth > 0.05) {
+    alerts.push({ sev: "hi", text: `Irrigação recomendada: ${fmtNum(grossDepth)} mm brutos para ${pivotLabel}.` });
+  } else if (urgency.atOrBeyondAfd) {
+    alerts.push({ sev: "hi", text: `${pivotLabel} atingiu o limite de manejo e precisa de reposição.` });
   } else if (series.future.length > 0) {
-    // Com previsão: a data de cruzamento vem da PROJEÇÃO do motor (considera
-    // chuva prevista), não da estimativa de demanda constante da urgência.
     const firstRed = series.future.find((p) => p.waterStatus === "deficit_critico");
-    if (firstRed) alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ~${daysBetweenIso(last.date, firstRed.date)} dia(s) (projeção).` });
+    if (firstRed) alerts.push({ sev: "md", text: `O limite de manejo pode ser atingido em ~${daysBetweenIso(last.date, firstRed.date)} dia(s), conforme a projeção.` });
   } else if (urgency.daysToAfd != null && urgency.daysToAfd <= 2.5) {
-    // Sem previsão: estimativa por demanda atual (sem chuva) — deixado explícito.
-    alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ${fmtNum(urgency.daysToAfd)} dia(s) (demanda atual, sem chuva).` });
+    alerts.push({ sev: "md", text: `O limite de manejo pode ser atingido em ${fmtNum(urgency.daysToAfd)} dia(s) se não houver chuva ou irrigação.` });
   }
-  // Chuva efetiva prevista dos dias GENUINAMENTE futuros (mesma base da projeção).
+
   const rainForecast = series.future.reduce((a, p) => a + (p.effectivePrecipitation ?? 0), 0);
-  if (series.future.length > 0 && rainForecast < 5) alerts.push({ sev: "md", text: "Sem chuva efetiva relevante prevista para os próximos dias." });
-  if ((last.ky ?? 0) >= 1) alerts.push({ sev: "md", text: "Fase reprodutiva com alta sensibilidade ao déficit (Ky ≥ 1)." });
-  if ((last.surplus ?? 0) > 0) alerts.push({ sev: "md", text: `Excedente de ${fmtNum(last.surplus)} mm acima da capacidade de campo.` });
-  if (alerts.length === 0) alerts.push({ sev: "lo", text: "Nenhum alerta ativo para o pivô no período." });
+  if (series.future.length > 0 && rainForecast < 5) {
+    alerts.push({ sev: "md", text: "Não há chuva efetiva relevante prevista para os próximos dias." });
+  }
+
+  if ((last.ky ?? 0) >= 1) {
+    alerts.push({ sev: "md", text: "A cultura está em fase sensível ao déficit hídrico; evitar queda prolongada da reserva." });
+  }
+
+  if ((last.surplus ?? 0) > 0) {
+    alerts.push({ sev: "md", text: `Há ${fmtNum(last.surplus)} mm de excedente acima da capacidade de campo; verificar drenagem ou lançamento recente.` });
+  }
+
+  if ((last.factorWeekSampleDays ?? 7) < 4) {
+    alerts.push({ sev: "lo", text: "O fator de disponibilidade semanal ainda usa poucos dias e pode mudar conforme novos dados entrarem." });
+  }
+
+  if (last.rootDepthEstimated != null && last.rootDepthEstimated > last.rootDepth + 0.001) {
+    alerts.push({ sev: "lo", text: "A raiz estimada já ultrapassa o perfil de solo cadastrado; a água abaixo do perfil não entra no cálculo." });
+  }
+
+  if (latestSensory) {
+    const note = Number(latestSensory[1]);
+    if (note <= 3 && pctCc >= 80) {
+      alerts.push({ sev: "hi", text: "A leitura de campo indica solo seco, mas o balanço mostra alta disponibilidade. Conferir chuva, irrigação ou condição inicial." });
+    } else if (note >= 7 && pctCc <= 55) {
+      alerts.push({ sev: "md", text: "A leitura de campo indica solo úmido, mas o balanço está baixo. Conferir a condição observada e os lançamentos." });
+    }
+  }
+
+  if (alerts.length === 0) {
+    alerts.push({ sev: "lo", text: "Sem alerta ativo: manejo dentro da faixa esperada." });
+  }
   const sevDot = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
 
   const kySens = last.ky == null ? null : last.ky >= 1.15 ? "MUITO ALTA" : last.ky >= 1 ? "ALTA" : last.ky >= 0.85 ? "MÉDIA" : "BAIXA";
   const kySensColor = last.ky == null ? undefined : last.ky >= 1 ? "text-red-600 dark:text-red-400" : last.ky >= 0.85 ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400";
-
-  const rootCm = Math.max(last.rootDepth * 100, 0);
-  const profileRows = soilLayers.map((layer) => {
-    const thicknessCm = Math.max(layer.depth_end - layer.depth_start, 0);
-    const cadLayer = Math.max((layer.field_capacity - layer.wilting_point) * (thicknessCm / 100) * 1000, 0);
-    const exploredCm = Math.max(Math.min(rootCm, layer.depth_end) - layer.depth_start, 0);
-    const exploredPct = thicknessCm > 0 ? clampN((exploredCm / thicknessCm) * 100, 0, 100) : 0;
-    const cadEffective = cadLayer * (exploredPct / 100);
-    return { layer, cadLayer, exploredPct, cadEffective };
-  });
-  const ctaProfile = profileRows.reduce((sum, row) => sum + row.cadLayer, 0);
-  const pFactor = cad > 0 ? afd / cad : 0;
 
   return (
     <div className="space-y-4">
@@ -2685,6 +2700,7 @@ function Cockpit({
         rows={rows}
         soilLayers={soilLayers}
         bulkDensity={bulkDensity}
+        pivotName={identity.pivotName}
         cultureName={identity.cultureName}
         varietyName={identity.varietyName}
         stage={identity.stage}
@@ -2699,91 +2715,83 @@ function Cockpit({
       <div className="space-y-4">
         <div className="space-y-4">
           {panelView === "cultura" && (
-          <>
-            <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
-              {[
-                { label: "Pivô", value: identity.pivotName ?? "—" },
-                { label: "Cultura", value: identity.cultureName ?? "—" },
-                { label: "Cultivar / variedade", value: identity.varietyName ?? "Não cadastrada" },
-                { label: "Fenologia atual", value: identity.stage && /^(VE|VC|V\d+|R\d+)$/i.test(identity.stage.trim()) ? identity.stage : (last.phase ?? identity.stage ?? "—") },
-                { label: "Idade", value: last.dae == null ? "—" : last.dae + " DAE" },
-                { label: "Kc atual", value: fmtNum(last.kc, 2) },
-              ].map((item) => (
-                <div key={item.label} className="rounded-xl border border-white/10 bg-[#10252b] p-3 text-white">
-                  <p className="text-[11px] text-slate-400">{item.label}</p>
-                  <p className="mt-1 break-words text-[16px] font-bold">{item.value}</p>
-                </div>
-              ))}
-            </div>
-            <Card className="p-4">
-            <div className="mb-3 flex flex-wrap items-start justify-between gap-3">
-              <div>
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Curva de Kc da Cultura</p>
-                  {kcCurve && (
-                    <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300">
-                      curva ativa · {kcCurve.scope === "cultivar" ? "cultivar" : "cultura"}
-                    </span>
-                  )}
-                </div>
-                <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-                  {identity.cultureName ?? "Cultura"} · {identity.varietyName ?? "cultivar não cadastrada"} · evolução DAE × Kc com fases fenológicas do cadastro
-                </p>
-              </div>
-              {kcCurve && (
-                <div className="text-right">
-                  <p className="text-[11px] font-semibold text-graphite-600 dark:text-gray-300">{kcCurve.name} · v{kcCurve.version}</p>
-                  <p className="mt-0.5 text-[10px] text-graphite-400 dark:text-gray-500">
-                    Hoje: {last.dae ?? "—"} DAE · Kc {fmtNum(last.kc, 2)}
+          <Card className="overflow-hidden p-0">
+            <div className="border-b border-gray-100 bg-white px-4 py-3 dark:border-white/[0.06] dark:bg-graphite-900">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Fenologia e curva de Kc</p>
+                    {kcCurve && (
+                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9.5px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300">
+                        curva ativa · {kcCurve.scope === "cultivar" ? "cultivar" : "cultura"}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
+                    {identity.pivotName ?? "Pivô"} · {identity.cultureName ?? "Cultura"} · {identity.varietyName ?? "cultivar não cadastrada"}
                   </p>
                 </div>
-              )}
-            </div>
-            <div className="mb-4 rounded-xl border border-santa-300/20 bg-santa-50/50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
-              <p className="mb-2 text-[12px] font-bold text-santa-800 dark:text-santa-200">Estádios fenológicos da cultivar (DAE cadastrados)</p>
-              {phenologyMarkers.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                {kcCurve && (
+                  <div className="text-right">
+                    <p className="text-[10.5px] font-semibold text-graphite-600 dark:text-gray-300">{kcCurve.name} · v{kcCurve.version}</p>
+                    <p className="mt-0.5 text-[9.5px] text-graphite-400 dark:text-gray-500">DAE × Kc · progressivo até hoje</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mt-3 grid grid-cols-3 gap-2">
+                {[
+                  { label: "Fenologia atual", value: identity.stage && /^(VE|VC|V\d+|R\d+)$/i.test(identity.stage.trim()) ? identity.stage : (last.phase ?? identity.stage ?? "—") },
+                  { label: "DAE", value: last.dae == null ? "—" : String(last.dae) },
+                  { label: "Kc atual", value: fmtNum(last.kc, 2) },
+                ].map((item) => (
+                  <div key={item.label} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.03]">
+                    <p className="text-[9px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{item.label}</p>
+                    <p className="mt-0.5 truncate text-[15px] font-extrabold text-graphite-900 dark:text-white">{item.value}</p>
+                  </div>
+                ))}
+              </div>
+
+              {phenologyMarkers.length > 0 && (
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  <span className="mr-1 text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Marcos alcançados</span>
                   {phenologyMarkers.filter((m) => m.dae <= (last.dae ?? -1)).map((m) => (
                     <span key={m.code + m.dae} title={m.label + " · " + m.origin}
-                      className="rounded-lg border border-santa-200 bg-white px-3 py-2 text-[12px] font-bold text-santa-800 dark:border-santa-800 dark:bg-santa-900/30 dark:text-santa-100">
-                      {m.code} <span className="ml-1 font-normal opacity-75">{m.dae} DAE · {m.origin}</span>
+                      className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-900/20 dark:text-emerald-300">
+                      {m.code} · {m.dae} DAE
                     </span>
                   ))}
-                  {phenologyMarkers.every((m) => m.dae > (last.dae ?? -1)) && (
-                    <span className="text-[12px] text-graphite-500 dark:text-slate-300">Nenhum estádio cadastrado foi alcançado até o DAE atual.</span>
-                  )}
                 </div>
-              ) : (
-                <p className="text-[12px] text-graphite-500 dark:text-slate-300">
-                  R1, R2 e os demais códigos aparecem quando houver DAE esperado ou calibrado ativo em Culturas → Fenologia, para a cultivar deste pivô.
-                </p>
               )}
             </div>
-            {kcCurve ? (
-              <div className="h-[76vh] min-h-[560px] w-full">
-                <KcCurveReadOnlyChart
-                  points={kcCurve.points}
-                  currentDae={last.dae ?? null}
-                  currentKc={last.kc}
-                  currentPhase={last.phase ?? null}
-                  daeOffsetFromPlanting={daeOffsetFromPlanting}
-                  markers={phenologyMarkers}
-                  phases={culturePhases.map((phase) => ({
-                    name: phase.name,
-                    phaseKey: phase.phase_key ?? null,
-                    startDap: phase.days_after_plant,
-                    durationDays: phase.duration_days,
-                  }))}
-                />
-              </div>
-            ) : (
-              <div className="w-full rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-white/[0.08] dark:bg-white/[0.02]">
-                <p className="mb-2 text-[12px] font-semibold text-graphite-600 dark:text-gray-300">Sem curva Kc ativa em DAE no cadastro: exibindo os valores históricos realmente calculados para este pivô.</p>
-                <ObservedKcChart rows={rows} markers={phenologyMarkers} />
-              </div>
-            )}
+
+            <div className="p-3 sm:p-4">
+              {kcCurve ? (
+                <div className="h-[58vh] min-h-[420px] max-h-[620px] w-full rounded-xl border border-gray-100 bg-gray-50/40 p-1 dark:border-white/[0.06] dark:bg-white/[0.015]">
+                  <KcCurveReadOnlyChart
+                    points={kcCurve.points}
+                    currentDae={last.dae ?? null}
+                    currentKc={last.kc}
+                    currentPhase={last.phase ?? null}
+                    currentRootDepthM={last.rootDepthEstimated ?? last.rootDepth}
+                    daeOffsetFromPlanting={daeOffsetFromPlanting}
+                    markers={phenologyMarkers}
+                    phases={culturePhases.map((phase) => ({
+                      name: phase.name,
+                      phaseKey: phase.phase_key ?? null,
+                      startDap: phase.days_after_plant,
+                      durationDays: phase.duration_days,
+                    }))}
+                  />
+                </div>
+              ) : (
+                <div className="w-full rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                  <p className="mb-2 text-[11px] font-semibold text-graphite-600 dark:text-gray-300">Sem curva ativa em DAE: exibindo somente o Kc realmente calculado até hoje.</p>
+                  <ObservedKcChart rows={rows} markers={phenologyMarkers} currentRootDepthM={last.rootDepthEstimated ?? last.rootDepth} />
+                </div>
+              )}
+            </div>
           </Card>
-          </>
           )}
         </div>
 
@@ -2863,79 +2871,33 @@ function Cockpit({
 
 
           <Card className="p-4 xl:col-span-2">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <p className="flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconRoot /> Perfil explorado pela raiz</p>
-              <span className="text-[10.5px] font-semibold text-graphite-400 dark:text-gray-500">Estimada {fmtNum(last.rootDepthEstimated ?? last.rootDepth, 2)} m · na CTA {fmtNum(last.rootDepth, 2)} m</span>
-            </div>
-            {profileRows.length > 0 ? (
-              <>
-                <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-white/[0.06]">
-                  <div className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 bg-gray-50 px-2.5 py-2 text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:bg-white/[0.03] dark:text-gray-500">
-                    <span>Camada</span><span>CTA</span><span>Explorada</span><span>CTA efetiva</span>
-                  </div>
-                  {profileRows.map((row) => (
-                    <div key={`${row.layer.depth_start}-${row.layer.depth_end}`} className="grid grid-cols-[1.1fr_.8fr_.8fr_.9fr] gap-2 border-t border-gray-100 px-2.5 py-2 text-[11.5px] tabular-nums text-graphite-600 dark:border-white/[0.05] dark:text-gray-300">
-                      <span className="font-semibold">{row.layer.depth_start}–{row.layer.depth_end} cm</span>
-                      <span>{fmtNum(row.cadLayer)} mm</span>
-                      <span>{fmtNum(row.exploredPct, 0)}%</span>
-                      <span className="font-bold text-graphite-900 dark:text-white">{fmtNum(row.cadEffective)} mm</span>
-                    </div>
-                  ))}
-                </div>
-                <div className="mt-3 grid grid-cols-2 gap-2 text-[11.5px] lg:grid-cols-4">
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA perfil completo</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(ctaProfile)} mm</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CTA efetiva hoje</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(cad)} mm</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">F médio semanal</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(pFactor, 2)}</p></div>
-                  <div className="rounded-xl bg-gray-50 p-2.5 dark:bg-white/[0.03]"><p className="text-graphite-400 dark:text-gray-500">CRA</p><p className="mt-0.5 font-extrabold text-graphite-900 dark:text-white">{fmtNum(afd)} mm</p></div>
-                </div>
-                {last.factorWeekStart && (
-                  <p className="mt-2 text-[11px] font-medium text-amber-700 dark:text-amber-300">
-                    F da semana iniciada em {fmtDia(last.factorWeekStart)} · {last.factorWeekSampleDays ?? "—"} dia(s) com dado · ETc potencial média: {last.etcPotentialWeeklyMean != null ? fmtNum(last.etcPotentialWeeklyMean, 2) : "—"} mm/dia.
-                    {(last.factorWeekSampleDays ?? 0) < 7 ? " Semana em andamento ou histórico parcial: a média pode ser atualizada com novos dias." : ""}
-                  </p>
-                )}
-                <p className="mt-2 text-[10px] leading-relaxed text-graphite-400 dark:text-gray-500">DTA = (CC − PMP) × 1000 (mm/m). CTA diária = soma das camadas exploradas pela raiz. CRA diária = CTA do dia × F médio da semana, calculado pelos ajustes FAO-56 com ETc potencial dos dias disponíveis. {last.rootDepthEstimated != null && last.rootDepthEstimated > last.rootDepth + 0.001 ? `A raiz estimada ultrapassa o perfil cadastrado em ${fmtNum((last.rootDepthEstimated - last.rootDepth) * 100, 0)} cm; essa profundidade adicional NÃO entrou no cálculo de água.` : "A profundidade usada no cálculo não excede o solo cadastrado."}</p>
-              </>
-            ) : (
-              <p className="text-[12px] text-graphite-400 dark:text-gray-500">Perfil por camadas não cadastrado para este pivô.</p>
-            )}
-          </Card>
-
-          {/* Nota de umidade de campo + Alertas */}
-          <div className="grid gap-4 sm:grid-cols-2 xl:col-span-2">
-            <Card className="p-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconDrop /> Nota de Umidade de Campo</p>
-              {latestSensory ? (
-                <div className="flex items-center gap-3">
-                  <div className="relative flex h-14 w-14 items-center justify-center">
-                    <svg viewBox="0 0 36 36" className="h-14 w-14 -rotate-90">
-                      <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" className="stroke-gray-100 dark:stroke-white/[0.08]" />
-                      <circle cx="18" cy="18" r="15.5" fill="none" strokeWidth="4" strokeLinecap="round" stroke={Number(latestSensory[1]) >= 7 ? "#16a34a" : Number(latestSensory[1]) >= 4 ? "#eab308" : "#dc2626"} strokeDasharray={`${(Number(latestSensory[1]) / 10) * 97.4} 97.4`} />
-                    </svg>
-                    <span className="absolute text-[13px] font-extrabold text-graphite-900 dark:text-white">{latestSensory[1]}<span className="text-[9px] text-graphite-400">/10</span></span>
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-[11px] text-graphite-400 dark:text-gray-500">{fmtDia(latestSensory[0])}</p>
-                    <p className="text-[12px] font-semibold text-graphite-700 dark:text-gray-200">{Number(latestSensory[1]) >= 7 ? "Solo úmido" : Number(latestSensory[1]) >= 4 ? "Umidade intermediária" : "Solo seco"}</p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-[12px] text-graphite-400 dark:text-gray-500">Sem leitura sensorial registrada no período.</p>
-              )}
-            </Card>
-
-            <Card className="p-4">
-              <p className="mb-2 flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconAlert /> Alertas Inteligentes</p>
-              <div className="space-y-2">
-                {alerts.map((a, i) => (
-                  <div key={i} className="flex gap-2.5">
-                    <span className={`mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full ${sevDot[a.sev]}`} />
-                    <p className="text-[12px] leading-snug text-graphite-600 dark:text-gray-300">{a.text}</p>
-                  </div>
-                ))}
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="flex items-center gap-1.5 text-[13px] font-bold text-graphite-900 dark:text-white"><IconAlert /> Alertas inteligentes</p>
+                <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-gray-500">Cruza balanço, previsão, fase da cultura e observação de campo.</p>
               </div>
-            </Card>
-          </div>
+              {latestSensory && (
+                <span className="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-1.5 text-[10.5px] font-semibold text-graphite-600 dark:border-white/[0.08] dark:bg-white/[0.03] dark:text-gray-300">
+                  Campo {latestSensory[1]}/10 · {fmtDia(latestSensory[0])}
+                </span>
+              )}
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {alerts.map((a, i) => {
+                const cls = a.sev === "hi"
+                  ? "border-red-500/25 bg-red-500/[0.05]"
+                  : a.sev === "md"
+                    ? "border-orange-500/25 bg-orange-500/[0.05]"
+                    : "border-emerald-500/20 bg-emerald-500/[0.04]";
+                return (
+                  <div key={i} className={`flex min-h-[58px] gap-2.5 rounded-xl border px-3 py-2.5 ${cls}`}>
+                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${sevDot[a.sev]}`} />
+                    <p className="text-[11.5px] leading-snug text-graphite-600 dark:text-gray-300">{a.text}</p>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
         </div>}
       </div>
       )}
@@ -2956,7 +2918,6 @@ function IconSun() { return <svg {...svgP}><circle cx="12" cy="12" r="4" /><path
 function IconLeaf() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20s0-8 8-8 8-8 8-8-1 16-9 16c-4 0-7-3-7-7 0 0 3-2 6-2" /></svg>; }
 function IconSprout() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 22V12m0 0C12 8 8 6 4 6c0 4 4 6 8 6zm0 0c0-3 3-5 7-5 0 3-3 5-7 5z" /></svg>; }
 function IconLayers() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l9 5-9 5-9-5 9-5zm9 9l-9 5-9-5m18 4l-9 5-9-5" /></svg>; }
-function IconRoot() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3v8m0 0c0 3-3 4-3 7m3-7c0 3 3 4 3 7M9 21h6" /></svg>; }
 function IconBars() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M4 20V10m5 10V4m5 16v-7m5 7V8" /></svg>; }
 function IconCloud() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 014-4 5 5 0 019.9 1H17a3 3 0 010 6H6a3 3 0 01-3-3z" /></svg>; }
 

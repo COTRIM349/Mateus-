@@ -18,11 +18,13 @@ describe("painéis de manejo hídrico por pivô", () => {
     // Curva de Kc da aba Cultura e painel RAS completo continuam disponíveis.
     expect(page).toContain("<SoilReservoirReferencePanel");
     expect(page).toContain('<KcCurveReadOnlyChart');
-    expect(page).toContain("h-[76vh] min-h-[560px] w-full");
+    expect(page).toContain("h-[58vh] min-h-[420px] max-h-[620px] w-full");
     expect(page).toContain("<PivotClimatePanel");
     expect(page).toContain("phenologyMarkers={phenologyMarkers}");
     expect(page).toContain("culture_variety_phenology_targets");
     expect(page).toContain("identity.varietyName");
+    expect(page).not.toContain("Perfil explorado pela raiz");
+    expect(page).toContain("Alertas inteligentes");
   });
 
   it("mantém chuva manual, eventos de irrigação e recálculo ao retornar", () => {
