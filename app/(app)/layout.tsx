@@ -1,6 +1,5 @@
 "use client";
 
-import { Sidebar } from "@/components/layout/Sidebar";
 import { Topbar } from "@/components/layout/Topbar";
 import { useAuth } from "@/components/providers";
 
@@ -19,14 +18,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen bg-[#f3f7f6] dark:bg-graphite-950">
-      <Sidebar />
-      <div className="flex min-w-0 flex-1 flex-col lg:pl-[264px]">
-        <Topbar />
-        <main className="min-w-0 flex-1 px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
-          <div className="mx-auto w-full max-w-[1680px] animate-in">{children}</div>
-        </main>
-      </div>
+    <div className="flex min-h-screen min-w-0 flex-col bg-[#f3f7f6] dark:bg-graphite-950">
+      <Topbar />
+      <main className="min-w-0 flex-1 px-4 py-5 sm:px-7 sm:py-6 lg:px-9 lg:py-7">
+        <div className="mx-auto w-full max-w-[1920px] animate-in">{children}</div>
+      </main>
     </div>
   );
 }

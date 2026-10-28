@@ -1,45 +1,41 @@
 import { describe, expect, it } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { bottomItems, navGroups, navItems, topLevelItems } from "../../config/navigation";
 
-describe("sidebar compacta", () => {
-  it("mantém identidade Santa Colomba, compacta, sem recorte de outra plataforma", () => {
-    const sidebar = readFileSync(join(process.cwd(), "components/layout/Sidebar.tsx"), "utf8");
-    const nav = readFileSync(join(process.cwd(), "config/navigation.ts"), "utf8");
-    const layout = readFileSync(join(process.cwd(), "app/(app)/layout.tsx"), "utf8");
-    const login = readFileSync(join(process.cwd(), "app/(auth)/login/page.tsx"), "utf8");
-    const palette = readFileSync(join(process.cwd(), "tailwind.config.ts"), "utf8");
+const source = (path: string) => readFileSync(join(process.cwd(), path), "utf8");
 
-    expect(sidebar).toContain("w-[264px]");
-    expect(sidebar).toContain("bg-santa-800");
-    expect(sidebar).toContain("text-[14px]");
-    expect(sidebar).toContain("Navegação principal");
-    expect(sidebar).toContain("aria-expanded");
-    expect(sidebar).toContain('src="/brand/santa-colomba-logo-branca.png"');
-    expect(login).toContain('src="/brand/santa-colomba-logo-branca.png"');
+describe("navegação horizontal Santa Colomba", () => {
+  it("usa o logotipo e o menu na parte superior, sem montar sidebar lateral", () => {
+    const layout = source("app/(app)/layout.tsx");
+    const topbar = source("components/layout/Topbar.tsx");
+    const navigation = source("components/layout/TopNavigation.tsx");
+
+    expect(layout).not.toContain("<Sidebar />");
+    expect(layout).not.toContain("lg:pl-[264px]");
+    expect(layout).toContain("<Topbar />");
+    expect(topbar).toContain("<TopNavigation />");
+    expect(topbar).toContain('src="/brand/santa-colomba-logo-branca.png"');
     expect(existsSync(join(process.cwd(), "public/brand/santa-colomba-logo-branca.png"))).toBe(true);
-    expect(login).toContain("bg-santa-700");
-    expect(palette).toContain('600: "#286a6b"');
-    expect(palette).toContain("brand: {");
-    expect(sidebar).toContain(">IRRIGA PRO</");
-    expect(nav).toContain('label: "Dashboard"');
-    expect(nav).toContain("Cadastros");
-    expect(nav).toContain("Manejo Diário");
-    expect(nav).toContain('href: "/historico"');
-    expect(nav).toContain('href: "/relatorios"');
-    expect(nav).toContain('href: "/balanco-hidrico"');
-    expect(nav).not.toContain("Gestão de Ativos");
-    expect(nav).not.toContain("Operação e Manejo");
-    expect(nav).not.toContain('label: "Home"');
-    expect(nav).not.toContain('href: "/agua"');
-    expect(nav).not.toContain('href: "/alertas"');
-    expect(nav).not.toContain('href: "/sensores"');
-    expect(nav).not.toContain('href: "/reservatorios"');
-    expect(nav).not.toContain('href: "/cotrim-ai"');
-    expect(nav).not.toContain('href: "/ordem-servico"');
-    expect(nav).not.toContain('href: "/lancamentos/chuvas"');
-    expect(nav).not.toContain("Infraestrutura");
-    expect(sidebar).not.toContain("tracking-[0.14em] text-brand-200");
-    expect(layout).toContain("lg:pl-[264px]");
+    expect(navigation).toContain('aria-label="Navegação principal"');
+    expect(navigation).toContain('aria-label="Navegação para telas menores"');
+    expect(navigation).toContain("aria-expanded");
+  });
+
+  it("dá acesso direto ao balanço hídrico sem duplicar a rota", () => {
+    expect(topLevelItems[0]?.href).toBe("/");
+    expect(topLevelItems[1]?.href).toBe("/balanco-hidrico");
+    expect(navGroups.find((g) => g.label === "Manejo Diário")?.items.some((i) => i.href === "/balanco-hidrico")).toBe(false);
+    expect(navItems.filter((i) => i.href === "/balanco-hidrico")).toHaveLength(1);
+  });
+
+  it("mantém todos os módulos e opções agrupadas no menu", () => {
+    expect(navGroups.map((group) => group.label)).toEqual([
+      "Cadastros", "Manejo Diário", "Lançamentos", "Energia & Custos",
+    ]);
+    expect(bottomItems.some((item) => item.href === "/configuracoes")).toBe(true);
+    expect(navItems.some((item) => item.href === "/programacao")).toBe(true);
+    expect(navItems.some((item) => item.href === "/lancamentos/irrigacao")).toBe(true);
+    expect(new Set(navItems.map((item) => item.href)).size).toBe(navItems.length);
   });
 });
