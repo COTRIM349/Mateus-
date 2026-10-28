@@ -189,7 +189,7 @@ function RasFullWidthChart({ points, replacementMm, mode, visible }: {
             </circle>
           ):null)}
         </g>
-        {points.map((p,i)=>(points.length<=20||i%2===0)?
+        {points.map((p,i)=>(i % Math.max(1, Math.ceil(points.length / 14)) === 0 || i === points.length - 1)?
           <text key={p.date} x={x(i)} y={H-13} fill="#d1dae2" textAnchor="middle" fontSize={12}>{fmtDate(p.date)}</text>:null)}
         {[0,25,50,75,100].filter((q)=>q>=yMin&&q<=yMax).map((q)=>{
           const mm=mmAt(q);
@@ -205,9 +205,10 @@ function RasFullWidthChart({ points, replacementMm, mode, visible }: {
   );
 }
 
-export function SoilReservoirReferencePanel({ rows, cultureName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
+export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
   rows: DailyBalanceRow[];
   cultureName: string | null;
+  varietyName: string | null;
   stage: string | null;
   areaHa: number | null;
   flowRateM3h: number | null;
@@ -217,7 +218,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, stage, areaHa, 
   const [eventVisibility, setEventVisibility] = useState<RASObservationsVisibility>({
     chuva: true, irrigacao: true, eto: true,
   });
-  const points = useMemo(() => rows.slice(-16).map(buildRasPoint).filter((p): p is RasPoint => p != null), [rows]);
+  const points = useMemo(() => rows.map(buildRasPoint).filter((p): p is RasPoint => p != null), [rows]);
   const last = rows[rows.length-1];
   const now = points[points.length-1];
   const weekly = currentWeekStats(rows);
@@ -247,8 +248,9 @@ export function SoilReservoirReferencePanel({ rows, cultureName, stage, areaHa, 
         </div>
       </header>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 2xl:grid-cols-8">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 2xl:grid-cols-9">
         <Tile label="Cultura" value={cultureName ?? "—"} hint="Parcela em manejo" tone="green" symbol="❧"/>
+        <Tile label="Cultivar" value={varietyName ?? "Não cadastrada"} hint="Cultivar da parcela ativa" tone="cyan" symbol="✧"/>
         <Tile label="Fase atual" value={phaseLabel} hint={last.dae!=null?`${last.dae} DAE`:undefined} tone="green" symbol="▦"/>
         <Tile label="Prof. radicular efetiva" value={n(last.rootDepth*100,0)+" cm"} hint="Profundidade na CTA" tone="green" symbol="♧"/>
         <Tile label="CTA atual" value={mmOrDash(now.ctaMm)} hint="Água total disponível" tone="blue" symbol="◉"/>
