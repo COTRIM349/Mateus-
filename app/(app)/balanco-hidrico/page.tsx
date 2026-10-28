@@ -1623,6 +1623,7 @@ export default function BalancoHidricoPage() {
                 summary={summary}
                 projection={projectionRows}
                 soilLayers={soilLayers}
+                bulkDensity={soil?.bulk_density ?? null}
                 identity={{
                   pivotName: selPivot?.name ?? null,
                   cultureName: culture?.name ?? null,
@@ -2625,6 +2626,7 @@ function Cockpit({
   summary,
   projection,
   soilLayers,
+  bulkDensity,
   identity,
   sensoryByDate,
   weatherByDate,
@@ -2641,6 +2643,7 @@ function Cockpit({
   summary: ReturnType<typeof calculateSummary>;
   projection: DailyBalanceRow[];
   soilLayers: SoilProfileLayer[];
+  bulkDensity: number | null;
   identity: CockpitIdentity;
   sensoryByDate: Record<string, number>;
   weatherByDate: Record<string, WeatherExtra>;
@@ -2773,6 +2776,8 @@ function Cockpit({
       </div>
       {panelView === "solo" && <SoilReservoirReferencePanel
         rows={rows}
+        soilLayers={soilLayers}
+        bulkDensity={bulkDensity}
         cultureName={identity.cultureName}
         varietyName={identity.varietyName}
         stage={identity.stage}
