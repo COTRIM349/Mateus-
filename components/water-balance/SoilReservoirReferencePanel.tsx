@@ -2,7 +2,7 @@
 
 import { useMemo, useState, useEffect, useRef } from "react";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
-import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
+import { buildRasPoint, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
 import { rasDisplaySeries, rasDisplayAxisCeiling, RAS_UNITS, type RasDisplayUnit, type RasDisplayPoint } from "@/modules/water-balance/services/ras-display-modes";
 import type { SoilProfileLayer } from "@/modules/soil/services/soil-profile";
 import { rasEventAxisCeiling, rasEventVerticalPosition } from "@/modules/water-balance/services/ras-event-axis";
@@ -31,21 +31,6 @@ function Tile({ label, value, hint, tone = "white", symbol = "◉" }: {
         <div className="truncate text-[9.5px] font-semibold leading-tight text-slate-300">{label}</div>
         <div title={value} className="mt-0.5 max-w-full truncate text-[clamp(15px,1.05vw,19px)] font-extrabold leading-none tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
         {hint && <div title={hint} className="mt-1 truncate text-[8.5px] leading-none text-slate-500">{hint}</div>}
-      </div>
-    </div>
-  );
-}
-
-function MiniMetric({ label, value, hint, symbol, tone = "white" }: {
-  label: string; value: string; hint?: string; symbol: string; tone?: StatTone;
-}) {
-  return (
-    <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-white/[0.08] bg-[#0a1a21] px-2.5 py-2">
-      <span className="text-[16px]" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</span>
-      <div className="min-w-0">
-        <div className="truncate text-[9.5px] font-medium text-slate-300">{label}</div>
-        <div title={value} className="mt-0.5 max-w-full truncate text-[clamp(16px,1.05vw,19px)] font-extrabold leading-tight tabular-nums text-white">{value}</div>
-        {hint && <div className="mt-0.5 truncate text-[9px] leading-tight text-slate-500">{hint}</div>}
       </div>
     </div>
   );
@@ -253,10 +238,11 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
   );
 }
 
-export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity = null, cultureName, varietyName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
+export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity = null, pivotName, cultureName, varietyName, stage, areaHa, flowRateM3h, efficiencyPercent }: {
   rows: DailyBalanceRow[];
   soilLayers?: SoilProfileLayer[];
   bulkDensity?: number | null;
+  pivotName: string | null;
   cultureName: string | null;
   varietyName: string | null;
   stage: string | null;
@@ -302,8 +288,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   ];
   const last = rows[rows.length-1];
   const now = points[points.length-1];
-  const weekly = currentWeekStats(rows);
-  if (!last || !now || !weekly) {
+  if (!last || !now) {
     return <div className="rounded-2xl border border-amber-500/20 bg-[#0b1c23] p-5 text-sm text-amber-200">Dados de CC, PMP e balanço incompletos; o gráfico RAS em %CC só é exibido com perfil hídrico válido.</div>;
   }
   const efficiency = efficiencyPercent != null && efficiencyPercent > 0 ? efficiencyPercent/100 : null;
@@ -311,6 +296,10 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   const reservePct = now.ctaMm > 0 ? now.armMm/now.ctaMm*100 : 0;
   const phaseLabel = last.phase && last.phase !== "—" ? last.phase : (stage ?? "—");
   const mmOrDash = (value: number | null, digits=1) => value==null ? "—" : n(value,digits)+" mm";
+  const irrigationAccumulatedMm = points.reduce((sum, point) => sum + (point.irrigationAppliedMm ?? 0), 0);
+  const etcPotentialAccumulatedMm = rows.reduce((sum, row) => sum + (row.etcPotential ?? row.etc ?? 0), 0);
+  const pivotAreaLabel = areaHa != null && Number.isFinite(areaHa) ? n(areaHa, 1) + " ha" : "—";
+  const recommendedGrossMm = repl.grossMm ?? 0;
 
   return (
     <section className="w-full min-w-0 space-y-3 rounded-[18px] border border-emerald-900/40 bg-[#051216] p-3 text-white shadow-xl sm:p-4">
@@ -338,16 +327,16 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         ))}
       </div>
 
-      <div className="grid grid-cols-2 gap-1 lg:grid-cols-4 min-[1550px]:grid-cols-9">
-        <Tile label="Cultura" value={cultureName ?? "—"} hint="Parcela em manejo" tone="green" symbol="❧"/>
-        <Tile label="Cultivar" value={varietyName ?? "Não cadastrada"} hint="Cultivar da parcela ativa" tone="cyan" symbol="✧"/>
-        <Tile label="Fase atual" value={phaseLabel} hint={last.dae!=null?`${last.dae} DAE`:undefined} tone="green" symbol="▦"/>
-        <Tile label="Prof. radicular efetiva" value={n(last.rootDepth*100,0)+" cm"} hint="Profundidade na CTA" tone="green" symbol="♧"/>
-        <Tile label="CTA atual" value={mmOrDash(now.ctaMm)} hint="Água total disponível" tone="blue" symbol="◉"/>
-        <Tile label="F médio semanal" value={n(now.f,3)} hint="Mesmo valor durante a semana" tone="cyan" symbol="≋"/>
-        <Tile label="Ponto de murcha (PMP)" value={n(now.pmpPercentCc,1)+"% CC"} hint={n(now.pmpAbsoluteMm,1)+" mm retidos no solo"} tone="orange" symbol="◉"/>
-        <Tile label="AFD / CRA · lâmina" value={mmOrDash(now.afdMm)} hint={n(now.f*100,1)+"% da CTA"} tone="purple" symbol="◉"/>
-        <Tile label="Água disponível (ARM)" value={mmOrDash(now.armMm)} hint={n(reservePct,1)+"% da CTA · "+n(now.ccPercent,1)+"% CC"} tone={now.ccPercent<=now.limitPercentCc?"red":"blue"} symbol="◉"/>
+      <div className="grid grid-cols-2 gap-1 lg:grid-cols-3 min-[1450px]:grid-cols-9">
+        <Tile label="Pivô / área" value={pivotAreaLabel} hint={pivotName ?? "Pivô selecionado"} tone="blue" symbol="◎"/>
+        <Tile label="Fenologia" value={phaseLabel} hint={cultureName ? `${cultureName}${varietyName ? " · " + varietyName : ""}` : undefined} tone="green" symbol="▦"/>
+        <Tile label="DAE" value={last.dae!=null?`${last.dae} dias`:"—"} hint="Dias após emergência" tone="cyan" symbol="◷"/>
+        <Tile label="Irrigação acumulada" value={mmOrDash(irrigationAccumulatedMm)} hint="Lâmina bruta realizada" tone="cyan" symbol="↧"/>
+        <Tile label="ETc potencial acumulada" value={mmOrDash(etcPotentialAccumulatedMm)} hint="Demanda potencial do período" tone="orange" symbol="≋"/>
+        <Tile label="Fator de disponibilidade" value={n(now.f,3)} hint={n(now.f*100,1)+"% da CTA"} tone="purple" symbol="ƒ"/>
+        <Tile label="Kc atual" value={n(now.kc,2)} hint="Coeficiente da cultura" tone="green" symbol="K"/>
+        <Tile label="ETo atual" value={n(now.et0,2)+" mm/d"} hint="Demanda atmosférica" tone="orange" symbol="☀"/>
+        <Tile label="Irrigação recomendada" value={mmOrDash(recommendedGrossMm)} hint={recommendedGrossMm > 0 ? "Lâmina bruta para 100% CC" : "Sem reposição hoje"} tone={recommendedGrossMm > 0 ? "blue" : "green"} symbol="↥"/>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-[#0c232a] px-3 py-2.5">
@@ -509,41 +498,8 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         )}
       </div>
 
-      <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-[1.15fr_1.2fr_.72fr]">
-        <div className="rounded-xl border border-white/[0.09] bg-[#0b1c23] p-3">
-          <div className="mb-2 text-[13px] font-bold">Parâmetros da semana <span className="ml-1 font-normal text-slate-400">({fmtDate(weekly.start)} a {fmtDate(weekly.end)})</span></div>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <MiniMetric symbol="☀" label="ETo média" value={n(weekly.etoMean,2)} hint="mm/dia" tone="orange"/>
-            <MiniMetric symbol="❧" label="Kc da cultura" value={n(weekly.currentKc,2)} hint="Fase atual" tone="green"/>
-            <MiniMetric symbol="♧" label="ETc média" value={n(weekly.etcMean,2)} hint="mm/dia (real)" tone="cyan"/>
-            <MiniMetric symbol="≋" label="F semanal" value={n(now.f,3)} hint={weekly.days+" dia(s) com dados"} tone="blue"/>
-          </div>
-        </div>
-        <div className="rounded-xl border border-white/[0.09] bg-[#0b1c23] p-3">
-          <div className="mb-2 text-[13px] font-bold">Cálculo da necessidade de reposição</div>
-          <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-            <MiniMetric symbol="◉" label="ARM atual" value={mmOrDash(now.armMm)} tone="purple"/>
-            <MiniMetric symbol="◎" label="Meta: 100% da CC" value={mmOrDash(now.ctaMm)} tone="green"/>
-            <MiniMetric symbol="◉" label="Lâmina líquida" value={mmOrDash(repl.netMm)} hint="CTA − ARM" tone="blue"/>
-            <MiniMetric symbol="⚙" label="Lâmina bruta" value={mmOrDash(repl.grossMm)} hint={efficiency!=null?`Eficiência ${n(efficiency*100,0)}%`:"Ea não cadastrada"} tone="white"/>
-          </div>
-        </div>
-        <div className="rounded-xl border border-white/[0.09] bg-[#0b1c23] p-3">
-          <div className="mb-2 text-[12px] font-bold">Resumo da recomendação</div>
-          <div className="rounded-lg bg-gradient-to-br from-blue-600 to-blue-800 p-3">
-            <div className="grid grid-cols-2 gap-3 xl:grid-cols-1">
-              <div>
-                <div className="text-[10px] font-medium text-blue-100">Lâmina bruta · 100% CC</div>
-                <div className="mt-0.5 text-[24px] font-extrabold leading-none">{mmOrDash(repl.grossMm)}</div>
-              </div>
-              <div>
-                <div className="text-[10px] font-medium text-blue-100">Tempo estimado</div>
-                <div className="mt-0.5 text-[17px] font-extrabold leading-tight">{repl.hours==null?"—":n(repl.hours,1)+" h"}</div>
-              </div>
-            </div>
-            <div className="mt-2 border-t border-white/15 pt-2 text-[9.5px] text-blue-100">{flowRateM3h!=null?`Vazão ${n(flowRateM3h,0)} m³/h`:"Vazão não cadastrada"}</div>
-          </div>
-        </div>
+      <div className="rounded-xl border border-white/[0.08] bg-[#0b1c23] px-3 py-2 text-[10px] leading-relaxed text-slate-400">
+        Os indicadores acima resumem a operação do pivô no período selecionado. A profundidade radicular permanece apenas no gráfico de cultura/Kc e nos cálculos internos do balanço.
       </div>
       <p className="px-1 text-[10px] leading-relaxed text-slate-400">Todos os gráficos usam o mesmo balanço e as mesmas datas: %CC (PMP acima de zero), ARM em mm (PMP = zero) e % em peso (convertido com densidade por camada). AFD/CRA = CTA × F semanal; retorno a 100% CC = CTA − ARM. Chuva somente de lançamentos manuais por pivô; ETo conforme fonte aprovada.</p>
     </section>
