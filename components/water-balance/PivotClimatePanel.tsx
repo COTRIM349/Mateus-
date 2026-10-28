@@ -157,3 +157,45 @@ export function PivotClimatePanel({
     </section>
   );
 }
+
+
+/** Fallback visual: somente os Kc já utilizados pelo motor nos dias calculados. */
+export function ObservedKcChart({ rows }: { rows: DailyBalanceRow[] }) {
+  const values = useMemo(
+    () => rows.filter((row) => Number.isFinite(row.kc)).map((row) => ({
+      date: row.date,
+      kc: row.kc,
+      fase: row.phase,
+      dae: row.dae,
+    })),
+    [rows],
+  );
+
+  if (values.length === 0) {
+    return <p className="p-6 text-[13px] text-slate-400">Sem valores de Kc calculados no período.</p>;
+  }
+
+  return (
+    <div className="w-full space-y-2">
+      <p className="text-[12px] text-graphite-500 dark:text-slate-400">
+        Kc histórico utilizado pelo motor, por data, com a fenologia correspondente. Sem curva ativa no cadastro: não há extrapolação do ciclo futuro.
+      </p>
+      <div className="h-[450px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={values} margin={{ top: 15, right: 22, bottom: 5, left: 0 }}>
+            <CartesianGrid stroke="#64748b" strokeOpacity={0.17} vertical={false} />
+            <XAxis dataKey="date" tickFormatter={formatDay} minTickGap={24} tick={axisTick} />
+            <YAxis dataKey="kc" domain={[0, "auto"]} tick={axisTick} width={42} />
+            <Tooltip contentStyle={tooltipStyle} labelFormatter={(date) => String(date)} />
+            <Line name="Kc calculado" dataKey="kc" type="monotone" dot={false} stroke="#16a085" strokeWidth={3} connectNulls={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+      <p className="text-[11px] text-graphite-500 dark:text-slate-400">
+        Último dia: {values[values.length - 1]?.dae ?? "—"} DAE ·
+        fase {values[values.length - 1]?.fase ?? "não informada"} ·
+        Kc {decimal(values[values.length - 1]?.kc)}.
+      </p>
+    </div>
+  );
+}
