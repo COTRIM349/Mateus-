@@ -52,20 +52,16 @@ import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modul
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
+import { SoilReservoirReferencePanel } from "@/components/water-balance/SoilReservoirReferencePanel";
 import {
   EntradasConsumoChart,
-  ReservatorioChart,
   KcCurveReadOnlyChart,
   CockpitSeriesToggles,
   ENTRADAS_SERIES,
-  RESERVATORIO_SERIES,
   defaultEntradasVisible,
-  defaultReservatorioVisible,
   type EntradaConsumoPoint,
   type ReservatorioPoint,
   type EntradaSeriesKey,
-  type ReservSeriesKey,
-  type ReservatorioZoom,
 } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 import Link from "next/link";
@@ -1581,6 +1577,7 @@ export default function BalancoHidricoPage() {
                   stage: assignment?.crop_stage ?? null,
                   area: parcelArea,
                   efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
+                  flowRateM3h: selPivot?.flow_rate ?? null,
                 }}
                 sensoryByDate={sensoryByDate}
                 onShowDetail={() => setActiveTab("decisao")}
@@ -2479,6 +2476,7 @@ interface CockpitIdentity {
   stage: string | null;
   area: number | null;
   efficiency: number | null;
+  flowRateM3h: number | null;
 }
 
 function daysBetweenIso(a: string, b: string): number {
@@ -2603,38 +2601,18 @@ function Cockpit({
   // Variáveis exibidas em cada gráfico — o usuário inclui/remove séries (estilo
   // Scheduling) e a escolha persiste por navegador.
   const [entradasVis, setEntradasVis] = useState<Record<EntradaSeriesKey, boolean>>(defaultEntradasVisible);
-  const [reservVis, setReservVis] = useState<Record<ReservSeriesKey, boolean>>(defaultReservatorioVisible);
-  // Escala do gráfico de reservatório: "pct" = % da água disponível (PMP=0,
-  // CC=100, estilo Scheduling); "mm" = ARM em milímetros absolutos.
-  const [reservUnit, setReservUnit] = useState<"pct" | "mm">("pct");
-  const [reservZoom, setReservZoom] = useState<ReservatorioZoom>("total");
+  // Apenas o gráfico de entradas permite séries opcionais.
+  // O RAS passou a ser um painel amplo em %CC, com linhas físicas de CC/PMP.
   useEffect(() => {
     try {
       const e = window.localStorage.getItem("bh:entradasVis");
       if (e) setEntradasVis((prev) => ({ ...prev, ...JSON.parse(e) }));
-      const r = window.localStorage.getItem("bh:reservVis");
-      if (r) setReservVis((prev) => ({ ...prev, ...JSON.parse(r) }));
-      const u = window.localStorage.getItem("bh:reservUnit");
-      if (u === "pct" || u === "mm") setReservUnit(u);
-    } catch {
-      // localStorage indisponível — mantém os padrões.
-    }
-  }, []);
-  const changeReservUnit = useCallback((u: "pct" | "mm") => {
-    setReservUnit(u);
-    try { window.localStorage.setItem("bh:reservUnit", u); } catch { /* noop */ }
+    } catch { /* sem armazenamento local */ }
   }, []);
   const toggleEntrada = useCallback((k: EntradaSeriesKey) => {
     setEntradasVis((prev) => {
       const next = { ...prev, [k]: !prev[k] };
       try { window.localStorage.setItem("bh:entradasVis", JSON.stringify(next)); } catch { /* noop */ }
-      return next;
-    });
-  }, []);
-  const toggleReserv = useCallback((k: ReservSeriesKey) => {
-    setReservVis((prev) => {
-      const next = { ...prev, [k]: !prev[k] };
-      try { window.localStorage.setItem("bh:reservVis", JSON.stringify(next)); } catch { /* noop */ }
       return next;
     });
   }, []);
@@ -2710,41 +2688,16 @@ function Cockpit({
   const ctaProfile = profileRows.reduce((sum, row) => sum + row.cadLayer, 0);
   const pFactor = cad > 0 ? afd / cad : 0;
 
-  const topKpis = [
-    { icon: <IconSun />, label: "ETo hoje", value: fmtNum(last.et0), unit: "mm" },
-    { icon: <IconLeaf />, label: "Kc", value: fmtNum(last.kc, 2) },
-    { icon: <IconWave />, label: "ETc potencial", value: fmtNum(last.etcPotential ?? last.etc), unit: "mm" },
-    { icon: <IconSprout />, label: "Ks", value: fmtNum(last.ks ?? 1, 2) },
-    { icon: <IconDrop />, label: "ARM", value: fmtNum(arm), unit: "mm" },
-    { icon: <IconLayers />, label: "DTA", value: dtaMmPerMeter(last) != null ? fmtNum(dtaMmPerMeter(last)!) : "—", unit: "mm/m" },
-    { icon: <IconLayers />, label: "CTA", value: fmtNum(cad), unit: "mm" },
-    { icon: <IconAlert />, label: "CRA", value: fmtNum(afd), unit: "mm" },
-    { icon: <IconLeaf />, label: "F médio semanal", value: fmtNum(pFactor, 3) },
-    { icon: <IconRoot />, label: "Raiz na CTA", value: fmtNum(last.rootDepth, 2), unit: "m" },
-  ];
-
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-10">
-        {topKpis.map((k) => (
-          <StatCard key={k.label} icon={k.icon} label={k.label} value={k.value} unit={k.unit} />
-        ))}
-      </div>
-
-      {/* Cabeçalho do pivô selecionado */}
-      <Card className="p-4">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="text-[17px] font-extrabold text-graphite-900 dark:text-white">{identity.pivotName ?? "Pivô"}</span>
-          {[identity.cultureName, identity.varietyName, last.phase ?? identity.stage, identity.area != null ? `${fmtNum(identity.area, 0)} ha` : null, last.dae != null ? `${last.dae} DAE` : null]
-            .filter(Boolean)
-            .map((chip, i) => (
-              <span key={i} className="text-[12.5px] text-graphite-500 dark:text-gray-400"><span className="mx-1 text-graphite-300 dark:text-gray-600">•</span>{chip}</span>
-            ))}
-          <span className="ml-auto inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ color: priority.color, background: `${priority.color}1a` }}>
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: priority.color }} />{priority.short}
-          </span>
-        </div>
-      </Card>
+      <SoilReservoirReferencePanel
+        rows={rows}
+        cultureName={identity.cultureName}
+        stage={identity.stage}
+        areaHa={identity.area}
+        flowRateM3h={identity.flowRateM3h}
+        efficiencyPercent={identity.efficiency}
+      />
 
       {/* Gráficos + coluna de decisão */}
       <div className="grid gap-4 lg:grid-cols-3">
@@ -2822,63 +2775,6 @@ function Cockpit({
                 </div>
               </div>
             )}
-          </Card>
-          <Card className="p-4">
-            <div className="mb-2 flex items-start justify-between gap-3">
-              <div>
-                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Reservatório de Água do Solo</p>
-                <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-                  {reservUnit === "pct"
-                    ? "CTA por dia × F médio semanal (segunda–domingo). Amarelo: 70–100% da CRA consumida; PMP = 0% e CC = 100%."
-                    : "ARM em mm; limites pela CTA diária × F médio semanal. Atenção a 70% da CRA consumida; irrigar a 100%."}
-                </p>
-              </div>
-              <div className="flex shrink-0 gap-0.5 rounded-lg bg-gray-100/70 p-0.5 dark:bg-white/[0.04]">
-                {(["pct", "mm"] as const).map((u) => (
-                  <button
-                    key={u}
-                    type="button"
-                    onClick={() => changeReservUnit(u)}
-                    aria-pressed={reservUnit === u}
-                    className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition-colors ${reservUnit === u ? "bg-white text-graphite-800 shadow-xs dark:bg-white/[0.1] dark:text-white" : "text-graphite-400 hover:text-graphite-600 dark:text-gray-500"}`}
-                  >
-                    {u === "pct" ? "% da CC" : "mm"}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="mb-3 flex flex-wrap items-center gap-1.5">
-              <span className="mr-1 text-[10px] font-bold uppercase tracking-[0.12em] text-graphite-400 dark:text-gray-500">Escala</span>
-              {([
-                { key: "total", label: "Completa" },
-                { key: "atencao", label: "Zoom faixa amarela" },
-                { key: "arm", label: "Zoom ARM" },
-              ] as const).map((option) => (
-                <button
-                  type="button"
-                  key={option.key}
-                  aria-pressed={reservZoom === option.key}
-                  onClick={() => setReservZoom(option.key)}
-                  className={`rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                    reservZoom === option.key
-                      ? "border-amber-500/60 bg-amber-500/15 text-amber-700 dark:text-amber-300"
-                      : "border-gray-200 bg-gray-50 text-graphite-500 hover:border-gray-300 dark:border-white/[0.1] dark:bg-white/[0.04] dark:text-gray-400"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
-              {reservZoom !== "total" && <span className="text-[10px] text-amber-700 dark:text-amber-300">Zoom visual — fora da janela não aparece, mas os cálculos continuam iguais</span>}
-            </div>
-            <div className="mb-2.5">
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
-              <CockpitSeriesToggles
-                series={reservUnit === "pct" ? RESERVATORIO_SERIES.filter((s) => s.k !== "arm") : RESERVATORIO_SERIES}
-                visible={reservVis}
-                onToggle={toggleReserv}
-              />
-            </div>
-            <div className="h-[480px] w-full"><ReservatorioChart points={series.reservatorio} ccMm={series.ccMm} pmpMm={series.pmpMm} safetyMm={series.safetyMm} attentionMm={series.attentionMm} visible={reservVis} unit={reservUnit} zoom={reservZoom} /></div>
           </Card>
         </div>
 
