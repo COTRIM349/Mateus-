@@ -26,12 +26,12 @@ function Tile({ label, value, hint, tone = "white", symbol = "◉" }: {
   label: string; value: string; hint?: string; tone?: StatTone; symbol?: string;
 }) {
   return (
-    <div className="flex min-h-[104px] min-w-0 items-center gap-3 rounded-xl border border-white/[0.09] bg-[#0b1c23] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-[21px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
+    <div className="flex min-h-[82px] min-w-0 items-center gap-2 rounded-lg border border-white/[0.09] bg-[#0b1c23] px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/[0.045] text-[17px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
       <div className="min-w-0">
-        <div className="break-words text-[12px] font-medium leading-snug text-slate-300">{label}</div>
-        <div title={value} className="mt-1 max-w-full truncate text-[clamp(19px,1.6vw,27px)] font-extrabold leading-tight tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
-        {hint && <div className="mt-1.5 break-words text-[11px] leading-snug text-slate-400">{hint}</div>}
+        <div className="break-words text-[10.5px] font-medium leading-tight text-slate-300">{label}</div>
+        <div title={value} className="mt-0.5 max-w-full truncate text-[clamp(16px,1.25vw,21px)] font-extrabold leading-tight tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
+        {hint && <div className="mt-1 break-words text-[9.5px] leading-tight text-slate-400">{hint}</div>}
       </div>
     </div>
   );
@@ -345,7 +345,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         <span className="text-[11px] text-slate-400">Ao retornar ao balanço, o RAS será recalculado com os novos lançamentos.</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 min-[1550px]:grid-cols-9">
+      <div className="grid grid-cols-2 gap-1.5 lg:grid-cols-4 min-[1550px]:grid-cols-9">
         <Tile label="Cultura" value={cultureName ?? "—"} hint="Parcela em manejo" tone="green" symbol="❧"/>
         <Tile label="Cultivar" value={varietyName ?? "Não cadastrada"} hint="Cultivar da parcela ativa" tone="cyan" symbol="✧"/>
         <Tile label="Fase atual" value={phaseLabel} hint={last.dae!=null?`${last.dae} DAE`:undefined} tone="green" symbol="▦"/>
