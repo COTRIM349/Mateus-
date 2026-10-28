@@ -2651,18 +2651,6 @@ function Cockpit({
   const kySens = last.ky == null ? null : last.ky >= 1.15 ? "MUITO ALTA" : last.ky >= 1 ? "ALTA" : last.ky >= 0.85 ? "MÉDIA" : "BAIXA";
   const kySensColor = last.ky == null ? undefined : last.ky >= 1 ? "text-red-600 dark:text-red-400" : last.ky >= 0.85 ? "text-orange-600 dark:text-orange-400" : "text-green-600 dark:text-green-400";
 
-  const rootCm = Math.max(last.rootDepth * 100, 0);
-  const profileRows = soilLayers.map((layer) => {
-    const thicknessCm = Math.max(layer.depth_end - layer.depth_start, 0);
-    const cadLayer = Math.max((layer.field_capacity - layer.wilting_point) * (thicknessCm / 100) * 1000, 0);
-    const exploredCm = Math.max(Math.min(rootCm, layer.depth_end) - layer.depth_start, 0);
-    const exploredPct = thicknessCm > 0 ? clampN((exploredCm / thicknessCm) * 100, 0, 100) : 0;
-    const cadEffective = cadLayer * (exploredPct / 100);
-    return { layer, cadLayer, exploredPct, cadEffective };
-  });
-  const ctaProfile = profileRows.reduce((sum, row) => sum + row.cadLayer, 0);
-  const pFactor = cad > 0 ? afd / cad : 0;
-
   return (
     <div className="space-y-4">
       <div role="tablist" aria-label="Painéis de manejo do pivô" className="grid grid-cols-3 gap-2 rounded-xl border border-santa-900/60 bg-[#10252b] p-1.5">
@@ -2685,6 +2673,7 @@ function Cockpit({
         rows={rows}
         soilLayers={soilLayers}
         bulkDensity={bulkDensity}
+        pivotName={identity.pivotName}
         cultureName={identity.cultureName}
         varietyName={identity.varietyName}
         stage={identity.stage}
