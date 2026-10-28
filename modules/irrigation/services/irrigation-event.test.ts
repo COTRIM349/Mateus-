@@ -69,9 +69,9 @@ describe("buildIrrigationEventInsert", () => {
     expect(row.depth_mm).toBe(12);
     expect(row.percentimeter_pct).toBe(50);
     expect(row.volume_m3).toBe(9600);
-    expect(row.horimeter_initial).toBe(500.25);
-    expect(row.horimeter_final).toBe(513.75);
-    expect(row.operating_hours).toBe(13.5);
+    expect(row.horimeter_initial).toBeNull();
+    expect(row.horimeter_final).toBeNull();
+    expect(row.operating_hours).toBe(27.12);
     expect(row.parcel_id).toBe("a1");
     expect(row.started_at).toBe("2026-08-20T08:30:00");
     expect(row.status).toBe("concluida");

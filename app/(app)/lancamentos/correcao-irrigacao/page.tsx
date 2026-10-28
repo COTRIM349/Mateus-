@@ -18,12 +18,9 @@ import { PrerequisiteNotice } from "@/components/onboarding";
 import {
   buildIrrigationEventInsert,
   deriveDepthFromPercentimeter,
-  deriveHoursFromHorimeter,
   irrigationDuplicateCounts,
   isPossibleDuplicate,
-  validateHorimeter,
   validateIrrigationDepth,
-  validateOperatingHours,
   validatePercentimeterPct,
 } from "@/modules/irrigation/services";
 import {
@@ -58,8 +55,6 @@ interface EventRow {
   started_at: string;
   depth_mm: number;
   percentimeter_pct: number | null;
-  horimeter_initial: number | null;
-  horimeter_final: number | null;
   volume_m3: number;
   operating_hours: number | null;
   energy_kwh: number | null;
@@ -70,8 +65,6 @@ interface EventRow {
 interface EditForm {
   date: string;
   percentimeter_pct: string;
-  horimeter_initial: string;
-  horimeter_final: string;
   notes: string;
 }
 
@@ -79,10 +72,6 @@ function fmtDate(iso: string): string {
   const ymd = iso.slice(0, 10);
   const [y, m, d] = ymd.split("-");
   return y && m && d ? `${d}/${m}/${y}` : ymd;
-}
-
-function numberText(value: number | null | undefined, digits = 2): string {
-  return value == null ? "—" : value.toFixed(digits);
 }
 
 export default function CorrecaoIrrigacaoPage() {
@@ -100,8 +89,6 @@ export default function CorrecaoIrrigacaoPage() {
   const [form, setForm] = useState<EditForm>({
     date: "",
     percentimeter_pct: "",
-    horimeter_initial: "",
-    horimeter_final: "",
     notes: "",
   });
   const [formError, setFormError] = useState("");
@@ -137,7 +124,7 @@ export default function CorrecaoIrrigacaoPage() {
         .in("pivot_id", pivotIds),
       supabase
         .from("irrigation_events")
-        .select("id, pivot_id, parcel_id, started_at, depth_mm, percentimeter_pct, horimeter_initial, horimeter_final, volume_m3, operating_hours, energy_kwh, cost, notes")
+        .select("id, pivot_id, parcel_id, started_at, depth_mm, percentimeter_pct, volume_m3, operating_hours, energy_kwh, cost, notes")
         .in("pivot_id", pivotIds)
         .order("started_at", { ascending: false })
         .limit(1000),
@@ -191,8 +178,6 @@ export default function CorrecaoIrrigacaoPage() {
     setForm({
       date: event.started_at.slice(0, 10),
       percentimeter_pct: event.percentimeter_pct?.toString() ?? "",
-      horimeter_initial: event.horimeter_initial?.toString() ?? "",
-      horimeter_final: event.horimeter_final?.toString() ?? "",
       notes: event.notes ?? "",
     });
     setFormError("");
@@ -231,21 +216,6 @@ export default function CorrecaoIrrigacaoPage() {
       return;
     }
 
-    const horimeterInitial = Number(form.horimeter_initial);
-    const horimeterFinal = Number(form.horimeter_final);
-    const horimeterErr = validateHorimeter(horimeterInitial, horimeterFinal);
-    if (horimeterErr) {
-      setFormError(horimeterErr);
-      return;
-    }
-
-    const hours = deriveHoursFromHorimeter(horimeterInitial, horimeterFinal);
-    const hoursErr = validateOperatingHours(hours);
-    if (hoursErr) {
-      setFormError(hoursErr);
-      return;
-    }
-
     const payload = buildIrrigationEventInsert({
       pivotId: editing.pivot_id,
       parcelId: editing.parcel_id,
@@ -256,8 +226,6 @@ export default function CorrecaoIrrigacaoPage() {
       areaHa: pivot.area,
       flowRateM3h: pivot.flow_rate,
       fullTurnTime100H: pivot.full_turn_time,
-      horimeterInitial,
-      horimeterFinal,
       notes: form.notes || null,
     });
 
@@ -275,13 +243,19 @@ export default function CorrecaoIrrigacaoPage() {
       pivotEnergyCostReaisPerKwh: pivot.energy_cost,
     });
 
+    const {
+      horimeter_initial: _horimeterInitial,
+      horimeter_final: _horimeterFinal,
+      ...payloadWithoutHorimeter
+    } = payload;
+
     setSaving(true);
     setFormError("");
 
     const { error } = await supabase
       .from("irrigation_events")
       .update({
-        ...payload,
+        ...payloadWithoutHorimeter,
         energy_kwh: priced.energy_kwh,
         cost: priced.cost,
         tariff_rate: priced.tariff_rate,
@@ -297,7 +271,7 @@ export default function CorrecaoIrrigacaoPage() {
     }
 
     setEditing(null);
-    setMessage("Lançamento corrigido com sucesso. O balanço hídrico será recalculado com o evento corrigido.");
+    setMessage("Lançamento corrigido com sucesso.");
     await load();
   };
 
@@ -319,7 +293,7 @@ export default function CorrecaoIrrigacaoPage() {
       return;
     }
 
-    setMessage("Lançamento excluído. A duplicidade foi removida do histórico operacional.");
+    setMessage("Lançamento excluído. A duplicidade foi removida.");
     await load();
   };
 
@@ -354,20 +328,8 @@ export default function CorrecaoIrrigacaoPage() {
       render: (r) => (r.percentimeter_pct != null ? `${r.percentimeter_pct.toFixed(0)}%` : "—"),
     },
     {
-      header: "Horímetros",
-      render: (r) => (
-        <span className="text-xs">
-          {numberText(r.horimeter_initial)} → {numberText(r.horimeter_final)}
-        </span>
-      ),
-    },
-    {
       header: "Lâmina",
       render: (r) => `${r.depth_mm.toFixed(2)} mm`,
-    },
-    {
-      header: "Horas",
-      render: (r) => (r.operating_hours != null ? `${r.operating_hours.toFixed(2)} h` : "—"),
     },
     {
       header: "Ações",
@@ -409,16 +371,6 @@ export default function CorrecaoIrrigacaoPage() {
     Number.isFinite(editPercentimeter) &&
     editPercentimeter > 0
       ? deriveDepthFromPercentimeter(editPercentimeter, editingPivot.depth_100_pct)
-      : null;
-  const editInitial = Number(form.horimeter_initial);
-  const editFinal = Number(form.horimeter_final);
-  const correctedHours =
-    form.horimeter_initial !== "" &&
-    form.horimeter_final !== "" &&
-    Number.isFinite(editInitial) &&
-    Number.isFinite(editFinal) &&
-    editFinal > editInitial
-      ? deriveHoursFromHorimeter(editInitial, editFinal)
       : null;
 
   return (
@@ -475,7 +427,7 @@ export default function CorrecaoIrrigacaoPage() {
       </Card>
 
       <p className="text-[11px] text-graphite-400 dark:text-gray-500">
-        “Possível duplicado” é um alerta, não uma exclusão automática. A plataforma compara pivô, data, lâmina, percentímetro e horímetros; a decisão de corrigir ou excluir permanece com o usuário.
+        “Possível duplicado” é um alerta, não uma exclusão automática. A plataforma compara pivô, data, lâmina e percentímetro.
       </p>
 
       <Modal
@@ -505,32 +457,10 @@ export default function CorrecaoIrrigacaoPage() {
               value={form.percentimeter_pct}
               onChange={(e) => patch({ percentimeter_pct: e.target.value })}
             />
-            <Input
-              id="correction_horimeter_initial"
-              label="Horímetro inicial"
-              type="number"
-              min={0}
-              step={0.01}
-              required
-              value={form.horimeter_initial}
-              onChange={(e) => patch({ horimeter_initial: e.target.value })}
-            />
-            <Input
-              id="correction_horimeter_final"
-              label="Horímetro final"
-              type="number"
-              min={0}
-              step={0.01}
-              required
-              value={form.horimeter_final}
-              onChange={(e) => patch({ horimeter_final: e.target.value })}
-            />
           </div>
 
           <div className="rounded-xl border border-gray-200 bg-gray-50 p-4 text-sm dark:border-white/[0.08] dark:bg-white/[0.03]">
             Lâmina corrigida: <strong>{correctedDepth != null ? `${correctedDepth.toFixed(2)} mm` : "—"}</strong>
-            {" · "}
-            Horas reais: <strong>{correctedHours != null ? `${correctedHours.toFixed(2)} h` : "—"}</strong>
           </div>
 
           <TextArea

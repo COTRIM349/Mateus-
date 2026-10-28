@@ -15,12 +15,8 @@ import {
   buildIrrigationEventInsert,
   deriveAppliedVolume,
   deriveDepthFromPercentimeter,
-  deriveHoursFromHorimeter,
   deriveOperatingHoursFromPercentimeter,
-  resolveHorimeterReference,
-  validateHorimeter,
   validateIrrigationDepth,
-  validateOperatingHours,
   validatePercentimeterPct,
 } from "@/modules/irrigation/services";
 import { isActiveParcel, assertParcelAcceptsOperationalLaunch } from "@/modules/assignment/services";
@@ -38,9 +34,6 @@ interface PivotLite {
   energy_cost: number | null;
   depth_100_pct: number | null;
   full_turn_time: number | null;
-  horimeter_base_value: number | null;
-  horimeter_base_date: string | null;
-  horimeter_base_source: string | null;
 }
 
 interface ParcelLite {
@@ -55,8 +48,6 @@ interface FormState {
   pivot_id: string;
   date: string;
   percentimeter_pct: string;
-  horimeter_initial: string;
-  horimeter_final: string;
   notes: string;
 }
 
@@ -65,8 +56,6 @@ const EMPTY: FormState = {
   pivot_id: "",
   date: today(),
   percentimeter_pct: "",
-  horimeter_initial: "",
-  horimeter_final: "",
   notes: "",
 };
 
@@ -80,9 +69,6 @@ export default function LancamentoIrrigacaoPage() {
   const [selectedPivotId, setSelectedPivotId] = useState("");
   const [modalOpen, setModalOpen] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [loadingLastHorimeter, setLoadingLastHorimeter] = useState(false);
-  const [lastHorimeterSourceDate, setLastHorimeterSourceDate] = useState<string | null>(null);
-  const [lastHorimeterSource, setLastHorimeterSource] = useState<"event" | "historical_base" | null>(null);
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY);
@@ -91,7 +77,7 @@ export default function LancamentoIrrigacaoPage() {
     if (!activeFarmId) return;
     supabase
       .from("pivots")
-      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost, depth_100_pct, full_turn_time, horimeter_base_value, horimeter_base_date, horimeter_base_source")
+      .select("id, name, area, flow_rate, pump_power, installed_power_kw, motor_efficiency, specific_consumption, energy_cost, depth_100_pct, full_turn_time")
       .eq("farm_id", activeFarmId)
       .eq("active", true)
       .order("name")
@@ -156,19 +142,9 @@ export default function LancamentoIrrigacaoPage() {
       ? deriveOperatingHoursFromPercentimeter(percentimeterNum, selectedPivot.full_turn_time)
       : null;
 
-  const horimeterInitialNum = form.horimeter_initial !== "" ? Number(form.horimeter_initial) : NaN;
-  const horimeterFinalNum = form.horimeter_final !== "" ? Number(form.horimeter_final) : NaN;
-  const actualHours =
-    Number.isFinite(horimeterInitialNum) &&
-    Number.isFinite(horimeterFinalNum) &&
-    horimeterFinalNum > horimeterInitialNum
-      ? deriveHoursFromHorimeter(horimeterInitialNum, horimeterFinalNum)
-      : null;
-  const hoursForPricing = actualHours ?? previewHours;
-
-  const previewPrice = selectedPivot && previewVolume != null && hoursForPricing != null && hoursForPricing > 0
+  const previewPrice = selectedPivot && previewVolume != null && previewHours != null && previewHours > 0
     ? priceIrrigationEvent({
-      operatingHours: hoursForPricing,
+      operatingHours: previewHours,
       volumeM3: previewVolume,
       depthMm: depthNum,
       areaHa: selectedPivot.area,
@@ -186,64 +162,15 @@ export default function LancamentoIrrigacaoPage() {
     setForm((current) => ({ ...current, ...changes }));
   };
 
-  const openLaunch = async () => {
+  const openLaunch = () => {
     if (!selectedPivotId) return;
-
-    setLoadingLastHorimeter(true);
-    setFormError("");
-    setSuccessMessage("");
-    setLastHorimeterSourceDate(null);
-    setLastHorimeterSource(null);
-
-    const pivot = pivotMap.get(selectedPivotId);
-    const baseValue = pivot?.horimeter_base_value ?? null;
-    const baseDate = pivot?.horimeter_base_date ?? null;
-
-    const { data, error } = await supabase
-      .from("irrigation_events")
-      .select("horimeter_final, started_at, created_at")
-      .eq("pivot_id", selectedPivotId)
-      .not("horimeter_final", "is", null)
-      .order("started_at", { ascending: false })
-      .order("created_at", { ascending: false })
-      .limit(1);
-
-    const lastEvent = data?.[0] as {
-      horimeter_final: number | null;
-      started_at: string;
-      created_at: string;
-    } | undefined;
-
-    const eventValue = !error && lastEvent?.horimeter_final != null
-      ? Number(lastEvent.horimeter_final)
-      : null;
-    const eventDate = !error && lastEvent?.started_at
-      ? lastEvent.started_at.slice(0, 10)
-      : null;
-
-    const reference = resolveHorimeterReference({
-      baseValue,
-      baseDate,
-      eventValue,
-      eventDate,
-    });
-
     setForm({
       ...EMPTY,
       pivot_id: selectedPivotId,
       date: today(),
-      horimeter_initial:
-        reference.value != null
-          ? String(reference.value)
-          : "",
     });
-
-    if (reference.value != null) {
-      setLastHorimeterSourceDate(reference.date);
-      setLastHorimeterSource(reference.source);
-    }
-
-    setLoadingLastHorimeter(false);
+    setFormError("");
+    setSuccessMessage("");
     setModalOpen(true);
   };
 
@@ -285,21 +212,6 @@ export default function LancamentoIrrigacaoPage() {
       return;
     }
 
-    const horimeterInitial = Number(form.horimeter_initial);
-    const horimeterFinal = Number(form.horimeter_final);
-    const horimeterErr = validateHorimeter(horimeterInitial, horimeterFinal);
-    if (horimeterErr) {
-      setFormError(horimeterErr);
-      return;
-    }
-
-    const actualOperatingHours = deriveHoursFromHorimeter(horimeterInitial, horimeterFinal);
-    const actualHoursErr = validateOperatingHours(actualOperatingHours);
-    if (actualHoursErr) {
-      setFormError(actualHoursErr);
-      return;
-    }
-
     const parcel = activeParcelFor(form.pivot_id);
     const launchErr = assertParcelAcceptsOperationalLaunch(parcel);
     if (launchErr) {
@@ -317,8 +229,6 @@ export default function LancamentoIrrigacaoPage() {
       areaHa: pivot.area,
       flowRateM3h: pivot.flow_rate,
       fullTurnTime100H: pivot.full_turn_time,
-      horimeterInitial,
-      horimeterFinal,
       notes: form.notes || null,
     });
 
@@ -338,6 +248,8 @@ export default function LancamentoIrrigacaoPage() {
 
     const row = {
       ...payload,
+      horimeter_initial: null,
+      horimeter_final: null,
       energy_kwh: priced.energy_kwh,
       cost: priced.cost,
       tariff_rate: priced.tariff_rate,
@@ -354,7 +266,7 @@ export default function LancamentoIrrigacaoPage() {
       } else {
         setModalOpen(false);
         setSuccessMessage(
-          `Irrigação lançada com sucesso em ${pivot.name}: ${percentimeterPct.toFixed(0)}% → ${depth.toFixed(1)} mm · ${actualOperatingHours.toFixed(2)} h reais.`,
+          `Irrigação lançada com sucesso em ${pivot.name}: ${percentimeterPct.toFixed(0)}% → ${depth.toFixed(1)} mm.`,
         );
       }
     } catch (err) {
@@ -385,7 +297,7 @@ export default function LancamentoIrrigacaoPage() {
     <div className="space-y-6">
       <PageHeader
         titulo="Lançamento de irrigação"
-        descricao="Selecione o pivô e registre somente a irrigação realizada. O histórico permanece disponível na área de Histórico."
+        descricao="Selecione o pivô e registre a data e o percentímetro. A lâmina é calculada automaticamente."
       />
 
       <Card>
@@ -415,14 +327,13 @@ export default function LancamentoIrrigacaoPage() {
           <Button
             onClick={openLaunch}
             disabled={
-              loadingLastHorimeter ||
               !selectedLaunchPivot ||
               !selectedLaunchParcel ||
               !selectedLaunchPivot.depth_100_pct ||
               !selectedLaunchPivot.full_turn_time
             }
           >
-            {loadingLastHorimeter ? "Buscando horímetro..." : "Lançar irrigação"}
+            Lançar irrigação
           </Button>
         </div>
 
@@ -499,42 +410,7 @@ export default function LancamentoIrrigacaoPage() {
               placeholder="Ex.: 80"
             />
 
-            <div>
-              <Input
-                id="horimeter_initial"
-                label="Horímetro inicial"
-                type="number"
-                min={0}
-                step={0.01}
-                required
-                value={form.horimeter_initial}
-                onChange={(e) => patch({ horimeter_initial: e.target.value })}
-                placeholder="Ex.: 1523,40"
-              />
-              {lastHorimeterSourceDate && form.horimeter_initial !== "" && (
-                <p className="mt-1 text-[11px] text-emerald-600 dark:text-emerald-400">
-                  {lastHorimeterSource === "event"
-                    ? "Preenchido com o horímetro final da última irrigação da plataforma"
-                    : "Preenchido com o último horímetro da base histórica"}
-                  {" · "}
-                  {lastHorimeterSourceDate.split("-").reverse().join("/")}
-                </p>
-              )}
-            </div>
-
-            <Input
-              id="horimeter_final"
-              label="Horímetro final"
-              type="number"
-              min={0}
-              step={0.01}
-              required
-              value={form.horimeter_final}
-              onChange={(e) => patch({ horimeter_final: e.target.value })}
-              placeholder="Ex.: 1541,10"
-            />
-
-            <div>
+            <div className="sm:col-span-2">
               <p className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-graphite-500 dark:text-gray-400">
                 Lâmina calculada
               </p>
@@ -548,7 +424,6 @@ export default function LancamentoIrrigacaoPage() {
               {selectedPivot?.depth_100_pct != null && (
                 <p className="mt-1 text-[11px] text-graphite-400 dark:text-gray-500">
                   Base do pivô: {selectedPivot.depth_100_pct.toFixed(2)} mm a 100%
-                  {selectedPivot.full_turn_time != null ? ` · ${selectedPivot.full_turn_time.toFixed(2)} h a 100%` : ""}
                 </p>
               )}
             </div>
@@ -557,11 +432,6 @@ export default function LancamentoIrrigacaoPage() {
           {previewVolume != null && (
             <p className="text-xs text-graphite-500 dark:text-gray-400">
               Volume: <strong className="text-graphite-800 dark:text-white">{previewVolume.toLocaleString("pt-BR")} m³</strong>
-              {actualHours != null ? (
-                <> · Horas reais: <strong className="text-graphite-800 dark:text-white">{actualHours.toFixed(2)} h</strong></>
-              ) : previewHours != null && previewHours > 0 ? (
-                <> · Tempo teórico: <strong className="text-graphite-800 dark:text-white">{previewHours.toFixed(2)} h</strong></>
-              ) : null}
               {previewPrice?.energy_kwh != null && (
                 <> · Energia: <strong className="text-graphite-800 dark:text-white">{previewPrice.energy_kwh.toFixed(1)} kWh</strong></>
               )}

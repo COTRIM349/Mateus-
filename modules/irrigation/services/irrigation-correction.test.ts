@@ -12,8 +12,6 @@ describe("correção de irrigação duplicada", () => {
     started_at: "2026-10-27T06:00:00",
     depth_mm: 7.36,
     percentimeter_pct: 70,
-    horimeter_initial: 100,
-    horimeter_final: 118,
   };
 
   it("considera iguais eventos com os mesmos dados operacionais no mesmo dia", () => {
@@ -26,16 +24,16 @@ describe("correção de irrigação duplicada", () => {
     expect(isPossibleDuplicate(b, counts)).toBe(true);
   });
 
-  it("não marca como duplicado quando o horímetro é diferente", () => {
+  it("não marca como duplicado quando o percentímetro é diferente", () => {
     const a = base;
-    const b = { ...base, id: "2", horimeter_final: 119 };
+    const b = { ...base, id: "2", percentimeter_pct: 80 };
     const counts = irrigationDuplicateCounts([a, b]);
     expect(isPossibleDuplicate(a, counts)).toBe(false);
     expect(isPossibleDuplicate(b, counts)).toBe(false);
   });
 
-  it("também funciona para eventos legados sem percentímetro/horímetro", () => {
-    const a = { ...base, id: "1", percentimeter_pct: null, horimeter_initial: null, horimeter_final: null };
+  it("também funciona para eventos legados sem percentímetro", () => {
+    const a = { ...base, id: "1", percentimeter_pct: null };
     const b = { ...a, id: "2" };
     const counts = irrigationDuplicateCounts([a, b]);
     expect(isPossibleDuplicate(a, counts)).toBe(true);

@@ -183,16 +183,8 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
     Number.isFinite(draft.fullTurnTime100H)
       ? deriveOperatingHoursFromPercentimeter(draft.percentimeterPct, draft.fullTurnTime100H)
       : deriveOperatingHours(depth, draft.areaHa, draft.flowRateM3h);
-  const horimeterHours =
-    draft.horimeterInitial != null &&
-    draft.horimeterFinal != null &&
-    Number.isFinite(draft.horimeterInitial) &&
-    Number.isFinite(draft.horimeterFinal)
-      ? deriveHoursFromHorimeter(draft.horimeterInitial, draft.horimeterFinal)
-      : Number.NaN;
-  const hours = Number.isFinite(horimeterHours)
-    ? horimeterHours
-    : draft.hoursOverride != null && Number.isFinite(draft.hoursOverride)
+  const hours =
+    draft.hoursOverride != null && Number.isFinite(draft.hoursOverride)
       ? roundTo(draft.hoursOverride, 2)
       : derivedHours;
   const startedAt = combineStartedAt(draft.dateYmd, draft.timeHm);
@@ -206,14 +198,8 @@ export function buildIrrigationEventInsert(draft: IrrigationEventDraft): {
       draft.percentimeterPct != null && Number.isFinite(draft.percentimeterPct)
         ? roundTo(draft.percentimeterPct, 2)
         : null,
-    horimeter_initial:
-      draft.horimeterInitial != null && Number.isFinite(draft.horimeterInitial)
-        ? roundTo(draft.horimeterInitial, 2)
-        : null,
-    horimeter_final:
-      draft.horimeterFinal != null && Number.isFinite(draft.horimeterFinal)
-        ? roundTo(draft.horimeterFinal, 2)
-        : null,
+    horimeter_initial: null,
+    horimeter_final: null,
     volume_m3: volume,
     operating_hours: hours,
     notes: draft.notes ?? null,
