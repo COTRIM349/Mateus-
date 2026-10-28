@@ -5,6 +5,7 @@ import type { DailyBalanceRow } from "@/modules/water-balance/services/water-bal
 import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
 
 type ZoomMode = "full" | "arm" | "lamina";
+type RASObservationsVisibility = { chuva: boolean; irrigacao: boolean; eto: boolean };
 type StatTone = "green" | "blue" | "cyan" | "purple" | "orange" | "red" | "white";
 const colours: Record<StatTone, string> = {
   green: "#41d77b", blue: "#58baff", cyan: "#41e7c0", purple: "#c06bff",
@@ -55,8 +56,10 @@ function Legend({ color, text, dashed = false }: { color: string; text: string; 
   );
 }
 
-function RasFullWidthChart({ points, replacementMm, mode }: { points: RasPoint[]; replacementMm: number; mode: ZoomMode }) {
-  const W = 1560, H = 410, l = 57, r = 138, t = 22, b = 43;
+function RasFullWidthChart({ points, replacementMm, mode, visible }: {
+  points: RasPoint[]; replacementMm: number; mode: ZoomMode; visible: RASObservationsVisibility;
+}) {
+  const W = 1560, H = 555, l = 57, r = 138, t = 22, b = 167;
   const width = W - l - r, height = H - t - b;
   const newest = points[points.length - 1];
   if (!newest || points.length === 0) return null;
@@ -86,11 +89,32 @@ function RasFullWidthChart({ points, replacementMm, mode }: { points: RasPoint[]
   const lastX = x(points.length - 1);
   const lastY = y(newest.ccPercent);
   const hasReplacement = replacementMm > 0.05;
+
+  // A banda inferior utiliza escala INDEPENDENTE em mm/dia. Não mistura
+  // eventos de entrada/ETo com o eixo da umidade em % da capacidade de campo.
+  // Irrigação é a lâmina bruta REAL lançada; chuva é a chuva efetiva usada no
+  // balanço. Valores originais da chuva manual ficam acessíveis nos detalhes.
+  const eventsTop = t + height + 46;
+  const eventsHeight = 85;
+  const eventsBottom = eventsTop + eventsHeight;
+  const eventMaxRaw = Math.max(1, ...points.map(p => Math.max(
+    visible.chuva ? p.rainEffectiveMm : 0,
+    visible.irrigacao ? p.irrigationAppliedMm : 0,
+    visible.eto ? p.et0 : 0,
+  )));
+  const eventMax = Math.max(2, Math.ceil(eventMaxRaw / 2) * 2);
+  const eventY = (mm: number) => eventsBottom - clamp(mm, 0, eventMax) / eventMax * eventsHeight;
+  const eventBarWidth = Math.max(4, Math.min(11, width / Math.max(points.length, 1) / 5));
+  const etoPoints = points.filter(p => Number.isFinite(p.et0));
+  const etoPath = etoPoints.map(p => {
+    const index = points.findIndex(r => r.date === p.date);
+    return `${x(index).toFixed(2)},${eventY(p.et0).toFixed(2)}`;
+  }).join(" ");
   return (
     <div className="w-full overflow-x-auto">
       <svg viewBox={`0 0 ${W} ${H}`} role="img"
         aria-label="Evolução da umidade em porcentagem da capacidade de campo, com linhas de PMP e limite de irrigação"
-        className="h-[390px] min-w-[900px] w-full lg:h-[440px]" preserveAspectRatio="none">
+        className="h-[460px] min-w-[900px] w-full lg:h-[570px]" preserveAspectRatio="none">
         <defs>
           <clipPath id="rasFullClip"><rect x={l} y={t} width={width} height={height} /></clipPath>
           <linearGradient id="rasFullArea" x1="0" x2="0" y1="0" y2="1">
@@ -124,8 +148,49 @@ function RasFullWidthChart({ points, replacementMm, mode }: { points: RasPoint[]
             <text x={lastX-66} y={y(Math.min(95,Math.max(newest.ccPercent+15,75)))+39} textAnchor="middle" fontSize={12} fill="white">100% da CC</text>
           </g>
         )}
+        {/* Eventos registrados: mesma data e eixo X do reservatório, escala mm/dia separada. */}
+        <text x={l} y={eventsTop-21} fill="#d1e1e8" fontSize={14} fontWeight={700}>
+          Chuva efetiva, irrigação realizada e ETo diária
+        </text>
+        <text x={l+width+12} y={eventsTop-21} fill="#b7cbd5" fontSize={12}>mm/dia</text>
+        {[0, eventMax / 2, eventMax].map((tick, i)=>(
+          <g key={i}>
+            <line x1={l} x2={l+width} y1={eventY(tick)} y2={eventY(tick)}
+              stroke="#ffffff" strokeOpacity={tick===0?.20:.07} />
+            <text x={l+width+12} y={eventY(tick)+5} fill="#b9cdd7" fontSize={11}>{n(tick,1)}</text>
+          </g>
+        ))}
+        <g>
+          {points.map((p,i)=>(
+            <g key={p.date}>
+              {visible.chuva && p.rainEffectiveMm>0 && (
+                <rect x={x(i)-eventBarWidth-1} y={eventY(p.rainEffectiveMm)}
+                  width={eventBarWidth} height={Math.max(0,eventsBottom-eventY(p.rainEffectiveMm))}
+                  rx={2} fill="#2e91ff" opacity={.9}>
+                  <title>{fmtDate(p.date)}: chuva registrada {n(p.rainRecordedMm,2)} mm; chuva efetiva {n(p.rainEffectiveMm,2)} mm</title>
+                </rect>
+              )}
+              {visible.irrigacao && p.irrigationAppliedMm>0 && (
+                <rect x={x(i)+1} y={eventY(p.irrigationAppliedMm)}
+                  width={eventBarWidth} height={Math.max(0,eventsBottom-eventY(p.irrigationAppliedMm))}
+                  rx={2} fill="#17d780" opacity={.94}>
+                  <title>{fmtDate(p.date)}: irrigação realizada {n(p.irrigationAppliedMm,2)} mm brutos; efetiva {n(p.irrigationEffectiveMm,2)} mm</title>
+                </rect>
+              )}
+            </g>
+          ))}
+          {visible.eto && etoPoints.length>1 && (
+            <polyline points={etoPath} fill="none" stroke="#ffca42" strokeWidth={2.7}
+              strokeLinejoin="round" strokeLinecap="round"/>
+          )}
+          {visible.eto && points.map((p,i)=>Number.isFinite(p.et0)?(
+            <circle key={p.date} cx={x(i)} cy={eventY(p.et0)} r={3.4} stroke="#1b2528" strokeWidth={1} fill="#ffca42">
+              <title>{fmtDate(p.date)}: ETo diária {n(p.et0,2)} mm/dia</title>
+            </circle>
+          ):null)}
+        </g>
         {points.map((p,i)=>(points.length<=20||i%2===0)?
-          <text key={p.date} x={x(i)} y={H-15} fill="#d1dae2" textAnchor="middle" fontSize={12}>{fmtDate(p.date)}</text>:null)}
+          <text key={p.date} x={x(i)} y={H-13} fill="#d1dae2" textAnchor="middle" fontSize={12}>{fmtDate(p.date)}</text>:null)}
         {[0,25,50,75,100].filter((q)=>q>=yMin&&q<=yMax).map((q)=>{
           const mm=mmAt(q);
           return <text key={q} x={l+width+12} y={y(q)+4} fill="#b8c7d1" fontSize={11}>{q>=thetaPmp-0.1 && mm>=0 ? n(mm,1)+" mm" : "—"}</text>;
@@ -135,7 +200,7 @@ function RasFullWidthChart({ points, replacementMm, mode }: { points: RasPoint[]
         <text x={l+7} y={y(newest.limitPercentCc)-10} fontSize={13} fill="#ff656c" fontWeight="bold">Limite de irrigação · {n(newest.limitPercentCc,1)}% CC</text>
         <text x={l+7} y={y(newest.pmpPercentCc)-10} fontSize={13} fill="#ffae37" fontWeight="bold">Ponto de murcha · {n(newest.pmpPercentCc,1)}% CC</text>
       </svg>
-      <p className="mt-1 px-1 text-[10px] text-slate-400">¹ O eixo direito é a equivalência em mm do perfil atual; as profundidades radiculares e a CTA podem variar entre os dias históricos.</p>
+      <p className="mt-1 px-1 text-[10px] text-slate-400">¹ O eixo direito superior é a equivalência da ARM em mm do perfil atual. Na banda inferior, as barras azuis representam a chuva efetiva da chuva registrada, as verdes representam a irrigação bruta realizada e a linha amarela mostra a ETo diária em mm/dia; somente dados observados são utilizados.</p>
     </div>
   );
 }
@@ -149,6 +214,9 @@ export function SoilReservoirReferencePanel({ rows, cultureName, stage, areaHa, 
   efficiencyPercent: number | null;
 }) {
   const [zoom, setZoom] = useState<ZoomMode>("full");
+  const [eventVisibility, setEventVisibility] = useState<RASObservationsVisibility>({
+    chuva: true, irrigacao: true, eto: true,
+  });
   const points = useMemo(() => rows.slice(-16).map(buildRasPoint).filter((p): p is RasPoint => p != null), [rows]);
   const last = rows[rows.length-1];
   const now = points[points.length-1];
@@ -198,7 +266,27 @@ export function SoilReservoirReferencePanel({ rows, cultureName, stage, areaHa, 
           <Legend color="#ff6067" text="Limite de irrigação (F semanal)" dashed/>
           <Legend color="#ff9f23" text="Ponto de murcha (PMP)" dashed/>
         </div>
-        <RasFullWidthChart points={points} replacementMm={repl.netMm} mode={zoom}/>
+        <div className="mb-2 flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-1 pt-2">
+          <span className="mr-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Entradas e clima</span>
+          {([
+            { key: "chuva", label: "Chuva efetiva", colour: "#2e91ff" },
+            { key: "irrigacao", label: "Irrigação realizada", colour: "#17d780" },
+            { key: "eto", label: "ETo diária", colour: "#ffca42" },
+          ] as const).map((item) => (
+            <button key={item.key} type="button" aria-pressed={eventVisibility[item.key]}
+              onClick={() => setEventVisibility(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
+              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
+                eventVisibility[item.key]
+                  ? "border-white/[0.17] bg-white/[0.08] text-white"
+                  : "border-white/[0.08] bg-transparent text-slate-500 line-through"
+              }`}>
+              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: item.colour, opacity: eventVisibility[item.key] ? 1 : .35 }}/>
+              {item.label}
+            </button>
+          ))}
+          <span className="text-[10px] text-slate-400">Valores em mm/dia · passe o cursor sobre cada registro</span>
+        </div>
+        <RasFullWidthChart points={points} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility}/>
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1.25fr_.75fr]">

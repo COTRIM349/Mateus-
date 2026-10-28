@@ -71,4 +71,46 @@ describe("RAS: %CC, %CTA, PMP e F semanal", () => {
     expect(buildRasPoint({ ...piv06, fieldCapacity: null })).toBeNull();
     expect(buildRasPoint({ ...piv06, wiltingPoint: 0.5 })).toBeNull();
   });
+
+  it("mostra chuva efetiva, chuva registrada, irrigação bruta/efetiva e ETo diária nas datas corretas", () => {
+    const row = {
+      ...piv06, date: "2026-10-26", et0: 6.25,
+      precipitation: 18, effectivePrecipitation: 13.7,
+      irrigationApplied: 22, effectiveIrrigation: 17.6,
+    };
+    const point = buildRasPoint(row);
+    expect(point).not.toBeNull();
+    expect(point!.date).toBe("2026-10-26");
+    expect(point!.rainRecordedMm).toBe(18);
+    expect(point!.rainEffectiveMm).toBe(13.7);
+    expect(point!.irrigationAppliedMm).toBe(22);
+    expect(point!.irrigationEffectiveMm).toBe(17.6);
+    expect(point!.et0).toBe(6.25);
+    expect(point!.f).toBeCloseTo(.51, 8);
+  });
+
+  it("não cria chuva ou irrigação em dias sem lançamento, mantendo a ETo diária", () => {
+    const point = buildRasPoint({ ...piv06, et0: 4.81 });
+    expect(point!.rainRecordedMm).toBe(0);
+    expect(point!.rainEffectiveMm).toBe(0);
+    expect(point!.irrigationAppliedMm).toBe(0);
+    expect(point!.irrigationEffectiveMm).toBe(0);
+    expect(point!.et0).toBe(4.81);
+  });
+
+  it("respeita diferenças entre chuva manual bruta e efetiva, irrigação realizada e F semanal", () => {
+    const rows = [
+      { ...piv06, date: "2026-10-26", et0: 4, precipitation: 13, effectivePrecipitation: 10,
+        irrigationApplied: 0, effectiveIrrigation: 0 },
+      { ...piv06, date: "2026-10-27", et0: 7, precipitation: 0, effectivePrecipitation: 0,
+        irrigationApplied: 25, effectiveIrrigation: 20 },
+    ];
+    const points = rows.map(buildRasPoint);
+    expect(points.map(p => p?.f)).toEqual([.51,.51]);
+    expect(points[0]?.rainEffectiveMm).toBe(10);
+    expect(points[0]?.irrigationAppliedMm).toBe(0);
+    expect(points[1]?.rainEffectiveMm).toBe(0);
+    expect(points[1]?.irrigationAppliedMm).toBe(25);
+    expect(points.map(p => p?.et0)).toEqual([4,7]);
+  });
 });

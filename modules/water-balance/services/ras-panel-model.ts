@@ -14,6 +14,13 @@ export interface RasDayInput {
   et0: number;
   etc: number;
   kc: number;
+  /** Chuva registrada, sem buscar precipitação automaticamente. */
+  precipitation?: number;
+  /** Parcela da chuva que realmente entrou no balanço do solo. */
+  effectivePrecipitation?: number;
+  /** Lâmina bruta de irrigação REALMENTE executada, nunca recomendada/projetada. */
+  irrigationApplied?: number;
+  effectiveIrrigation?: number;
   factorWeekStart?: string;
 }
 
@@ -30,6 +37,11 @@ export interface RasPoint {
   et0: number;
   etc: number;
   kc: number;
+  /** Somente eventos observados; mm/dia, independentes do eixo %CC. */
+  rainRecordedMm: number;
+  rainEffectiveMm: number;
+  irrigationAppliedMm: number;
+  irrigationEffectiveMm: number;
 }
 
 const cap = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -57,6 +69,10 @@ export function buildRasPoint(row: RasDayInput): RasPoint | null {
     et0: row.et0,
     etc: row.etc,
     kc: row.kc,
+    rainRecordedMm: Math.max(0, row.precipitation ?? 0),
+    rainEffectiveMm: Math.max(0, row.effectivePrecipitation ?? 0),
+    irrigationAppliedMm: Math.max(0, row.irrigationApplied ?? 0),
+    irrigationEffectiveMm: Math.max(0, row.effectiveIrrigation ?? 0),
   };
 }
 
