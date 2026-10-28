@@ -1,15 +1,14 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef, type ReactNode } from "react";
+import Link from "next/link";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
-  Button,
   Card,
   Select,
   Table,
   Tabs,
   Input,
-  TextArea,
   type Column,
 } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -41,15 +40,13 @@ import {
   type PivotSoilRegistryRow,
   type SoilProfileLayer,
 } from "@/modules/soil/services";
-import { buildIrrigationEventInsert, deriveAppliedVolume, deriveOperatingHours, sumGrossDepthByDate } from "@/modules/irrigation/services";
+import { sumGrossDepthByDate } from "@/modules/irrigation/services";
 import {
-  assertParcelAcceptsOperationalLaunch,
   filterPivotsWithActiveParcel,
   resolveDaeReferenceDate,
 } from "@/modules/assignment/services";
 import { calculateDailyKc, calculateRootDepthMeters } from "@/modules/culture/services/agronomic-engine";
 import type { AgronomicDayInput } from "@/modules/water-balance/services/pivot-engine-v2";
-import { pickTariffForDate, priceIrrigationEvent, type TariffRow } from "@/modules/costs/services";
 import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey } from "@/modules/reports/services";
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
@@ -283,9 +280,9 @@ interface StoredBalance {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-// Arquitetura obrigatória: apenas duas abas. DADOS entende o histórico;
-// DECISÃO transforma o estado atual em ação. O registro de irrigação
-// executada vive em /lancamentos/irrigacao (fluxo de execução).
+// Duas abas principais: DADOS entende o histórico; DECISÃO transforma o
+// estado atual em ação. Chuva e irrigação realizadas ficam acessíveis por
+// ações rápidas no topo, sem ocupar espaço dos painéis analíticos.
 const TABS = [
   { id: "dados", label: "Dados" },
   { id: "decisao", label: "Decisão" },
@@ -338,15 +335,6 @@ export default function BalancoHidricoPage() {
   // Projeção hídrica: dias futuros calculados pelo motor com a previsão como
   // clima (ETo calculada aprovada), sem irrigação. Nunca observação.
   const [projectionRows, setProjectionRows] = useState<DailyBalanceRow[]>([]);
-
-  // Lançamento tab
-  const [lancDate, setLancDate] = useState("");
-  const [lancTime, setLancTime] = useState("06:00");
-  const [lancDepth, setLancDepth] = useState("");
-  const [lancHours, setLancHours] = useState("");
-  const [lancNotes, setLancNotes] = useState("");
-  const [lancSaving, setLancSaving] = useState(false);
-  const [lancMsg, setLancMsg] = useState("");
 
   // Parcela preferida vinda de ?parcel= (fila da Central de Manejo). Consumida
   // uma única vez ao abrir o pivô setorizado correspondente.
@@ -1421,75 +1409,6 @@ export default function BalancoHidricoPage() {
     setActivePeriod(kind);
   };
 
-  // ── Lançamento handler ──────────────────────────────────────────────────
-  const handleLancamento = async () => {
-    if (!selectedPivotId || !lancDate || !lancDepth) return;
-    const pivot = pivots.find((p) => p.id === selectedPivotId);
-    if (!pivot) return;
-    const launchErr = assertParcelAcceptsOperationalLaunch(
-      assignment ? { status: "ativa", active: assignment.active } : null,
-    );
-    if (launchErr) {
-      setLancMsg(launchErr);
-      return;
-    }
-    setLancSaving(true);
-    setLancMsg("");
-
-    try {
-      const depth = parseFloat(lancDepth);
-      const payload = buildIrrigationEventInsert({
-        pivotId: selectedPivotId,
-        parcelId: assignment?.id ?? null,
-        dateYmd: lancDate,
-        timeHm: lancTime || "06:00",
-        depthMm: depth,
-        areaHa: pivot.area,
-        flowRateM3h: pivot.flow_rate,
-        hoursOverride: lancHours === "" ? null : parseFloat(lancHours),
-        notes: lancNotes || null,
-      });
-      const { data: tariffRows } = await supabase
-        .from("energy_tariffs")
-        .select("id, valid_from, valid_to, rate_peak, rate_off_peak, peak_start, peak_end")
-        .eq("farm_id", activeFarmId);
-      const priced = priceIrrigationEvent({
-        operatingHours: payload.operating_hours,
-        volumeM3: payload.volume_m3,
-        depthMm: payload.depth_mm,
-        areaHa: pivot.area,
-        pumpPowerCv: pivot.pump_power,
-        installedPowerKw: pivot.installed_power_kw,
-        motorEfficiency: pivot.motor_efficiency,
-        specificConsumptionKwhM3: pivot.specific_consumption,
-        startedAt: payload.started_at,
-        tariff: pickTariffForDate((tariffRows ?? []) as TariffRow[], lancDate),
-        pivotEnergyCostReaisPerKwh: pivot.energy_cost,
-      });
-      const { error: err } = await supabase.from("irrigation_events").insert({
-        ...payload,
-        energy_kwh: priced.energy_kwh,
-        cost: priced.cost,
-        tariff_rate: priced.tariff_rate,
-        energy_source: priced.energy_source,
-      });
-
-      if (err) throw new Error(err.message);
-      setLancMsg("Irrigação lançada com sucesso. Atualizando o balanço...");
-      setLancDepth("");
-      setLancHours("");
-      setLancNotes("");
-      // Recalcula o cockpit E o estado hídrico da fazenda (KPIs do topo) para
-      // refletir o novo ARM/recomendação — o botão "Calcular" foi removido.
-      void runCalculation();
-      refreshFarm();
-    } catch (err) {
-      setLancMsg(err instanceof Error ? err.message : "Erro ao salvar");
-    } finally {
-      setLancSaving(false);
-    }
-  };
-
   if (!activeFarmId) {
     return (
       <div>
@@ -1561,9 +1480,34 @@ export default function BalancoHidricoPage() {
 
       {/* Navegação principal do manejo — cada aba tem função própria. */}
       {selectedPivotId && assignment && (
-        <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
-          <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
-        </div>
+        <>
+          <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
+            <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
+            <div className="min-w-0">
+              <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-graphite-400 dark:text-gray-500">Registrar evento realizado</p>
+              <p className="truncate text-[11.5px] text-graphite-600 dark:text-gray-300">
+                {selPivot?.name ?? "Pivô"} · somente eventos realizados alteram o balanço.
+              </p>
+            </div>
+            <div className="flex items-center gap-2">
+              <Link
+                href={`/lancamentos/chuvas?pivot=${selectedPivotId}&new=1`}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 text-[11.5px] font-bold text-blue-700 transition-colors hover:bg-blue-100 dark:border-blue-500/25 dark:bg-blue-500/10 dark:text-blue-300 dark:hover:bg-blue-500/15"
+              >
+                <span aria-hidden>+</span> Chuva
+              </Link>
+              <Link
+                href={`/lancamentos/irrigacao?pivot=${selectedPivotId}&new=1`}
+                className="inline-flex h-8 items-center gap-1.5 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-[11.5px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100 dark:border-emerald-500/25 dark:bg-emerald-500/10 dark:text-emerald-300 dark:hover:bg-emerald-500/15"
+              >
+                <span aria-hidden>+</span> Irrigação
+              </Link>
+            </div>
+          </div>
+        </>
       )}
 
       {/* Mensagens de estado */}
@@ -1696,37 +1640,6 @@ export default function BalancoHidricoPage() {
           />
           {balanceRows.length > 0 && (
             <DecisionForecast projection={projectionRows} last={balanceRows[balanceRows.length - 1]} />
-          )}
-          {balanceRows.length > 0 && (
-            <details className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-900">
-              <summary className="cursor-pointer select-none text-[13px] font-bold text-graphite-900 dark:text-white">
-                Registrar irrigação realizada <span className="ml-1 text-[11px] font-normal text-graphite-400 dark:text-gray-500">— só após execução ela entra no histórico (aba DADOS)</span>
-              </summary>
-              <div className="mt-3">
-                <LancamentoTab
-                  pivotId={selectedPivotId}
-                  pivots={pivots}
-                  date={lancDate}
-                  time={lancTime}
-                  depth={lancDepth}
-                  hours={lancHours}
-                  notes={lancNotes}
-                  saving={lancSaving}
-                  message={lancMsg}
-                  onDateChange={setLancDate}
-                  onTimeChange={setLancTime}
-                  onDepthChange={(v) => {
-                    setLancDepth(v);
-                    const pivot = pivots.find((p) => p.id === selectedPivotId);
-                    const n = parseFloat(v);
-                    if (pivot && Number.isFinite(n) && n > 0) setLancHours(String(deriveOperatingHours(n, pivot.area, pivot.flow_rate)));
-                  }}
-                  onHoursChange={setLancHours}
-                  onNotesChange={setLancNotes}
-                  onSave={handleLancamento}
-                />
-              </div>
-            </details>
           )}
         </div>
       )}
@@ -3049,95 +2962,3 @@ function IconBars() { return <svg {...svgP}><path strokeLinecap="round" strokeLi
 function IconCloud() { return <svg {...svgP}><path strokeLinecap="round" strokeLinejoin="round" d="M3 15a4 4 0 014-4 5 5 0 019.9 1H17a3 3 0 010 6H6a3 3 0 01-3-3z" /></svg>; }
 
 // ── Lancamento Tab ──────────────────────────────────────────────────────
-
-function LancamentoTab({
-  pivotId,
-  pivots,
-  date,
-  time,
-  depth,
-  hours,
-  notes,
-  saving,
-  message,
-  onDateChange,
-  onTimeChange,
-  onDepthChange,
-  onHoursChange,
-  onNotesChange,
-  onSave,
-}: {
-  pivotId: string;
-  pivots: Pivot[];
-  date: string;
-  time: string;
-  depth: string;
-  hours: string;
-  notes: string;
-  saving: boolean;
-  message: string;
-  onDateChange: (v: string) => void;
-  onTimeChange: (v: string) => void;
-  onDepthChange: (v: string) => void;
-  onHoursChange: (v: string) => void;
-  onNotesChange: (v: string) => void;
-  onSave: () => void;
-}) {
-  const pivot = pivots.find((p) => p.id === pivotId);
-  const depthN = parseFloat(depth);
-  const volume = pivot && Number.isFinite(depthN) && depthN > 0
-    ? deriveAppliedVolume(depthN, pivot.area)
-    : null;
-
-  return (
-    <Card>
-      <h3 className="mb-5 text-sm font-semibold tracking-tight text-graphite-900 dark:text-white">
-        Registrar irrigação realizada
-      </h3>
-      {!pivotId ? (
-        <p className="text-sm text-graphite-400 dark:text-gray-500">
-          Selecione um pivô acima para lançar o evento.
-        </p>
-      ) : (
-        <div className="grid max-w-lg grid-cols-1 gap-5 sm:grid-cols-2">
-          <Input label="Data" type="date" value={date} onChange={(e) => onDateChange(e.target.value)} />
-          <Input label="Hora" type="time" value={time} onChange={(e) => onTimeChange(e.target.value)} />
-          <Input
-            label="Lâmina bruta (mm)"
-            type="number"
-            step="0.1"
-            min="0"
-            value={depth}
-            onChange={(e) => onDepthChange(e.target.value)}
-          />
-          <Input
-            label="Horas de operação"
-            type="number"
-            step="0.1"
-            min="0"
-            value={hours}
-            onChange={(e) => onHoursChange(e.target.value)}
-          />
-          {volume != null && (
-            <p className="col-span-full text-xs text-graphite-400 dark:text-gray-500">
-              Volume: <strong>{volume.toLocaleString("pt-BR")} m³</strong>
-            </p>
-          )}
-          <div className="col-span-full">
-            <TextArea label="Observação (opcional)" value={notes} onChange={(e) => onNotesChange(e.target.value)} />
-          </div>
-          <div className="col-span-full">
-            <Button onClick={onSave} disabled={!date || !depth || saving}>
-              {saving ? "Salvando..." : "Lançar Irrigação"}
-            </Button>
-          </div>
-          {message && (
-            <p role="alert" className={`col-span-full rounded-xl p-3.5 text-xs ${message.includes("sucesso") ? "bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400" : "bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400"}`}>
-              {message}
-            </p>
-          )}
-        </div>
-      )}
-    </Card>
-  );
-}
