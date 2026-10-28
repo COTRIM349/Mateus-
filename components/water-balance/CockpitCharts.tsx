@@ -1,6 +1,7 @@
 "use client";
 
 import { calculateHydricZoneBounds } from "@/modules/water-balance/services/map-hydric-status";
+import type { PhenologyChartMarker } from "@/modules/culture/services/phenology-chart-markers";
 import { reservoirAxisRange, type ReservatorioZoom } from "@/modules/water-balance/services/reservoir-axis-range";
 export type { ReservatorioZoom } from "@/modules/water-balance/services/reservoir-axis-range";
 
@@ -349,6 +350,7 @@ export function KcCurveReadOnlyChart({
   currentDae,
   currentKc,
   phases = [],
+  markers = [],
   daeOffsetFromPlanting = 0,
   currentPhase = null,
 }: {
@@ -356,6 +358,7 @@ export function KcCurveReadOnlyChart({
   currentDae?: number | null;
   currentKc?: number | null;
   phases?: KcPhenologyPhase[];
+  markers?: PhenologyChartMarker[];
   /** Dias entre plantio e emergência; converte a linha do tempo DAP para DAE. */
   daeOffsetFromPlanting?: number;
   /** Fenologia atual calculada pelo motor. */
@@ -453,6 +456,27 @@ export function KcCurveReadOnlyChart({
           <text x={p.cx} y={p.cy - 11} textAnchor="middle" className="fill-graphite-700 dark:fill-gray-200" fontSize={10} fontWeight={700}>{p.y.toFixed(2)}</text>
         </g>
       ))}
+
+      {/* Marcos R1/R2/Rn: posicionamento apenas pelo DAE cadastrado/calibrado.
+          Sem data do cadastro, não cria marca inventada. */}
+      {markers
+        .filter((marker) => /^R[1-8]$/.test(marker.code) && marker.dae >= 0 && marker.dae <= dae)
+        .map((marker, i) => {
+          const markerX = x(marker.dae);
+          const badgeX = Math.max(padL, Math.min(markerX - 19, W - padR - 40));
+          const badgeY = padT + 7 + (i % 2) * 24;
+          return (
+            <g key={marker.code + "-" + marker.dae}>
+              <title>{marker.code} · {marker.label} · {marker.dae} DAE ({marker.origin})</title>
+              <line x1={markerX} x2={markerX} y1={padT} y2={padT + plotH}
+                stroke="#34d399" strokeWidth={1.5} strokeDasharray="6 6" opacity={0.8} />
+              <rect x={badgeX} y={badgeY} width={40} height={19} rx={5} fill="#065f46" stroke="#6ee7b7" strokeWidth={1} />
+              <text x={badgeX + 20} y={badgeY + 13} textAnchor="middle" fill="#ecfdf5" fontSize={11} fontWeight={800}>
+                {marker.code}
+              </text>
+            </g>
+          );
+        })}
 
       {xTicks.map((tick) => (
         <g key={`dae-${tick}`}>

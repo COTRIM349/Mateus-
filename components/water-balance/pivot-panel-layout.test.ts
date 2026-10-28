@@ -11,9 +11,11 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(page).toContain('panelView === "solo"');
     expect(page).toContain('panelView === "cultura"');
     expect(page).toContain('panelView === "clima"');
-    expect(page).toContain("h-[430px] w-full");
-    expect(page).toContain("h-[520px] w-full");
+    expect(page).toContain("h-[76vh] min-h-[560px] w-full");
+    expect(page).toContain("h-[76vh] min-h-[560px] w-full");
     expect(page).toContain("<PivotClimatePanel");
+    expect(page).toContain("phenologyMarkers={phenologyMarkers}");
+    expect(page).toContain("culture_variety_phenology_targets");
     expect(page).toContain("identity.varietyName");
   });
 

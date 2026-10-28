@@ -32,6 +32,7 @@ import {
 import { fao56ReferenceDepletionByName } from "@/modules/water-balance/services/availability-factor";
 import { calculateHydricZoneBounds } from "@/modules/water-balance/services/map-hydric-status";
 import { type CulturePhase } from "@/modules/culture/services";
+import { buildPhenologyChartMarkers, type PhenologyChartMarker, type PhenologyMarkerRow, type PhenologyTargetRow } from "@/modules/culture/services/phenology-chart-markers";
 import {
   buildOperationalPivotSoil,
   mapDbLayersToProfile,
@@ -314,6 +315,7 @@ export default function BalancoHidricoPage() {
   const [soil, setSoil] = useState<Soil | null>(null);
   const [soilLayers, setSoilLayers] = useState<SoilProfileLayer[]>([]);
   const [phases, setPhases] = useState<CulturePhase[]>([]);
+  const [phenologyMarkers, setPhenologyMarkers] = useState<PhenologyChartMarker[]>([]);
   const [hydricAnchor, setHydricAnchor] = useState<HydricAnchor | null>(null);
   const [showInitialForm, setShowInitialForm] = useState(false);
   const [balanceRows, setBalanceRows] = useState<DailyBalanceRow[]>([]);
@@ -603,6 +605,41 @@ export default function BalancoHidricoPage() {
     })();
     return () => { cancelled = true; };
   }, [selectedPivotId, supabase]);
+
+  // Os estádios VE/Vn/R1/R2/... vêm do cadastro fenológico da própria
+  // cultivar da parcela. DAE calibrado somente quando ativado; caso contrário
+  // usa DAE esperado registrado. Não inventa datas nem altera o motor.
+  useEffect(() => {
+    const varietyId = assignment?.culture_variety_id ?? assignment?.variety_id;
+    if (!assignment?.culture_id || !varietyId) {
+      setPhenologyMarkers([]);
+      return;
+    }
+    let cancelled = false;
+    setPhenologyMarkers([]);
+    (async () => {
+      const [markersRes, targetsRes] = await Promise.all([
+        supabase.from("culture_phenology_markers")
+          .select("id,stage_code,name,marker_order")
+          .eq("culture_id", assignment.culture_id)
+          .eq("active", true)
+          .order("marker_order"),
+        supabase.from("culture_variety_phenology_targets")
+          .select("marker_id,expected_dae,calibrated_dae,use_calibrated")
+          .eq("variety_id", varietyId),
+      ]);
+      if (cancelled) return;
+      if (markersRes.error || targetsRes.error) {
+        setPhenologyMarkers([]);
+        return;
+      }
+      setPhenologyMarkers(buildPhenologyChartMarkers(
+        (markersRes.data ?? []) as PhenologyMarkerRow[],
+        (targetsRes.data ?? []) as PhenologyTargetRow[],
+      ));
+    })();
+    return () => { cancelled = true; };
+  }, [assignment?.id, assignment?.culture_id, assignment?.culture_variety_id, assignment?.variety_id, supabase]);
 
   // Sequenciamento: só o cálculo mais recente pode escrever no estado, evitando
   // que um cálculo lento com entradas antigas sobrescreva o resultado correto
@@ -1604,6 +1641,7 @@ export default function BalancoHidricoPage() {
                 kcSource={kcSource}
                 kcCurve={kcCurveView}
                 culturePhases={phases}
+                phenologyMarkers={phenologyMarkers}
                 daeOffsetFromPlanting={
                   assignment?.planting_date && assignment?.emergence_date
                     ? Math.max(0, daysBetweenIso(assignment.planting_date, assignment.emergence_date))
@@ -2596,6 +2634,7 @@ function Cockpit({
   kcSource = null,
   kcCurve = null,
   culturePhases = [],
+  phenologyMarkers = [],
   daeOffsetFromPlanting = 0,
 }: {
   rows: DailyBalanceRow[];
@@ -2616,6 +2655,8 @@ function Cockpit({
   kcCurve?: KcCurveView | null;
   /** Fases cadastradas da cultura, usadas somente para desenhar a fenologia do ciclo. */
   culturePhases?: CulturePhase[];
+  /** Estádios por cultivar com DAE esperado ou calibrado, sem inventar R1/R2. */
+  phenologyMarkers?: PhenologyChartMarker[];
   /** Diferença plantio→emergência para alinhar DAP das fases com DAE do manejo. */
   daeOffsetFromPlanting?: number;
 }) {
@@ -2768,7 +2809,7 @@ function Cockpit({
               <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
               <CockpitSeriesToggles series={ENTRADAS_SERIES.filter((s) => s.k !== "kc")} visible={entradasVis} onToggle={toggleEntrada} />
             </div>
-            <div className="h-[430px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={-1} visible={{ ...entradasVis, kc: false }} /></div>
+            <div className="h-[76vh] min-h-[560px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={-1} visible={{ ...entradasVis, kc: false }} /></div>
           </Card>}
           {panelView === "cultura" && (
           <>
@@ -2777,7 +2818,7 @@ function Cockpit({
                 { label: "Pivô", value: identity.pivotName ?? "—" },
                 { label: "Cultura", value: identity.cultureName ?? "—" },
                 { label: "Cultivar / variedade", value: identity.varietyName ?? "Não cadastrada" },
-                { label: "Fenologia atual", value: last.phase ?? identity.stage ?? "—" },
+                { label: "Fenologia atual", value: identity.stage && /^(VE|VC|V\d+|R\d+)$/i.test(identity.stage.trim()) ? identity.stage : (last.phase ?? identity.stage ?? "—") },
                 { label: "Idade", value: last.dae == null ? "—" : last.dae + " DAE" },
                 { label: "Kc atual", value: fmtNum(last.kc, 2) },
               ].map((item) => (
@@ -2811,14 +2852,35 @@ function Cockpit({
                 </div>
               )}
             </div>
+            <div className="mb-4 rounded-xl border border-santa-300/20 bg-santa-50/50 p-3 dark:border-white/10 dark:bg-white/[0.04]">
+              <p className="mb-2 text-[12px] font-bold text-santa-800 dark:text-santa-200">Estádios fenológicos da cultivar (DAE cadastrados)</p>
+              {phenologyMarkers.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {phenologyMarkers.filter((m) => m.dae <= (last.dae ?? -1)).map((m) => (
+                    <span key={m.code + m.dae} title={m.label + " · " + m.origin}
+                      className="rounded-lg border border-santa-200 bg-white px-3 py-2 text-[12px] font-bold text-santa-800 dark:border-santa-800 dark:bg-santa-900/30 dark:text-santa-100">
+                      {m.code} <span className="ml-1 font-normal opacity-75">{m.dae} DAE · {m.origin}</span>
+                    </span>
+                  ))}
+                  {phenologyMarkers.every((m) => m.dae > (last.dae ?? -1)) && (
+                    <span className="text-[12px] text-graphite-500 dark:text-slate-300">Nenhum estádio cadastrado foi alcançado até o DAE atual.</span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[12px] text-graphite-500 dark:text-slate-300">
+                  R1, R2 e os demais códigos aparecem quando houver DAE esperado ou calibrado ativo em Culturas → Fenologia, para a cultivar deste pivô.
+                </p>
+              )}
+            </div>
             {kcCurve ? (
-              <div className="h-[520px] w-full">
+              <div className="h-[76vh] min-h-[560px] w-full">
                 <KcCurveReadOnlyChart
                   points={kcCurve.points}
                   currentDae={last.dae ?? null}
                   currentKc={last.kc}
                   currentPhase={last.phase ?? null}
                   daeOffsetFromPlanting={daeOffsetFromPlanting}
+                  markers={phenologyMarkers}
                   phases={culturePhases.map((phase) => ({
                     name: phase.name,
                     phaseKey: phase.phase_key ?? null,
@@ -2830,7 +2892,7 @@ function Cockpit({
             ) : (
               <div className="w-full rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-white/[0.08] dark:bg-white/[0.02]">
                 <p className="mb-2 text-[12px] font-semibold text-graphite-600 dark:text-gray-300">Sem curva Kc ativa em DAE no cadastro: exibindo os valores históricos realmente calculados para este pivô.</p>
-                <ObservedKcChart rows={rows} />
+                <ObservedKcChart rows={rows} markers={phenologyMarkers} />
               </div>
             )}
           </Card>

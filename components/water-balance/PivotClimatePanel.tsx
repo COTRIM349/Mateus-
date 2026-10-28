@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import {
   CartesianGrid,
+  ReferenceLine,
   Line,
   LineChart,
   ResponsiveContainer,
@@ -11,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import type { DailyBalanceRow } from "@/modules/water-balance/services";
+import type { PhenologyChartMarker } from "@/modules/culture/services/phenology-chart-markers";
 
 export interface ClimateObservation {
   tmax: number | null;
@@ -114,7 +116,7 @@ export function PivotClimatePanel({
         <h3 className="mb-1 text-[16px] font-bold">Temperaturas por dia</h3>
         <p className="mb-4 text-[11px] text-slate-400">Máxima, média e mínima · °C · dados existentes na estação</p>
         {hasTemperatures ? (
-          <div className="h-[390px] w-full">
+          <div className="h-[76vh] min-h-[540px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={points} margin={{ top: 12, right: 24, left: 0, bottom: 6 }}>
                 <CartesianGrid stroke="#ffffff" strokeOpacity={0.09} vertical={false} />
@@ -137,7 +139,7 @@ export function PivotClimatePanel({
       <div className="rounded-xl border border-white/10 bg-[#0c1e25] p-4">
         <h3 className="mb-1 text-[16px] font-bold">ETo e ETc por dia</h3>
         <p className="mb-4 text-[11px] text-slate-400">ETo de referência e ETc real calculada pelo motor hídrico · mm/dia</p>
-        <div className="h-[390px] w-full">
+        <div className="h-[76vh] min-h-[540px] w-full">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={points} margin={{ top: 12, right: 24, left: 0, bottom: 6 }}>
               <CartesianGrid stroke="#ffffff" strokeOpacity={0.09} vertical={false} />
@@ -160,7 +162,7 @@ export function PivotClimatePanel({
 
 
 /** Fallback visual: somente os Kc já utilizados pelo motor nos dias calculados. */
-export function ObservedKcChart({ rows }: { rows: DailyBalanceRow[] }) {
+export function ObservedKcChart({ rows, markers = [] }: { rows: DailyBalanceRow[]; markers?: PhenologyChartMarker[] }) {
   const values = useMemo(
     () => rows.filter((row) => Number.isFinite(row.kc)).map((row) => ({
       date: row.date,
@@ -171,6 +173,12 @@ export function ObservedKcChart({ rows }: { rows: DailyBalanceRow[] }) {
     [rows],
   );
 
+  const reached = markers.filter((marker) => /^R[1-8]$/.test(marker.code))
+    .flatMap((marker) => {
+      const date = values.find((row) => row.dae != null && Math.abs(row.dae - marker.dae) < 0.5)?.date;
+      return date ? [{ ...marker, date }] : [];
+    });
+
   if (values.length === 0) {
     return <p className="p-6 text-[13px] text-slate-400">Sem valores de Kc calculados no período.</p>;
   }
@@ -180,13 +188,17 @@ export function ObservedKcChart({ rows }: { rows: DailyBalanceRow[] }) {
       <p className="text-[12px] text-graphite-500 dark:text-slate-400">
         Kc histórico utilizado pelo motor, por data, com a fenologia correspondente. Sem curva ativa no cadastro: não há extrapolação do ciclo futuro.
       </p>
-      <div className="h-[450px] w-full">
+      <div className="h-[76vh] min-h-[540px] w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={values} margin={{ top: 15, right: 22, bottom: 5, left: 0 }}>
             <CartesianGrid stroke="#64748b" strokeOpacity={0.17} vertical={false} />
             <XAxis dataKey="date" tickFormatter={formatDay} minTickGap={24} tick={axisTick} />
             <YAxis dataKey="kc" domain={[0, "auto"]} tick={axisTick} width={42} />
             <Tooltip contentStyle={tooltipStyle} labelFormatter={(date) => String(date)} />
+            {reached.map((marker) => (
+              <ReferenceLine key={marker.code + marker.dae} x={marker.date} stroke="#34d399" strokeDasharray="5 5"
+                label={{ value: marker.code, position: "insideTop", fill: "#047857", fontWeight: 700, fontSize: 13 }} />
+            ))}
             <Line name="Kc calculado" dataKey="kc" type="monotone" dot={false} stroke="#16a085" strokeWidth={3} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
