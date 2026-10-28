@@ -60,7 +60,7 @@ function Legend({ color, text, dashed = false }: { color: string; text: string; 
 function RasFullWidthChart({ points, replacementMm, mode, visible }: {
   points: RasPoint[]; replacementMm: number; mode: ZoomMode; visible: RASObservationsVisibility;
 }) {
-  const W = 1560, H = 555, l = 57, r = 138, t = 22, b = 167;
+  const W = 1560, H = 720, l = 57, r = 138, t = 22, b = 170;
   const width = W - l - r, height = H - t - b;
   const newest = points[points.length - 1];
   if (!newest || points.length === 0) return null;
@@ -115,7 +115,7 @@ function RasFullWidthChart({ points, replacementMm, mode, visible }: {
     <div className="w-full overflow-x-auto">
       <svg viewBox={`0 0 ${W} ${H}`} role="img"
         aria-label="Evolução da umidade em porcentagem da capacidade de campo, com linhas de PMP e limite de irrigação"
-        className="h-[460px] min-w-[900px] w-full lg:h-[570px]" preserveAspectRatio="none">
+        className="h-[76vh] min-h-[560px] min-w-[900px] w-full" preserveAspectRatio="none">
         <defs>
           <clipPath id="rasFullClip"><rect x={l} y={t} width={width} height={height} /></clipPath>
           <linearGradient id="rasFullArea" x1="0" x2="0" y1="0" y2="1">
