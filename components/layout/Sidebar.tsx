@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { topLevelItems, navGroups, bottomItems } from "@/config/navigation";
@@ -79,7 +80,7 @@ export function Sidebar() {
         type="button"
         aria-label="Abrir menu"
         onClick={() => setOpen(true)}
-        className="fixed left-4 top-4 z-40 rounded-xl bg-forest-900 p-2.5 text-white shadow-elevated lg:hidden"
+        className="fixed left-4 top-4 z-40 rounded-xl bg-santa-800 p-2.5 text-white shadow-elevated lg:hidden"
       >
         <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
@@ -96,20 +97,23 @@ export function Sidebar() {
 
       <aside
         className={cn(
-          "fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col bg-forest-900 text-white transition-transform duration-200",
+          "fixed inset-y-0 left-0 z-50 flex w-[240px] flex-col bg-santa-800 text-white transition-transform duration-200",
           open ? "translate-x-0" : "-translate-x-full",
           "lg:translate-x-0",
         )}
       >
-        <div className="flex shrink-0 items-center gap-2.5 px-4 py-3">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-500/90 text-white">
-            <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
-            </svg>
-          </div>
-          <div>
-            <p className="text-[14px] font-extrabold leading-none tracking-tight text-white">SANTA COLOMBA</p>
-            <p className="mt-0.5 text-[8.5px] font-bold uppercase tracking-[0.18em] text-brand-300">IRRIGA PRO</p>
+        <div className="shrink-0 border-b border-white/10 px-4 pb-3 pt-4">
+          <Image
+            src="/brand/santa-colomba-logo-branca.png"
+            alt="Santa Colomba"
+            width={178}
+            height={67}
+            priority
+            className="h-auto w-[178px] object-contain"
+          />
+          <div className="mt-2 border-t border-white/10 pt-2">
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.19em] text-santa-200">IRRIGA PRO</p>
+            <p className="mt-0.5 text-[10px] text-white/55">Gestão inteligente da irrigação</p>
           </div>
         </div>
 

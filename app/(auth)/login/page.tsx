@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
@@ -38,19 +39,26 @@ export default function LoginPage() {
 
   return (
     <div className="rounded-2xl border border-gray-100 bg-white p-10 shadow-elevated dark:border-white/[0.06] dark:bg-graphite-900">
-      <div className="mb-10 flex flex-col items-center">
-        <div className="mb-5 flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-soft">
-          <svg className="h-7 w-7" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M12 2.5l5.5 7.7a6.5 6.5 0 11-11 0L12 2.5z" />
-          </svg>
-        </div>
-        <h1 className="text-xl font-bold tracking-tight text-graphite-900 dark:text-white">
-          {APP_NAME}
-        </h1>
-        <p className="mt-2 text-sm text-graphite-400 dark:text-gray-500">
-          Entre com suas credenciais
+      <div className="-mx-10 -mt-10 mb-8 rounded-t-2xl bg-santa-700 px-6 pb-7 pt-7 text-center">
+        <Image
+          src="/brand/santa-colomba-logo-branca.png"
+          alt="Santa Colomba"
+          width={210}
+          height={79}
+          priority
+          className="mx-auto h-auto w-[210px] object-contain"
+        />
+        <h1 className="sr-only">{APP_NAME}</h1>
+        <p className="mt-3 text-[13px] font-extrabold uppercase tracking-[0.22em] text-white">
+          IRRIGA PRO
+        </p>
+        <p className="mt-1 text-[10px] font-medium uppercase tracking-[0.12em] text-white/70">
+          Gestão inteligente da irrigação
         </p>
       </div>
+      <p className="mb-7 text-center text-sm text-graphite-500 dark:text-gray-400">
+        Entre com suas credenciais
+      </p>
 
       <form onSubmit={handleLogin} className="space-y-5">
         <Input
