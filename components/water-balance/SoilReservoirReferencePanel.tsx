@@ -293,7 +293,6 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   }
   const efficiency = efficiencyPercent != null && efficiencyPercent > 0 ? efficiencyPercent/100 : null;
   const repl = rasWaterReplenishment(now.ctaMm, now.armMm, efficiency, areaHa, flowRateM3h);
-  const reservePct = now.ctaMm > 0 ? now.armMm/now.ctaMm*100 : 0;
   const phaseLabel = last.phase && last.phase !== "—" ? last.phase : (stage ?? "—");
   const mmOrDash = (value: number | null, digits=1) => value==null ? "—" : n(value,digits)+" mm";
   const irrigationAccumulatedMm = points.reduce((sum, point) => sum + (point.irrigationAppliedMm ?? 0), 0);
@@ -460,7 +459,6 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
             <div className="grid grid-cols-2 gap-2 text-[11px] sm:grid-cols-3 xl:grid-cols-6">
               {([
                 ["Data", now.date],
-                ["Raiz efetiva", n(now.rootDepth*100,0)+" cm"],
                 ["CAD", n(now.ctaMm,2)+" mm"],
                 ["ARM", n(now.armMm,2)+" mm"],
                 ["AFD", n(now.afdMm,2)+" mm"],
