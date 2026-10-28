@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import {
   Button, Card, Input, Select, Modal, TextArea,
@@ -72,6 +72,7 @@ export default function LancamentoIrrigacaoPage() {
   const [formError, setFormError] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
   const [form, setForm] = useState<FormState>(EMPTY);
+  const quickLaunchHandled = useRef(false);
 
   useEffect(() => {
     if (!activeFarmId) return;
@@ -119,6 +120,33 @@ export default function LancamentoIrrigacaoPage() {
   const activeParcelFor = useCallback((pivotId: string) => {
     return parcels.find((p) => p.pivot_id === pivotId && isActiveParcel(p.status, p.active)) ?? null;
   }, [parcels]);
+
+  useEffect(() => {
+    if (
+      quickLaunchHandled.current ||
+      pivots.length === 0 ||
+      parcels.length === 0 ||
+      typeof window === "undefined"
+    ) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const pivotId = params.get("pivot");
+    if (!pivotId || !pivots.some((pivot) => pivot.id === pivotId)) return;
+
+    quickLaunchHandled.current = true;
+    setSelectedPivotId(pivotId);
+
+    if (params.get("new") === "1") {
+      setForm({
+        ...EMPTY,
+        pivot_id: pivotId,
+        date: today(),
+      });
+      setFormError("");
+      setSuccessMessage("");
+      setModalOpen(true);
+    }
+  }, [pivots, parcels]);
 
   const selectedLaunchPivot = selectedPivotId ? pivotMap.get(selectedPivotId) : undefined;
   const selectedLaunchParcel = selectedPivotId ? activeParcelFor(selectedPivotId) : null;
