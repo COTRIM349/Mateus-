@@ -53,7 +53,7 @@ import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
 import { SoilReservoirReferencePanel } from "@/components/water-balance/SoilReservoirReferencePanel";
-import { PivotClimatePanel } from "@/components/water-balance/PivotClimatePanel";
+import { ObservedKcChart, PivotClimatePanel } from "@/components/water-balance/PivotClimatePanel";
 import { cn } from "@/utils/cn";
 import {
   EntradasConsumoChart,
@@ -2552,7 +2552,7 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   const crossIndexReserv = -1;
 
   // Entradas e consumo: últimos 14 dias observados (sem previsão no gráfico).
-  const histE = rows.slice(-14);
+  const histE = rows;
   const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
     label: fmtDia(r.date),
     chuvaEf: r.effectivePrecipitation,
@@ -2828,11 +2828,9 @@ function Cockpit({
                 />
               </div>
             ) : (
-              <div className="flex h-[170px] items-center justify-center rounded-xl border border-dashed border-gray-200 bg-gray-50/60 px-6 text-center dark:border-white/[0.08] dark:bg-white/[0.02]">
-                <div>
-                  <p className="text-[12px] font-semibold text-graphite-600 dark:text-gray-300">Nenhuma curva Kc ativa em DAE para esta cultura/cultivar.</p>
-                  <p className="mt-1 text-[10.5px] text-graphite-400 dark:text-gray-500">O manejo continua mostrando o Kc calculado pelo fallback das fases, quando disponível.</p>
-                </div>
+              <div className="w-full rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-white/[0.08] dark:bg-white/[0.02]">
+                <p className="mb-2 text-[12px] font-semibold text-graphite-600 dark:text-gray-300">Sem curva Kc ativa em DAE no cadastro: exibindo os valores históricos realmente calculados para este pivô.</p>
+                <ObservedKcChart rows={rows} />
               </div>
             )}
           </Card>
