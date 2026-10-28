@@ -111,3 +111,63 @@ body {
 .leaflet-tooltip-top.leaflet-pivot-hover::before {
   border-top-color: rgb(9 9 11 / 0.92);
 }
+
+
+/*
+ * Tipografia operacional Santa Colomba — aplicada a TODAS as abas autenticadas.
+ * Várias telas antigas usam classes arbitrárias de 9–13px. A escala abaixo
+ * privilegia leitura em monitores sem alterar os cálculos, gráficos SVG ou
+ * diagramação dos dados. Classes Tailwind têm nomes exatos (não confundimos
+ * text-[10px] com cores text-[#...]). Não usamos zoom ou transform: scale(),
+ * que esticariam SVG, letras e interfaces interativas.
+ */
+@media (min-width: 768px) {
+  .app-readable-ui [class~="text-[9px]"],
+  .app-readable-ui [class~="text-[9.5px]"] {
+    font-size: 12px;
+    line-height: 1.5;
+  }
+
+  .app-readable-ui [class~="text-[10px]"],
+  .app-readable-ui [class~="text-[10.5px]"] {
+    font-size: 13px;
+    line-height: 1.45;
+  }
+
+  .app-readable-ui [class~="text-[11px]"],
+  .app-readable-ui [class~="text-[11.5px]"],
+  .app-readable-ui .text-xs {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .app-readable-ui [class~="text-[12px]"],
+  .app-readable-ui [class~="text-[12.5px]"],
+  .app-readable-ui [class~="text-[13px]"],
+  .app-readable-ui [class~="text-[13.5px]"],
+  .app-readable-ui .text-sm {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .app-readable-ui [class~="text-[14px]"],
+  .app-readable-ui [class~="text-[14.5px]"] {
+    font-size: 17px;
+    line-height: 1.45;
+  }
+
+  .app-readable-ui [class~="text-[15px]"] {
+    font-size: 18px;
+    line-height: 1.4;
+  }
+}
+
+/* Campos e tabelas em qualquer aba: os dados não se tornam ilegíveis.
+   As tabelas continuam podendo rolar horizontalmente conforme a tela. */
+.app-readable-ui :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+  font-size: max(16px, 1em);
+}
+
+.app-readable-ui :is(button, a, input, select, textarea) {
+  text-size-adjust: 100%;
+}
