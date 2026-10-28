@@ -116,7 +116,7 @@ export function PivotClimatePanel({
         <h3 className="mb-1 text-[16px] font-bold">Temperaturas por dia</h3>
         <p className="mb-4 text-[11px] text-slate-400">Máxima, média e mínima · °C · dados existentes na estação</p>
         {hasTemperatures ? (
-          <div className="h-[76vh] min-h-[540px] w-full">
+          <div className="h-[58vh] min-h-[420px] max-h-[620px] w-full">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={points} margin={{ top: 12, right: 24, left: 0, bottom: 6 }}>
                 <CartesianGrid stroke="#ffffff" strokeOpacity={0.09} vertical={false} />
@@ -162,7 +162,7 @@ export function PivotClimatePanel({
 
 
 /** Fallback visual: somente os Kc já utilizados pelo motor nos dias calculados. */
-export function ObservedKcChart({ rows, markers = [] }: { rows: DailyBalanceRow[]; markers?: PhenologyChartMarker[] }) {
+export function ObservedKcChart({ rows, markers = [], currentRootDepthM = null }: { rows: DailyBalanceRow[]; markers?: PhenologyChartMarker[]; currentRootDepthM?: number | null }) {
   const values = useMemo(
     () => rows.filter((row) => Number.isFinite(row.kc)).map((row) => ({
       date: row.date,
@@ -206,7 +206,8 @@ export function ObservedKcChart({ rows, markers = [] }: { rows: DailyBalanceRow[
       <p className="text-[11px] text-graphite-500 dark:text-slate-400">
         Último dia: {values[values.length - 1]?.dae ?? "—"} DAE ·
         fase {values[values.length - 1]?.fase ?? "não informada"} ·
-        Kc {decimal(values[values.length - 1]?.kc)}.
+        Kc {decimal(values[values.length - 1]?.kc)}
+        {currentRootDepthM != null && Number.isFinite(currentRootDepthM) ? ` · raiz ${Math.round(currentRootDepthM * 100)} cm` : ""}.
       </p>
     </div>
   );
