@@ -6,6 +6,7 @@ import type { DailyBalanceRow } from "@/modules/water-balance/services/water-bal
 import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
 import { rasDisplaySeries, rasDisplayAxisCeiling, RAS_UNITS, type RasDisplayUnit, type RasDisplayPoint } from "@/modules/water-balance/services/ras-display-modes";
 import type { SoilProfileLayer } from "@/modules/soil/services/soil-profile";
+import { rasEventAxisCeiling, rasEventVerticalPosition } from "@/modules/water-balance/services/ras-event-axis";
 
 type ZoomMode = "full" | "arm" | "lamina";
 type RASObservationsVisibility = { chuva: boolean; irrigacao: boolean; eto: boolean };
@@ -80,8 +81,11 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+  const integratedCc = unit === "cc";
   const W = Math.max(900, size.width), H = Math.max(560, size.height);
-  const l = 66, r = 142, t = 30, b = 190;
+  // No gráfico %CC, os eventos utilizam o mesmo plano de datas e o eixo direito em mm/dia.
+  // As demais unidades conservam a banda inferior original até a revisão dos seus modelos.
+  const l = 66, r = integratedCc ? 205 : 142, t = 30, b = integratedCc ? 70 : 190;
   const width = W - l - r, height = H - t - b;
   const newest = points[points.length - 1];
   const latest = displayed[displayed.length - 1];
@@ -118,17 +122,19 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
   // eventos de entrada/ETo com o eixo da umidade em % da capacidade de campo.
   // Irrigação é a lâmina bruta REAL lançada; chuva é a chuva efetiva usada no
   // balanço. Valores originais da chuva manual ficam acessíveis nos detalhes.
-  const eventsTop = t + height + 46;
-  const eventsHeight = 85;
+  const eventsTop = integratedCc ? t : t + height + 46;
+  const eventsHeight = integratedCc ? height : 85;
   const eventsBottom = eventsTop + eventsHeight;
   const eventMaxRaw = Math.max(1, ...points.map(p => Math.max(
     visible.chuva ? p.rainEffectiveMm : 0,
     visible.irrigacao ? p.irrigationAppliedMm : 0,
     visible.eto ? p.et0 : 0,
   )));
-  const eventMax = Math.max(2, Math.ceil(eventMaxRaw / 2) * 2);
-  const eventY = (mm: number) => eventsBottom - clamp(mm, 0, eventMax) / eventMax * eventsHeight;
+  const eventMax = integratedCc ? rasEventAxisCeiling(points, visible) : Math.max(2, Math.ceil(eventMaxRaw / 2) * 2);
+  // Irrigação, chuva e ETo têm eixo secundário independente: 0 mm = base do gráfico.
+  const eventY = (mm: number) => rasEventVerticalPosition(mm, eventMax, eventsTop, eventsHeight);
   const eventBarWidth = Math.max(4, Math.min(11, width / Math.max(points.length, 1) / 5));
+  const summaryX = integratedCc ? l+width+64 : l+width+12;
   const labelStride = Math.max(1, Math.ceil(points.length / Math.max(2, Math.floor(width / 64))));
   const etoPoints = points.filter(p => Number.isFinite(p.et0));
   const etoPath = etoPoints.map(p => {
@@ -175,19 +181,33 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
             <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+39} textAnchor="middle" fontSize={18} fill="white">até CC do dia</text>
           </g>
         )}
-        {/* Eventos registrados: mesma data e eixo X do reservatório, escala mm/dia separada. */}
-        <text x={l} y={eventsTop-21} fill="#d1e1e8" fontSize={17} fontWeight={700}>
-          Chuva efetiva, irrigação realizada e ETo diária
-        </text>
-        <text x={l+width+12} y={eventsTop-21} fill="#b7cbd5" fontSize={18}>mm/dia</text>
-        {[0, eventMax / 2, eventMax].map((tick, i)=>(
-          <g key={i}>
-            <line x1={l} x2={l+width} y1={eventY(tick)} y2={eventY(tick)}
-              stroke="#ffffff" strokeOpacity={tick===0?.20:.07} />
-            <text x={l+width+12} y={eventY(tick)+5} fill="#b9cdd7" fontSize={17}>{n(tick,1)}</text>
+        {/* Modo %CC: uma única área plotada; eixo direito exclusivo dos eventos em mm/dia.
+            As barras começam exatamente em 0 mm na base, independentemente do eixo esquerdo. */}
+        {integratedCc ? (
+          <g aria-label="Eixo direito: irrigação, chuva e ETo em mm por dia">
+            <text x={l+width+12} y={t-12} fill="#b7cbd5" fontSize={17}>mm/dia</text>
+            {[0, eventMax/4, eventMax/2, eventMax*3/4, eventMax].map((tick, i)=>(
+              <g key={i}>
+                <text x={l+width+12} y={eventY(tick)+5} fill="#b9cdd7" fontSize={17}>{n(tick,1)}</text>
+              </g>
+            ))}
           </g>
-        ))}
-        <g>
+        ) : (
+          <>
+            <text x={l} y={eventsTop-21} fill="#d1e1e8" fontSize={17} fontWeight={700}>
+              Chuva efetiva, irrigação realizada e ETo diária
+            </text>
+            <text x={l+width+12} y={eventsTop-21} fill="#b7cbd5" fontSize={18}>mm/dia</text>
+            {[0, eventMax / 2, eventMax].map((tick, i)=>(
+              <g key={i}>
+                <line x1={l} x2={l+width} y1={eventY(tick)} y2={eventY(tick)}
+                  stroke="#ffffff" strokeOpacity={tick===0?.20:.07} />
+                <text x={l+width+12} y={eventY(tick)+5} fill="#b9cdd7" fontSize={17}>{n(tick,1)}</text>
+              </g>
+            ))}
+          </>
+        )}
+        <g clipPath={integratedCc ? "url(#rasFullClip)" : undefined}>
           {points.map((p,i)=>(
             <g key={p.date}>
               {visible.chuva && p.rainEffectiveMm>0 && (
@@ -218,15 +238,15 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
         </g>
         {points.map((p,i)=>(i % labelStride === 0 || i === points.length - 1)?
           <text key={p.date} x={x(i)} y={H-13} fill="#d1dae2" textAnchor="middle" fontSize={18}>{fmtDate(p.date)}</text>:null)}
-        <text x={l+width+12} y={t+9} fill="#dce8ef" fontSize={17}>ARM atual</text>
-        <text x={l+width+12} y={t+25} fill="#dce8ef" fontSize={18}>{n(newest.armMm,1)} mm</text>
-        <text x={l+width+12} y={t+41} fill="#dce8ef" fontSize={17}>CAD atual</text>
-        <text x={l+width+12} y={t+57} fill="#dce8ef" fontSize={18}>{n(newest.ctaMm,1)} mm</text>
+        <text x={summaryX} y={t+27} fill="#dce8ef" fontSize={17}>ARM atual</text>
+        <text x={summaryX} y={t+45} fill="#dce8ef" fontSize={18}>{n(newest.armMm,1)} mm</text>
+        <text x={summaryX} y={t+67} fill="#dce8ef" fontSize={17}>CAD atual</text>
+        <text x={summaryX} y={t+85} fill="#dce8ef" fontSize={18}>{n(newest.ctaMm,1)} mm</text>
         <text x={l+7} y={y(latest.capacity)-10} fontSize={16} fill="#36e98a" fontWeight="bold">Capacidade de campo</text>
         <text x={l+7} y={y(latest.safety)-10} fontSize={18} fill="#ff656c" fontWeight="bold">Limite de irrigação</text>
         <text x={l+7} y={y(latest.pmp)-10} fontSize={18} fill="#ffae37" fontWeight="bold">PMP</text>
       </svg>
-      <p className="mt-1 px-1 text-[10px] text-slate-400">As séries CC, limite, PMP e umidade atual usam os valores e a zona radicular de cada dia; o ARM à direita mostra apenas o dia atual. Na banda inferior, as barras azuis representam a chuva efetiva da chuva registrada, as verdes representam a irrigação bruta realizada e a linha amarela mostra a ETo diária em mm/dia; somente dados observados são utilizados.</p>
+      <p className="mt-1 px-1 text-[10px] text-slate-400">As séries CC, limite, PMP e umidade atual usam os valores e a zona radicular de cada dia; o ARM à direita mostra apenas o dia atual. {integratedCc ? "As barras de irrigação bruta realizada (verde) e chuva efetiva (azul) partem de 0 mm na base do mesmo gráfico; a linha amarela é a ETo diária. O eixo direito em mm/dia é independente da umidade no eixo esquerdo." : "Na banda inferior, as barras azuis representam a chuva efetiva da chuva registrada, as verdes representam a irrigação bruta realizada e a linha amarela mostra a ETo diária em mm/dia."} Somente dados observados são utilizados.</p>
     </div>
   );
 }
