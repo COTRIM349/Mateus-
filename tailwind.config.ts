@@ -11,6 +11,21 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
+        // Marca Santa Colomba: verde-petróleo e branco.
+        // Paletas de alertas agronômicos permanecem separadas da identidade.
+        santa: {
+          50: "#edf6f5",
+          100: "#d5eae8",
+          200: "#a7d7d2",
+          300: "#79c3bc",
+          400: "#4a9e99",
+          500: "#347f80",
+          600: "#286a6b",
+          700: "#22585a",
+          800: "#1b4849",
+          900: "#12393b",
+          950: "#0b292a",
+        },
         brand: {
           50: "#eefbf2",
           100: "#d6f5e0",
