@@ -108,12 +108,15 @@ describe("motor hídrico operacional", () => {
     expect(stressed[0].etc).toBeLessThan(stressed[0].etcPotential);
   });
 
-  it("KL da parcela reduz ETc potencial", () => {
+  it("Kl cadastrado não reduz ETc potencial nem afeta o balanço do pivô", () => {
     const full = computePivotBalanceSeries(sampleInput())[0];
     const assignment = { ...sampleInput().assignment, kl_override: 0.6 };
     const localized = computePivotBalanceSeries(sampleInput({ assignment }))[0];
-    expect(localized.kl).toBe(0.6);
-    expect(localized.etcPotential).toBeCloseTo(full.etcPotential * 0.6, 2);
+    expect(localized.kl).toBe(1);
+    expect(localized.etcPotential).toBe(full.etcPotential);
+    expect(localized.etc).toBe(full.etc);
+    expect(localized.afd).toBe(full.afd);
+    expect(localized.storage).toBe(full.storage);
   });
 
   it("chuva diária ocupa apenas espaço disponível na CAD e excedente vira surplus", () => {

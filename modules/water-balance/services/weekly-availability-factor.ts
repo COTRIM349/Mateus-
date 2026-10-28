@@ -19,7 +19,7 @@ export interface WeeklyAvailabilityObservation {
   date: string;
   /** F base aprovado para cultura/cultivar/fase/override em cada dia. */
   baseP: number;
-  /** ETo aprovada × Kc potencial × KL, sem Ks (evita circularidade). */
+  /** ETo aprovada × Kc potencial, sem Kl nem Ks (evita circularidade). */
   etcPotentialMm: number;
 }
 

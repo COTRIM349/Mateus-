@@ -44,6 +44,10 @@ describe("gráfico %CC: eixo da irrigação independente à direita", () => {
     expect(source).toContain('aria-pressed={selectedUnit === card.id}');
     expect(source).toContain('setSelectedUnit(card.id); setExpanded(null);');
     expect(source).toContain('if (card.id !== selectedUnit) return null;');
+    expect(source).toContain('aria-label="Escolher as variáveis do gráfico"');
+    expect(source).toContain('visible={seriesVisibility}');
+    expect(source).toContain('auditRasGraph(rows, points, auditedSeries, selectedUnit)');
+    expect(source).toContain('seriesVisibility.capacity && <Legend');
     expect(source).toContain('RasFullWidthChart points={points} displayed={card.series} unit={card.id}');
     expect(source).toContain('rasDisplaySeries(points, "mm"');
     expect(source).toContain('rasDisplaySeries(points, "cc"');

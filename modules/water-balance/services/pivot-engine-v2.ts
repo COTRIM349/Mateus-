@@ -16,7 +16,6 @@ import { calculateADTFromLayers, soilProfileIsUsable, registeredSoilProfileDepth
 import {
   formatEtcFormula,
   ksFunctionForEtc,
-  resolveManejoKl,
   resolveKsFunctionName,
   resolvePhaseKy,
   yieldRiskFraction,
@@ -294,18 +293,19 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const legacyKc = phases.length > 0 ? interpolateKc(phases, dae) : null;
     const kc = agronomic?.kc ?? legacyKc;
     const weather = weatherByDate[date];
-    const kl = resolveManejoKl({ parcelOverride: assignment.kl_override, phaseKl: phaseId?.phase.kl, cultureKl: culture.kl });
+    // Kl é mantido apenas por compatibilidade de cadastro: não reduz ETc do pivô.
+    const kl = 1;
     const legacyP = culture.depletion_factor ?? phaseId?.phase.depletion_factor ?? null;
     const baseP = agronomic?.depletionFractionP
       ?? (legacyP == null ? null : resolveDepletionFactor(
         assignment, phaseId?.phase.depletion_factor ?? null, legacyP,
       ));
     if (kc == null || !Number.isFinite(kc) || kc < 0 || kc > 2.5 ||
-        !Number.isFinite(kl) || kl < 0 || baseP == null ||
+        baseP == null ||
         !Number.isFinite(baseP) || baseP <= 0 || baseP >= 1) return null;
     return {
       date, dae, agronomic, phaseId, kc, kl, weather, baseP,
-      etcPotentialMm: Math.max(weather.et0 * kc * kl, 0),
+      etcPotentialMm: Math.max(weather.et0 * kc, 0),
     };
   });
   if (potentialDays.some((day) => day == null)) return [];
@@ -372,9 +372,9 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const startDepletion = startDeficit / adt;
     const ksConfigured = resolveKsFunctionName(assignment.ks_function_override, phaseId?.phase.ks_function, culture.ks_function);
     const ks = roundTo(calculateKs(startDepletion, pFactor, ksFunctionForEtc(ksConfigured), null), 3);
-    const etcPotential = roundTo(Math.max(weather.et0 * kc * kl, 0), 2);
+    const etcPotential = roundTo(Math.max(weather.et0 * kc, 0), 2);
     const etc = roundTo(etcPotential * ks, 2);
-    const kcAdjusted = roundTo(kc * kl * ks, 3);
+    const kcAdjusted = roundTo(kc * ks, 3);
     const ky = resolvePhaseKy(phaseId?.phase.ky, culture.ky);
     const yieldRisk = yieldRiskFraction(ky, ks);
     const irrigation = irrigationByDate[date] ?? 0;
