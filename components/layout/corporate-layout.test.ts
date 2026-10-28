@@ -10,7 +10,8 @@ describe("layout corporativo horizontal Santa Colomba", () => {
     const topbar = source("components/layout/Topbar.tsx");
     const navigation = source("components/layout/TopNavigation.tsx");
 
-    expect(layout).toContain("max-w-[1920px]");
+    expect(layout).toContain("max-w-none");
+    expect(layout).toContain("app-readable-ui");
     expect(layout).not.toContain("lg:pl-[264px]");
     expect(topbar).toContain("sticky top-0");
     expect(topbar).toContain("bg-santa-800");
@@ -26,6 +27,18 @@ describe("layout corporativo horizontal Santa Colomba", () => {
     expect(source("components/ui/Table.tsx")).toContain("bg-santa-50/60");
     expect(source("components/ui/Input.tsx")).toContain("focus:border-santa-500");
     expect(source("components/ui/Select.tsx")).toContain("focus:border-santa-500");
+  });
+
+  it("amplia fontes em todas as abas sem deformar os gráficos SVG", () => {
+    const css = source("app/globals.css");
+    const charts = source("components/water-balance/CockpitCharts.tsx");
+    const ras = source("components/water-balance/SoilReservoirReferencePanel.tsx");
+    expect(css).toContain(".app-readable-ui .text-xs");
+    expect(css).toContain(".app-readable-ui .text-sm");
+    expect(css).toContain('[class~="text-[10px]"]');
+    expect(charts).toContain("useResponsivePlotSize");
+    expect(charts).not.toContain('preserveAspectRatio="none" role="img" aria-label="Curva progressiva');
+    expect(ras).toContain("ResizeObserver");
   });
 
   it("não altera a semântica de alerta do manejo hídrico", () => {
