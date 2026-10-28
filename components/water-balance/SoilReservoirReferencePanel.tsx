@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import { buildRasPoint, currentWeekStats, rasWaterReplenishment, type RasPoint } from "@/modules/water-balance/services/ras-panel-model";
 
@@ -237,6 +238,7 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
         <div>
           <h2 className="text-[22px] font-extrabold leading-tight tracking-tight text-white sm:text-[28px]">Reservatório de Água do Solo (RAS)</h2>
           <p className="mt-1 text-[12px] text-slate-300">Disponibilidade hídrica e recomendação para retornar a 100% da capacidade de campo</p>
+          <p className="mt-1 text-[11px] text-slate-400">As barras de chuva e irrigação utilizam os lançamentos realizados na operação, na data de cada registro.</p>
         </div>
         <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.13] bg-[#081b21] p-1">
           {([
@@ -247,6 +249,12 @@ export function SoilReservoirReferencePanel({ rows, cultureName, varietyName, st
           ))}
         </div>
       </header>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <Link href="/lancamentos/chuvas" className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-500/20">Lançar chuva manual</Link>
+        <Link href="/lancamentos/irrigacao" className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-4 py-2 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">Lançar irrigação realizada</Link>
+        <span className="text-[11px] text-slate-400">Ao retornar ao balanço, o RAS será recalculado com os novos lançamentos.</span>
+      </div>
 
       <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 2xl:grid-cols-9">
         <Tile label="Cultura" value={cultureName ?? "—"} hint="Parcela em manejo" tone="green" symbol="❧"/>
