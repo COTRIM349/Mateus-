@@ -25,7 +25,7 @@ function Tile({ label, value, hint, tone = "white", symbol = "◉" }: {
   label: string; value: string; hint?: string; tone?: StatTone; symbol?: string;
 }) {
   return (
-    <div className="flex min-h-[125px] min-w-0 items-center gap-3 rounded-xl border border-white/[0.09] bg-[#0b1c23] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
+    <div className="flex min-h-[104px] min-w-0 items-center gap-3 rounded-xl border border-white/[0.09] bg-[#0b1c23] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-[21px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
       <div className="min-w-0">
         <div className="break-words text-[12px] font-medium leading-snug text-slate-300">{label}</div>
@@ -66,7 +66,7 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
   // O SVG recebe dimensões em pixels reais: textos, círculos e nomes não são
   // deformados pelo redimensionamento da janela ou ao entrar em tela cheia.
   const containerRef = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState({ width: 1200, height: 700 });
+  const [size, setSize] = useState({ width: 1200, height: 350 });
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
@@ -81,11 +81,12 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
-  const integratedCc = unit === "cc";
-  const W = Math.max(900, size.width), H = Math.max(560, size.height);
+  // Os três gráficos usam o mesmo plano de datas, com escala de eventos independente em mm/dia.
+  const integratedCc = true;
+  const W = Math.max(900, size.width), H = Math.max(300, size.height);
   // No gráfico %CC, os eventos utilizam o mesmo plano de datas e o eixo direito em mm/dia.
   // As demais unidades conservam a banda inferior original até a revisão dos seus modelos.
-  const l = 66, r = integratedCc ? 205 : 142, t = 30, b = integratedCc ? 70 : 190;
+  const l = 66, r = 185, t = 30, b = 58;
   const width = W - l - r, height = H - t - b;
   const newest = points[points.length - 1];
   const latest = displayed[displayed.length - 1];
@@ -142,7 +143,7 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
     return `${x(index).toFixed(2)},${eventY(p.et0).toFixed(2)}`;
   }).join(" ");
   return (
-    <div ref={containerRef} className={`w-full overflow-x-auto ${expanded ? "h-[calc(100dvh-170px)] min-h-[420px] max-h-none" : "h-[74vh] min-h-[580px] max-h-[900px]"}`}>
+    <div ref={containerRef} className={`w-full overflow-x-auto ${expanded ? "h-[calc(100dvh-170px)] min-h-[420px] max-h-none" : "h-[320px] sm:h-[350px] xl:h-[390px]"}`}>
       <svg viewBox={`0 0 ${W} ${H}`} width={W} height={H} role="img"
         aria-label={`Reservatório em ${RAS_UNITS[unit].axis}: água atual, capacidade de campo, limite de manejo, PMP e eventos diários`}
         className="block max-w-none" preserveAspectRatio="xMinYMin meet">
@@ -156,19 +157,20 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
         {Array.from({ length: 5 }, (_, i) => yMin + i * (yMax - yMin) / 4).map((q) => (
           <g key={q}>
             <line x1={l} x2={l+width} y1={y(q)} y2={y(q)} stroke="#ffffff" strokeOpacity=".10" strokeWidth={1}/>
-            <text x={l-12} y={y(q)+5} fill="#d7e4eb" textAnchor="end" fontSize={18}>{n(q,unit==="weight"?2:1)}</text>
+            <text x={l-12} y={y(q)+5} fill="#d7e4eb" textAnchor="end" fontSize={16}>{unit === "cc" ? n(q,0) : n(q,unit==="weight"?2:1)}</text>
           </g>
         ))}
         <text x={3} y={t+8} fill="#d8e6ed" fontSize={16}>{RAS_UNITS[unit].axis}</text>
         <g clipPath="url(#rasFullClip)">
-          {segments("capacity","safety","rgba(12,113,81,.35)")}
-          {segments("safety","pmp","rgba(182,48,54,.25)")}
-          {displayed.slice(0,-1).map((p,i) => <path key={i} d={`M ${x(i)} ${y(p.pmp)} L ${x(i+1)} ${y(displayed[i+1].pmp)} L ${x(i+1)} ${y(0)} L ${x(i)} ${y(0)} Z`} fill="rgba(113,29,31,.14)"/>)}
+          {unit === "mm" && (
+            <path d={"M "+x(0)+" "+y(0)+" L "+displayed.map((p,i) => x(i)+" "+y(p.current)).join(" L ")+" L "+x(displayed.length-1)+" "+y(0)+" Z"}
+              fill="rgba(179,198,215,.22)"/>
+          )}
           <polyline points={line("safety")} stroke="#ff5a60" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
-          <polyline points={line("pmp")} stroke="#ff9f23" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
-          <polyline points={line("capacity")} stroke="#1ce277" fill="none" strokeWidth={2.6} strokeDasharray="10 7"/>
-          <polyline points={line("current")} stroke="#ba4bff" fill="none" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round"/>
-          {displayed.map((p,i)=><circle key={p.date} cx={x(i)} cy={y(p.current)} r={Math.max(2.4, Math.min(5.3, width / displayed.length / 7))} stroke="#eacbff" strokeWidth={1.2} fill="#b449ff">
+          <polyline points={line("pmp")} stroke="#a2adb8" fill="none" strokeDasharray="10 7" strokeWidth={2.8}/>
+          <polyline points={line("capacity")} stroke={unit === "mm" ? "#fa8568" : "#6576ff"} fill="none" strokeWidth={2.6}/>
+          <polyline points={line("current")} stroke={unit === "mm" ? "#ced8e2" : "#b77841"} fill="none" strokeWidth={3.5} strokeLinejoin="round" strokeLinecap="round"/>
+          {displayed.map((p,i)=><circle key={p.date} cx={x(i)} cy={y(p.current)} r={Math.max(2.4, Math.min(5.3, width / displayed.length / 7))} stroke="#dbe4ed" strokeWidth={1} fill={unit === "mm" ? "#d1dae5" : "#b77841"}>
             <title>{p.date}: atual {n(p.current,unit==="weight"?2:1)} {RAS_UNITS[unit].axis}; CC {n(p.capacity,1)}, limite {n(p.safety,1)}, PMP {n(p.pmp,1)}; ARM {n(points[i].armMm,1)} mm, CAD {n(points[i].ctaMm,1)} mm.</title>
           </circle>)}
         </g>
@@ -220,7 +222,7 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
               {visible.irrigacao && p.irrigationAppliedMm>0 && (
                 <rect x={x(i)+1} y={eventY(p.irrigationAppliedMm)}
                   width={eventBarWidth} height={Math.max(0,eventsBottom-eventY(p.irrigationAppliedMm))}
-                  rx={2} fill="#17d780" opacity={.94}>
+                  rx={2} fill="#1ce0db" opacity={.86}>
                   <title>{fmtDate(p.date)}: irrigação realizada {n(p.irrigationAppliedMm,2)} mm brutos; efetiva {n(p.irrigationEffectiveMm,2)} mm</title>
                 </rect>
               )}
@@ -262,30 +264,31 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   flowRateM3h: number | null;
   efficiencyPercent: number | null;
 }) {
-  const [zoom, setZoom] = useState<ZoomMode>("full");
-  const [displayUnit, setDisplayUnit] = useState<RasDisplayUnit>("cc");
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState<RasDisplayUnit | null>(null);
   useEffect(() => {
-    if (!expanded) return;
-    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(false); };
+    if (expanded === null) return;
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === "Escape") setExpanded(null); };
     document.addEventListener("keydown", onKeyDown);
     return () => document.removeEventListener("keydown", onKeyDown);
   }, [expanded]);
-  const [eventVisibility, setEventVisibility] = useState<RASObservationsVisibility>({
-    chuva: true, irrigacao: true, eto: true,
-  });
   const points = useMemo(() => rows.map(buildRasPoint).filter((p): p is RasPoint => p != null), [rows]);
   const gravimetric = useMemo(
     () => rasDisplaySeries(points, "weight", soilLayers, bulkDensity),
     [points, soilLayers, bulkDensity],
   );
-  const selectedUnit: RasDisplayUnit = displayUnit === "weight" && gravimetric === null ? "cc" : displayUnit;
-  const displayPoints = useMemo(
-    () => selectedUnit === "weight" && gravimetric
-      ? gravimetric
-      : rasDisplaySeries(points, selectedUnit, soilLayers, bulkDensity) ?? [],
-    [points, selectedUnit, soilLayers, bulkDensity, gravimetric],
+  const mmSeries = useMemo(
+    () => rasDisplaySeries(points, "mm", soilLayers, bulkDensity) ?? [],
+    [points, soilLayers, bulkDensity],
   );
+  const ccSeries = useMemo(
+    () => rasDisplaySeries(points, "cc", soilLayers, bulkDensity) ?? [],
+    [points, soilLayers, bulkDensity],
+  );
+  const cards: { id: RasDisplayUnit; title: string; description: string; series: RasDisplayPoint[] | null; symbol: string }[] = [
+    { id: "mm", title: "Água disponível (mm)", description: "ARM diário, CAD/CTA e limite de manejo (CAD − AFD)", series: mmSeries, symbol: "◉" },
+    { id: "weight", title: "Umidade do solo (% em peso)", description: "Equivalência calculada com densidade e camadas do perfil", series: gravimetric, symbol: "❧" },
+    { id: "cc", title: "Umidade do solo (% da CC)", description: "Capacidade de campo = 100% • limite de manejo e PMP", series: ccSeries, symbol: "♧" },
+  ];
   const last = rows[rows.length-1];
   const now = points[points.length-1];
   const weekly = currentWeekStats(rows);
@@ -306,34 +309,11 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
           <p className="mt-1 text-[12px] text-slate-300">Disponibilidade hídrica e recomendação para retornar a 100% da capacidade de campo</p>
           <p className="mt-1 text-[11px] text-slate-400">As barras de chuva e irrigação utilizam os lançamentos realizados na operação, na data de cada registro.</p>
         </div>
-        <div className="flex flex-wrap gap-1 rounded-lg border border-white/[0.13] bg-[#081b21] p-1">
-          {([
-            ["full", "Escala completa"], ["arm", "Zoom ARM"], ["lamina", "Zoom lâmina"],
-          ] as const).map(([id,label])=>(
-            <button key={id} type="button" onClick={()=>setZoom(id)} aria-pressed={zoom===id}
-              className={`rounded-md px-3 py-2 text-[11px] font-semibold transition-colors ${zoom===id?"bg-emerald-500 text-[#072119]":"text-slate-200 hover:bg-white/[0.08]"}`}>{label}</button>
-          ))}
-        </div>
       </header>
-
-      <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0c232a] p-2.5" role="group" aria-label="Unidade do reservatório de água do solo">
-        {([
-          ["cc", "% da CC"],
-          ["mm", "Água disponível (mm)"],
-          ["weight", "% em peso"],
-        ] as const).map(([id,label]) => (
-          <button key={id} type="button" onClick={() => setDisplayUnit(id)}
-            disabled={id === "weight" && gravimetric === null}
-            aria-pressed={selectedUnit === id}
-            title={id === "weight" && gravimetric === null ? "Falta densidade válida em uma ou mais camadas da profundidade radicular" : RAS_UNITS[id].name}
-            className={`rounded-lg px-3 py-2 text-[12px] font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-35 ${selectedUnit === id ? "bg-santa-600 text-white" : "text-slate-300 hover:bg-white/10"}`}>
-            {label}
-          </button>
-        ))}
-        {gravimetric === null && (
-          <span className="text-[11px] text-amber-200">Informe a densidade do solo em todas as camadas para habilitar % em peso.</span>
-        )}
-      </div>
+      <p className="px-1 text-[12px] text-slate-300">
+        Três gráficos do mesmo balanço diário. Barras de irrigação e chuva partem de 0 mm no eixo direito,
+        sem interferir na escala de umidade e na exploração radicular.
+      </p>
 
       <div className="flex flex-wrap items-center gap-2">
         <Link href="/lancamentos/chuvas" className="rounded-lg border border-blue-400/30 bg-blue-500/10 px-4 py-2 text-[12px] font-semibold text-blue-100 hover:bg-blue-500/20">Lançar chuva manual</Link>
@@ -341,7 +321,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         <span className="text-[11px] text-slate-400">Ao retornar ao balanço, o RAS será recalculado com os novos lançamentos.</span>
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 min-[2000px]:grid-cols-9">
+      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 min-[1550px]:grid-cols-9">
         <Tile label="Cultura" value={cultureName ?? "—"} hint="Parcela em manejo" tone="green" symbol="❧"/>
         <Tile label="Cultivar" value={varietyName ?? "Não cadastrada"} hint="Cultivar da parcela ativa" tone="cyan" symbol="✧"/>
         <Tile label="Fase atual" value={phaseLabel} hint={last.dae!=null?`${last.dae} DAE`:undefined} tone="green" symbol="▦"/>
@@ -353,41 +333,64 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         <Tile label="Água disponível (ARM)" value={mmOrDash(now.armMm)} hint={n(reservePct,1)+"% da CTA · "+n(now.ccPercent,1)+"% CC"} tone={now.ccPercent<=now.limitPercentCc?"red":"blue"} symbol="◉"/>
       </div>
 
-      <div className={expanded
-        ? "fixed inset-0 z-[100] flex min-h-0 flex-col overflow-hidden rounded-none border border-white/[0.09] bg-[#091920] p-3 shadow-2xl sm:p-5"
-        : "rounded-xl border border-white/[0.09] bg-[#091920] p-2 sm:p-3"}>
-        <div className="mb-2 flex flex-wrap items-center gap-3 px-1">
-          <div className="mr-auto text-[14px] font-bold text-white">Evolução da água no solo</div>
-          <button type="button" onClick={() => setExpanded(v => !v)}
-            aria-label={expanded ? "Sair da tela cheia" : "Ampliar o gráfico para toda a tela"}
-            aria-pressed={expanded}
-            className="rounded-lg border border-emerald-400/30 bg-emerald-500/10 px-3 py-1.5 text-[12px] font-semibold text-emerald-100 hover:bg-emerald-500/20">{expanded ? "Sair da tela cheia (Esc)" : "Tela cheia"}</button>
-          <Legend color="#ba4bff" text={`Umidade atual (${RAS_UNITS[selectedUnit].axis})`}/>
-          <Legend color="#1ce277" text={selectedUnit === "cc" ? "Capacidade de campo (100% CC)" : `Capacidade de campo (${RAS_UNITS[selectedUnit].axis})`} dashed/>
-          <Legend color="#ff6067" text="Limite de irrigação (F semanal)" dashed/>
-          <Legend color="#ff9f23" text="Ponto de murcha (PMP)" dashed/>
-        </div>
-        <div className="mb-2 flex flex-wrap items-center gap-2 border-t border-white/[0.06] px-1 pt-2">
-          <span className="mr-2 text-[10px] font-semibold uppercase tracking-wide text-slate-400">Entradas e clima</span>
-          {([
-            { key: "chuva", label: "Chuva efetiva", colour: "#2e91ff" },
-            { key: "irrigacao", label: "Irrigação realizada", colour: "#17d780" },
-            { key: "eto", label: "ETo diária", colour: "#ffca42" },
-          ] as const).map((item) => (
-            <button key={item.key} type="button" aria-pressed={eventVisibility[item.key]}
-              onClick={() => setEventVisibility(prev => ({ ...prev, [item.key]: !prev[item.key] }))}
-              className={`inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 text-[11px] font-semibold transition-colors ${
-                eventVisibility[item.key]
-                  ? "border-white/[0.17] bg-white/[0.08] text-white"
-                  : "border-white/[0.08] bg-transparent text-slate-500 line-through"
-              }`}>
-              <span className="h-2.5 w-2.5 rounded-sm" style={{ backgroundColor: item.colour, opacity: eventVisibility[item.key] ? 1 : .35 }}/>
-              {item.label}
-            </button>
-          ))}
-          <span className="text-[10px] text-slate-400">Valores em mm/dia · passe o cursor sobre cada registro</span>
-        </div>
-        <RasFullWidthChart points={points} displayed={displayPoints} unit={selectedUnit} replacementMm={repl.netMm} mode={zoom} visible={eventVisibility} expanded={expanded}/>
+      <div className="space-y-3" aria-label="Três gráficos do reservatório de água do solo">
+        {cards.map(card => {
+          const isExpanded = expanded === card.id;
+          const colour = card.id === "mm"
+            ? { current:"#ced8e2", capacity:"#fa8568" }
+            : { current:"#b77841", capacity:"#6576ff" };
+          return (
+            <div key={card.id} className={isExpanded
+              ? "fixed inset-0 z-[100] flex flex-col overflow-y-auto border border-white/15 bg-[#091920] p-3 shadow-2xl sm:p-5"
+              : "rounded-2xl border border-blue-800/35 bg-[#091920] p-2 shadow-[inset_0_1px_0_rgba(255,255,255,.04)] sm:p-3"}>
+              <div className="flex flex-wrap items-center gap-2 px-2 py-1">
+                <span className="text-[20px] font-bold text-cyan-300" aria-hidden="true">{card.symbol}</span>
+                <div className="mr-auto min-w-0">
+                  <h3 className="text-[17px] font-extrabold text-white">{card.title}</h3>
+                  <p className="text-[11px] text-slate-400">{card.description}</p>
+                </div>
+                <span className="text-[11px] font-medium text-slate-300">
+                  {fmtDate(points[0].date) + " – " + fmtDate(now.date)}
+                </span>
+                <button type="button" onClick={() => setExpanded(isExpanded ? null : card.id)}
+                  aria-pressed={isExpanded} aria-label={isExpanded ? "Sair da tela cheia" : "Ampliar "+card.title}
+                  className="rounded-lg border border-white/15 px-2.5 py-1.5 text-[11px] font-semibold text-slate-100 hover:bg-white/10">
+                  {isExpanded ? "Fechar (Esc)" : "Tela cheia"}
+                </button>
+              </div>
+              {card.series === null ? (
+                <div className="my-4 flex min-h-[250px] items-center justify-center rounded-xl border border-amber-500/25 bg-amber-500/5 px-4 text-center text-[13px] text-amber-200">
+                  Não é possível calcular % em peso: cadastre a densidade de todas as camadas exploradas.
+                  Não serão inventados valores de solo.
+                </div>
+              ) : (
+                <RasFullWidthChart points={points} displayed={card.series} unit={card.id}
+                  replacementMm={repl.netMm} mode="full"
+                  visible={{ chuva:true, irrigacao:true, eto:true }} expanded={isExpanded}/>
+              )}
+              <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-2 py-2">
+                <Legend color={colour.current} text={card.id === "mm" ? "Água disponível (ARM)" : "Umidade calculada"}/>
+                <Legend color={colour.capacity} text={card.id === "mm" ? "CAD / CTA" : "Capacidade de campo"}/>
+                <Legend color="#ff6067" text="Limite de irrigação"/>
+                <Legend color="#a2adb8" text="PMP"/>
+                <Legend color="#1ce0db" text="Irrigação"/>
+                <Legend color="#2e91ff" text="Chuva"/>
+                <Legend color="#ffca42" text="ETo"/>
+              </div>
+              {card.id === "weight" && (
+                <p className="px-2 pb-1 text-[10px] text-slate-400">
+                  % em peso é uma equivalência calculada do balanço, não uma leitura de sensor.
+                </p>
+              )}
+              {card.id === "mm" && (
+                <p className="px-2 pb-1 text-[10px] text-slate-400">
+                  CAD/CTA = armazenamento total disponível à planta; AFD/CRA = parcela facilmente disponível.
+                  A linha vermelha marca CAD − AFD, a reserva mínima para irrigar.
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
 
       <div className="grid grid-cols-1 gap-3 xl:grid-cols-[1.2fr_1.25fr_.75fr]">
@@ -420,7 +423,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
           </div>
         </div>
       </div>
-      <p className="px-1 text-[10px] leading-relaxed text-slate-400">Escalas equivalentes de um mesmo balanço: % da CC (PMP acima de zero), ARM disponível em mm (PMP = zero) e % em peso (convertido usando a densidade por camada). AFD/CRA = CTA × F semanal; retorno a 100% CC = CTA − ARM. CC/PMP já são volumétricos no motor e não devem ser convertidos novamente para calcular a CAD.</p>
+      <p className="px-1 text-[10px] leading-relaxed text-slate-400">Todos os gráficos usam o mesmo balanço e as mesmas datas: %CC (PMP acima de zero), ARM em mm (PMP = zero) e % em peso (convertido com densidade por camada). AFD/CRA = CTA × F semanal; retorno a 100% CC = CTA − ARM. Chuva somente de lançamentos manuais por pivô; ETo conforme fonte aprovada.</p>
     </section>
   );
 }
