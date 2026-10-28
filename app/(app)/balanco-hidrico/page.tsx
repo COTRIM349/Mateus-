@@ -2626,26 +2626,55 @@ function Cockpit({
   const sensoryEntries = Object.entries(sensoryByDate).sort((a, b) => b[0].localeCompare(a[0]));
   const latestSensory = sensoryEntries[0] ?? null;
 
-  // alertas
+  // Alertas inteligentes: combinam balanço, previsão, fase, leitura de campo
+  // e qualidade dos parâmetros. O objetivo é destacar somente o que pede ação.
   const alerts: { sev: "hi" | "md" | "lo"; text: string }[] = [];
   const pivotLabel = identity.pivotName ?? "Pivô";
-  if (urgency.atOrBeyondAfd) {
-    alerts.push({ sev: "hi", text: `${pivotLabel} atingiu o limite de manejo.` });
+
+  if (grossDepth > 0.05) {
+    alerts.push({ sev: "hi", text: `Irrigação recomendada: ${fmtNum(grossDepth)} mm brutos para ${pivotLabel}.` });
+  } else if (urgency.atOrBeyondAfd) {
+    alerts.push({ sev: "hi", text: `${pivotLabel} atingiu o limite de manejo e precisa de reposição.` });
   } else if (series.future.length > 0) {
-    // Com previsão: a data de cruzamento vem da PROJEÇÃO do motor (considera
-    // chuva prevista), não da estimativa de demanda constante da urgência.
     const firstRed = series.future.find((p) => p.waterStatus === "deficit_critico");
-    if (firstRed) alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ~${daysBetweenIso(last.date, firstRed.date)} dia(s) (projeção).` });
+    if (firstRed) alerts.push({ sev: "md", text: `O limite de manejo pode ser atingido em ~${daysBetweenIso(last.date, firstRed.date)} dia(s), conforme a projeção.` });
   } else if (urgency.daysToAfd != null && urgency.daysToAfd <= 2.5) {
-    // Sem previsão: estimativa por demanda atual (sem chuva) — deixado explícito.
-    alerts.push({ sev: "md", text: `${pivotLabel} atingirá o limite de manejo em ${fmtNum(urgency.daysToAfd)} dia(s) (demanda atual, sem chuva).` });
+    alerts.push({ sev: "md", text: `O limite de manejo pode ser atingido em ${fmtNum(urgency.daysToAfd)} dia(s) se não houver chuva ou irrigação.` });
   }
-  // Chuva efetiva prevista dos dias GENUINAMENTE futuros (mesma base da projeção).
+
   const rainForecast = series.future.reduce((a, p) => a + (p.effectivePrecipitation ?? 0), 0);
-  if (series.future.length > 0 && rainForecast < 5) alerts.push({ sev: "md", text: "Sem chuva efetiva relevante prevista para os próximos dias." });
-  if ((last.ky ?? 0) >= 1) alerts.push({ sev: "md", text: "Fase reprodutiva com alta sensibilidade ao déficit (Ky ≥ 1)." });
-  if ((last.surplus ?? 0) > 0) alerts.push({ sev: "md", text: `Excedente de ${fmtNum(last.surplus)} mm acima da capacidade de campo.` });
-  if (alerts.length === 0) alerts.push({ sev: "lo", text: "Nenhum alerta ativo para o pivô no período." });
+  if (series.future.length > 0 && rainForecast < 5) {
+    alerts.push({ sev: "md", text: "Não há chuva efetiva relevante prevista para os próximos dias." });
+  }
+
+  if ((last.ky ?? 0) >= 1) {
+    alerts.push({ sev: "md", text: "A cultura está em fase sensível ao déficit hídrico; evitar queda prolongada da reserva." });
+  }
+
+  if ((last.surplus ?? 0) > 0) {
+    alerts.push({ sev: "md", text: `Há ${fmtNum(last.surplus)} mm de excedente acima da capacidade de campo; verificar drenagem ou lançamento recente.` });
+  }
+
+  if ((last.factorWeekSampleDays ?? 7) < 4) {
+    alerts.push({ sev: "lo", text: "O fator de disponibilidade semanal ainda usa poucos dias e pode mudar conforme novos dados entrarem." });
+  }
+
+  if (last.rootDepthEstimated != null && last.rootDepthEstimated > last.rootDepth + 0.001) {
+    alerts.push({ sev: "lo", text: "A raiz estimada já ultrapassa o perfil de solo cadastrado; a água abaixo do perfil não entra no cálculo." });
+  }
+
+  if (latestSensory) {
+    const note = Number(latestSensory[1]);
+    if (note <= 3 && pctCc >= 80) {
+      alerts.push({ sev: "hi", text: "A leitura de campo indica solo seco, mas o balanço mostra alta disponibilidade. Conferir chuva, irrigação ou condição inicial." });
+    } else if (note >= 7 && pctCc <= 55) {
+      alerts.push({ sev: "md", text: "A leitura de campo indica solo úmido, mas o balanço está baixo. Conferir a condição observada e os lançamentos." });
+    }
+  }
+
+  if (alerts.length === 0) {
+    alerts.push({ sev: "lo", text: "Sem alerta ativo: manejo dentro da faixa esperada." });
+  }
   const sevDot = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
 
   const kySens = last.ky == null ? null : last.ky >= 1.15 ? "MUITO ALTA" : last.ky >= 1 ? "ALTA" : last.ky >= 0.85 ? "MÉDIA" : "BAIXA";
