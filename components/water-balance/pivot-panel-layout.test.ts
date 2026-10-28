@@ -11,7 +11,13 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(page).toContain('panelView === "solo"');
     expect(page).toContain('panelView === "cultura"');
     expect(page).toContain('panelView === "clima"');
-    expect(page).toContain("h-[76vh] min-h-[560px] w-full");
+    // O gráfico antigo "Entradas e Consumo" foi removido somente da aba Solo.
+    expect(page).not.toContain('>Entradas e Consumo</p>');
+    expect(page).not.toContain("<EntradasConsumoChart");
+    expect(page).not.toContain("CockpitSeriesToggles");
+    // Curva de Kc da aba Cultura e painel RAS completo continuam disponíveis.
+    expect(page).toContain("<SoilReservoirReferencePanel");
+    expect(page).toContain('<KcCurveReadOnlyChart');
     expect(page).toContain("h-[76vh] min-h-[560px] w-full");
     expect(page).toContain("<PivotClimatePanel");
     expect(page).toContain("phenologyMarkers={phenologyMarkers}");

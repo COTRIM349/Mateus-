@@ -57,14 +57,8 @@ import { SoilReservoirReferencePanel } from "@/components/water-balance/SoilRese
 import { ObservedKcChart, PivotClimatePanel } from "@/components/water-balance/PivotClimatePanel";
 import { cn } from "@/utils/cn";
 import {
-  EntradasConsumoChart,
   KcCurveReadOnlyChart,
-  CockpitSeriesToggles,
-  ENTRADAS_SERIES,
-  defaultEntradasVisible,
-  type EntradaConsumoPoint,
   type ReservatorioPoint,
-  type EntradaSeriesKey,
 } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 import Link from "next/link";
@@ -2592,20 +2586,6 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
   const todayIndexReserv = -1;
   const crossIndexReserv = -1;
 
-  // Entradas e consumo: últimos 14 dias observados (sem previsão no gráfico).
-  const histE = rows;
-  const entradas: EntradaConsumoPoint[] = histE.map((r) => ({
-    label: fmtDia(r.date),
-    chuvaEf: r.effectivePrecipitation,
-    irrig: r.effectiveIrrigation ?? r.irrigationApplied,
-    etc: r.etc,
-    eto: r.et0,
-    kc: r.kc,
-    phase: r.phase,
-    isForecast: false,
-  }));
-  const todayIndexEntradas = -1; // sem linha "HOJE": o último ponto já é o dia atual
-
   // Tabela de projeção (APENAS aba DECISÃO — nunca plotada no gráfico):
   // Hoje (último observado) + offsets desejados por data.
   // A cor de cada linha vem do status do motor daquele dia (limiares por data),
@@ -2620,7 +2600,7 @@ function buildCockpitSeries(rows: DailyBalanceRow[], projection: DailyBalanceRow
       .filter((p): p is ProjRow => p != null),
   ];
 
-  return { entradas, todayIndexEntradas, reservatorio, todayIndexReserv, crossIndexReserv, projTable, future, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: future.length > 0 };
+  return { reservatorio, todayIndexReserv, crossIndexReserv, projTable, future, ccMm, pmpMm, safetyMm, attentionMm, safetyArm, attentionArm, cad, afd, hasForecast: future.length > 0 };
 }
 
 function Cockpit({
@@ -2667,25 +2647,8 @@ function Cockpit({
 }) {
   const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
 
-  // Variáveis exibidas em cada gráfico — o usuário inclui/remove séries (estilo
-  // Scheduling) e a escolha persiste por navegador.
-  const [entradasVis, setEntradasVis] = useState<Record<EntradaSeriesKey, boolean>>(defaultEntradasVisible);
+  // A aba Solo mantém o seletor de variáveis dentro do próprio painel RAS.
   const [panelView, setPanelView] = useState<"solo" | "cultura" | "clima">("solo");
-  // Apenas o gráfico de entradas permite séries opcionais.
-  // O RAS passou a ser um painel amplo em %CC, com linhas físicas de CC/PMP.
-  useEffect(() => {
-    try {
-      const e = window.localStorage.getItem("bh:entradasVis");
-      if (e) setEntradasVis((prev) => ({ ...prev, ...JSON.parse(e) }));
-    } catch { /* sem armazenamento local */ }
-  }, []);
-  const toggleEntrada = useCallback((k: EntradaSeriesKey) => {
-    setEntradasVis((prev) => {
-      const next = { ...prev, [k]: !prev[k] };
-      try { window.localStorage.setItem("bh:entradasVis", JSON.stringify(next)); } catch { /* noop */ }
-      return next;
-    });
-  }, []);
 
   const last = rows[rows.length - 1];
   if (!last || !series) return null;
@@ -2793,31 +2756,6 @@ function Cockpit({
       {panelView !== "clima" && (
       <div className="space-y-4">
         <div className="space-y-4">
-          {panelView === "solo" && <Card className="p-4">
-            <div className="mb-2">
-              <div className="flex flex-wrap items-center gap-2">
-                <p className="text-[13px] font-bold text-graphite-900 dark:text-white">Entradas e Consumo</p>
-                {kcSource && (
-                  <span
-                    title={describeKcSource(kcSource).hint}
-                    className={`rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
-                      describeKcSource(kcSource).fromCadastro
-                        ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300"
-                        : "border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-500/30 dark:bg-amber-900/20 dark:text-amber-300"
-                    }`}
-                  >
-                    {describeKcSource(kcSource).badge}
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-graphite-400 dark:text-gray-500">Chuva, irrigação, ETo, ETc e curva de Kc · histórico até hoje ({Math.min(rows.length, 14)} dias) · sem previsão no gráfico</p>
-            </div>
-            <div className="mb-2.5">
-              <p className="mb-1.5 text-[10px] font-bold uppercase tracking-[0.14em] text-graphite-400 dark:text-gray-500">Variáveis do gráfico</p>
-              <CockpitSeriesToggles series={ENTRADAS_SERIES.filter((s) => s.k !== "kc")} visible={entradasVis} onToggle={toggleEntrada} />
-            </div>
-            <div className="h-[76vh] min-h-[560px] w-full"><EntradasConsumoChart points={series.entradas} todayIndex={-1} visible={{ ...entradasVis, kc: false }} /></div>
-          </Card>}
           {panelView === "cultura" && (
           <>
             <div className="grid grid-cols-2 gap-3 lg:grid-cols-6">
