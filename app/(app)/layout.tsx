@@ -2,12 +2,9 @@
 
 import { Topbar } from "@/components/layout/Topbar";
 import { useAuth } from "@/components/providers";
-import { usePathname } from "next/navigation";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
-  const pathname = usePathname();
-  const isWaterBalance = pathname?.startsWith("/balanco-hidrico") ?? false;
 
   if (loading) {
     return (
@@ -21,10 +18,10 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <div className="flex min-h-screen min-w-0 flex-col bg-[#f3f7f6] dark:bg-graphite-950">
+    <div className="app-readable-ui flex min-h-screen min-w-0 flex-col bg-[#f3f7f6] dark:bg-graphite-950">
       <Topbar />
-      <main className={`min-w-0 flex-1 py-5 sm:py-6 lg:py-7 ${isWaterBalance ? "px-2 sm:px-3 lg:px-4" : "px-4 sm:px-7 lg:px-9"}`}>
-        <div className={`mx-auto w-full min-w-0 animate-in ${isWaterBalance ? "max-w-none" : "max-w-[1920px]"}`}>{children}</div>
+      <main className="min-w-0 flex-1 px-3 py-5 sm:px-4 sm:py-6 lg:px-5 lg:py-7">
+        <div className="mx-auto w-full min-w-0 max-w-none animate-in">{children}</div>
       </main>
     </div>
   );

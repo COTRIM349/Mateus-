@@ -24,11 +24,11 @@ function Tile({ label, value, hint, tone = "white", symbol = "◉" }: {
   label: string; value: string; hint?: string; tone?: StatTone; symbol?: string;
 }) {
   return (
-    <div className="flex min-h-[113px] min-w-0 items-center gap-3 rounded-xl border border-white/[0.09] bg-[#0b1c23] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
+    <div className="flex min-h-[125px] min-w-0 items-center gap-3 rounded-xl border border-white/[0.09] bg-[#0b1c23] px-3 py-3.5 shadow-[inset_0_1px_0_rgba(255,255,255,.03)]">
       <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-white/[0.045] text-[21px] font-bold" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</div>
       <div className="min-w-0">
         <div className="break-words text-[12px] font-medium leading-snug text-slate-300">{label}</div>
-        <div title={value} className="mt-1 max-w-full truncate text-[clamp(16px,1.5vw,25px)] font-extrabold leading-tight tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
+        <div title={value} className="mt-1 max-w-full truncate text-[clamp(19px,1.6vw,27px)] font-extrabold leading-tight tracking-normal tabular-nums" style={{ color: colours[tone] }}>{value}</div>
         {hint && <div className="mt-1.5 break-words text-[11px] leading-snug text-slate-400">{hint}</div>}
       </div>
     </div>
@@ -43,7 +43,7 @@ function MiniMetric({ label, value, hint, symbol, tone = "white" }: {
       <span className="text-xl" style={{ color: colours[tone] }} aria-hidden="true">{symbol}</span>
       <div className="min-w-0">
         <div className="text-[10px] text-slate-300">{label}</div>
-        <div title={value} className="mt-1 max-w-full truncate text-[clamp(16px,1.25vw,20px)] font-extrabold leading-tight tabular-nums text-white">{value}</div>
+        <div title={value} className="mt-1 max-w-full truncate text-[clamp(18px,1.25vw,23px)] font-extrabold leading-tight tabular-nums text-white">{value}</div>
         {hint && <div className="mt-1 text-[10px] leading-snug text-slate-400">{hint}</div>}
       </div>
     </div>
@@ -149,10 +149,10 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
         {Array.from({ length: 5 }, (_, i) => yMin + i * (yMax - yMin) / 4).map((q) => (
           <g key={q}>
             <line x1={l} x2={l+width} y1={y(q)} y2={y(q)} stroke="#ffffff" strokeOpacity=".10" strokeWidth={1}/>
-            <text x={l-12} y={y(q)+5} fill="#d7e4eb" textAnchor="end" fontSize={12}>{n(q,unit==="weight"?2:1)}</text>
+            <text x={l-12} y={y(q)+5} fill="#d7e4eb" textAnchor="end" fontSize={18}>{n(q,unit==="weight"?2:1)}</text>
           </g>
         ))}
-        <text x={3} y={t+8} fill="#d8e6ed" fontSize={13}>{RAS_UNITS[unit].axis}</text>
+        <text x={3} y={t+8} fill="#d8e6ed" fontSize={16}>{RAS_UNITS[unit].axis}</text>
         <g clipPath="url(#rasFullClip)">
           {segments("capacity","safety","rgba(12,113,81,.35)")}
           {segments("safety","pmp","rgba(182,48,54,.25)")}
@@ -170,20 +170,20 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
             <line x1={lastX+18} y1={lastY} x2={lastX+18} y2={y(latest.capacity)+5} stroke="#24baff" strokeWidth={5} strokeLinecap="round"/>
             <polygon points={`${lastX+18},${y(latest.capacity)-5} ${lastX+10},${y(latest.capacity)+10} ${lastX+26},${y(latest.capacity)+10}`} fill="#24baff"/>
             <rect x={lastX-125} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))} width={118} height={51} rx={7} fill="#1068db" stroke="#3baaff"/>
-            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+20} textAnchor="middle" fontSize={15} fill="white" fontWeight="bold">Repor {n(replacementMm,1)} mm</text>
-            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+39} textAnchor="middle" fontSize={12} fill="white">até CC do dia</text>
+            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+20} textAnchor="middle" fontSize={18} fill="white" fontWeight="bold">Repor {n(replacementMm,1)} mm</text>
+            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+39} textAnchor="middle" fontSize={18} fill="white">até CC do dia</text>
           </g>
         )}
         {/* Eventos registrados: mesma data e eixo X do reservatório, escala mm/dia separada. */}
-        <text x={l} y={eventsTop-21} fill="#d1e1e8" fontSize={14} fontWeight={700}>
+        <text x={l} y={eventsTop-21} fill="#d1e1e8" fontSize={17} fontWeight={700}>
           Chuva efetiva, irrigação realizada e ETo diária
         </text>
-        <text x={l+width+12} y={eventsTop-21} fill="#b7cbd5" fontSize={12}>mm/dia</text>
+        <text x={l+width+12} y={eventsTop-21} fill="#b7cbd5" fontSize={18}>mm/dia</text>
         {[0, eventMax / 2, eventMax].map((tick, i)=>(
           <g key={i}>
             <line x1={l} x2={l+width} y1={eventY(tick)} y2={eventY(tick)}
               stroke="#ffffff" strokeOpacity={tick===0?.20:.07} />
-            <text x={l+width+12} y={eventY(tick)+5} fill="#b9cdd7" fontSize={11}>{n(tick,1)}</text>
+            <text x={l+width+12} y={eventY(tick)+5} fill="#b9cdd7" fontSize={17}>{n(tick,1)}</text>
           </g>
         ))}
         <g>
@@ -216,14 +216,14 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
           ):null)}
         </g>
         {points.map((p,i)=>(i % labelStride === 0 || i === points.length - 1)?
-          <text key={p.date} x={x(i)} y={H-13} fill="#d1dae2" textAnchor="middle" fontSize={12}>{fmtDate(p.date)}</text>:null)}
-        <text x={l+width+12} y={t+9} fill="#dce8ef" fontSize={11}>ARM atual</text>
-        <text x={l+width+12} y={t+25} fill="#dce8ef" fontSize={12}>{n(newest.armMm,1)} mm</text>
-        <text x={l+width+12} y={t+41} fill="#dce8ef" fontSize={11}>CAD atual</text>
-        <text x={l+width+12} y={t+57} fill="#dce8ef" fontSize={12}>{n(newest.ctaMm,1)} mm</text>
-        <text x={l+7} y={y(latest.capacity)-10} fontSize={13} fill="#36e98a" fontWeight="bold">Capacidade de campo</text>
-        <text x={l+7} y={y(latest.safety)-10} fontSize={12} fill="#ff656c" fontWeight="bold">Limite de irrigação</text>
-        <text x={l+7} y={y(latest.pmp)-10} fontSize={12} fill="#ffae37" fontWeight="bold">PMP</text>
+          <text key={p.date} x={x(i)} y={H-13} fill="#d1dae2" textAnchor="middle" fontSize={18}>{fmtDate(p.date)}</text>:null)}
+        <text x={l+width+12} y={t+9} fill="#dce8ef" fontSize={17}>ARM atual</text>
+        <text x={l+width+12} y={t+25} fill="#dce8ef" fontSize={18}>{n(newest.armMm,1)} mm</text>
+        <text x={l+width+12} y={t+41} fill="#dce8ef" fontSize={17}>CAD atual</text>
+        <text x={l+width+12} y={t+57} fill="#dce8ef" fontSize={18}>{n(newest.ctaMm,1)} mm</text>
+        <text x={l+7} y={y(latest.capacity)-10} fontSize={16} fill="#36e98a" fontWeight="bold">Capacidade de campo</text>
+        <text x={l+7} y={y(latest.safety)-10} fontSize={18} fill="#ff656c" fontWeight="bold">Limite de irrigação</text>
+        <text x={l+7} y={y(latest.pmp)-10} fontSize={18} fill="#ffae37" fontWeight="bold">PMP</text>
       </svg>
       <p className="mt-1 px-1 text-[10px] text-slate-400">As séries CC, limite, PMP e umidade atual usam os valores e a zona radicular de cada dia; o ARM à direita mostra apenas o dia atual. Na banda inferior, as barras azuis representam a chuva efetiva da chuva registrada, as verdes representam a irrigação bruta realizada e a linha amarela mostra a ETo diária em mm/dia; somente dados observados são utilizados.</p>
     </div>
