@@ -171,3 +171,19 @@ body {
 .app-readable-ui :is(button, a, input, select, textarea) {
   text-size-adjust: 100%;
 }
+
+/* Auditoria da safra, exclusiva de Decisão e Monitoramento.
+   As muitas colunas permanecem legíveis, com rolagem e cabeçalhos fixos.
+   Não modifica gráficos nem a aba Dados do Balanço Hídrico. */
+.season-audit-table table {
+  min-width: 1950px;
+}
+.season-audit-table th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  white-space: nowrap;
+}
+.season-audit-table td {
+  white-space: nowrap;
+}
