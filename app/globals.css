@@ -190,10 +190,36 @@ body {
 
 /* Exclusivo da aba Decisão e Monitoramento: referência visual aprovada.
    Não toca na aba Dados nem nos seus SVGs e escalas. */
-@media (min-width: 1024px) {
-  body:has(.decision-reference-shell) [data-irrigapro-topnav="true"] {
-    display: none;
-  }
+/* A navegação horizontal original permanece visível em TODAS as abas.
+   Somente o conteúdo de Decisão é tingido de verde institucional. */
+body:has(.decision-reference-shell) .app-readable-ui,
+body:has(.decision-reference-shell) .app-readable-ui > main {
+  background-color: #073326 !important;
+}
+body:has(.decision-reference-shell) .app-readable-ui > main {
+  min-height: calc(100dvh - 140px);
+}
+.decision-reference-shell {
+  background: linear-gradient(170deg, #073a2a 0%, #062f23 45%, #05271e 100%);
+}
+.decision-reference-shell :is(.dark\\:bg-graphite-900, .dark\\:bg-white\\/\\[0\\.04\\]) {
+  color-scheme: dark;
+}
+/* O cabeçalho do pivô e a seleção das abas seguem a paleta da fazenda
+   sem afetar o cabeçalho da aba Dados. */
+.decision-reference-shell .decision-header-chip {
+  background: #0b4532;
+  border-color: rgb(110 231 183 / 0.22);
+}
+.decision-reference-shell .decision-header-chip p:first-child {
+  color: #a7f3d0;
+}
+.decision-reference-shell .decision-header-chip p:last-child {
+  color: #ffffff;
+}
+.decision-reference-shell [role="tablist"] {
+  background-color: #0a4632;
+  border-color: rgb(110 231 183 / 0.24);
 }
 .decision-reference-shell .season-audit-table[data-view="essencial"] table {
   min-width: 1370px;
@@ -218,15 +244,33 @@ body {
 .decision-reference-shell .season-audit-table td {
   padding: 7px 8px !important;
   font-size: 12px !important;
-  color: #334155 !important;
-  border-bottom: 1px solid #eaf0ee;
+  color: #ecfdf5 !important;
+  border-bottom: 1px solid rgb(110 231 183 / 0.13);
   background: transparent !important;
 }
+.decision-reference-shell .season-audit-table {
+  background: #0b392b;
+}
+.decision-reference-shell .season-audit-table table {
+  background: #0b392b;
+}
+.decision-reference-shell .season-audit-table :is(.text-red-600, .dark\\:text-red-400) {
+  color: #fda4af !important;
+}
+.decision-reference-shell .season-audit-table :is(.text-blue-600, .text-cyan-600) {
+  color: #7dd3fc !important;
+}
+.decision-reference-shell .season-audit-table :is(.text-amber-600, .text-orange-600) {
+  color: #fcd34d !important;
+}
+.decision-reference-shell .season-audit-table :is(.text-green-600, .text-emerald-600) {
+  color: #86efac !important;
+}
 .decision-reference-shell .season-audit-table tbody tr:nth-child(even) {
-  background: #f4f8f6;
+  background: #10503b;
 }
 .decision-reference-shell .season-audit-table tbody tr:hover {
-  background: #e7f4eb;
+  background: #166349;
 }
 .decision-reference-shell .season-audit-table td span:not([title]) {
   /* Mantém badges coloridos de status e negativos no balanço. */
@@ -234,7 +278,6 @@ body {
 }
 @media print {
   body:has(.decision-reference-shell) [data-irrigapro-topnav="true"],
-  .decision-reference-shell > aside,
   .decision-reference-shell button {
     display: none !important;
   }
