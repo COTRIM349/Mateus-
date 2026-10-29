@@ -282,7 +282,7 @@ interface StoredBalance {
 // ações rápidas no topo, sem ocupar espaço dos painéis analíticos.
 const TABS = [
   { id: "dados", label: "Dados" },
-  { id: "decisao", label: "Decisão" },
+  { id: "decisao", label: "Decisão e Monitoramento" },
 ];
 
 // ── Main Page ─────────────────────────────────────────────────────────────
@@ -307,6 +307,9 @@ export default function BalancoHidricoPage() {
   const [hydricAnchor, setHydricAnchor] = useState<HydricAnchor | null>(null);
   const [showInitialForm, setShowInitialForm] = useState(false);
   const [balanceRows, setBalanceRows] = useState<DailyBalanceRow[]>([]);
+  // Auditoria da safra: histórico inteiro que o motor conseguiu calcular desde
+  // a condição inicial registrada. Independente do filtro temporal dos gráficos.
+  const [seasonRows, setSeasonRows] = useState<DailyBalanceRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [dateStart, setDateStart] = useState("");
   const [dateEnd, setDateEnd] = useState("");
@@ -350,6 +353,7 @@ export default function BalancoHidricoPage() {
     setPivotsLoadedFarmId(null);
     setPivotLoadError("");
     setBalanceRows([]);
+    setSeasonRows([]);
     setKcCurveView(null);
     setDateStart("");
     setDateEnd("");
@@ -638,6 +642,7 @@ export default function BalancoHidricoPage() {
     setError("");
     setNotice("");
     setBalanceRows([]);
+    setSeasonRows([]);
 
     try {
       const pivot = pivots.find((p) => p.id === selectedPivotId);
@@ -1126,7 +1131,8 @@ export default function BalancoHidricoPage() {
       if (series.length === 0) {
         throw new Error("Balanço bloqueado: valide condição inicial, solo, fases/Kc e eficiência de aplicação.");
       }
-      const rows: DailyBalanceRow[] = series.filter((d) => d.date >= dateStart).map(mapBalanceDay);
+      const allSeasonRows: DailyBalanceRow[] = series.map(mapBalanceDay);
+      const rows = allSeasonRows.filter((row) => row.date >= dateStart);
 
       // 6. Projeção pela previsão — usa somente ETo prevista.
       // Chuva prevista NÃO entra no manejo: o cenário futuro considera P=0 até
@@ -1185,10 +1191,12 @@ export default function BalancoHidricoPage() {
 
       if (isStale()) return;
       setBalanceRows(rows);
+      setSeasonRows(allSeasonRows);
       setProjectionRows(projRows);
     } catch (err) {
       if (isStale()) return;
       setBalanceRows([]);
+      setSeasonRows([]);
       setProjectionRows([]);
       setError(err instanceof Error ? err.message : "Erro ao calcular balanço");
     } finally {
@@ -1202,6 +1210,7 @@ export default function BalancoHidricoPage() {
   useEffect(() => {
     calcTokenRef.current += 1;
     setBalanceRows([]);
+    setSeasonRows([]);
     setProjectionRows([]);
     setCalculating(false); // o run invalidado não limpa a flag; evita travar em "Calculando…"
     setError("");
@@ -1212,6 +1221,7 @@ export default function BalancoHidricoPage() {
   // persistido não é usado como estado atual nem como seed do ARM.
   useEffect(() => {
     setBalanceRows([]);
+    setSeasonRows([]);
     setProjectionRows([]);
     setNotice("");
   }, [assignment?.id, dateStart, dateEnd]);
@@ -1241,6 +1251,7 @@ export default function BalancoHidricoPage() {
   }, [assignment, culture, soil, runCalculation]);
 
   const summary = useMemo(() => calculateSummary(balanceRows), [balanceRows]);
+  const seasonSummary = useMemo(() => calculateSummary(seasonRows), [seasonRows]);
 
   // rastreabilidade (estação climática) + operação (eventos de irrigação)
   const [trace, setTrace] = useState<{ stationName: string | null; distanceKm: number | null; lastSync: string | null; qualityPct: number | null }>({ stationName: null, distanceKm: null, lastSync: null, qualityPct: null });
@@ -1390,6 +1401,33 @@ export default function BalancoHidricoPage() {
     return () => { cancelled = true; };
   }, [activeFarmId, selectedPivotId, dateStart, dateEnd, pivots, supabase]);
 
+  // Leituras sensoriais da safra para a auditoria. O recorte de sensorial
+  // usado pelos gráficos em Dados permanece inalterado.
+  const [seasonSensoryByDate, setSeasonSensoryByDate] = useState<Record<string, number>>({});
+  const seasonFirstDate = seasonRows[0]?.date ?? "";
+  const seasonLastDate = seasonRows[seasonRows.length - 1]?.date ?? "";
+  useEffect(() => {
+    setSeasonSensoryByDate({});
+    if (activeTab !== "decisao" || !selectedPivotId || !seasonFirstDate || !seasonLastDate) return;
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("soil_sensory_readings")
+        .select("reading_date,note,layer_1_note,layer_2_note,layer_3_note")
+        .eq("pivot_id", selectedPivotId)
+        .gte("reading_date", seasonFirstDate)
+        .lte("reading_date", seasonLastDate);
+      if (cancelled) return;
+      const readings: Record<string, number> = {};
+      for (const row of data ?? []) {
+        const value = resolveSensoryNote(row);
+        if (value != null) readings[row.reading_date] = value;
+      }
+      setSeasonSensoryByDate(readings);
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, selectedPivotId, seasonFirstDate, seasonLastDate, supabase]);
+
   // presets de período — apenas ajustam o intervalo (o carregamento é automático)
   const [activePeriod, setActivePeriod] = useState<number | "safra" | null>(null);
   const applyPeriod = (kind: number | "safra") => {
@@ -1423,7 +1461,7 @@ export default function BalancoHidricoPage() {
   const centroHead = {
     pivotName: selPivot?.name ?? null,
     cultureName: culture?.name ?? null,
-    seasonName: null as string | null,
+    seasonName,
     farmName: farms.find((f) => f.id === activeFarmId)?.name ?? null,
     area: selPivot?.area ?? null,
     efficiency: selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null,
@@ -1586,22 +1624,7 @@ export default function BalancoHidricoPage() {
                     : 0
                 }
               />
-              <details className="rounded-2xl border border-gray-100 bg-white p-4 dark:border-white/[0.06] dark:bg-graphite-900">
-                <summary className="cursor-pointer select-none text-[13px] font-bold text-graphite-900 dark:text-white">
-                  Tabela detalhada do balanço <span className="ml-1 text-[11px] font-normal text-graphite-400 dark:text-gray-500">— auditoria dia a dia, com origem de cada dado</span>
-                </summary>
-                <div className="mt-3">
-                  <BalanceTab
-                    panel="dados"
-                    rows={balanceRows}
-                    summary={summary}
-                    loading={loading || calculating}
-                    head={centroHead}
-                    weatherByDate={weatherByDate}
-                    sensoryByDate={sensoryByDate}
-                  />
-                </div>
-              </details>
+
             </>
           ) : (calculating || loading) ? (
             <Card className="flex items-center justify-center gap-3 py-16">
@@ -1628,8 +1651,8 @@ export default function BalancoHidricoPage() {
         <div className="space-y-3">
           <BalanceTab
             panel="decisao"
-            rows={balanceRows}
-            summary={summary}
+            rows={seasonRows}
+            summary={seasonSummary}
             loading={loading || calculating}
             head={centroHead}
             weatherByDate={weatherByDate}
@@ -1637,6 +1660,25 @@ export default function BalancoHidricoPage() {
           />
           {balanceRows.length > 0 && (
             <DecisionForecast projection={projectionRows} last={balanceRows[balanceRows.length - 1]} />
+          )}
+          {seasonRows.length > 0 && (
+            <section aria-label="Auditoria diária do balanço na safra" className="space-y-2">
+              <BalanceTab
+                panel="auditoria"
+                rows={seasonRows}
+                summary={seasonSummary}
+                loading={loading || calculating}
+                head={centroHead}
+                weatherByDate={weatherByDate}
+                sensoryByDate={seasonSensoryByDate}
+              />
+              {assignment.planting_date && seasonRows[0].date > assignment.planting_date && (
+                <p className="px-2 text-[12px] text-amber-700 dark:text-amber-300">
+                  O plantio foi em {fmtDia(assignment.planting_date)}, mas o histórico calculável começa em {fmtDia(seasonRows[0].date)}.
+                  Os dias anteriores à condição inicial do balanço não são estimados nem incluídos nos totais.
+                </p>
+              )}
+            </section>
           )}
         </div>
       )}
@@ -1903,7 +1945,7 @@ function BalanceTab({
   weatherByDate,
   sensoryByDate,
 }: {
-  panel: "grafico" | "dados" | "decisao";
+  panel: "grafico" | "dados" | "decisao" | "auditoria";
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
   loading: boolean;
@@ -2061,6 +2103,75 @@ function BalanceTab({
       <Card className="flex items-center justify-center gap-3 py-16">
         <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
         <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      </Card>
+    );
+  }
+
+  if (panel === "auditoria") {
+    const seasonDays = rows.length;
+    const startLabel = rows[0]?.date ? fmtDia(rows[0].date) + "/" + rows[0].date.slice(0, 4) : "—";
+    const endLabel = rows[seasonDays - 1]?.date
+      ? fmtDia(rows[seasonDays - 1].date) + "/" + rows[seasonDays - 1].date.slice(0, 4)
+      : "—";
+    return (
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 bg-forest-900 px-5 py-4 text-white dark:border-white/[0.07]">
+          <div className="min-w-0">
+            <p className="text-[11px] font-bold uppercase tracking-wider text-brand-200">Monitoramento e rastreabilidade</p>
+            <h3 className="mt-1 text-[19px] font-extrabold leading-snug sm:text-[22px]">Tabela detalhada do balanço hídrico</h3>
+            <p className="mt-1 text-[13px] text-brand-100/90">
+              {head.seasonName ? `Safra ${head.seasonName} · ` : "Safra · "}
+              {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
+              {" · "}{startLabel} a {endLabel} · {seasonDays} dias calculados
+            </p>
+            <p className="mt-1 text-[12px] text-brand-100/70">Histórico real do motor hídrico desde a condição inicial · não acompanha os filtros dos gráficos.</p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {showFilter && (
+              <label className="sr-only" htmlFor="season-audit-filter">Filtrar por data ou fase</label>
+            )}
+            {showFilter && (
+              <input id="season-audit-filter" type="text" autoFocus value={tblFilter}
+                onChange={(event) => setTblFilter(event.target.value)}
+                placeholder="Data ou fase…"
+                className="w-44 rounded-lg border border-white/20 bg-white px-3 py-2 text-[14px] font-medium text-graphite-800 outline-none focus:border-emerald-400"
+              />
+            )}
+            <button type="button" onClick={() => { setShowFilter(value => !value); if (showFilter) setTblFilter(""); }}
+              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[13px] font-semibold text-white hover:bg-white/20">
+              {showFilter ? "Fechar filtro" : "Filtrar dias"}
+            </button>
+            <button type="button" onClick={exportCsv} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[13px] font-semibold text-white hover:bg-white/20">
+              Exportar CSV/Excel
+            </button>
+            <button type="button" onClick={() => window.print()} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[13px] font-semibold text-white hover:bg-white/20">
+              Imprimir / PDF
+            </button>
+          </div>
+        </div>
+        <div className="grid grid-cols-2 gap-px bg-santa-900 sm:grid-cols-4 xl:grid-cols-6">
+          {[
+            { label: "Dias calculados", value: String(summary.days) },
+            { label: "Irrigação realizada", value: `${summary.totalIrrigation.toFixed(1)} mm` },
+            { label: "Chuva registrada", value: `${summary.totalPrecipitation.toFixed(1)} mm` },
+            { label: "Chuva efetiva", value: `${summary.totalEffPrecipitation.toFixed(1)} mm` },
+            { label: "ETc acumulada", value: `${summary.totalETc.toFixed(1)} mm` },
+            { label: "Dias de déficit", value: String(summary.daysInDeficit) },
+          ].map(item => (
+            <div key={item.label} className="bg-forest-900 px-4 py-3 text-white">
+              <p className="text-[11px] font-semibold text-brand-200/85">{item.label}</p>
+              <p className="mt-1 text-[19px] font-bold tabular-nums">{item.value}</p>
+            </div>
+          ))}
+        </div>
+        <div className="px-4 py-2 text-[12px] text-graphite-500 dark:text-gray-400">
+          Exibindo {filteredRows.length} de {seasonDays} dias da safra. Deslize a tabela horizontalmente para consultar todas as variáveis.
+          A exportação respeita o filtro aplicado.
+        </div>
+        <div className="season-audit-table max-h-[min(66vh,780px)] overflow-auto px-2 pb-2" role="region"
+          aria-label="Tabela detalhada da safra, com rolagem horizontal e vertical" tabIndex={0}>
+          <Table columns={columns} data={filteredRows} getKey={row => row.date} />
+        </div>
       </Card>
     );
   }
