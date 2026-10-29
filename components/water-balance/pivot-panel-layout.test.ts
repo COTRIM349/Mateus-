@@ -15,10 +15,18 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(page).not.toContain('>Entradas e Consumo</p>');
     expect(page).not.toContain("<EntradasConsumoChart");
     expect(page).not.toContain("CockpitSeriesToggles");
-    // Curva de Kc da aba Cultura e painel RAS completo continuam disponíveis.
+    // Desenvolvimento fenológico, Kc do motor e raiz efetiva substituem o gráfico só de Kc.
     expect(page).toContain("<SoilReservoirReferencePanel");
-    expect(page).toContain('<KcCurveReadOnlyChart');
-    expect(page).toContain("h-[58vh] min-h-[420px] max-h-[620px] w-full");
+    expect(page).toContain("<CropDevelopmentPanel");
+    expect(page).not.toContain("<KcCurveReadOnlyChart");
+    expect(page).toContain("kcCurve={kcCurve?.points ?? null}");
+    expect(page).toContain("markers={phenologyMarkers}");
+    const culturePanel=source("components/water-balance/CropDevelopmentPanel.tsx");
+    expect(culturePanel).toContain("Desenvolvimento da cultura");
+    expect(culturePanel).toContain("Linha do tempo fenológica");
+    expect(culturePanel).toContain("Raiz efetiva no balanço");
+    expect(culturePanel).toContain("Kc usado no balanço");
+    expect(culturePanel).toContain("last.rootDepthEstimated");
     expect(page).toContain("<PivotClimatePanel");
     expect(page).toContain("phenologyMarkers={phenologyMarkers}");
     expect(page).toContain("culture_variety_phenology_targets");
