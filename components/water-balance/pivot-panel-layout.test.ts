@@ -23,9 +23,9 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(page).toContain("markers={phenologyMarkers}");
     const culturePanel=source("components/water-balance/CropDevelopmentPanel.tsx");
     expect(culturePanel).toContain("Desenvolvimento da cultura");
-    expect(culturePanel).toContain("Linha do tempo fenológica");
-    expect(culturePanel).toContain("Raiz efetiva no balanço");
-    expect(culturePanel).toContain("Kc usado no balanço");
+    expect(culturePanel).toContain("Estádios e parâmetros da cultivar");
+    expect(culturePanel).toContain("Prof. radicular efetiva");
+    expect(culturePanel).toContain("Kc atual");
     expect(culturePanel).toContain("last.rootDepthEstimated");
     expect(culturePanel).toContain("Estádios e parâmetros da cultivar");
     expect(culturePanel).toContain("Desenvolvimento da cultura, Kc e profundidade radicular");
