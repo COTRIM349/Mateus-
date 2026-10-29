@@ -59,7 +59,7 @@ export function DecisionMonitoringReferenceLayout({
 }: Props) {
   if (!rows.length) {
     return (
-      <div className="rounded-xl border border-white/10 bg-[#08281f] p-8 text-center text-emerald-100">
+      <div className="rounded-xl border border-emerald-400/20 bg-[#0b392b] p-8 text-center text-emerald-100">
         O histórico da safra será apresentado quando o balanço hídrico estiver calculado.
       </div>
     );
@@ -116,21 +116,21 @@ export function DecisionMonitoringReferenceLayout({
       </div>
 
       <div className="grid items-stretch gap-3 xl:grid-cols-2">
-        <article className="min-w-0 overflow-hidden rounded-xl border border-emerald-300/15 bg-white shadow-[0_6px_22px_rgba(0,0,0,.14)]">
+        <article className="min-w-0 overflow-hidden rounded-xl border border-emerald-300/20 bg-gradient-to-b from-[#0b4433] to-[#092e24] text-emerald-50 shadow-[0_6px_22px_rgba(0,0,0,.2)]">
           <PanelHeader icon="◉" title="Recomendação de irrigação"
             description="Com base no balanço hídrico, clima e estádio da cultura."
             action={<span className={`rounded-lg border border-emerald-300/25 bg-white/10 px-3 py-1.5 text-[12px] font-bold ${statusColor}`}>{statusLabel}</span>} />
-          <div className="space-y-3 p-4 text-slate-800">
-            <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${needsWater ? "border-rose-100 bg-rose-50" : isAttention ? "border-amber-100 bg-amber-50" : "border-emerald-100 bg-emerald-50"}`}>
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[19px] font-extrabold text-white ${needsWater ? "bg-rose-600" : isAttention ? "bg-amber-500" : "bg-emerald-600"}`} aria-hidden="true">
+          <div className="space-y-3 p-4 text-emerald-50">
+            <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${needsWater ? "border-rose-400/35 bg-rose-950/45" : isAttention ? "border-amber-400/35 bg-amber-950/45" : "border-emerald-400/30 bg-emerald-950/45"}`}>
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[19px] font-extrabold text-white ${needsWater ? "bg-rose-600" : isAttention ? "bg-amber-950/450" : "bg-emerald-600"}`} aria-hidden="true">
                 {needsWater ? "!" : "✓"}
               </span>
               <div>
-                <p className="text-[15px] font-extrabold text-slate-800">{actionMessage}</p>
-                <p className="mt-0.5 text-[13px] text-slate-600">{actionDescription}</p>
+                <p className="text-[15px] font-extrabold text-emerald-50">{actionMessage}</p>
+                <p className="mt-0.5 text-[13px] text-emerald-100/85">{actionDescription}</p>
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3 divide-slate-200 sm:grid-cols-4 sm:divide-x">
+            <div className="grid grid-cols-2 gap-3 divide-emerald-400/20 sm:grid-cols-4 sm:divide-x">
               {[
                 { label:"Lâmina líquida", value:`${fmt(net)} mm` },
                 { label:"Lâmina bruta", value:`${fmt(gross)} mm` },
@@ -138,29 +138,29 @@ export function DecisionMonitoringReferenceLayout({
                 { label:"Urgência", value:risk },
               ].map(item=>(
                 <div key={item.label} className="min-w-0 px-2 py-2 first:pl-0">
-                  <p className="text-[12px] text-slate-500">{item.label}</p>
-                  <p className="mt-1 text-[18px] font-extrabold text-slate-900">{item.value}</p>
+                  <p className="text-[12px] text-emerald-100/70">{item.label}</p>
+                  <p className="mt-1 text-[18px] font-extrabold text-white">{item.value}</p>
                 </div>
               ))}
             </div>
-            <div className="flex flex-wrap gap-2 border-t border-slate-100 pt-3">
+            <div className="flex flex-wrap gap-2 border-t border-emerald-300/20 pt-3">
               {needsWater ? (
                 <Link href="/programacao" className="rounded-lg bg-emerald-700 px-4 py-2 text-[13px] font-semibold text-white hover:bg-emerald-800">Programar irrigação</Link>
               ) : (
-                <button disabled type="button" className="cursor-not-allowed rounded-lg bg-slate-300 px-4 py-2 text-[13px] font-semibold text-white">Programar irrigação</button>
+                <button disabled type="button" className="cursor-not-allowed rounded-lg bg-[#1a5841] px-4 py-2 text-[13px] font-semibold text-white">Programar irrigação</button>
               )}
-              <Link href={`/lancamentos/irrigacao?pivot=${pivotId}&new=1`} className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">Registrar irrigação</Link>
-              <Link href={`/lancamentos/chuvas?pivot=${pivotId}&new=1`} className="rounded-lg border border-slate-200 px-3 py-2 text-[13px] font-semibold text-slate-700 hover:bg-slate-50">Registrar chuva</Link>
+              <Link href={`/lancamentos/irrigacao?pivot=${pivotId}&new=1`} className="rounded-lg border border-emerald-400/25 bg-emerald-700/15 px-3 py-2 text-[13px] font-semibold text-emerald-50 hover:bg-emerald-700/30">Registrar irrigação</Link>
+              <Link href={`/lancamentos/chuvas?pivot=${pivotId}&new=1`} className="rounded-lg border border-emerald-400/25 bg-emerald-700/15 px-3 py-2 text-[13px] font-semibold text-emerald-50 hover:bg-emerald-700/30">Registrar chuva</Link>
             </div>
           </div>
         </article>
 
-        <article className="min-w-0 overflow-hidden rounded-xl border border-emerald-300/15 bg-white shadow-[0_6px_22px_rgba(0,0,0,.14)]">
+        <article className="min-w-0 overflow-hidden rounded-xl border border-emerald-300/20 bg-gradient-to-b from-[#0b4433] to-[#092e24] text-emerald-50 shadow-[0_6px_22px_rgba(0,0,0,.2)]">
           <PanelHeader icon="▥" title="Monitoramento da safra"
             description="Condições atuais, eventos realizados e principais indicadores."
             action={<button type="button" onClick={onOpenHistory} className="rounded-lg border border-white/30 bg-white/10 px-3 py-2 text-[12px] font-semibold text-white hover:bg-white/20">Ver histórico completo ↓</button>} />
-          <div className="grid gap-3 p-4 text-slate-800 md:grid-cols-[.92fr_1fr]">
-            <div className="divide-y divide-slate-100">
+          <div className="grid gap-3 p-4 text-emerald-50 md:grid-cols-[.92fr_1fr]">
+            <div className="divide-y divide-emerald-300/20">
               {[
                 { icon:"☁", label:"Última chuva", value:appliedRain ? `${fmt(appliedRain.precipitation)} mm` : "Sem registro", note:appliedRain ? fmtDay(appliedRain.date) : "Lançamentos manuais" },
                 { icon:"▦", label:"Última irrigação", value:appliedIrrigation ? `${fmt(appliedIrrigation.irrigationApplied)} mm` : "Sem registro", note:appliedIrrigation ? fmtDay(appliedIrrigation.date) : "Eventos realizados" },
@@ -169,32 +169,32 @@ export function DecisionMonitoringReferenceLayout({
               ].map(item => (
                 <div key={item.label} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
                   <span className="w-7 shrink-0 text-center text-[21px] text-emerald-700" aria-hidden="true">{item.icon}</span>
-                  <p className="min-w-0 flex-1 text-[12px] font-medium text-slate-600">{item.label}</p>
+                  <p className="min-w-0 flex-1 text-[12px] font-medium text-emerald-100/85">{item.label}</p>
                   <div className="min-w-0 text-right">
-                    <p className="max-w-[165px] truncate text-[14px] font-extrabold text-slate-800" title={item.value}>{item.value}</p>
-                    <p className="text-[11px] text-slate-500">{item.note}</p>
+                    <p className="max-w-[165px] truncate text-[14px] font-extrabold text-emerald-50" title={item.value}>{item.value}</p>
+                    <p className="text-[11px] text-emerald-100/70">{item.note}</p>
                   </div>
                 </div>
               ))}
             </div>
             <div className="space-y-2">
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="mb-2 text-[13px] font-bold text-slate-700">Alertas e ocorrências</p>
-                <div className={`rounded-lg border px-3 py-3 ${needsWater ? "border-rose-100 bg-rose-50" : isAttention ? "border-amber-100 bg-amber-50" : "border-emerald-100 bg-emerald-50"}`}>
-                  <p className={`text-[13px] font-extrabold ${needsWater ? "text-rose-800" : isAttention ? "text-amber-800" : "text-emerald-800"}`}>
+              <div className="rounded-lg bg-[#0e3f30] p-3">
+                <p className="mb-2 text-[13px] font-bold text-emerald-100">Alertas e ocorrências</p>
+                <div className={`rounded-lg border px-3 py-3 ${needsWater ? "border-rose-400/35 bg-rose-950/45" : isAttention ? "border-amber-400/35 bg-amber-950/45" : "border-emerald-400/30 bg-emerald-950/45"}`}>
+                  <p className={`text-[13px] font-extrabold ${needsWater ? "text-rose-200" : isAttention ? "text-amber-200" : "text-emerald-200"}`}>
                     {needsWater ? "Ação de irrigação necessária" : isAttention ? "Monitorar limite de manejo" : "Sem alerta de irrigação no momento"}
                   </p>
-                  <p className="mt-1 text-[12px] text-slate-600">{actionDescription}</p>
+                  <p className="mt-1 text-[12px] text-emerald-100/85">{actionDescription}</p>
                 </div>
               </div>
-              <div className="rounded-lg bg-slate-50 p-3">
-                <p className="text-[13px] font-bold text-slate-700">Observações da safra</p>
-                <p className="mt-1 text-[12px] text-slate-600">
+              <div className="rounded-lg bg-[#0e3f30] p-3">
+                <p className="text-[13px] font-bold text-emerald-100">Observações da safra</p>
+                <p className="mt-1 text-[12px] text-emerald-100/85">
                   {historicalCritical > 0
                     ? `${historicalCritical} dia(s) de déficit crítico registrados no histórico. Situação atual: ${statusLabel.toLowerCase()}.`
                     : "Nenhuma ocorrência de déficit crítico registrada nesta safra."}
                 </p>
-                <p className="mt-1 text-[11px] text-slate-500">{pivotName} · Safra {seasonName ?? "em andamento"}</p>
+                <p className="mt-1 text-[11px] text-emerald-100/70">{pivotName} · Safra {seasonName ?? "em andamento"}</p>
               </div>
             </div>
           </div>
