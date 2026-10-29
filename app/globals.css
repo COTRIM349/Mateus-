@@ -217,6 +217,15 @@ body:has(.decision-reference-shell) .app-readable-ui > main {
 .decision-reference-shell .decision-header-chip p:last-child {
   color: #ffffff;
 }
+.decision-reference-shell .decision-tabs > div {
+  background: #0a4632 !important;
+}
+.decision-reference-shell .decision-tabs button:not(.bg-santa-600) {
+  color: #d1fae5 !important;
+}
+.decision-reference-shell .decision-tabs button:not(.bg-santa-600):hover {
+  background: #12684c;
+}
 .decision-reference-shell [role="tablist"] {
   background-color: #0a4632;
   border-color: rgb(110 231 183 / 0.24);
