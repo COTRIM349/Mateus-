@@ -2144,16 +2144,16 @@ function BalanceTab({
     const shownColumns = auditColumnsView === "completa"
       ? columns : columns.filter(col => essentialHeaders.has(col.header));
     return (
-      <section className="overflow-hidden rounded-xl border border-[#d5e6dd] bg-white text-slate-800 shadow-[0_6px_26px_rgba(0,0,0,.12)]"
+      <section className="overflow-hidden rounded-xl border border-emerald-400/25 bg-[#0b382b] text-emerald-50 shadow-[0_6px_26px_rgba(0,0,0,.12)]"
         aria-label="Tabela detalhada do balanço hídrico da safra">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/20 bg-[#084a34] px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[23px] font-extrabold text-emerald-700" aria-hidden="true">▦</span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#126548] text-[23px] font-extrabold text-emerald-100" aria-hidden="true">▦</span>
             <div className="min-w-0">
-              <h3 className="text-[17px] font-extrabold text-slate-900">Tabela detalhada do balanço hídrico
-                <span className="ml-2 text-[13px] font-normal text-slate-500">— auditoria diária da safra</span>
+              <h3 className="text-[17px] font-extrabold text-white">Tabela detalhada do balanço hídrico
+                <span className="ml-2 text-[13px] font-normal text-emerald-100/80">— auditoria diária da safra</span>
               </h3>
-              <p className="text-[12px] text-slate-600">
+              <p className="text-[12px] text-emerald-100/80">
                 {head.seasonName ? `Safra ${head.seasonName} · ` : "Safra · "}
                 {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
                 {" · "}{startLabel} a {endLabel} · {seasonDays} dias calculados
@@ -2172,20 +2172,20 @@ function BalanceTab({
               />
             )}
             <button type="button" onClick={() => { setShowFilter(value => !value); if (showFilter) setTblFilter(""); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              className="rounded-lg border border-emerald-400/30 bg-[#0c6042] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#117653]">
               {showFilter ? "Fechar filtro" : "Filtros"}
             </button>
             <button type="button" onClick={() => setAuditColumnsView(value => value === "essencial" ? "completa" : "essencial")}
               aria-pressed={auditColumnsView === "completa"}
-              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-900 hover:bg-emerald-100">
+              className="rounded-lg border border-emerald-300/45 bg-[#126548] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#19855e]">
               {auditColumnsView === "essencial" ? "Todas as variáveis" : "Visão essencial"}
             </button>
             <button type="button" onClick={exportCsv}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              className="rounded-lg border border-emerald-400/30 bg-[#0c6042] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#117653]">
               Exportar Excel
             </button>
             <button type="button" onClick={() => window.print()}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              className="rounded-lg border border-emerald-400/30 bg-[#0c6042] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#117653]">
               Exportar PDF
             </button>
           </div>
@@ -2194,7 +2194,7 @@ function BalanceTab({
           role="region" aria-label="Histórico diário da safra, com cabeçalho fixo e rolagem horizontal" tabIndex={0}>
           <Table columns={shownColumns} data={filteredRows} getKey={row => row.date} />
         </div>
-        <div className="border-t border-slate-100 bg-white px-4 py-2 text-[12px] text-slate-500">
+        <div className="border-t border-emerald-400/20 bg-[#0a3528] px-4 py-2 text-[12px] text-emerald-100/80">
           {filteredRows.length} de {seasonDays} dias da safra · {auditColumnsView === "essencial" ? "17 colunas essenciais" : "Todas as variáveis do balanço"} · a exportação inclui todas as colunas e respeita o filtro.
         </div>
       </section>
