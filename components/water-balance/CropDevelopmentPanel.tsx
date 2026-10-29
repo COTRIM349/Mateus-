@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { calculateDailyKc, calculateRootDepthMeters } from "@/modules/culture/services/agronomic-engine";
 import { buildDevelopmentAudit } from "@/modules/culture/services/crop-development-view";
+import { activeFieldObservation, type PhenologyStageOption, type PhenologyFieldObservation } from "@/modules/culture/services/phenology-observed";
+import { PhenologyStageEditor, type PhenologyObservationContext } from "@/components/water-balance/PhenologyStageEditor";
 import { buildCropDevelopmentBands, cropDevelopmentStageLabel } from "@/modules/culture/services/crop-development-bands";
 import type { CulturePhase } from "@/modules/culture/services/culture.service";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
@@ -16,6 +18,10 @@ type AxisMode = "dae" | "date";
 interface Props {
   rows: DailyBalanceRow[];
   markers: PhenologyChartMarker[];
+  stageOptions?: PhenologyStageOption[];
+  fieldObservations?: PhenologyFieldObservation[];
+  observationContext?: PhenologyObservationContext | null;
+  onObservationSaved?: (observation:PhenologyFieldObservation)=>void;
   kcCurve: CurvePoint[] | null;
   rootCurve?: CurvePoint[] | null;
   culturePhases?: CulturePhase[];
@@ -79,6 +85,7 @@ function GraphLegend({ color, name, dashed = false }: { color: string; name: str
 export function CropDevelopmentPanel({
   rows, markers, kcCurve, rootCurve = null, kcCurveLabel, cropName,
   varietyName, pivotName, seasonName, culturePhases = [], daeOffsetFromPlanting = 0,
+  stageOptions = [],fieldObservations = [],observationContext = null,onObservationSaved,
 }: Props) {
   const [axisMode, setAxisMode] = useState<AxisMode>("dae");
   const [showPicker, setShowPicker] = useState(false);
@@ -90,6 +97,7 @@ export function CropDevelopmentPanel({
   const last = rows.at(-1);
   const dae = last?.dae != null && Number.isFinite(last.dae) ? Math.max(0, last.dae) : null;
   const isSoy = /soja/i.test(cropName ?? "");
+  const fieldStage=activeFieldObservation(fieldObservations,stageOptions,last?.date??"");
   const audit = useMemo(
     () => buildDevelopmentAudit({ isSoy, currentDae: dae, markers, rows, kcCurve }),
     [isSoy, dae, markers, rows, kcCurve],
@@ -183,7 +191,9 @@ export function CropDevelopmentPanel({
   const hoverPhase = activeDae != null
     ? phaseBands.find((b) => b.start <= activeDae && b.end > activeDae)
     : null;
-  const selectedPhenology = cropDevelopmentStageLabel(audit.currentStage?.code, last.phase);
+  const selectedPhenology=fieldStage?.stage.code ??
+    cropDevelopmentStageLabel(audit.currentStage?.code,last.phase);
+  const observedAtDae=fieldStage?.observation.dae ?? null;
   const tooltipKc = activeDae == null ? null : activeDae <= (dae ?? 0)
     ? hoverRow?.kc ?? null
     : completeKc.length >= 2 ? calculateDailyKc(completeKc, activeDae) : null;
@@ -225,9 +235,10 @@ export function CropDevelopmentPanel({
       </header>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
-        {metric("◈", "Estádio / fase atual", selectedPhenology,
-          audit.currentStage ? audit.currentStage.label + " · calendário da cultivar"
-            : "Macrofase do manejo · VE/Vn/Rn sem calibração", "#059669")}
+        {metric("◈", fieldStage?"Último estádio observado":"Estádio / fase estimada", selectedPhenology,
+          fieldStage?fieldStage.stage.name+" · "+fieldStage.observation.observed_date+" (campo)"
+            : audit.currentStage?audit.currentStage.label+" · referência da cultivar"
+            : "Macrofase estimada · sem observação detalhada", "#059669")}
         {metric("▦", "DAE", dae == null ? "—" : String(dae),
           r8Dae != null ? "de " + r8Dae + " dias até R8 (estimado)" : "Ciclo final não cadastrado", "#0284c7")}
         {metric("⌁", "Kc atual", fmt(last.kc, 2), "Conforme cálculo do motor", "#0284c7")}
@@ -239,6 +250,11 @@ export function CropDevelopmentPanel({
           r8Dae != null ? "VE → R8 · cultivar" : "Duração das fases cadastradas", "#f97316")}
       </div>
 
+      {observationContext && onObservationSaved && stageOptions.length>0 && dae!=null && (
+        <PhenologyStageEditor key={observationContext.assignmentId}
+          context={observationContext} stages={stageOptions} observations={fieldObservations}
+          today={last.date} todayDae={dae} onSaved={onObservationSaved}/>
+      )}
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-graphite-900 sm:p-5">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -297,7 +313,7 @@ export function CropDevelopmentPanel({
           </div>
         </div>
 
-        {audit.currentStage == null && (
+        {audit.currentStage == null && fieldStage == null && (
           <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
             {phaseBands.length > 0
               ? "As faixas coloridas vêm do cadastro das fases da cultura. Para indicar VE, VC, V1…R8 no dia correto, cadastre os DAE esperados ou calibrados da cultivar."
@@ -440,6 +456,23 @@ export function CropDevelopmentPanel({
                 )}
               </g>
 
+              {fieldStage && observedAtDae!=null && visible.stages && (
+                <g>
+                  {/* Marco de campo persistido: futuras faixas continuam como referência. */}
+                  <rect x={todayX??plot.right} y={plot.top}
+                    width={Math.max(0,plot.right-(todayX??plot.right))}
+                    height={plotHeight} fill="#f8fafc" opacity={.35}/>
+                  <line x1={px(observedAtDae)} x2={px(observedAtDae)}
+                    y1={plot.top} y2={plot.bottom}
+                    stroke="#eab308" strokeWidth={2.4} strokeDasharray="6 4"/>
+                  <rect x={Math.min(plot.right-166,Math.max(plot.left,px(observedAtDae)-83))}
+                    y={56} width={166} height={24} rx={6} fill="#065f46"/>
+                  <text x={Math.min(plot.right-83,Math.max(plot.left+83,px(observedAtDae)))}
+                    y={72} fill="white" fontSize={12} fontWeight={800} textAnchor="middle">
+                    {fieldStage.stage.code} · REGISTRO DE CAMPO
+                  </text>
+                </g>
+              )}
               {todayX != null && (
                 <g>
                   <rect x={Math.min(plot.right - 114, Math.max(plot.left, todayX - 48))} y={1}
@@ -460,7 +493,9 @@ export function CropDevelopmentPanel({
                   </text>
                   <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
                     y={plot.top + 49} fill="#e2e8f0" fontSize={12}>
-                    {hoverStage ? "Estádio: "+hoverStage.code : "Fase: "+(hoverPhase?.label ?? "não cadastrada")}
+                    {fieldStage && activeDae>=fieldStage.observation.dae && activeDae<=dae
+                      ? "Observado: "+fieldStage.stage.code
+                      : hoverStage ? "Estimado: "+hoverStage.code : "Fase: "+(hoverPhase?.label ?? "não cadastrada")}
                   </text>
                   <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
                     y={plot.top + 65} fill="#e2e8f0" fontSize={12}>
@@ -501,7 +536,8 @@ export function CropDevelopmentPanel({
           </p>
           <div className="mt-3 flex gap-1 overflow-x-auto pb-2">
             {audit.stages.map((stage) => {
-              const stageDae = stage.dae;
+              const manuallyObserved=fieldStage?.stage.code===stage.code;
+              const stageDae=manuallyObserved?observedAtDae:stage.dae;
               const kcAtStage = stageDae != null && completeKc.length >= 2
                 ? calculateDailyKc(completeKc, stageDae) : null;
               const rootAtStage = stageDae != null && completeRoot.length >= 2
@@ -512,7 +548,7 @@ export function CropDevelopmentPanel({
                 <div key={stage.code} title={stageDae == null ? "Sem DAE cadastrado" :
                   stage.label + " · " + stageDae + " DAE (" + stage.origin + ")"}
                   className={"min-w-[100px] flex-1 rounded-lg border px-2 py-3 text-center " +
-                    (stage.current ? "border-amber-500 bg-amber-50 shadow-sm dark:bg-amber-800/20" :
+                    (manuallyObserved || (!fieldStage && stage.current) ? "border-amber-500 bg-amber-50 shadow-sm dark:bg-amber-800/20" :
                       "border-slate-200 dark:border-white/10")}
                   style={stage.current ? undefined : {backgroundColor:palette.fill}}>
                   <p className="text-[13px] font-black text-slate-800">{stage.code}</p>
@@ -525,7 +561,8 @@ export function CropDevelopmentPanel({
                   <p className="mt-1 text-[10px] text-slate-700">
                     Raiz: {rootAtStage == null ? "—" : fmt(rootAtStage,2) + " m"}
                   </p>
-                  {stage.current && <p className="mt-1 text-[10px] font-bold text-amber-700">Atual</p>}
+                  {manuallyObserved && <p className="mt-1 text-[10px] font-bold text-amber-700">Observado</p>}
+                  {!fieldStage && stage.current && <p className="mt-1 text-[10px] font-bold text-amber-700">Estimado</p>}
                 </div>
               );
             })}
