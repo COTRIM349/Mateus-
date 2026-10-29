@@ -1585,6 +1585,7 @@ export default function BalancoHidricoPage() {
                 mode="dados"
                 kcSource={kcSource}
                 kcCurve={kcCurveView}
+                rootCurve={rootCurveView}
                 culturePhases={phases}
                 phenologyMarkers={phenologyMarkers}
                 daeOffsetFromPlanting={
@@ -2533,6 +2534,7 @@ function Cockpit({
   mode = "dados",
   kcSource = null,
   kcCurve = null,
+  rootCurve = null,
   culturePhases = [],
   phenologyMarkers = [],
   daeOffsetFromPlanting = 0,
@@ -2554,6 +2556,8 @@ function Cockpit({
   kcSource?: KcSource;
   /** Curva ativa realmente usada pelo motor (cultivar prevalece sobre cultura). */
   kcCurve?: KcCurveView | null;
+  /** Curva radicular aprovada usada pelo motor quando não há override manual. */
+  rootCurve?: { x: number; y: number }[] | null;
   /** Fases cadastradas da cultura, usadas somente para desenhar a fenologia do ciclo. */
   culturePhases?: CulturePhase[];
   /** Estádios por cultivar com DAE esperado ou calibrado, sem inventar R1/R2. */
@@ -2696,7 +2700,7 @@ function Cockpit({
                 rows={rows}
                 markers={phenologyMarkers}
                 kcCurve={kcCurve?.points ?? null}
-                rootCurve={rootCurveView}
+                rootCurve={rootCurve}
                 pivotName={identity.pivotName}
                 seasonName={identity.seasonName}
                 kcCurveLabel={kcCurve ? kcCurve.name + " · v" + kcCurve.version +
