@@ -5,7 +5,7 @@ import { calculateDailyKc, calculateRootDepthMeters } from "@/modules/culture/se
 import { buildDevelopmentAudit } from "@/modules/culture/services/crop-development-view";
 import { activeFieldObservation, type PhenologyStageOption, type PhenologyFieldObservation } from "@/modules/culture/services/phenology-observed";
 import { PhenologyStageEditor, type PhenologyObservationContext } from "@/components/water-balance/PhenologyStageEditor";
-import { buildCropDevelopmentBands, cropDevelopmentStageLabel } from "@/modules/culture/services/crop-development-bands";
+import { buildCropDevelopmentBands, cropDevelopmentStageLabel, isCropPhaseShown, setCropPhaseShown } from "@/modules/culture/services/crop-development-bands";
 import type { CulturePhase } from "@/modules/culture/services/culture.service";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import type { PhenologyChartMarker } from "@/modules/culture/services/phenology-chart-markers";
@@ -93,6 +93,7 @@ export function CropDevelopmentPanel({
     kc: true, root: true, potential: true, stages: true,
   });
   const [hoverDae, setHoverDae] = useState<number | null>(null);
+  const [hiddenPhases, setHiddenPhases] = useState<string[]>([]);
 
   const last = rows.at(-1);
   const dae = last?.dae != null && Number.isFinite(last.dae) ? Math.max(0, last.dae) : null;
@@ -123,6 +124,17 @@ export function CropDevelopmentPanel({
     [culturePhases, daeOffsetFromPlanting],
   );
   const phaseEnd = Math.max(0, ...phaseBands.map((b) => b.end));
+  // Legenda e seletor exibem as mesmas fases; nomes repetidos no cadastro
+  // compartilham um único controle e nenhum filtro modifica o balanço.
+  const phaseChoices = phaseBands.length
+    ? Array.from(new Map(phaseBands.map((b) => [b.label, { label: b.label, color: b.stripe }])).values())
+    : Object.entries(stagePalette).map(([label, palette]) => ({ label, color: palette.header }));
+  const phaseIsVisible = (label: string) => visible.stages && isCropPhaseShown(label, hiddenPhases);
+  const setPhaseVisible = (label: string, shown: boolean) => {
+    setHiddenPhases((prev) => setCropPhaseShown(prev, label, shown));
+    if (shown) setVisible((prev) => ({ ...prev, stages: true }));
+  };
+
   const curveEnd = Math.max(0,
     ...(kcCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
     ...(rootCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
@@ -302,8 +314,26 @@ export function CropDevelopmentPanel({
                       {label}
                     </label>
                   ))}
+                  <div className="mt-3 border-t border-slate-200 pt-3 dark:border-white/15" role="group"
+                    aria-label="Selecionar fases fenológicas no menu">
+                    <p className="mb-2 text-[11px] font-bold text-slate-700 dark:text-slate-100">
+                      Fases do ciclo (seleção individual)
+                    </p>
+                    {phaseChoices.map((phase) => (
+                      <label key={phase.label}
+                        className="flex cursor-pointer items-center gap-2 py-1.5 text-[12px] text-slate-700 dark:text-slate-200">
+                        <input type="checkbox"
+                          checked={phaseIsVisible(phase.label)}
+                          onChange={(event) => setPhaseVisible(phase.label, event.target.checked)}
+                          className="accent-emerald-600" />
+                        <span className="h-3 w-3 shrink-0 rounded-sm" style={{ backgroundColor: phase.color }} />
+                        {phase.label}
+                      </label>
+                    ))}
+                  </div>
                   <button type="button" onClick={() => {
                     setVisible({ kc: true, root: true, potential: true, stages: true });
+                    setHiddenPhases([]);
                   }} className="mt-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                     Mostrar todas
                   </button>
@@ -338,6 +368,7 @@ export function CropDevelopmentPanel({
                 <g>
                   {/* As macrofases reais do cadastro colorem o ciclo mesmo sem VC, V1 ou R1 com DAE. */}
                   {phaseBands.map((band) => {
+                    if (!phaseIsVisible(band.label)) return null;
                     const bx=px(band.start),bw=Math.max(0,px(band.end)-bx);
                     return <g key={band.key}>
                       <rect x={bx} y={plot.top} width={bw} height={plotHeight}
@@ -353,6 +384,7 @@ export function CropDevelopmentPanel({
                     </g>;
                   })}
                   {phaseBands.length===0 && groupBands.map((group, i) => {
+                    if (!phaseIsVisible(group.group)) return null;
                     const palette = stagePalette[group.group] ?? stagePalette["Estádios vegetativos"];
                     const bx = px(group.start), bw = Math.max(0, px(group.end) - bx);
                     return <g key={group.group + i}>
@@ -364,8 +396,15 @@ export function CropDevelopmentPanel({
                     </g>;
                   })}
                   {stageBands.map((stage, i) => {
-                    const bx = px(stage.start), bw = Math.max(0, px(stage.end) - bx);
-                    return <g key={stage.code + "-" + i}>
+                    // Interseção impede que um estádio desenhe sobre uma fase desmarcada.
+                    const spans = phaseBands.length
+                      ? phaseBands.filter((b) => phaseIsVisible(b.label))
+                          .map((b) => ({ start: Math.max(stage.start, b.start), end: Math.min(stage.end, b.end) }))
+                          .filter((span) => span.end > span.start)
+                      : phaseIsVisible(stage.group) ? [{start:stage.start,end:stage.end}] : [];
+                    return spans.map((span, j) => {
+                    const bx = px(span.start), bw = Math.max(0, px(span.end) - bx);
+                    return <g key={stage.code + "-" + i + "-" + j}>
                       <rect x={bx} y={54} width={bw} height={29}
                         fill={stagePalette[stage.group]?.fill ?? "#f1f5f9"} opacity={.95}/>
                       <line x1={bx} y1={54} x2={bx} y2={plot.bottom}
@@ -374,6 +413,7 @@ export function CropDevelopmentPanel({
                         fontSize={bw >= 32 ? 12 : 10} fontWeight={800} fill="#334155">{stage.code}</text>}
                       <title>{stage.code} · {stage.label} · a partir de {stage.dae} DAE ({stage.origin})</title>
                     </g>;
+                    });
                   })}
                   {visibleStages.length === 0 && phaseBands.length === 0 && <text x={plot.left + 12} y={63}
                     fontSize={12} fill="#b45309">Fases e marcos fenológicos não cadastrados</text>}
@@ -519,11 +559,35 @@ export function CropDevelopmentPanel({
           {visible.kc && <GraphLegend color="#047857" name="Kc (direita)"/>}
           {visible.root && <GraphLegend color="#1672ef" name="Profundidade radicular efetiva (esquerda)"/>}
           {visible.potential && <GraphLegend color="#64748b" name="Referência futura cadastrada" dashed/>}
-          {visible.stages && (phaseBands.length>0 ? phaseBands.map((b)=>[b.label,{header:b.stripe}] as const) : Object.entries(stagePalette)).map(([label,palette]) => (
-            <span key={label} className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">
-              <span className="h-3 w-3 rounded-sm" style={{background:palette.header}}/>{label}
+          <div className="flex flex-wrap items-center justify-center gap-1.5" role="group"
+            aria-label="Selecionar fases fenológicas">
+            <span className="mr-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+              Fases (clique para mostrar/ocultar):
             </span>
-          ))}
+            {phaseChoices.map((phase) => {
+              const isActive = phaseIsVisible(phase.label);
+              return (
+                <button key={phase.label} type="button" aria-pressed={isActive}
+                  aria-label={(isActive ? "Ocultar fase " : "Mostrar fase ") + phase.label}
+                  title={(isActive ? "Ocultar" : "Mostrar") + " a faixa " + phase.label}
+                  onClick={() => setPhaseVisible(phase.label, !isActive)}
+                  className={"inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold transition-colors " +
+                    (isActive ? "border-slate-200 bg-slate-50 text-slate-700 hover:bg-slate-100 dark:border-white/20 dark:bg-white/10 dark:text-slate-100" :
+                      "border-dashed border-slate-300 bg-transparent text-slate-400 line-through hover:bg-slate-50 dark:border-white/15 dark:text-slate-500")}>
+                  <span className="h-3 w-3 rounded-sm" style={{backgroundColor:phase.color,opacity:isActive?1:.3}}/>
+                  {phase.label}
+                </button>
+              );
+            })}
+            {(hiddenPhases.length>0 || !visible.stages) && (
+              <button type="button" onClick={() => {
+                setHiddenPhases([]);
+                setVisible((prev) => ({...prev,stages:true}));
+              }} className="ml-1 text-[11px] font-bold text-emerald-700 underline-offset-2 hover:underline dark:text-emerald-300">
+                Todas as fases
+              </button>
+            )}
+          </div>
         </div>
 
         <div className="border-t border-slate-100 pt-3 dark:border-white/10">
