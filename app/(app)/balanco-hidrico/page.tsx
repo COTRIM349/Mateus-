@@ -325,6 +325,7 @@ export default function BalancoHidricoPage() {
     "cadastro-cultivar" | "cadastro-cultura" | "inativa" | "outro-eixo" | "fases" | null
   >(null);
   const [kcCurveView, setKcCurveView] = useState<KcCurveView | null>(null);
+  const [rootCurveView, setRootCurveView] = useState<{ x: number; y: number }[] | null>(null);
 
   // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
   const { states: farmStates, refresh: refreshFarm } = useFarmHydricState();
@@ -351,6 +352,7 @@ export default function BalancoHidricoPage() {
     setPivotLoadError("");
     setBalanceRows([]);
     setKcCurveView(null);
+    setRootCurveView(null);
     setDateStart("");
     setDateEnd("");
 
@@ -421,6 +423,7 @@ export default function BalancoHidricoPage() {
   // Load assignment + culture + soil + phases when pivot changes
   useEffect(() => {
     setKcCurveView(null);
+    setRootCurveView(null);
     if (!selectedPivotId) {
       setAssignment(null);
       setCulture(null);
@@ -866,6 +869,10 @@ export default function BalancoHidricoPage() {
             }
           : null,
       );
+
+      // A mesma curva de raiz APROVADA aplicada ao motor alimenta a referência visual futura.
+      // Se houver ajuste manual da parcela, a tela mostra só a raiz efetiva do histórico.
+      setRootCurveView(canApplyRoot ? rootPoints : null);
 
       const agronomicByDate: Record<string, AgronomicDayInput> = {};
       for (const date of datesInRange(calculationStart, addDaysIso(dateEnd, 30))) {
@@ -2689,6 +2696,9 @@ function Cockpit({
                 rows={rows}
                 markers={phenologyMarkers}
                 kcCurve={kcCurve?.points ?? null}
+                rootCurve={rootCurveView}
+                pivotName={identity.pivotName}
+                seasonName={identity.seasonName}
                 kcCurveLabel={kcCurve ? kcCurve.name + " · v" + kcCurve.version +
                   " (" + (kcCurve.scope === "cultivar" ? "cultivar" : "cultura") + ")" : null}
                 cropName={identity.cultureName}

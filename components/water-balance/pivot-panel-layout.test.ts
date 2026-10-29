@@ -27,6 +27,16 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(culturePanel).toContain("Raiz efetiva no balanço");
     expect(culturePanel).toContain("Kc usado no balanço");
     expect(culturePanel).toContain("last.rootDepthEstimated");
+    expect(culturePanel).toContain("Estádios e parâmetros da cultivar");
+    expect(culturePanel).toContain("Desenvolvimento da cultura, Kc e profundidade radicular");
+    expect(culturePanel).toContain('role="img" aria-label="Gráfico único de desenvolvimento da cultura');
+    expect(culturePanel).toContain('aria-label="Eixo horizontal do desenvolvimento"');
+    expect(culturePanel).toContain("Variáveis do gráfico");
+    expect(culturePanel).toContain("rootCurve");
+    expect(culturePanel).toContain("stageBands.map");
+    expect(page).toContain("rootCurve={rootCurveView}");
+    expect(page).toContain("setRootCurveView(canApplyRoot ? rootPoints : null);");
+    expect(page).toContain("setRootCurveView(null);");
     expect(page).toContain("<PivotClimatePanel");
     expect(page).toContain("phenologyMarkers={phenologyMarkers}");
     expect(page).toContain("culture_variety_phenology_targets");
