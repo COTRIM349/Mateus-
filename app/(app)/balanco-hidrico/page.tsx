@@ -56,6 +56,8 @@ import { CropDevelopmentPanel } from "@/components/water-balance/CropDevelopment
 import { cn } from "@/utils/cn";
 import { type ReservatorioPoint } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
+import { DecisionMonitoringReferenceLayout } from "@/components/water-balance/DecisionMonitoringReferenceLayout";
+import { navItems } from "@/config/navigation";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -1492,12 +1494,59 @@ export default function BalancoHidricoPage() {
     || (assignment?.initial_soil_moisture_pct != null && Number.isFinite(Number(assignment?.initial_soil_moisture_pct))));
 
   return (
-    <div className="space-y-4">
+    <div className={activeTab === "decisao"
+      ? "decision-reference-shell flex min-w-0 gap-3 rounded-2xl bg-[#061d17] p-2 text-white lg:gap-4 lg:p-3"
+      : "space-y-4"}>
+      {activeTab === "decisao" && (
+        <aside className="sticky top-[84px] hidden h-[calc(100vh-100px)] w-[220px] shrink-0 flex-col rounded-xl border border-emerald-900/60 bg-gradient-to-b from-[#063223] to-[#041e18] px-2.5 py-5 text-white lg:flex">
+          <div className="mb-5 border-b border-emerald-500/20 px-3 pb-5">
+            <p className="text-[15px] font-black leading-tight tracking-tight text-white">SANTA COLOMBA</p>
+            <p className="text-[13px] font-extrabold tracking-wide text-emerald-400">IRRIGA PRO</p>
+          </div>
+          <nav aria-label="Navegação lateral do monitoramento" className="space-y-1">
+            {([
+              { label:"Visão Geral", href:"/" },
+              { label:"Balanço Hídrico", href:"/balanco-hidrico" },
+              { label:"Manejo da Irrigação", href:"/central-manejo" },
+              { label:"Clima e Previsão", href:"/clima" },
+              { label:"Solo", href:"/solos" },
+              { label:"Cultura", href:"/culturas" },
+              { label:"Relatórios", href:"/relatorios" },
+              { label:"Talhões e Equipamentos", href:"/pivos" },
+              { label:"Configurações", href:"/configuracoes" },
+            ] as const).map(item => {
+              const iconPath = navItems.find(nav => nav.href === item.href)?.icon;
+              return (
+                <Link key={item.href} href={item.href} aria-current={item.href === "/balanco-hidrico" ? "page" : undefined}
+                  className={`flex min-h-[43px] items-center gap-3 rounded-lg px-3 text-[13px] font-semibold transition-colors ${item.href === "/balanco-hidrico"
+                    ? "border-l-[3px] border-emerald-400 bg-emerald-700/50 text-white"
+                    : "text-emerald-100/85 hover:bg-white/10 hover:text-white"}`}>
+                  <svg className="h-[19px] w-[19px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
+                    <path d={iconPath ?? "M4 12h16M12 4v16"} strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                  {item.label}
+                </Link>
+              );
+            })}
+          </nav>
+          <div className="mt-auto border-t border-emerald-400/15 px-3 pt-4 text-[12px] text-emerald-100/70">
+            Monitoramento operacional da safra
+          </div>
+        </aside>
+      )}
+      <div className={activeTab === "decisao" ? "min-w-0 flex-1 space-y-3" : "contents"}>
       {/* Cabeçalho — central de decisão */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[24px] font-extrabold tracking-tight text-graphite-900 dark:text-white">Balanço Hídrico</h1>
-          <p className="text-[12.5px] text-graphite-400 dark:text-gray-500">Central de decisão do manejo de irrigação</p>
+          <h1 className={`font-extrabold tracking-tight ${activeTab === "decisao" ? "text-[28px] text-white" : "text-[24px] text-graphite-900 dark:text-white"}`}>
+            {activeTab === "decisao" && <span className="mr-2 text-emerald-300" aria-hidden="true">◉</span>}
+            Balanço Hídrico
+          </h1>
+          <p className={activeTab === "decisao" ? "text-[13px] text-emerald-100/75" : "text-[12.5px] text-graphite-400 dark:text-gray-500"}>
+            {activeTab === "decisao"
+              ? "Acompanhe o balanço hídrico da cultura e tome decisões de manejo com base em dados atualizados."
+              : "Central de decisão do manejo de irrigação"}
+          </p>
         </div>
         <div className="flex flex-wrap items-end gap-2">
           <HeaderChip label="Fazenda" value={farmName ?? "—"} />
@@ -1523,11 +1572,25 @@ export default function BalancoHidricoPage() {
       {/* Navegação principal do manejo — cada aba tem função própria. */}
       {selectedPivotId && assignment && (
         <>
-          <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
-            <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
-          </div>
+          {activeTab === "decisao" ? (
+            <div role="tablist" aria-label="Abas do balanço hídrico" className="flex gap-1 border-b border-emerald-500/35">
+              {TABS.map(item => (
+                <button key={item.id} type="button" role="tab" aria-selected={activeTab === item.id}
+                  onClick={() => setActiveTab(item.id as typeof activeTab)}
+                  className={`min-w-[120px] rounded-t-lg border px-5 py-2.5 text-[14px] font-bold transition-colors ${activeTab === item.id
+                    ? "border-emerald-500 bg-emerald-800/55 text-emerald-300"
+                    : "border-transparent bg-white/[0.03] text-emerald-100/80 hover:bg-white/10"}`}>
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
+              <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
+            </div>
+          )}
 
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
+          {activeTab === "dados" && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
             <div className="min-w-0">
               <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-graphite-400 dark:text-gray-500">Registrar evento realizado</p>
               <p className="truncate text-[11.5px] text-graphite-600 dark:text-gray-300">
@@ -1548,7 +1611,7 @@ export default function BalancoHidricoPage() {
                 <span aria-hidden>+</span> Irrigação
               </Link>
             </div>
-          </div>
+          </div>}
         </>
       )}
 
@@ -1657,20 +1720,17 @@ export default function BalancoHidricoPage() {
           Não repete o gráfico; a previsão vive só aqui, nunca no histórico. ── */}
       {activeTab === "decisao" && selectedPivotId && assignment && (
         <div className="space-y-3">
-          <BalanceTab
-            panel="decisao"
+          <DecisionMonitoringReferenceLayout
             rows={seasonRows}
             summary={seasonSummary}
-            loading={loading || calculating}
-            head={centroHead}
-            weatherByDate={weatherByDate}
-            sensoryByDate={sensoryByDate}
+            pivotName={selPivot?.name ?? "Pivô"}
+            cultureName={culture?.name ?? "Cultura"}
+            pivotId={selectedPivotId}
+            seasonName={seasonName}
+            onOpenHistory={() => document.getElementById("decision-season-audit")?.scrollIntoView({behavior:"smooth",block:"start"})}
           />
-          {balanceRows.length > 0 && (
-            <DecisionForecast projection={projectionRows} last={balanceRows[balanceRows.length - 1]} />
-          )}
           {seasonRows.length > 0 && (
-            <section aria-label="Auditoria diária do balanço na safra" className="space-y-2">
+            <section id="decision-season-audit" aria-label="Auditoria diária do balanço na safra" className="scroll-mt-24 space-y-2">
               <BalanceTab
                 panel="auditoria"
                 rows={seasonRows}
@@ -1681,16 +1741,23 @@ export default function BalancoHidricoPage() {
                 sensoryByDate={seasonSensoryByDate}
               />
               {assignment.planting_date && seasonRows[0].date > assignment.planting_date && (
-                <p className="px-2 text-[12px] text-amber-700 dark:text-amber-300">
+                <p className="px-2 text-[12px] text-amber-200">
                   O plantio foi em {fmtDia(assignment.planting_date)}, mas o histórico calculável começa em {fmtDia(seasonRows[0].date)}.
                   Os dias anteriores à condição inicial do balanço não são estimados nem incluídos nos totais.
                 </p>
               )}
             </section>
           )}
+          {balanceRows.length > 0 && (
+            <details className="rounded-xl border border-emerald-500/20 bg-[#09291f] p-3 text-emerald-100">
+              <summary className="cursor-pointer text-[13px] font-semibold">Projeção climática de apoio à decisão (opcional)</summary>
+              <div className="mt-3"><DecisionForecast projection={projectionRows} last={balanceRows[balanceRows.length - 1]} /></div>
+            </details>
+          )}
         </div>
       )}
 
+      </div>
     </div>
   );
 }
