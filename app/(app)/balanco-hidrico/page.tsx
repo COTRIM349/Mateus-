@@ -57,7 +57,6 @@ import { cn } from "@/utils/cn";
 import { type ReservatorioPoint } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 import { DecisionMonitoringReferenceLayout } from "@/components/water-balance/DecisionMonitoringReferenceLayout";
-import { navItems } from "@/config/navigation";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -1495,46 +1494,8 @@ export default function BalancoHidricoPage() {
 
   return (
     <div className={activeTab === "decisao"
-      ? "decision-reference-shell flex min-w-0 gap-3 rounded-2xl bg-[#061d17] p-2 text-white lg:gap-4 lg:p-3"
+      ? "decision-reference-shell min-w-0 space-y-3 rounded-xl bg-[#073326] p-3 text-white lg:p-4"
       : "space-y-4"}>
-      {activeTab === "decisao" && (
-        <aside className="sticky top-[84px] hidden h-[calc(100vh-100px)] w-[220px] shrink-0 flex-col rounded-xl border border-emerald-900/60 bg-gradient-to-b from-[#063223] to-[#041e18] px-2.5 py-5 text-white lg:flex">
-          <div className="mb-5 border-b border-emerald-500/20 px-3 pb-5">
-            <p className="text-[15px] font-black leading-tight tracking-tight text-white">SANTA COLOMBA</p>
-            <p className="text-[13px] font-extrabold tracking-wide text-emerald-400">IRRIGA PRO</p>
-          </div>
-          <nav aria-label="Navegação lateral do monitoramento" className="space-y-1">
-            {([
-              { label:"Visão Geral", href:"/" },
-              { label:"Balanço Hídrico", href:"/balanco-hidrico" },
-              { label:"Manejo da Irrigação", href:"/central-manejo" },
-              { label:"Clima e Previsão", href:"/clima" },
-              { label:"Solo", href:"/solos" },
-              { label:"Cultura", href:"/culturas" },
-              { label:"Relatórios", href:"/relatorios" },
-              { label:"Talhões e Equipamentos", href:"/pivos" },
-              { label:"Configurações", href:"/configuracoes" },
-            ] as const).map(item => {
-              const iconPath = navItems.find(nav => nav.href === item.href)?.icon;
-              return (
-                <Link key={item.href} href={item.href} aria-current={item.href === "/balanco-hidrico" ? "page" : undefined}
-                  className={`flex min-h-[43px] items-center gap-3 rounded-lg px-3 text-[13px] font-semibold transition-colors ${item.href === "/balanco-hidrico"
-                    ? "border-l-[3px] border-emerald-400 bg-emerald-700/50 text-white"
-                    : "text-emerald-100/85 hover:bg-white/10 hover:text-white"}`}>
-                  <svg className="h-[19px] w-[19px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
-                    <path d={iconPath ?? "M4 12h16M12 4v16"} strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="mt-auto border-t border-emerald-400/15 px-3 pt-4 text-[12px] text-emerald-100/70">
-            Monitoramento operacional da safra
-          </div>
-        </aside>
-      )}
-      <div className={activeTab === "decisao" ? "min-w-0 flex-1 space-y-3" : "contents"}>
       {/* Cabeçalho — central de decisão */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -1572,23 +1533,9 @@ export default function BalancoHidricoPage() {
       {/* Navegação principal do manejo — cada aba tem função própria. */}
       {selectedPivotId && assignment && (
         <>
-          {activeTab === "decisao" ? (
-            <div role="tablist" aria-label="Abas do balanço hídrico" className="flex gap-1 border-b border-emerald-500/35">
-              {TABS.map(item => (
-                <button key={item.id} type="button" role="tab" aria-selected={activeTab === item.id}
-                  onClick={() => setActiveTab(item.id as typeof activeTab)}
-                  className={`min-w-[120px] rounded-t-lg border px-5 py-2.5 text-[14px] font-bold transition-colors ${activeTab === item.id
-                    ? "border-emerald-500 bg-emerald-800/55 text-emerald-300"
-                    : "border-transparent bg-white/[0.03] text-emerald-100/80 hover:bg-white/10"}`}>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
-              <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
-            </div>
-          )}
+          <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
+            <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
+          </div>
 
           {activeTab === "dados" && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
             <div className="min-w-0">
@@ -1757,7 +1704,6 @@ export default function BalancoHidricoPage() {
         </div>
       )}
 
-      </div>
     </div>
   );
 }
