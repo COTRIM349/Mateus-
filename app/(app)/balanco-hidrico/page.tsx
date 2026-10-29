@@ -51,12 +51,10 @@ import { initialManejoVisibility, managementRowFromBalance, type ManejoSeriesKey
 import { ManejoChart, ManejoSeriesPicker } from "@/components/charts/ManejoChart";
 import { HydricInitialConditionForm } from "@/components/water-balance/HydricInitialConditionForm";
 import { SoilReservoirReferencePanel } from "@/components/water-balance/SoilReservoirReferencePanel";
-import { ObservedKcChart, PivotClimatePanel } from "@/components/water-balance/PivotClimatePanel";
+import { PivotClimatePanel } from "@/components/water-balance/PivotClimatePanel";
+import { CropDevelopmentPanel } from "@/components/water-balance/CropDevelopmentPanel";
 import { cn } from "@/utils/cn";
-import {
-  KcCurveReadOnlyChart,
-  type ReservatorioPoint,
-} from "@/components/water-balance/CockpitCharts";
+import { type ReservatorioPoint } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
@@ -2686,83 +2684,17 @@ function Cockpit({
       <div className="space-y-4">
         <div className="space-y-4">
           {panelView === "cultura" && (
-          <Card className="overflow-hidden p-0">
-            <div className="border-b border-gray-100 bg-white px-4 py-3 dark:border-white/[0.06] dark:bg-graphite-900">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[15px] font-extrabold text-graphite-900 dark:text-white">Fenologia e curva de Kc</p>
-                    {kcCurve && (
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9.5px] font-semibold text-emerald-700 dark:border-emerald-500/30 dark:bg-emerald-900/20 dark:text-emerald-300">
-                        curva ativa · {kcCurve.scope === "cultivar" ? "cultivar" : "cultura"}
-                      </span>
-                    )}
-                  </div>
-                  <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
-                    {identity.pivotName ?? "Pivô"} · {identity.cultureName ?? "Cultura"} · {identity.varietyName ?? "cultivar não cadastrada"}
-                  </p>
-                </div>
-                {kcCurve && (
-                  <div className="text-right">
-                    <p className="text-[10.5px] font-semibold text-graphite-600 dark:text-gray-300">{kcCurve.name} · v{kcCurve.version}</p>
-                    <p className="mt-0.5 text-[9.5px] text-graphite-400 dark:text-gray-500">DAE × Kc · progressivo até hoje</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="mt-3 grid grid-cols-3 gap-2">
-                {[
-                  { label: "Fenologia atual", value: identity.stage && /^(VE|VC|V\d+|R\d+)$/i.test(identity.stage.trim()) ? identity.stage : (last.phase ?? identity.stage ?? "—") },
-                  { label: "DAE", value: last.dae == null ? "—" : String(last.dae) },
-                  { label: "Kc atual", value: fmtNum(last.kc, 2) },
-                ].map((item) => (
-                  <div key={item.label} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.03]">
-                    <p className="text-[9px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{item.label}</p>
-                    <p className="mt-0.5 truncate text-[15px] font-extrabold text-graphite-900 dark:text-white">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-
-              {phenologyMarkers.length > 0 && (
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="mr-1 text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">Marcos alcançados</span>
-                  {phenologyMarkers.filter((m) => m.dae <= (last.dae ?? -1)).map((m) => (
-                    <span key={m.code + m.dae} title={m.label + " · " + m.origin}
-                      className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-[10px] font-bold text-emerald-700 dark:border-emerald-500/25 dark:bg-emerald-900/20 dark:text-emerald-300">
-                      {m.code} · {m.dae} DAE
-                    </span>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="p-3 sm:p-4">
-              {kcCurve ? (
-                <div className="h-[58vh] min-h-[420px] max-h-[620px] w-full rounded-xl border border-gray-100 bg-gray-50/40 p-1 dark:border-white/[0.06] dark:bg-white/[0.015]">
-                  <KcCurveReadOnlyChart
-                    points={kcCurve.points}
-                    currentDae={last.dae ?? null}
-                    currentKc={last.kc}
-                    currentPhase={last.phase ?? null}
-                    currentRootDepthM={last.rootDepthEstimated ?? last.rootDepth}
-                    daeOffsetFromPlanting={daeOffsetFromPlanting}
-                    markers={phenologyMarkers}
-                    phases={culturePhases.map((phase) => ({
-                      name: phase.name,
-                      phaseKey: phase.phase_key ?? null,
-                      startDap: phase.days_after_plant,
-                      durationDays: phase.duration_days,
-                    }))}
-                  />
-                </div>
-              ) : (
-                <div className="w-full rounded-xl border border-gray-200 bg-gray-50/60 p-3 dark:border-white/[0.08] dark:bg-white/[0.02]">
-                  <p className="mb-2 text-[11px] font-semibold text-graphite-600 dark:text-gray-300">Sem curva ativa em DAE: exibindo somente o Kc realmente calculado até hoje.</p>
-                  <ObservedKcChart rows={rows} markers={phenologyMarkers} currentRootDepthM={last.rootDepthEstimated ?? last.rootDepth} />
-                </div>
-              )}
-            </div>
-          </Card>
+            <Card className="border border-slate-200 bg-white p-3 sm:p-4 dark:border-white/10 dark:bg-graphite-900">
+              <CropDevelopmentPanel
+                rows={rows}
+                markers={phenologyMarkers}
+                kcCurve={kcCurve?.points ?? null}
+                kcCurveLabel={kcCurve ? kcCurve.name + " · v" + kcCurve.version +
+                  " (" + (kcCurve.scope === "cultivar" ? "cultivar" : "cultura") + ")" : null}
+                cropName={identity.cultureName}
+                varietyName={identity.varietyName}
+              />
+            </Card>
           )}
         </div>
 
