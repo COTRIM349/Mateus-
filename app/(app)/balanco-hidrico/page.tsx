@@ -328,6 +328,7 @@ export default function BalancoHidricoPage() {
     "cadastro-cultivar" | "cadastro-cultura" | "inativa" | "outro-eixo" | "fases" | null
   >(null);
   const [kcCurveView, setKcCurveView] = useState<KcCurveView | null>(null);
+  const [rootCurveView, setRootCurveView] = useState<{ x: number; y: number }[] | null>(null);
 
   // Estado hídrico de toda a fazenda (KPIs do topo do cockpit).
   const { states: farmStates, refresh: refreshFarm } = useFarmHydricState();
@@ -355,6 +356,7 @@ export default function BalancoHidricoPage() {
     setBalanceRows([]);
     setSeasonRows([]);
     setKcCurveView(null);
+    setRootCurveView(null);
     setDateStart("");
     setDateEnd("");
 
@@ -425,6 +427,7 @@ export default function BalancoHidricoPage() {
   // Load assignment + culture + soil + phases when pivot changes
   useEffect(() => {
     setKcCurveView(null);
+    setRootCurveView(null);
     if (!selectedPivotId) {
       setAssignment(null);
       setCulture(null);
@@ -871,6 +874,10 @@ export default function BalancoHidricoPage() {
             }
           : null,
       );
+
+      // A mesma curva de raiz APROVADA aplicada ao motor alimenta a referência visual futura.
+      // Se houver ajuste manual da parcela, a tela mostra só a raiz efetiva do histórico.
+      setRootCurveView(canApplyRoot ? rootPoints : null);
 
       const agronomicByDate: Record<string, AgronomicDayInput> = {};
       for (const date of datesInRange(calculationStart, addDaysIso(dateEnd, 30))) {
@@ -1616,6 +1623,7 @@ export default function BalancoHidricoPage() {
                 mode="dados"
                 kcSource={kcSource}
                 kcCurve={kcCurveView}
+                rootCurve={rootCurveView}
                 culturePhases={phases}
                 phenologyMarkers={phenologyMarkers}
                 daeOffsetFromPlanting={
@@ -2637,6 +2645,7 @@ function Cockpit({
   mode = "dados",
   kcSource = null,
   kcCurve = null,
+  rootCurve = null,
   culturePhases = [],
   phenologyMarkers = [],
   daeOffsetFromPlanting = 0,
@@ -2658,6 +2667,8 @@ function Cockpit({
   kcSource?: KcSource;
   /** Curva ativa realmente usada pelo motor (cultivar prevalece sobre cultura). */
   kcCurve?: KcCurveView | null;
+  /** Curva radicular aprovada usada pelo motor quando não há override manual. */
+  rootCurve?: { x: number; y: number }[] | null;
   /** Fases cadastradas da cultura, usadas somente para desenhar a fenologia do ciclo. */
   culturePhases?: CulturePhase[];
   /** Estádios por cultivar com DAE esperado ou calibrado, sem inventar R1/R2. */
@@ -2800,6 +2811,9 @@ function Cockpit({
                 rows={rows}
                 markers={phenologyMarkers}
                 kcCurve={kcCurve?.points ?? null}
+                rootCurve={rootCurve}
+                pivotName={identity.pivotName}
+                seasonName={identity.seasonName}
                 kcCurveLabel={kcCurve ? kcCurve.name + " · v" + kcCurve.version +
                   " (" + (kcCurve.scope === "cultivar" ? "cultivar" : "cultura") + ")" : null}
                 cropName={identity.cultureName}

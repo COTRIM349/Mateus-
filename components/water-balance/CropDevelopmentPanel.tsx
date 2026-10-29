@@ -1,227 +1,498 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
+import { calculateDailyKc, calculateRootDepthMeters } from "@/modules/culture/services/agronomic-engine";
+import { buildDevelopmentAudit } from "@/modules/culture/services/crop-development-view";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import type { PhenologyChartMarker } from "@/modules/culture/services/phenology-chart-markers";
-import { buildDevelopmentAudit } from "@/modules/culture/services/crop-development-view";
 
-type KcPoint = { x:number; y:number };
+type CurvePoint = { x: number; y: number };
+type ChartVariable = "kc" | "root" | "potential" | "stages";
+type ChartVisibility = Record<ChartVariable, boolean>;
+type AxisMode = "dae" | "date";
+
 interface Props {
   rows: DailyBalanceRow[];
   markers: PhenologyChartMarker[];
-  kcCurve: KcPoint[] | null;
+  kcCurve: CurvePoint[] | null;
+  rootCurve?: CurvePoint[] | null;
   kcCurveLabel?: string | null;
   cropName: string | null;
   varietyName: string | null;
+  pivotName?: string | null;
+  seasonName?: string | null;
 }
 
-const fmt=(value:number,decimal=1)=>new Intl.NumberFormat("pt-BR",{
-  minimumFractionDigits:decimal, maximumFractionDigits:decimal,
-}).format(value);
+const fmt = (n: number, digits = 1) =>
+  new Intl.NumberFormat("pt-BR", {
+    minimumFractionDigits: digits, maximumFractionDigits: digits,
+  }).format(n);
 
-function MiniSeries({title,unit,values,color,subtitle,cap}:{
-  title:string;unit:string;values:Array<{x:number;y:number}>;
-  color:string;subtitle:string;cap?:number;
-}) {
-  const sorted=values.filter(p=>Number.isFinite(p.x)&&Number.isFinite(p.y)).sort((a,b)=>a.x-b.x);
-  const maxX=Math.max(1,...sorted.map(p=>p.x)),maxY=Math.max(cap??0.1,...sorted.map(p=>p.y)) *1.07;
-  const plot={x:40,y:12,w:840,h:128};
-  const x=(v:number)=>plot.x+Math.max(0,Math.min(1,v/maxX))*plot.w;
-  const y=(v:number)=>plot.y+plot.h-(Math.max(0,Math.min(maxY,v))/maxY)*plot.h;
-  const coords=sorted.map(p=>x(p.x)+","+y(p.y)).join(" ");
-  const last=sorted.at(-1);
+function dateAtDae(lastDate: string, currentDae: number, targetDae: number) {
+  const ref = new Date(lastDate + "T12:00:00Z");
+  if (Number.isNaN(ref.getTime())) return "—";
+  ref.setUTCDate(ref.getUTCDate() + Math.round(targetDae - currentDae));
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", timeZone: "UTC" }).format(ref);
+}
+
+function fullDateAtDae(lastDate: string, currentDae: number, targetDae: number) {
+  const ref = new Date(lastDate + "T12:00:00Z");
+  if (Number.isNaN(ref.getTime())) return "—";
+  ref.setUTCDate(ref.getUTCDate() + Math.round(targetDae - currentDae));
+  return new Intl.DateTimeFormat("pt-BR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" }).format(ref);
+}
+
+const groupFor = (code: string) => {
+  if (/^R[78]$/.test(code)) return "Maturação";
+  if (/^R[3-6]$/.test(code)) return "Enchimento de grãos";
+  if (/^R[12]$/.test(code)) return "Florescimento";
+  return "Estádios vegetativos";
+};
+
+const stagePalette: Record<string, { fill: string; header: string }> = {
+  "Estádios vegetativos": { fill: "#e3faf0", header: "#b5efd5" },
+  "Florescimento": { fill: "#fff8d4", header: "#fdec9d" },
+  "Enchimento de grãos": { fill: "#fff0df", header: "#fed6ab" },
+  "Maturação": { fill: "#ffe6e6", header: "#fac6c6" },
+};
+
+function GraphLegend({ color, name, dashed = false }: { color: string; name: string; dashed?: boolean }) {
   return (
-    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-3 dark:border-white/10 dark:bg-white/[0.035]">
-      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h4 className="text-[14px] font-extrabold text-slate-800 dark:text-white">{title}</h4>
-          <p className="text-[11px] text-slate-500 dark:text-slate-400">{subtitle}</p>
-        </div>
-        <div className="rounded-lg bg-slate-100 px-3 py-1.5 text-[14px] font-black dark:bg-white/10" style={{color}}>
-          {last ? fmt(last.y,unit==="Kc"?2:0)+" "+(unit==="Kc"?"":unit) : "—"}
-        </div>
-      </div>
-      {sorted.length<2 ? <div className="flex h-36 items-center justify-center text-[12px] text-slate-500">
-        Série histórica insuficiente para mostrar a evolução.
-      </div> : (
-        <svg viewBox="0 0 930 188" className="w-full" role="img" aria-label={"Evolução observada de "+title+" até hoje"}>
-          {[0,.25,.5,.75,1].map(i=>(
-            <g key={i}>
-              <line x1={plot.x} y1={y(maxY*i)} x2={plot.x+plot.w} y2={y(maxY*i)}
-                stroke="currentColor" strokeOpacity={.09}/>
-              <text x={plot.x-7} y={y(maxY*i)+4} textAnchor="end" fontSize={12}
-                className="fill-slate-500 dark:fill-slate-400">{fmt(maxY*i,unit==="Kc"?2:0)}</text>
-            </g>
-          ))}
-          <polyline points={coords} fill="none" stroke={color} strokeWidth={3.2} strokeLinejoin="round" strokeLinecap="round"/>
-          {last&&<circle cx={x(last.x)} cy={y(last.y)} r={5.2} fill={color} stroke="white" strokeWidth={1.6}>
-            <title>Hoje · {fmt(last.x,0)} DAE · {fmt(last.y,unit==="Kc"?2:0)} {unit}</title>
-          </circle>}
-          <text x={plot.x} y={plot.y+plot.h+22} fontSize={12} className="fill-slate-500 dark:fill-slate-400">0 DAE</text>
-          <text x={plot.x+plot.w} y={plot.y+plot.h+22} textAnchor="end" fontSize={12} className="fill-slate-500 dark:fill-slate-400">
-            {fmt(maxX,0)} DAE · hoje
-          </text>
-        </svg>
-      )}
-    </section>
+    <span className="inline-flex items-center gap-2 whitespace-nowrap text-[11px] font-medium text-slate-600 dark:text-slate-300">
+      <span className="h-1 w-6 rounded" style={{
+        background: dashed ? "transparent" : color,
+        borderTop: dashed ? "3px dashed " + color : undefined,
+      }} />
+      {name}
+    </span>
   );
 }
 
-export function CropDevelopmentPanel({rows,markers,kcCurve,kcCurveLabel,cropName,varietyName}:Props){
-  const last=rows.at(-1);
-  const dae=last?.dae!=null && Number.isFinite(last.dae) ? Math.max(0,last.dae) : null;
-  const soy=/soja/i.test(cropName??"");
-  const model=useMemo(()=>buildDevelopmentAudit({
-    isSoy:soy,currentDae:dae,markers,rows,kcCurve,
-  }),[soy,dae,markers,rows,kcCurve]);
-  const reached=model.stages.filter(s=>s.reached && s.dae!=null).sort((a,b)=>(a.dae??0)-(b.dae??0));
-  const missing=model.stages.filter(s=>s.dae==null);
-  const veg=model.stages.filter(s=>s.code==="VE"||s.code==="VC"||/^V\d+$/.test(s.code));
-  const repro=model.stages.filter(s=>/^R[1-8]$/.test(s.code));
-  const effectiveCm=last && Number.isFinite(last.rootDepth) ? last.rootDepth*100 : null;
-  const estimatedCm=last && last.rootDepthEstimated!=null && Number.isFinite(last.rootDepthEstimated)
-    ? last.rootDepthEstimated*100 : null;
-  const rootLimited=estimatedCm!=null && effectiveCm!=null && estimatedCm>effectiveCm+1;
-  const kcData=rows.filter(r=>r.dae!=null&&Number.isFinite(r.dae)&&Number.isFinite(r.kc))
-    .map(r=>({x:r.dae!,y:r.kc}));
-  const rootData=rows.filter(r=>r.dae!=null&&Number.isFinite(r.dae)&&Number.isFinite(r.rootDepth))
-    .map(r=>({x:r.dae!,y:r.rootDepth*100}));
-  const plot={left:53,right:1110,lineY:126,firstY:36,secondY:72};
-  const maxDay=Math.max(1,dae??1);
-  const pos=(v:number)=>plot.left+(Math.min(maxDay,Math.max(0,v))/maxDay)*(plot.right-plot.left);
-  if(!last)return null;
-  const metric=(label:string,value:string,sub:string)=>(
-    <div className="min-w-0 rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-white/10 dark:bg-white/[0.035]">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{label}</p>
-      <div className="mt-1 text-[19px] font-extrabold leading-tight text-slate-900 dark:text-white">{value}</div>
-      <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">{sub}</p>
+/**
+ * Gráfico único como referência: Kc no eixo direito, raiz no esquerdo,
+ * bandas com DAE cadastrados, e histórico separado visualmente de curvas futuras.
+ */
+export function CropDevelopmentPanel({
+  rows, markers, kcCurve, rootCurve = null, kcCurveLabel, cropName,
+  varietyName, pivotName, seasonName,
+}: Props) {
+  const [axisMode, setAxisMode] = useState<AxisMode>("dae");
+  const [showPicker, setShowPicker] = useState(false);
+  const [visible, setVisible] = useState<ChartVisibility>({
+    kc: true, root: true, potential: true, stages: true,
+  });
+  const [hoverDae, setHoverDae] = useState<number | null>(null);
+
+  const last = rows.at(-1);
+  const dae = last?.dae != null && Number.isFinite(last.dae) ? Math.max(0, last.dae) : null;
+  const isSoy = /soja/i.test(cropName ?? "");
+  const audit = useMemo(
+    () => buildDevelopmentAudit({ isSoy, currentDae: dae, markers, rows, kcCurve }),
+    [isSoy, dae, markers, rows, kcCurve],
+  );
+
+  const observed = useMemo(
+    () => rows.filter((r) => r.dae != null && Number.isFinite(r.dae) &&
+      Number.isFinite(r.kc) && Number.isFinite(r.rootDepth))
+      .map((r) => ({
+        dae: r.dae!, date: r.date, kc: r.kc, root: r.rootDepth,
+        estimatedRoot: r.rootDepthEstimated ?? null,
+      })).sort((a, b) => a.dae - b.dae),
+    [rows],
+  );
+  if (!last) return null;
+
+  const stageDated = audit.stages
+    .filter((s) => s.dae != null && Number.isFinite(s.dae))
+    .sort((a, b) => (a.dae ?? 0) - (b.dae ?? 0));
+  const r8Dae = audit.stages.find((s) => s.code === "R8")?.dae ?? null;
+  const curveEnd = Math.max(0,
+    ...(kcCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
+    ...(rootCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
+  );
+  // Só expande a linha do tempo se o calendário/curva aprovados contiverem pontos futuros.
+  // Sem referência, não inventa duração para os estádios não cadastrados.
+  const endDae = Math.max(1, dae ?? 0, r8Dae ?? 0, curveEnd,
+    ...stageDated.map((s) => s.dae ?? 0));
+  const effectiveCm = Number.isFinite(last.rootDepth) ? last.rootDepth * 100 : null;
+  const estimatedCm = last.rootDepthEstimated != null && Number.isFinite(last.rootDepthEstimated)
+    ? last.rootDepthEstimated * 100 : null;
+  const rootLimited = effectiveCm != null && estimatedCm != null && estimatedCm > effectiveCm + 1;
+  const completeKc = (kcCurve ?? []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0);
+  const completeRoot = (rootCurve ?? []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0);
+
+  const futureKc = dae != null && completeKc.length >= 2
+    ? Array.from({ length: Math.max(0, Math.min(450, Math.floor(endDae - dae))) + 1 },
+        (_, i) => ({ dae: dae + i, value: calculateDailyKc(completeKc, dae + i) }))
+    : [];
+  const futureRoot = dae != null && completeRoot.length >= 2
+    ? Array.from({ length: Math.max(0, Math.min(450, Math.floor(endDae - dae))) + 1 },
+        (_, i) => ({ dae: dae + i, value: calculateRootDepthMeters(completeRoot, dae + i) }))
+    : [];
+
+  const rootCeiling = Math.max(0.6, last.rootDepth,
+    ...observed.map((r) => r.root), ...futureRoot.map((r) => r.value));
+  const kcCeiling = Math.max(1.1, last.kc,
+    ...observed.map((r) => r.kc), ...futureKc.map((r) => r.value));
+  const rootAxisMax = Math.ceil(rootCeiling * 5.2) / 5;
+  const kcAxisMax = Math.ceil(kcCeiling * 5.2) / 5;
+
+  const plot = { left: 65, right: 1110, top: 83, bottom: 338 };
+  const plotWidth = plot.right - plot.left;
+  const plotHeight = plot.bottom - plot.top;
+  const px = (d: number) => plot.left + (Math.min(endDae, Math.max(0, d)) / endDae) * plotWidth;
+  const pyRoot = (v: number) => plot.bottom - Math.max(0, Math.min(rootAxisMax, v)) / rootAxisMax * plotHeight;
+  const pyKc = (v: number) => plot.bottom - Math.max(0, Math.min(kcAxisMax, v)) / kcAxisMax * plotHeight;
+  const trace = (arr: Array<{ dae: number; value: number }>, fn: (n: number) => number) =>
+    arr.map((v) => px(v.dae).toFixed(1) + "," + fn(v.value).toFixed(1)).join(" ");
+  const kcObserved = observed.map((r) => ({ dae: r.dae, value: r.kc }));
+  const rootObserved = observed.map((r) => ({ dae: r.dae, value: r.root }));
+  const rootAvailable = observed.length > 0;
+  const visibleStages = stageDated.filter((s) => (s.dae ?? 0) <= endDae);
+
+  // Segmentos resultam EXCLUSIVAMENTE de marcos fenológicos com DAE cadastrados.
+  const stageBands = visibleStages.map((stage, i) => {
+    const next = visibleStages[i + 1]?.dae;
+    const end = next != null ? next : endDae;
+    return { ...stage, start: stage.dae ?? 0, end: Math.max(stage.dae ?? 0, end),
+      group: groupFor(stage.code) };
+  }).filter((stage) => stage.end > stage.start);
+  const groupBands: Array<{ group: string; start: number; end: number }> = [];
+  for (const stage of stageBands) {
+    const prev = groupBands.at(-1);
+    if (prev && prev.group === stage.group && stage.start <= prev.end) prev.end = stage.end;
+    else groupBands.push({ group: stage.group, start: stage.start, end: stage.end });
+  }
+  const todayX = dae != null ? px(dae) : null;
+  const activeDae = hoverDae ?? dae;
+  const hoverRow = activeDae != null
+    ? [...observed].reverse().find((row) => row.dae <= activeDae)
+    : null;
+  const hoverStage = activeDae != null
+    ? [...visibleStages].reverse().find((s) => (s.dae ?? 0) <= activeDae)
+    : null;
+  const tooltipKc = activeDae == null ? null : activeDae <= (dae ?? 0)
+    ? hoverRow?.kc ?? null
+    : completeKc.length >= 2 ? calculateDailyKc(completeKc, activeDae) : null;
+  const tooltipRoot = activeDae == null ? null : activeDae <= (dae ?? 0)
+    ? hoverRow?.root ?? null
+    : completeRoot.length >= 2 ? calculateRootDepthMeters(completeRoot, activeDae) : null;
+  const seasonDateRange = dae != null
+    ? fullDateAtDae(last.date, dae, 0) + " – " + fullDateAtDae(last.date, dae, endDae)
+    : "Ciclo sem DAE";
+  const metric = (symbol: string, title: string, value: string, subtitle: string, color: string) => (
+    <div key={title} className="flex min-h-[102px] items-start gap-2.5 rounded-xl border border-slate-200 bg-white px-3 py-4 shadow-sm dark:border-white/10 dark:bg-white/[0.04]">
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl text-[21px]"
+        style={{ color, backgroundColor: color + "12" }} aria-hidden="true">{symbol}</span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{title}</p>
+        <p className="mt-1 text-[22px] font-extrabold leading-tight text-slate-900 dark:text-white">{value}</p>
+        <p className="mt-1 text-[11px] leading-snug text-slate-500 dark:text-slate-400">{subtitle}</p>
+      </div>
     </div>
   );
+
   return (
-    <div className="space-y-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
+    <div className="space-y-4" aria-label="Desenvolvimento da cultura, Kc e profundidade radicular">
+      <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-[21px] font-black tracking-tight text-slate-900 dark:text-white">
-            Desenvolvimento da cultura
-          </h2>
+          <div className="flex flex-wrap items-center gap-3">
+            <h2 className="text-[23px] font-black tracking-tight text-slate-900 dark:text-white">
+              {cropName ?? "Cultura"} - {varietyName ?? "cultivar não cadastrada"}
+            </h2>
+            {kcCurve && <span className="rounded-full bg-emerald-100 px-3 py-1 text-[11px] font-bold text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+              Curva ativa · cultivar/cultura
+            </span>}
+          </div>
           <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-            {cropName??"Cultura"} · {varietyName??"Cultivar não cadastrada"} ·
-            fenologia, consumo potencial e sistema radicular até hoje
+            {pivotName ?? "Pivô"}{seasonName ? "  |  " + seasonName : ""} ·
+            evolução por DAE cadastrado, valores do balanço e curvas aprovadas
           </p>
         </div>
-        <div className="rounded-full border border-emerald-300/40 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-300">
-          Somente dados do cadastro e do balanço
-        </div>
+      </header>
+
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
+        {metric("◈", "Estádio atual", audit.currentStage?.code ?? "Não definido",
+          audit.currentStage ? audit.currentStage.label : "Sem data fenológica cadastrada", "#059669")}
+        {metric("▦", "DAE", dae == null ? "—" : String(dae),
+          r8Dae != null ? "de " + r8Dae + " dias até R8 (estimado)" : "Ciclo final não cadastrado", "#0284c7")}
+        {metric("⌁", "Kc atual", fmt(last.kc, 2), "Conforme cálculo do motor", "#0284c7")}
+        {metric("♧", "Prof. radicular efetiva", effectiveCm == null ? "—" : fmt(last.rootDepth, 2) + " m",
+          rootLimited ? "Potencial: " + fmt(estimatedCm! / 100, 2) + " m" : "Raiz usada no balanço", "#7c3aed")}
+        {metric("▱", "Fase da cultura", last.phase ?? "—", "Macroestádio do manejo", "#d97706")}
+        {metric("◷", "Ciclo estimado", r8Dae == null ? "—" : r8Dae + " dias",
+          r8Dae == null ? "Cadastre R8 da cultivar" : "VE → R8 · referência", "#f97316")}
       </div>
 
-      <div className="grid grid-cols-2 gap-2 lg:grid-cols-4">
-        {metric("Estádio identificado",
-          model.currentStage?.code??"Não definido",
-          model.currentStage ? model.currentStage.label+" · DAE "+model.currentStage.dae+" ("+model.stageOrigin+")"
-            : "Cadastre os DAE fenológicos da cultivar")}
-        {metric("Idade da cultura",dae==null?"—":dae+" DAE",last.phase+" · fase do motor")}
-        {metric("Kc usado no balanço",fmt(last.kc,2),kcCurveLabel??"Kc do motor (sem curva ativa)")}
-        {metric("Raiz efetiva no balanço",effectiveCm==null?"—":fmt(effectiveCm,0)+" cm",
-          rootLimited ? "Limite do perfil cadastrado" : "Profundidade explorada no solo")}
-      </div>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 dark:border-white/10 dark:bg-[#0b202b]">
-        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+      <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-graphite-900 sm:p-5">
+        <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-[16px] font-extrabold text-slate-900 dark:text-white">Linha do tempo fenológica</h3>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400">
-              VE → VC → V1, V2… → R1 a R8. Datas previstas/calibradas são do cadastro; não são medições de campo.
+            <h3 className="text-[17px] font-extrabold text-slate-900 dark:text-white">
+              Desenvolvimento da cultura, Kc e profundidade radicular
+            </h3>
+            <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+              Estádios fenológicos, Kc diário e crescimento radicular em um único gráfico.
             </p>
           </div>
-          <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">
-            {dae==null?"DAE indisponível":"Até "+dae+" DAE"}
-          </span>
-        </div>
-        {dae==null ? <p className="rounded-lg bg-amber-50 p-4 text-[12px] text-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
-          Falta uma referência válida de emergência para posicionar o desenvolvimento da cultura.
-        </p> : (
-          <svg viewBox="0 0 1160 198" className="w-full" role="img"
-            aria-label="Linha do tempo do desenvolvimento fenológico até o dia atual">
-            <line x1={plot.left} y1={plot.lineY} x2={plot.right} y2={plot.lineY} stroke="#cbd5e1" strokeWidth={9} strokeLinecap="round" opacity={.5}/>
-            {reached.length>0&&<line x1={plot.left} y1={plot.lineY}
-              x2={pos(reached[reached.length-1].dae??0)} y2={plot.lineY} stroke="#10b981" strokeWidth={9} strokeLinecap="round"/>}
-            {Array.from({length:6},(_,i)=>i).map(i=>(
-              <g key={i}>
-                <line x1={pos(dae*i/5)} y1={plot.lineY+11} x2={pos(dae*i/5)} y2={plot.lineY+16} stroke="#64748b"/>
-                <text x={pos(dae*i/5)} y={plot.lineY+32} textAnchor="middle" fontSize={13}
-                  className="fill-slate-500 dark:fill-slate-400">{Math.round(dae*i/5)}</text>
-              </g>
-            ))}
-            {reached.map((m,i)=>{
-              const cx=pos(m.dae??0),cy=i%2===0?plot.firstY:plot.secondY;
-              return <g key={m.code+"-"+m.dae}>
-                <line x1={cx} x2={cx} y1={cy+23} y2={plot.lineY-8}
-                  stroke={m.current?"#059669":"#64748b"} strokeWidth={1.4} strokeOpacity={.8}/>
-                <circle cx={cx} cy={plot.lineY} r={m.current?8:5} fill={m.current?"#059669":"#3b82f6"}
-                  stroke="white" strokeWidth={1.3}/>
-                <rect x={cx-22} y={cy} width={44} height={23} rx={6}
-                  fill={m.current?"#047857":m.code.startsWith("R")?"#b45309":"#145c8b"}/>
-                <text x={cx} y={cy+16} textAnchor="middle" fontSize={12.5} fontWeight={800} fill="white">{m.code}</text>
-                <title>{m.code} · {m.label} · {m.dae} DAE ({m.origin})</title>
-              </g>;
-            })}
-            <line x1={pos(dae)} x2={pos(dae)} y1={18} y2={plot.lineY+15}
-              stroke="#10b981" strokeWidth={2} strokeDasharray="5 5" />
-            <text x={plot.right} y={186} textAnchor="end" fontSize={12} className="fill-emerald-600 dark:fill-emerald-400">
-              HOJE · {dae} DAE
-            </text>
-          </svg>
-        )}
-        {soy && (
-          <div className="mt-3 grid gap-3 border-t border-slate-200 pt-3 dark:border-white/10 xl:grid-cols-2">
-            {[{label:"Desenvolvimento vegetativo",items:veg},{label:"Desenvolvimento reprodutivo",items:repro}].map(group=>(
-              <div key={group.label}>
-                <p className="mb-2 text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{group.label}</p>
-                <div className="flex flex-wrap gap-1.5">
-                  {group.items.map(m=>(
-                    <span key={m.code} title={m.dae!=null?m.label+" · "+m.dae+" DAE ("+m.origin+")":"Sem DAE cadastrado"}
-                      className={"inline-flex min-w-[46px] justify-center rounded-md border px-2 py-1.5 text-[11px] font-bold "+
-                        (m.current?"border-emerald-500 bg-emerald-600 text-white":
-                         m.reached?"border-sky-300 bg-sky-50 text-sky-800 dark:border-sky-700 dark:bg-sky-900/35 dark:text-sky-200":
-                         "border-slate-200 bg-slate-50 text-slate-400 dark:border-white/10 dark:bg-white/[0.025] dark:text-slate-500")}>
-                      {m.code}{m.reached&&m.dae!=null?<span className="ml-1 font-normal opacity-75">{m.dae}d</span>:""}
-                    </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 dark:border-white/10 dark:text-slate-200">
+              {seasonDateRange}
+            </span>
+            <div className="flex rounded-lg border border-slate-200 bg-slate-100 p-1 dark:border-white/10 dark:bg-white/[0.06]"
+              role="group" aria-label="Eixo horizontal do desenvolvimento">
+              {(["dae", "date"] as const).map((mode) => (
+                <button key={mode} type="button" onClick={() => setAxisMode(mode)}
+                  aria-pressed={axisMode === mode}
+                  className={"rounded-md px-3 py-1.5 text-[11px] font-bold " +
+                    (axisMode === mode ? "bg-emerald-700 text-white shadow-sm" : "text-slate-500 dark:text-slate-300")}>
+                  {mode === "dae" ? "DAE" : "Data"}
+                </button>
+              ))}
+            </div>
+            <div className="relative">
+              <button type="button" aria-expanded={showPicker}
+                onClick={() => setShowPicker((s) => !s)}
+                className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:text-white dark:hover:bg-white/10">
+                ⚙ Variáveis do gráfico
+              </button>
+              {showPicker && (
+                <div className="absolute right-0 top-full z-20 mt-2 min-w-[220px] rounded-xl border border-slate-200 bg-white p-3 shadow-xl dark:border-white/10 dark:bg-[#13262e]">
+                  <p className="mb-2 text-[11px] font-extrabold text-slate-800 dark:text-white">Exibir no gráfico</p>
+                  {([
+                    ["kc", "Kc da cultura"],
+                    ["root", "Raiz efetiva (histórico)"],
+                    ["potential", "Curvas futuras aprovadas"],
+                    ["stages", "Faixas fenológicas"],
+                  ] as const).map(([key, label]) => (
+                    <label key={key} className="flex cursor-pointer items-center gap-2 py-1.5 text-[12px] text-slate-700 dark:text-slate-200">
+                      <input type="checkbox" checked={visible[key]}
+                        onChange={(event) => setVisible((old) => ({ ...old, [key]: event.target.checked }))}
+                        className="accent-emerald-600" />
+                      {label}
+                    </label>
                   ))}
+                  <button type="button" onClick={() => {
+                    setVisible({ kc: true, root: true, potential: true, stages: true });
+                  }} className="mt-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
+                    Mostrar todas
+                  </button>
                 </div>
-              </div>
-            ))}
+              )}
+            </div>
+          </div>
+        </div>
+
+        {dae == null || observed.length === 0 ? (
+          <div className="rounded-xl bg-amber-50 p-6 text-[12px] text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
+            DAE ou histórico do balanço indisponível. Cadastre a referência de emergência e recalcule o manejo.
+          </div>
+        ) : (
+          <div className="w-full overflow-x-auto">
+            <svg viewBox="0 0 1190 414" className="block min-w-[900px] w-full"
+              role="img" aria-label="Gráfico único de desenvolvimento da cultura com Kc e profundidade radicular">
+              <defs>
+                <clipPath id="culture-development-clip">
+                  <rect x={plot.left} y={plot.top} width={plotWidth} height={plotHeight} />
+                </clipPath>
+              </defs>
+
+              {visible.stages && (
+                <g>
+                  {groupBands.map((group, i) => {
+                    const palette = stagePalette[group.group] ?? stagePalette["Estádios vegetativos"];
+                    const bx = px(group.start), bw = Math.max(0, px(group.end) - bx);
+                    return <g key={group.group + i}>
+                      <rect x={bx} y={plot.top} width={bw} height={plotHeight}
+                        fill={palette.fill} opacity={.62} />
+                      <rect x={bx} y={20} width={bw} height={34} fill={palette.header} />
+                      {bw >= 98 && <text x={bx + bw / 2} y={41} textAnchor="middle"
+                        fontSize={13} fontWeight={800} fill="#334155">{group.group}</text>}
+                    </g>;
+                  })}
+                  {stageBands.map((stage, i) => {
+                    const bx = px(stage.start), bw = Math.max(0, px(stage.end) - bx);
+                    return <g key={stage.code + "-" + i}>
+                      <rect x={bx} y={54} width={bw} height={29}
+                        fill={stagePalette[stage.group]?.fill ?? "#f1f5f9"} opacity={.95}/>
+                      <line x1={bx} y1={54} x2={bx} y2={plot.bottom}
+                        stroke="#475569" strokeOpacity={.09} />
+                      {bw >= 18 && <text x={bx + bw / 2} y={72} textAnchor="middle"
+                        fontSize={bw >= 32 ? 12 : 10} fontWeight={800} fill="#334155">{stage.code}</text>}
+                      <title>{stage.code} · {stage.label} · a partir de {stage.dae} DAE ({stage.origin})</title>
+                    </g>;
+                  })}
+                  {visibleStages.length === 0 && <text x={plot.left + 12} y={63}
+                    fontSize={12} fill="#b45309">Marcos fenológicos não cadastrados: faixas indisponíveis</text>}
+                </g>
+              )}
+
+              {[0,.25,.5,.75,1].map((part) => (
+                <g key={part}>
+                  <line x1={plot.left} x2={plot.right} y1={plot.bottom - part * plotHeight}
+                    y2={plot.bottom - part * plotHeight} stroke="#64748b" strokeOpacity={.14} />
+                  <text x={plot.left - 10} y={plot.bottom - part * plotHeight + 4}
+                    textAnchor="end" fontSize={13} fill="#64748b">{fmt(rootAxisMax * part, 2)}</text>
+                  <text x={plot.right + 10} y={plot.bottom - part * plotHeight + 4}
+                    textAnchor="start" fontSize={13} fill="#64748b">{fmt(kcAxisMax * part, 2)}</text>
+                </g>
+              ))}
+              <text x={16} y={plot.top + plotHeight / 2} transform={"rotate(-90 16 " + (plot.top + plotHeight / 2) + ")"}
+                textAnchor="middle" fontSize={13} fontWeight={700} fill="#334155">Profundidade radicular (m)</text>
+              <text x={1168} y={plot.top + plotHeight / 2}
+                transform={"rotate(90 1168 " + (plot.top + plotHeight / 2) + ")"}
+                textAnchor="middle" fontSize={13} fontWeight={700} fill="#334155">Kc</text>
+
+              {Array.from({length:7},(_,i)=>endDae*i/6).map((d,i)=>(
+                <g key={i}>
+                  <line x1={px(d)} x2={px(d)} y1={plot.bottom} y2={plot.bottom + 5} stroke="#94a3b8"/>
+                  <text x={px(d)} y={plot.bottom + 20} textAnchor="middle" fontSize={12} fill="#64748b">
+                    {axisMode === "dae" ? Math.round(d) : dateAtDae(last.date,dae,d)}
+                  </text>
+                </g>
+              ))}
+              <text x={(plot.left + plot.right)/2} y={390} textAnchor="middle" fontSize={13}
+                fontWeight={700} fill="#475569">
+                {axisMode === "dae" ? "DAE (dias após emergência)" : "Data do ciclo"}
+              </text>
+
+              <g clipPath="url(#culture-development-clip)">
+                {visible.kc && kcObserved.length > 0 && (
+                  <polyline points={trace(kcObserved, pyKc)} fill="none" stroke="#047857"
+                    strokeWidth={3.6} strokeLinejoin="round" strokeLinecap="round" />
+                )}
+                {visible.root && rootAvailable && (
+                  <polyline points={trace(rootObserved, pyRoot)} fill="none" stroke="#1672ef"
+                    strokeWidth={3.6} strokeLinejoin="round" strokeLinecap="round" />
+                )}
+                {visible.kc && visible.potential && futureKc.length > 1 && (
+                  <polyline points={trace(futureKc, pyKc)} fill="none" stroke="#047857"
+                    strokeWidth={3} strokeDasharray="8 5" opacity={.76} strokeLinejoin="round"/>
+                )}
+                {visible.root && visible.potential && futureRoot.length > 1 && (
+                  <polyline points={trace(futureRoot, pyRoot)} fill="none" stroke="#1672ef"
+                    strokeWidth={3} strokeDasharray="8 5" opacity={.76} strokeLinejoin="round"/>
+                )}
+                {todayX != null && (
+                  <line x1={todayX} x2={todayX} y1={plot.top} y2={plot.bottom}
+                    stroke="#065f46" strokeDasharray="6 5" strokeWidth={1.6} opacity={.84}/>
+                )}
+                {visible.kc && todayX != null && (
+                  <circle cx={todayX} cy={pyKc(last.kc)} r={6}
+                    fill="#047857" stroke="white" strokeWidth={2} />
+                )}
+                {visible.root && todayX != null && (
+                  <circle cx={todayX} cy={pyRoot(last.rootDepth)} r={6}
+                    fill="#1672ef" stroke="white" strokeWidth={2} />
+                )}
+              </g>
+
+              {todayX != null && (
+                <g>
+                  <rect x={Math.min(plot.right - 114, Math.max(plot.left, todayX - 48))} y={1}
+                    width={122} height={20} rx={5} fill="#065f46"/>
+                  <text x={Math.min(plot.right - 53, Math.max(plot.left + 61, todayX + 13))}
+                    y={15} textAnchor="middle" fill="#ecfdf5" fontSize={11} fontWeight={800}>
+                    HOJE · {dae} DAE
+                  </text>
+                </g>
+              )}
+              {activeDae != null && (
+                <g>
+                  <rect x={Math.min(plot.right - 202, Math.max(plot.left + 8, px(activeDae) - 82))}
+                    y={plot.top + 14} width={200} height={75} rx={8} fill="#0f2336" opacity={.96}/>
+                  <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
+                    y={plot.top + 32} fill="white" fontSize={12} fontWeight={800}>
+                    {activeDae > dae ? "Referência · " : "Histórico · "}{Math.round(activeDae)} DAE
+                  </text>
+                  <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
+                    y={plot.top + 49} fill="#e2e8f0" fontSize={12}>
+                    Estádio: {hoverStage?.code ?? "não definido"}
+                  </text>
+                  <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
+                    y={plot.top + 65} fill="#e2e8f0" fontSize={12}>
+                    Kc: {tooltipKc == null ? "—" : fmt(tooltipKc, 2)} · Raiz: {tooltipRoot == null ? "—" : fmt(tooltipRoot, 2) + " m"}
+                  </text>
+                </g>
+              )}
+              <rect x={plot.left} y={plot.top} width={plotWidth} height={plotHeight}
+                fill="transparent" onMouseMove={(event) => {
+                  const box = event.currentTarget.getBoundingClientRect();
+                  const fraction = (event.clientX - box.left) / Math.max(1, box.width);
+                  setHoverDae(Math.round(Math.max(0, Math.min(1, fraction)) * endDae));
+                }}
+                onMouseLeave={() => setHoverDae(null)}>
+                <title>Passe o cursor para consultar DAE, Kc, raiz e estádio</title>
+              </rect>
+            </svg>
           </div>
         )}
-        {missing.length>0 && soy && (
-          <p className="mt-3 text-[11px] text-amber-700 dark:text-amber-300">
-            {missing.length} estádio(s) sem DAE cadastrado. As etiquetas em cinza não representam previsão de ocorrência;
-            complete a escala fenológica da cultivar para posicioná-las na linha do tempo.
+        <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-slate-100 py-3 dark:border-white/10">
+          {visible.kc && <GraphLegend color="#047857" name="Kc (direita)"/>}
+          {visible.root && <GraphLegend color="#1672ef" name="Profundidade radicular efetiva (esquerda)"/>}
+          {visible.potential && <GraphLegend color="#64748b" name="Referência futura cadastrada" dashed/>}
+          {visible.stages && Object.entries(stagePalette).map(([label,palette]) => (
+            <span key={label} className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">
+              <span className="h-3 w-3 rounded-sm" style={{background:palette.header}}/>{label}
+            </span>
+          ))}
+        </div>
+
+        <div className="border-t border-slate-100 pt-3 dark:border-white/10">
+          <h4 className="text-[13px] font-extrabold text-slate-800 dark:text-white">
+            Estádios e parâmetros da cultivar
+          </h4>
+          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
+            DAE, Kc e profundidade radicular por estádio cadastrado.
+            Referências futuras são estimativas da cultivar; não representam medições de campo.
           </p>
-        )}
+          <div className="mt-3 flex gap-1 overflow-x-auto pb-2">
+            {audit.stages.map((stage) => {
+              const stageDae = stage.dae;
+              const kcAtStage = stageDae != null && completeKc.length >= 2
+                ? calculateDailyKc(completeKc, stageDae) : null;
+              const rootAtStage = stageDae != null && completeRoot.length >= 2
+                ? calculateRootDepthMeters(completeRoot, stageDae)
+                : observed.find((row) => row.dae === stageDae)?.root ?? null;
+              const palette = stagePalette[groupFor(stage.code)] ?? stagePalette["Estádios vegetativos"];
+              return (
+                <div key={stage.code} title={stageDae == null ? "Sem DAE cadastrado" :
+                  stage.label + " · " + stageDae + " DAE (" + stage.origin + ")"}
+                  className={"min-w-[100px] flex-1 rounded-lg border px-2 py-3 text-center " +
+                    (stage.current ? "border-amber-500 bg-amber-50 shadow-sm dark:bg-amber-800/20" :
+                      "border-slate-200 dark:border-white/10")}
+                  style={stage.current ? undefined : {backgroundColor:palette.fill}}>
+                  <p className="text-[13px] font-black text-slate-800">{stage.code}</p>
+                  <p className="mt-1 text-[10px] font-semibold text-slate-600">
+                    {stageDae == null ? "DAE —" : stageDae + " DAE"}
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-700">
+                    Kc: {kcAtStage == null ? "—" : fmt(kcAtStage,2)}
+                  </p>
+                  <p className="mt-1 text-[10px] text-slate-700">
+                    Raiz: {rootAtStage == null ? "—" : fmt(rootAtStage,2) + " m"}
+                  </p>
+                  {stage.current && <p className="mt-1 text-[10px] font-bold text-amber-700">Atual</p>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
       </section>
 
-      <div className="grid gap-3 xl:grid-cols-2">
-        <MiniSeries title="Kc ao longo do desenvolvimento" subtitle="Histórico diário efetivamente utilizado pelo balanço · ETc potencial = ETo × Kc"
-          values={kcData} color="#0d9488" unit="Kc" cap={1.25}/>
-        <MiniSeries title="Crescimento radicular efetivo" subtitle="Raiz diária limitada à profundidade de solo cadastrada"
-          values={rootData} color="#8b5cf6" unit="cm"/>
-      </div>
-      {rootLimited && (
-        <p className="rounded-xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-[12px] font-medium text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/20 dark:text-amber-200">
-          Raiz estimada pela curva da cultura: {fmt(estimatedCm!,0)} cm. Profundidade efetiva usada no balanço:
-          {" "+fmt(effectiveCm!,0)} cm. A diferença vem do limite de solo cadastrado; não significa que toda a raiz esteja
-          comprovadamente explorando esse perfil.
-        </p>
-      )}
-      <div className={"rounded-xl border px-3 py-2.5 text-[11px] "+
-        (model.issues.length?"border-amber-300/50 bg-amber-50 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/20 dark:text-amber-200":
+      {rootLimited && <p className="rounded-xl border border-amber-300/50 bg-amber-50 px-4 py-3 text-[12px] font-medium text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/20 dark:text-amber-200">
+        Raiz potencial da cultura: {fmt(estimatedCm! / 100,2)} m; raiz efetiva usada no balanço:
+        {" " + fmt(last.rootDepth,2)} m. O perfil de solo limita o cálculo da água disponível.
+      </p>}
+      <div className={"rounded-xl border px-3 py-2.5 text-[11px] " +
+        (audit.issues.length ? "border-amber-300/50 bg-amber-50 text-amber-900 dark:border-amber-500/25 dark:bg-amber-950/20 dark:text-amber-200" :
           "border-emerald-300/50 bg-emerald-50 text-emerald-900 dark:border-emerald-600/25 dark:bg-emerald-900/10 dark:text-emerald-200")}>
         <p className="font-extrabold">
-          {model.issues.length?"Conferências e dados a revisar":"Coerência dos dados do desenvolvimento"}
+          {audit.issues.length ? "Conferências e dados a revisar" : "Coerência dos dados do desenvolvimento"}
         </p>
-        <p className="mt-1">Kc confrontado com curva aprovada em {model.checkedKcDays} dia(s).
-          A fenologia é um calendário estimado/calibrado, não identificação visual automática da lavoura.</p>
-        {model.issues.map((issue,i)=><p key={i} className="mt-1">• {issue}</p>)}
+        <p className="mt-1">Kc confrontado com curva ativa em {audit.checkedKcDays} dia(s).
+          Fenologia por idade esperada/calibrada, não por observação automática da planta.
+          ETc potencial = ETo × Kc; sem Kl.</p>
+        {audit.issues.map((issue,i)=><p key={i} className="mt-1">• {issue}</p>)}
       </div>
     </div>
   );
