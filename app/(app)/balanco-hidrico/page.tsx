@@ -2041,6 +2041,7 @@ function BalanceTab({
   );
   const [tblFilter, setTblFilter] = useState("");
   const [showFilter, setShowFilter] = useState(false);
+  const [auditColumnsView, setAuditColumnsView] = useState<"essencial" | "completa">("essencial");
 
   const filteredRows = tblFilter.trim()
     ? rows.filter((r) => {
@@ -2188,20 +2189,32 @@ function BalanceTab({
     const endLabel = rows[seasonDays - 1]?.date
       ? fmtDia(rows[seasonDays - 1].date) + "/" + rows[seasonDays - 1].date.slice(0, 4)
       : "—";
+    // A tabela inteira continua disponível (30 variáveis). A visualização
+    // resumida segue o modelo aprovado, com todas as demais na opção Completa.
+    const essentialHeaders = new Set([
+      "Data", "Fase", "Kc", "ETo", "ETc", "Chuva", "Irrig.", "Entradas", "Saídas",
+      "Saldo", "CTA (mm)", "CRA", "ARM", "% CC", "Déficit", "Lâm. rec.", "Status",
+    ]);
+    const shownColumns = auditColumnsView === "completa"
+      ? columns : columns.filter(col => essentialHeaders.has(col.header));
     return (
-      <Card className="overflow-hidden p-0">
-        <div className="flex flex-wrap items-start justify-between gap-4 border-b border-gray-100 bg-forest-900 px-5 py-4 text-white dark:border-white/[0.07]">
-          <div className="min-w-0">
-            <p className="text-[11px] font-bold uppercase tracking-wider text-brand-200">Monitoramento e rastreabilidade</p>
-            <h3 className="mt-1 text-[19px] font-extrabold leading-snug sm:text-[22px]">Tabela detalhada do balanço hídrico</h3>
-            <p className="mt-1 text-[13px] text-brand-100/90">
-              {head.seasonName ? `Safra ${head.seasonName} · ` : "Safra · "}
-              {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
-              {" · "}{startLabel} a {endLabel} · {seasonDays} dias calculados
-            </p>
-            <p className="mt-1 text-[12px] text-brand-100/70">Histórico real do motor hídrico desde a condição inicial · não acompanha os filtros dos gráficos.</p>
+      <section className="overflow-hidden rounded-xl border border-[#d5e6dd] bg-white text-slate-800 shadow-[0_6px_26px_rgba(0,0,0,.12)]"
+        aria-label="Tabela detalhada do balanço hídrico da safra">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[23px] font-extrabold text-emerald-700" aria-hidden="true">▦</span>
+            <div className="min-w-0">
+              <h3 className="text-[17px] font-extrabold text-slate-900">Tabela detalhada do balanço hídrico
+                <span className="ml-2 text-[13px] font-normal text-slate-500">— auditoria diária da safra</span>
+              </h3>
+              <p className="text-[12px] text-slate-600">
+                {head.seasonName ? `Safra ${head.seasonName} · ` : "Safra · "}
+                {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
+                {" · "}{startLabel} a {endLabel} · {seasonDays} dias calculados
+              </p>
+            </div>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {showFilter && (
               <label className="sr-only" htmlFor="season-audit-filter">Filtrar por data ou fase</label>
             )}
@@ -2209,45 +2222,36 @@ function BalanceTab({
               <input id="season-audit-filter" type="text" autoFocus value={tblFilter}
                 onChange={(event) => setTblFilter(event.target.value)}
                 placeholder="Data ou fase…"
-                className="w-44 rounded-lg border border-white/20 bg-white px-3 py-2 text-[14px] font-medium text-graphite-800 outline-none focus:border-emerald-400"
+                className="w-36 rounded-lg border border-slate-300 bg-white px-3 py-2 text-[13px] font-medium text-slate-900 outline-none focus:border-emerald-500"
               />
             )}
             <button type="button" onClick={() => { setShowFilter(value => !value); if (showFilter) setTblFilter(""); }}
-              className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[13px] font-semibold text-white hover:bg-white/20">
-              {showFilter ? "Fechar filtro" : "Filtrar dias"}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              {showFilter ? "Fechar filtro" : "Filtros"}
             </button>
-            <button type="button" onClick={exportCsv} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[13px] font-semibold text-white hover:bg-white/20">
-              Exportar CSV/Excel
+            <button type="button" onClick={() => setAuditColumnsView(value => value === "essencial" ? "completa" : "essencial")}
+              aria-pressed={auditColumnsView === "completa"}
+              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-900 hover:bg-emerald-100">
+              {auditColumnsView === "essencial" ? "Todas as variáveis" : "Visão essencial"}
             </button>
-            <button type="button" onClick={() => window.print()} className="rounded-lg border border-white/20 bg-white/10 px-3 py-2 text-[13px] font-semibold text-white hover:bg-white/20">
-              Imprimir / PDF
+            <button type="button" onClick={exportCsv}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              Exportar Excel
+            </button>
+            <button type="button" onClick={() => window.print()}
+              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              Exportar PDF
             </button>
           </div>
         </div>
-        <div className="grid grid-cols-2 gap-px bg-santa-900 sm:grid-cols-4 xl:grid-cols-6">
-          {[
-            { label: "Dias calculados", value: String(summary.days) },
-            { label: "Irrigação realizada", value: `${summary.totalIrrigation.toFixed(1)} mm` },
-            { label: "Chuva registrada", value: `${summary.totalPrecipitation.toFixed(1)} mm` },
-            { label: "Chuva efetiva", value: `${summary.totalEffPrecipitation.toFixed(1)} mm` },
-            { label: "ETc acumulada", value: `${summary.totalETc.toFixed(1)} mm` },
-            { label: "Dias de déficit", value: String(summary.daysInDeficit) },
-          ].map(item => (
-            <div key={item.label} className="bg-forest-900 px-4 py-3 text-white">
-              <p className="text-[11px] font-semibold text-brand-200/85">{item.label}</p>
-              <p className="mt-1 text-[19px] font-bold tabular-nums">{item.value}</p>
-            </div>
-          ))}
+        <div className="season-audit-table max-h-[min(70vh,790px)] overflow-auto px-2 pb-2" data-view={auditColumnsView}
+          role="region" aria-label="Histórico diário da safra, com cabeçalho fixo e rolagem horizontal" tabIndex={0}>
+          <Table columns={shownColumns} data={filteredRows} getKey={row => row.date} />
         </div>
-        <div className="px-4 py-2 text-[12px] text-graphite-500 dark:text-gray-400">
-          Exibindo {filteredRows.length} de {seasonDays} dias da safra. Deslize a tabela horizontalmente para consultar todas as variáveis.
-          A exportação respeita o filtro aplicado.
+        <div className="border-t border-slate-100 bg-white px-4 py-2 text-[12px] text-slate-500">
+          {filteredRows.length} de {seasonDays} dias da safra · {auditColumnsView === "essencial" ? "17 colunas essenciais" : "Todas as variáveis do balanço"} · a exportação inclui todas as colunas e respeita o filtro.
         </div>
-        <div className="season-audit-table max-h-[min(66vh,780px)] overflow-auto px-2 pb-2" role="region"
-          aria-label="Tabela detalhada da safra, com rolagem horizontal e vertical" tabIndex={0}>
-          <Table columns={columns} data={filteredRows} getKey={row => row.date} />
-        </div>
-      </Card>
+      </section>
     );
   }
 
