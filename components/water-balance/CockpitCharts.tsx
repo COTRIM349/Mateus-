@@ -488,10 +488,10 @@ export function KcCurveReadOnlyChart({
         </g>
       ))}
 
-      {/* Marcos R1/R2/Rn: posicionamento apenas pelo DAE cadastrado/calibrado.
+      {/* Estádios específicos da soja e do algodão, posicionados pelo DAE cadastrado/calibrado.
           Sem data do cadastro, não cria marca inventada. */}
       {markers
-        .filter((marker) => /^R[1-8]$/.test(marker.code) && marker.dae >= 0 && marker.dae <= dae)
+        .filter((marker) => /^(VE|VC|VN|V\d+|R[1-8](?:\.\d+)?|B\d+|F\d+|C\d+)$/i.test(marker.code.trim()) && Number.isFinite(marker.dae) && marker.dae >= 0 && marker.dae <= dae)
         .map((marker, i) => {
           const markerX = x(marker.dae);
           const badgeX = Math.max(padL, Math.min(markerX - 19, W - padR - 40));
