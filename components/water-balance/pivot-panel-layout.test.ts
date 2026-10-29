@@ -34,6 +34,9 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(culturePanel).toContain("Variáveis do gráfico");
     expect(culturePanel).toContain("rootCurve");
     expect(culturePanel).toContain("stageBands.map");
+    expect(culturePanel).toContain("PhenologyStageEditor");
+    expect(culturePanel).toContain("activeFieldObservation");
+    expect(culturePanel).toContain("REGISTRO DE CAMPO");
     expect(culturePanel).toContain("buildCropDevelopmentBands(culturePhases, daeOffsetFromPlanting)");
     expect(culturePanel).toContain("phaseBands.map((band)");
     expect(culturePanel).toContain("activeDae = hoverDae");
