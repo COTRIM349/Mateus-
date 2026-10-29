@@ -202,9 +202,6 @@ body:has(.decision-reference-shell) .app-readable-ui > main {
 .decision-reference-shell {
   background: linear-gradient(170deg, #073a2a 0%, #062f23 45%, #05271e 100%);
 }
-.decision-reference-shell :is(.dark\\:bg-graphite-900, .dark\\:bg-white\\/\\[0\\.04\\]) {
-  color-scheme: dark;
-}
 /* O cabeçalho do pivô e a seleção das abas seguem a paleta da fazenda
    sem afetar o cabeçalho da aba Dados. */
 .decision-reference-shell .decision-header-chip {
@@ -263,7 +260,7 @@ body:has(.decision-reference-shell) .app-readable-ui > main {
 .decision-reference-shell .season-audit-table table {
   background: #0b392b;
 }
-.decision-reference-shell .season-audit-table :is(.text-red-600, .dark\\:text-red-400) {
+.decision-reference-shell .season-audit-table .text-red-600 {
   color: #fda4af !important;
 }
 .decision-reference-shell .season-audit-table :is(.text-blue-600, .text-cyan-600) {
