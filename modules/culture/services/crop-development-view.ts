@@ -2,6 +2,7 @@
 import type { PhenologyChartMarker } from "./phenology-chart-markers";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import { calculateDailyKc } from "./agronomic-engine";
+import { compareStageCodes } from "./phenology-observed";
 
 export const SOY_STAGE_CODES = [
   "VE", "VC", "V1", "V2", "V3", "V4", "V5", "V6", "V7", "V8", "V9", "V10",
@@ -26,13 +27,6 @@ export interface DevelopmentAudit {
 }
 
 const normalize = (s: string) => s.trim().toUpperCase();
-const order = (s: string) => {
-  const code=normalize(s);
-  if (code==="VE") return -2;
-  if (code==="VC") return -1;
-  const m=/^([VR])(\d+)$/.exec(code);
-  return m ? (m[1]==="V" ? Number(m[2]) : 100+Number(m[2])) : 1000;
-};
 
 /** Calibração tem precedência somente se o alvo foi ativado no cadastro. */
 export function buildDevelopmentAudit(input: {
@@ -46,19 +40,32 @@ export function buildDevelopmentAudit(input: {
   const dae= currentDae != null && Number.isFinite(currentDae) ? Math.max(0,currentDae) : null;
   const validMarkers = markers.filter(m=>Number.isFinite(m.dae) && m.dae>=0)
     .map(m=>({...m,code:normalize(m.code)}));
+  // Não descartar Vn nem subdivisões R5.1–R5.5 já cadastradas na plataforma.
   const stageCodes = isSoy
-    ? Array.from(new Set<string>([...SOY_STAGE_CODES,...validMarkers.map(m=>m.code).filter(s=>/^V\d+$|^R[1-8]$/.test(s))])).sort((a,b)=>order(a)-order(b))
-    : validMarkers.map(m=>m.code);
+    ? Array.from(new Set<string>([
+        ...SOY_STAGE_CODES,
+        ...validMarkers.map(m=>m.code).filter(s=>/^(VE|VC|VN|V\d+|R[1-8](?:\.\d+)?)$/.test(s)),
+      ])).sort(compareStageCodes)
+    : Array.from(new Set(validMarkers.map(m=>m.code))).sort(compareStageCodes);
   const stages: DevelopmentMilestone[] = stageCodes.map(code=>{
     const m=validMarkers.find(x=>x.code===code);
     return {code,label:m?.label??code,dae:m?.dae??null,origin:m?.origin??null,
       reached:dae!=null && m!=null && m.dae<=dae,current:false};
   });
-  const reached=stages.filter(s=>s.reached).sort((a,b)=>(a.dae??0)-(b.dae??0));
-  const currentStage=reached.at(-1)??null;
+  const reached=stages.filter(s=>s.reached)
+    .sort((a,b)=>(a.dae??0)-(b.dae??0)||compareStageCodes(a.code,b.code));
+  const lastDae=reached.at(-1)?.dae;
+  const simultaneous=lastDae==null?[]:reached.filter(s=>s.dae===lastDae);
+  const isAmbiguous=simultaneous.length>1;
+  // DAE idêntico para R5.1–R5.5 não é observação de todos os estádios no mesmo dia.
+  const currentStage=(isAmbiguous
+    ? [...reached].reverse().find(s=>s.dae!==lastDae)
+    : reached.at(-1))??null;
   if(currentStage) currentStage.current=true;
   const issues:string[]=[];
   if (dae == null) issues.push("DAE atual não disponível: não é possível posicionar estádios.");
+  if(isAmbiguous) issues.push("Vários estádios compartilham "+lastDae+" DAE ("+
+    simultaneous.map(s=>s.code).join(", ")+"): subdivisões precisam de calibração de campo.");
   if(isSoy && stages.filter(s=>s.dae!=null).length<4)
     issues.push("Fenologia da cultivar incompleta: cadastre DAE de VE, VC, V1, V2 e demais estádios para acompanhar sua progressão.");
   const sortedCodes = stages.filter(s=>s.dae!=null);
