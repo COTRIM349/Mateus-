@@ -94,7 +94,7 @@ export function DecisionSoilLayerPanel({
       </div>
       <p className="px-4 pb-4 text-[12px] leading-relaxed text-emerald-100/80">
         CTA e DTA são calculadas a partir de CC, PMP e espessura cadastradas, com recorte na profundidade radicular.
-        CRA (AFD) = CTA × F semanal. **ARM estimada por camada** é um rateio proporcional da ARM total do balanço, assumindo
+        CRA (AFD) = CTA × F semanal. <strong>ARM estimada por camada</strong> é um rateio proporcional da ARM total do balanço, assumindo
         esgotamento relativo uniforme; não representa uma medição individual de umidade nem informa qual camada está mais seca.
         Para o diagnóstico real por camada, utilize sensores ou amostragem.
       </p>
