@@ -47,3 +47,20 @@ export function cropDevelopmentStageLabel(
 ) {
   return stageCode ?? (phaseName?.trim() || "Não definido");
 }
+
+
+/** Estado somente visual das faixas; não altera as fases/DAE cadastrados. */
+export function isCropPhaseShown(phaseName: string, hiddenPhases: readonly string[]): boolean {
+  return !hiddenPhases.includes(phaseName);
+}
+
+export function setCropPhaseShown(
+  hiddenPhases: readonly string[],
+  phaseName: string,
+  shown: boolean,
+): string[] {
+  const hidden = new Set(hiddenPhases);
+  if (shown) hidden.delete(phaseName);
+  else hidden.add(phaseName);
+  return Array.from(hidden);
+}

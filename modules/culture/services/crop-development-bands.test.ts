@@ -1,5 +1,5 @@
 import { describe,it,expect } from "vitest";
-import { buildCropDevelopmentBands,cropDevelopmentStageLabel } from "./crop-development-bands";
+import { buildCropDevelopmentBands,cropDevelopmentStageLabel,isCropPhaseShown,setCropPhaseShown } from "./crop-development-bands";
 import type { CulturePhase } from "./culture.service";
 const phase=(name:string,phase_order:number,days_after_plant:number,duration_days:number,phase_key?:string)=>({
   name,phase_order,days_after_plant,duration_days,phase_key,kc_start:.4,kc_end:1.15,
@@ -21,4 +21,22 @@ describe("faixas macrofenológicas ancoradas no cadastro",()=>{
   expect(cropDevelopmentStageLabel(null,"Formação de vagens")).toBe("Formação de vagens");
   expect(cropDevelopmentStageLabel("R3","Formação de vagens")).toBe("R3");
  });
+});
+
+
+describe("seleção visual das fases do gráfico", () => {
+  it("oculta e restaura cada faixa de forma independente", () => {
+    const hidden = setCropPhaseShown([], "Florescimento", false);
+    expect(isCropPhaseShown("Florescimento", hidden)).toBe(false);
+    expect(isCropPhaseShown("Vegetativo", hidden)).toBe(true);
+    const moreHidden = setCropPhaseShown(hidden, "Maturação", false);
+    expect(moreHidden).toEqual(["Florescimento", "Maturação"]);
+    expect(setCropPhaseShown(moreHidden, "Florescimento", true)).toEqual(["Maturação"]);
+    expect(hidden).toEqual(["Florescimento"]);
+    expect(isCropPhaseShown("Maturação", [])).toBe(true);
+  });
+  it("não duplica fases ao desmarcar mais de uma vez", () => {
+    const hidden = setCropPhaseShown(setCropPhaseShown([], "Florescimento", false), "Florescimento", false);
+    expect(hidden).toEqual(["Florescimento"]);
+  });
 });
