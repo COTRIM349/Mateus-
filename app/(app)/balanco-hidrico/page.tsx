@@ -1533,7 +1533,9 @@ export default function BalancoHidricoPage() {
       {/* Navegação principal do manejo — cada aba tem função própria. */}
       {selectedPivotId && assignment && (
         <>
-          <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
+          <div className={activeTab === "decisao"
+            ? "decision-tabs rounded-2xl border border-emerald-400/25 bg-[#0b4532] px-3 pt-1"
+            : "rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900"}>
             <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
           </div>
 
@@ -1890,7 +1892,7 @@ function DecisionForecast({ projection, last }: { projection: DailyBalanceRow[];
 
 function HeaderChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
+    <div className="decision-header-chip rounded-xl border border-gray-200 bg-white px-3 py-1.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
       <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{label}</p>
       <p className="max-w-[140px] truncate text-[12.5px] font-bold text-graphite-800 dark:text-white">{value}</p>
     </div>
