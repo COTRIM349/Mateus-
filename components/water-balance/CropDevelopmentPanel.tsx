@@ -54,7 +54,8 @@ function fullDateAtDae(lastDate: string, currentDae: number, targetDae: number) 
 
 const groupFor = (code: string) => {
   if (/^R[78]$/.test(code)) return "Maturação";
-  if (/^R[3-6]$/.test(code)) return "Enchimento de grãos";
+  if (/^R[34]$/.test(code)) return "Formação de vagens";
+  if (/^R[56](?:\.\d+)?$/.test(code)) return "Enchimento de grãos";
   if (/^R[12]$/.test(code)) return "Florescimento";
   return "Estádios vegetativos";
 };
@@ -62,6 +63,7 @@ const groupFor = (code: string) => {
 const stagePalette: Record<string, { fill: string; header: string }> = {
   "Estádios vegetativos": { fill: "#e3faf0", header: "#b5efd5" },
   "Florescimento": { fill: "#fff8d4", header: "#fdec9d" },
+  "Formação de vagens": { fill: "#ffedd5", header: "#fdba74" },
   "Enchimento de grãos": { fill: "#fff0df", header: "#fed6ab" },
   "Maturação": { fill: "#ffe6e6", header: "#fac6c6" },
 };
@@ -124,6 +126,7 @@ export function CropDevelopmentPanel({
     [culturePhases, daeOffsetFromPlanting],
   );
   const phaseEnd = Math.max(0, ...phaseBands.map((b) => b.end));
+  const expectedNotValidated = markers.some(m=>m.origin==="esperado" && m.confidence==="nao_validada");
   // Legenda e seletor exibem as mesmas fases; nomes repetidos no cadastro
   // compartilham um único controle e nenhum filtro modifica o balanço.
   const phaseChoices = phaseBands.length
@@ -179,7 +182,7 @@ export function CropDevelopmentPanel({
   const rootAvailable = observed.length > 0;
   const visibleStages = stageDated.filter((s) => (s.dae ?? 0) <= endDae);
 
-  // Segmentos resultam EXCLUSIVAMENTE de marcos fenológicos com DAE cadastrados.
+  // Se R5.1–R5.5 compartilham DAE, mantemos os marcos mas NÃO sobrepomos faixas.
   const stageBands = visibleStages.map((stage, i) => {
     const next = visibleStages[i + 1]?.dae;
     const end = next != null ? next : endDae;
@@ -274,7 +277,10 @@ export function CropDevelopmentPanel({
               Desenvolvimento fenológico da cultura
             </h3>
             <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-              Fases coloridas do ciclo, curva de Kc e crescimento radicular no mesmo eixo de tempo.
+              Fases coloridas, estádios detalhados da cultivar, Kc e crescimento radicular.
+              {markers.length>0 && <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
+                {markers.length} marcos da cultivar carregados
+              </span>}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -343,6 +349,12 @@ export function CropDevelopmentPanel({
           </div>
         </div>
 
+        {expectedNotValidated && (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
+            DAE da fenologia são referências estimadas da cultivar e ainda não foram validados em campo.
+            Observações registradas na parcela têm identificação própria; as curvas de Kc e raiz não são recalculadas ao exibir esses marcos.
+          </p>
+        )}
         {audit.currentStage == null && fieldStage == null && (
           <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
             {phaseBands.length > 0

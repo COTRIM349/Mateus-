@@ -30,3 +30,23 @@ describe("desenvolvimento de soja por estádio",()=>{
   expect(result.stageOrigin).toBe("não cadastrado");
  });
 });
+
+describe("subestádios existentes no cadastro da cultivar",()=>{
+ it("inclui VN e R5.1/R5.5 na escala da soja sem descartar linhas do cadastro",()=>{
+  const result=buildDevelopmentAudit({isSoy:true,currentDae:75,
+    markers:[marker("R5.5",83),marker("R5.1",83),marker("R5",73),marker("VN",31),
+      marker("R1",37),marker("V2",15),marker("VC",7),marker("VE",0)],
+    rows:[row(75,1.15)],kcCurve:[{x:0,y:.4},{x:85,y:1.15}]});
+  expect(result.stages.map(s=>s.code).filter(c=>["VE","VC","V2","VN","R1","R5","R5.1","R5.5"].includes(c)))
+    .toEqual(["VE","VC","V2","VN","R1","R5","R5.1","R5.5"]);
+  expect(result.stages.find(s=>s.code==="R5.5")?.dae).toBe(83);
+  expect(result.currentStage?.code).toBe("R5");
+ });
+ it("não presume o subestádio R5.5 se todos compartilham 83 DAE",()=>{
+  const stages=[marker("R5",73),...["R5.1","R5.2","R5.3","R5.4","R5.5"].map(c=>marker(c,83))];
+  const result=buildDevelopmentAudit({isSoy:true,currentDae:84,markers:stages,
+    rows:[row(84,1.1)],kcCurve:[{x:0,y:.4},{x:100,y:1.15}]});
+  expect(result.currentStage?.code).toBe("R5");
+  expect(result.issues.some(x=>x.includes("Vários estádios compartilham"))).toBe(true);
+ });
+});

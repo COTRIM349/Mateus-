@@ -624,7 +624,7 @@ export default function BalancoHidricoPage() {
           .eq("active", true)
           .order("marker_order"),
         supabase.from("culture_variety_phenology_targets")
-          .select("marker_id,expected_dae,calibrated_dae,use_calibrated")
+          .select("marker_id,expected_dae,calibrated_dae,use_calibrated,confidence")
           .eq("variety_id", varietyId),
         supabase.from("phenology_observations")
           .select("id,marker_id,observed_date,dae,quality,notes")

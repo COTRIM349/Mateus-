@@ -11,6 +11,7 @@ export interface PhenologyTargetRow {
   expected_dae: number | null;
   calibrated_dae: number | null;
   use_calibrated: boolean;
+  confidence?: "alta" | "media" | "baixa" | "nao_validada" | null;
 }
 
 export interface PhenologyChartMarker {
@@ -18,6 +19,7 @@ export interface PhenologyChartMarker {
   label: string;
   dae: number;
   origin: "calibrado" | "esperado";
+  confidence?: string | null;
 }
 
 export function buildPhenologyChartMarkers(
@@ -39,6 +41,7 @@ export function buildPhenologyChartMarkers(
         label: marker.name,
         dae,
         origin: calibrated ? "calibrado" as const : "esperado" as const,
+        ...(target.confidence ? { confidence: target.confidence } : {}),
       }];
     })
     .sort((a, b) => a.dae - b.dae);

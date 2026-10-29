@@ -34,6 +34,8 @@ describe("painéis de manejo hídrico por pivô", () => {
     expect(culturePanel).toContain("Variáveis do gráfico");
     expect(culturePanel).toContain("rootCurve");
     expect(culturePanel).toContain("stageBands.map");
+    expect(culturePanel).toContain("marcos da cultivar carregados");
+    expect(culturePanel).toContain("Formação de vagens");
     // Legenda deixa de ser texto estático e passa a mostrar/ocultar faixas individuais.
     expect(culturePanel).toContain('aria-label="Selecionar fases fenológicas"');
     expect(culturePanel).toContain("aria-pressed={isActive}");
