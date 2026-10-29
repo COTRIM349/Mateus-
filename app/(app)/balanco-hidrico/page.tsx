@@ -32,6 +32,8 @@ import { fao56ReferenceDepletionByName } from "@/modules/water-balance/services/
 import { calculateHydricZoneBounds } from "@/modules/water-balance/services/map-hydric-status";
 import { type CulturePhase } from "@/modules/culture/services";
 import { buildPhenologyChartMarkers, type PhenologyChartMarker, type PhenologyMarkerRow, type PhenologyTargetRow } from "@/modules/culture/services/phenology-chart-markers";
+import type { PhenologyStageOption, PhenologyFieldObservation } from "@/modules/culture/services/phenology-observed";
+import type { PhenologyObservationContext } from "@/components/water-balance/PhenologyStageEditor";
 import {
   buildOperationalPivotSoil,
   mapDbLayersToProfile,
@@ -305,6 +307,11 @@ export default function BalancoHidricoPage() {
   const [soilLayers, setSoilLayers] = useState<SoilProfileLayer[]>([]);
   const [phases, setPhases] = useState<CulturePhase[]>([]);
   const [phenologyMarkers, setPhenologyMarkers] = useState<PhenologyChartMarker[]>([]);
+  const [phenologyStageOptions,setPhenologyStageOptions]=useState<PhenologyStageOption[]>([]);
+  const [phenologyFieldObservations,setPhenologyFieldObservations]=useState<PhenologyFieldObservation[]>([]);
+  const onPhenologyObservationSaved=useCallback((saved:PhenologyFieldObservation)=>{
+    setPhenologyFieldObservations(previous=>[...previous.filter(p=>p.id!==saved.id),saved]);
+  },[]);
   const [hydricAnchor, setHydricAnchor] = useState<HydricAnchor | null>(null);
   const [showInitialForm, setShowInitialForm] = useState(false);
   const [balanceRows, setBalanceRows] = useState<DailyBalanceRow[]>([]);
@@ -600,12 +607,16 @@ export default function BalancoHidricoPage() {
     const varietyId = assignment?.culture_variety_id ?? assignment?.variety_id;
     if (!assignment?.culture_id || !varietyId) {
       setPhenologyMarkers([]);
+      setPhenologyStageOptions([]);
+      setPhenologyFieldObservations([]);
       return;
     }
     let cancelled = false;
     setPhenologyMarkers([]);
+    setPhenologyStageOptions([]);
+    setPhenologyFieldObservations([]);
     (async () => {
-      const [markersRes, targetsRes] = await Promise.all([
+      const [markersRes, targetsRes,observationsRes] = await Promise.all([
         supabase.from("culture_phenology_markers")
           .select("id,stage_code,name,marker_order")
           .eq("culture_id", assignment.culture_id)
@@ -614,16 +625,27 @@ export default function BalancoHidricoPage() {
         supabase.from("culture_variety_phenology_targets")
           .select("marker_id,expected_dae,calibrated_dae,use_calibrated")
           .eq("variety_id", varietyId),
+        supabase.from("phenology_observations")
+          .select("id,marker_id,observed_date,dae,quality,notes")
+          .eq("pivot_crop_assignment_id",assignment.id)
+          .order("observed_date",{ascending:true}),
       ]);
       if (cancelled) return;
-      if (markersRes.error || targetsRes.error) {
-        setPhenologyMarkers([]);
-        return;
+      // Estádios da cultura são selecionáveis, mesmo sem DAE previsto na cultivar.
+      if (!markersRes.error) {
+        const source=(markersRes.data??[]) as PhenologyMarkerRow[];
+        setPhenologyStageOptions(source.map(m=>({
+          id:m.id,code:m.stage_code.toUpperCase(),name:m.name,order:m.marker_order,
+        })));
+        if(!targetsRes.error) setPhenologyMarkers(buildPhenologyChartMarkers(
+          source,(targetsRes.data??[]) as PhenologyTargetRow[],
+        ));
       }
-      setPhenologyMarkers(buildPhenologyChartMarkers(
-        (markersRes.data ?? []) as PhenologyMarkerRow[],
-        (targetsRes.data ?? []) as PhenologyTargetRow[],
-      ));
+      if(!observationsRes.error){
+        setPhenologyFieldObservations(
+          (observationsRes.data??[]) as PhenologyFieldObservation[],
+        );
+      }
     })();
     return () => { cancelled = true; };
   }, [assignment?.id, assignment?.culture_id, assignment?.culture_variety_id, assignment?.variety_id, supabase]);
@@ -1638,6 +1660,14 @@ export default function BalancoHidricoPage() {
                 rootCurve={rootCurveView}
                 culturePhases={phases}
                 phenologyMarkers={phenologyMarkers}
+                phenologyStageOptions={phenologyStageOptions}
+                phenologyFieldObservations={phenologyFieldObservations}
+                phenologyObservationContext={activeFarmId && assignment ? {
+                  farmId:activeFarmId,assignmentId:assignment.id,
+                  cultureId:assignment.culture_id,
+                  varietyId:assignment.culture_variety_id??assignment.variety_id,
+                }:null}
+                onPhenologyObservationSaved={onPhenologyObservationSaved}
                 daeOffsetFromPlanting={
                   assignment?.planting_date && assignment?.emergence_date
                     ? Math.max(0, daysBetweenIso(assignment.planting_date, assignment.emergence_date))
@@ -2667,6 +2697,10 @@ function Cockpit({
   rootCurve = null,
   culturePhases = [],
   phenologyMarkers = [],
+  phenologyStageOptions = [],
+  phenologyFieldObservations = [],
+  phenologyObservationContext = null,
+  onPhenologyObservationSaved,
   daeOffsetFromPlanting = 0,
 }: {
   rows: DailyBalanceRow[];
@@ -2692,6 +2726,10 @@ function Cockpit({
   culturePhases?: CulturePhase[];
   /** Estádios por cultivar com DAE esperado ou calibrado, sem inventar R1/R2. */
   phenologyMarkers?: PhenologyChartMarker[];
+  phenologyStageOptions?: PhenologyStageOption[];
+  phenologyFieldObservations?: PhenologyFieldObservation[];
+  phenologyObservationContext?: PhenologyObservationContext|null;
+  onPhenologyObservationSaved?: (saved:PhenologyFieldObservation)=>void;
   /** Diferença plantio→emergência para alinhar DAP das fases com DAE do manejo. */
   daeOffsetFromPlanting?: number;
 }) {
@@ -2829,6 +2867,10 @@ function Cockpit({
               <CropDevelopmentPanel
                 rows={rows}
                 markers={phenologyMarkers}
+                stageOptions={phenologyStageOptions}
+                fieldObservations={phenologyFieldObservations}
+                observationContext={phenologyObservationContext}
+                onObservationSaved={onPhenologyObservationSaved}
                 kcCurve={kcCurve?.points ?? null}
                 rootCurve={rootCurve}
                 culturePhases={culturePhases}
