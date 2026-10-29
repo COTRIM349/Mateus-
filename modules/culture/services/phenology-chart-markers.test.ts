@@ -39,3 +39,14 @@ describe("marcos fenológicos reais no gráfico Kc", () => {
     ]);
   });
 });
+
+  it("preserva o alerta de confiança do cadastro sem confundir estimativa com dado de campo",()=>{
+    const out=buildPhenologyChartMarkers(markers,[{
+      marker_id:"r1",expected_dae:38,calibrated_dae:null,use_calibrated:false,
+      confidence:"nao_validada",
+    }]);
+    expect(out).toEqual([{
+      code:"R1",label:"Início do florescimento",dae:38,origin:"esperado",
+      confidence:"nao_validada",
+    }]);
+  });

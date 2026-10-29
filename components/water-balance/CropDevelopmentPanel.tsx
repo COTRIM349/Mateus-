@@ -126,6 +126,7 @@ export function CropDevelopmentPanel({
     [culturePhases, daeOffsetFromPlanting],
   );
   const phaseEnd = Math.max(0, ...phaseBands.map((b) => b.end));
+  const expectedNotValidated = markers.some(m=>m.origin==="esperado" && m.confidence==="nao_validada");
   // Legenda e seletor exibem as mesmas fases; nomes repetidos no cadastro
   // compartilham um único controle e nenhum filtro modifica o balanço.
   const phaseChoices = phaseBands.length
@@ -348,6 +349,12 @@ export function CropDevelopmentPanel({
           </div>
         </div>
 
+        {expectedNotValidated && (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
+            DAE da fenologia são referências estimadas da cultivar e ainda não foram validados em campo.
+            Observações registradas na parcela têm identificação própria; as curvas de Kc e raiz não são recalculadas ao exibir esses marcos.
+          </p>
+        )}
         {audit.currentStage == null && fieldStage == null && (
           <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
             {phaseBands.length > 0
