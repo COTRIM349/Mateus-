@@ -57,7 +57,6 @@ import { cn } from "@/utils/cn";
 import { type ReservatorioPoint } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 import { DecisionMonitoringReferenceLayout } from "@/components/water-balance/DecisionMonitoringReferenceLayout";
-import { navItems } from "@/config/navigation";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -1495,46 +1494,8 @@ export default function BalancoHidricoPage() {
 
   return (
     <div className={activeTab === "decisao"
-      ? "decision-reference-shell flex min-w-0 gap-3 rounded-2xl bg-[#061d17] p-2 text-white lg:gap-4 lg:p-3"
+      ? "decision-reference-shell min-w-0 space-y-3 rounded-xl bg-[#073326] p-3 text-white lg:p-4"
       : "space-y-4"}>
-      {activeTab === "decisao" && (
-        <aside className="sticky top-[84px] hidden h-[calc(100vh-100px)] w-[220px] shrink-0 flex-col rounded-xl border border-emerald-900/60 bg-gradient-to-b from-[#063223] to-[#041e18] px-2.5 py-5 text-white lg:flex">
-          <div className="mb-5 border-b border-emerald-500/20 px-3 pb-5">
-            <p className="text-[15px] font-black leading-tight tracking-tight text-white">SANTA COLOMBA</p>
-            <p className="text-[13px] font-extrabold tracking-wide text-emerald-400">IRRIGA PRO</p>
-          </div>
-          <nav aria-label="Navegação lateral do monitoramento" className="space-y-1">
-            {([
-              { label:"Visão Geral", href:"/" },
-              { label:"Balanço Hídrico", href:"/balanco-hidrico" },
-              { label:"Manejo da Irrigação", href:"/central-manejo" },
-              { label:"Clima e Previsão", href:"/clima" },
-              { label:"Solo", href:"/solos" },
-              { label:"Cultura", href:"/culturas" },
-              { label:"Relatórios", href:"/relatorios" },
-              { label:"Talhões e Equipamentos", href:"/pivos" },
-              { label:"Configurações", href:"/configuracoes" },
-            ] as const).map(item => {
-              const iconPath = navItems.find(nav => nav.href === item.href)?.icon;
-              return (
-                <Link key={item.href} href={item.href} aria-current={item.href === "/balanco-hidrico" ? "page" : undefined}
-                  className={`flex min-h-[43px] items-center gap-3 rounded-lg px-3 text-[13px] font-semibold transition-colors ${item.href === "/balanco-hidrico"
-                    ? "border-l-[3px] border-emerald-400 bg-emerald-700/50 text-white"
-                    : "text-emerald-100/85 hover:bg-white/10 hover:text-white"}`}>
-                  <svg className="h-[19px] w-[19px] shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.7} aria-hidden="true">
-                    <path d={iconPath ?? "M4 12h16M12 4v16"} strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                  {item.label}
-                </Link>
-              );
-            })}
-          </nav>
-          <div className="mt-auto border-t border-emerald-400/15 px-3 pt-4 text-[12px] text-emerald-100/70">
-            Monitoramento operacional da safra
-          </div>
-        </aside>
-      )}
-      <div className={activeTab === "decisao" ? "min-w-0 flex-1 space-y-3" : "contents"}>
       {/* Cabeçalho — central de decisão */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
@@ -1572,23 +1533,11 @@ export default function BalancoHidricoPage() {
       {/* Navegação principal do manejo — cada aba tem função própria. */}
       {selectedPivotId && assignment && (
         <>
-          {activeTab === "decisao" ? (
-            <div role="tablist" aria-label="Abas do balanço hídrico" className="flex gap-1 border-b border-emerald-500/35">
-              {TABS.map(item => (
-                <button key={item.id} type="button" role="tab" aria-selected={activeTab === item.id}
-                  onClick={() => setActiveTab(item.id as typeof activeTab)}
-                  className={`min-w-[120px] rounded-t-lg border px-5 py-2.5 text-[14px] font-bold transition-colors ${activeTab === item.id
-                    ? "border-emerald-500 bg-emerald-800/55 text-emerald-300"
-                    : "border-transparent bg-white/[0.03] text-emerald-100/80 hover:bg-white/10"}`}>
-                  {item.label}
-                </button>
-              ))}
-            </div>
-          ) : (
-            <div className="rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900">
-              <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
-            </div>
-          )}
+          <div className={activeTab === "decisao"
+            ? "decision-tabs rounded-2xl border border-emerald-400/25 bg-[#0b4532] px-3 pt-1"
+            : "rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900"}>
+            <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
+          </div>
 
           {activeTab === "dados" && <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-2 dark:border-white/[0.06] dark:bg-white/[0.025]">
             <div className="min-w-0">
@@ -1757,7 +1706,6 @@ export default function BalancoHidricoPage() {
         </div>
       )}
 
-      </div>
     </div>
   );
 }
@@ -1944,7 +1892,7 @@ function DecisionForecast({ projection, last }: { projection: DailyBalanceRow[];
 
 function HeaderChip({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-gray-200 bg-white px-3 py-1.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
+    <div className="decision-header-chip rounded-xl border border-gray-200 bg-white px-3 py-1.5 dark:border-white/[0.08] dark:bg-white/[0.04]">
       <p className="text-[9.5px] font-semibold uppercase tracking-wide text-graphite-400 dark:text-gray-500">{label}</p>
       <p className="max-w-[140px] truncate text-[12.5px] font-bold text-graphite-800 dark:text-white">{value}</p>
     </div>
@@ -2198,16 +2146,16 @@ function BalanceTab({
     const shownColumns = auditColumnsView === "completa"
       ? columns : columns.filter(col => essentialHeaders.has(col.header));
     return (
-      <section className="overflow-hidden rounded-xl border border-[#d5e6dd] bg-white text-slate-800 shadow-[0_6px_26px_rgba(0,0,0,.12)]"
+      <section className="overflow-hidden rounded-xl border border-emerald-400/25 bg-[#0b382b] text-emerald-50 shadow-[0_6px_26px_rgba(0,0,0,.12)]"
         aria-label="Tabela detalhada do balanço hídrico da safra">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/20 bg-[#084a34] px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-50 text-[23px] font-extrabold text-emerald-700" aria-hidden="true">▦</span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#126548] text-[23px] font-extrabold text-emerald-100" aria-hidden="true">▦</span>
             <div className="min-w-0">
-              <h3 className="text-[17px] font-extrabold text-slate-900">Tabela detalhada do balanço hídrico
-                <span className="ml-2 text-[13px] font-normal text-slate-500">— auditoria diária da safra</span>
+              <h3 className="text-[17px] font-extrabold text-white">Tabela detalhada do balanço hídrico
+                <span className="ml-2 text-[13px] font-normal text-emerald-100/80">— auditoria diária da safra</span>
               </h3>
-              <p className="text-[12px] text-slate-600">
+              <p className="text-[12px] text-emerald-100/80">
                 {head.seasonName ? `Safra ${head.seasonName} · ` : "Safra · "}
                 {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
                 {" · "}{startLabel} a {endLabel} · {seasonDays} dias calculados
@@ -2226,20 +2174,20 @@ function BalanceTab({
               />
             )}
             <button type="button" onClick={() => { setShowFilter(value => !value); if (showFilter) setTblFilter(""); }}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              className="rounded-lg border border-emerald-400/30 bg-[#0c6042] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#117653]">
               {showFilter ? "Fechar filtro" : "Filtros"}
             </button>
             <button type="button" onClick={() => setAuditColumnsView(value => value === "essencial" ? "completa" : "essencial")}
               aria-pressed={auditColumnsView === "completa"}
-              className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-semibold text-emerald-900 hover:bg-emerald-100">
+              className="rounded-lg border border-emerald-300/45 bg-[#126548] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#19855e]">
               {auditColumnsView === "essencial" ? "Todas as variáveis" : "Visão essencial"}
             </button>
             <button type="button" onClick={exportCsv}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              className="rounded-lg border border-emerald-400/30 bg-[#0c6042] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#117653]">
               Exportar Excel
             </button>
             <button type="button" onClick={() => window.print()}
-              className="rounded-lg border border-slate-300 bg-white px-3 py-2 text-[12px] font-semibold text-slate-700 hover:bg-slate-50">
+              className="rounded-lg border border-emerald-400/30 bg-[#0c6042] px-3 py-2 text-[12px] font-semibold text-white hover:bg-[#117653]">
               Exportar PDF
             </button>
           </div>
@@ -2248,7 +2196,7 @@ function BalanceTab({
           role="region" aria-label="Histórico diário da safra, com cabeçalho fixo e rolagem horizontal" tabIndex={0}>
           <Table columns={shownColumns} data={filteredRows} getKey={row => row.date} />
         </div>
-        <div className="border-t border-slate-100 bg-white px-4 py-2 text-[12px] text-slate-500">
+        <div className="border-t border-emerald-400/20 bg-[#0a3528] px-4 py-2 text-[12px] text-emerald-100/80">
           {filteredRows.length} de {seasonDays} dias da safra · {auditColumnsView === "essencial" ? "17 colunas essenciais" : "Todas as variáveis do balanço"} · a exportação inclui todas as colunas e respeita o filtro.
         </div>
       </section>
