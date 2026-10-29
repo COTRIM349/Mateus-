@@ -3,6 +3,8 @@
 import { useMemo, useState } from "react";
 import { calculateDailyKc, calculateRootDepthMeters } from "@/modules/culture/services/agronomic-engine";
 import { buildDevelopmentAudit } from "@/modules/culture/services/crop-development-view";
+import { buildCropDevelopmentBands, cropDevelopmentStageLabel } from "@/modules/culture/services/crop-development-bands";
+import type { CulturePhase } from "@/modules/culture/services/culture.service";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import type { PhenologyChartMarker } from "@/modules/culture/services/phenology-chart-markers";
 
@@ -16,6 +18,8 @@ interface Props {
   markers: PhenologyChartMarker[];
   kcCurve: CurvePoint[] | null;
   rootCurve?: CurvePoint[] | null;
+  culturePhases?: CulturePhase[];
+  daeOffsetFromPlanting?: number;
   kcCurveLabel?: string | null;
   cropName: string | null;
   varietyName: string | null;
@@ -74,7 +78,7 @@ function GraphLegend({ color, name, dashed = false }: { color: string; name: str
  */
 export function CropDevelopmentPanel({
   rows, markers, kcCurve, rootCurve = null, kcCurveLabel, cropName,
-  varietyName, pivotName, seasonName,
+  varietyName, pivotName, seasonName, culturePhases = [], daeOffsetFromPlanting = 0,
 }: Props) {
   const [axisMode, setAxisMode] = useState<AxisMode>("dae");
   const [showPicker, setShowPicker] = useState(false);
@@ -106,13 +110,18 @@ export function CropDevelopmentPanel({
     .filter((s) => s.dae != null && Number.isFinite(s.dae))
     .sort((a, b) => (a.dae ?? 0) - (b.dae ?? 0));
   const r8Dae = audit.stages.find((s) => s.code === "R8")?.dae ?? null;
+  const phaseBands = useMemo(
+    () => buildCropDevelopmentBands(culturePhases, daeOffsetFromPlanting),
+    [culturePhases, daeOffsetFromPlanting],
+  );
+  const phaseEnd = Math.max(0, ...phaseBands.map((b) => b.end));
   const curveEnd = Math.max(0,
     ...(kcCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
     ...(rootCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
   );
   // Só expande a linha do tempo se o calendário/curva aprovados contiverem pontos futuros.
   // Sem referência, não inventa duração para os estádios não cadastrados.
-  const endDae = Math.max(1, dae ?? 0, r8Dae ?? 0, curveEnd,
+  const endDae = Math.max(1, dae ?? 0, r8Dae ?? 0, curveEnd, phaseEnd,
     ...stageDated.map((s) => s.dae ?? 0));
   const effectiveCm = Number.isFinite(last.rootDepth) ? last.rootDepth * 100 : null;
   const estimatedCm = last.rootDepthEstimated != null && Number.isFinite(last.rootDepthEstimated)
@@ -164,13 +173,17 @@ export function CropDevelopmentPanel({
     else groupBands.push({ group: stage.group, start: stage.start, end: stage.end });
   }
   const todayX = dae != null ? px(dae) : null;
-  const activeDae = hoverDae ?? dae;
+  const activeDae = hoverDae;
   const hoverRow = activeDae != null
     ? [...observed].reverse().find((row) => row.dae <= activeDae)
     : null;
   const hoverStage = activeDae != null
     ? [...visibleStages].reverse().find((s) => (s.dae ?? 0) <= activeDae)
     : null;
+  const hoverPhase = activeDae != null
+    ? phaseBands.find((b) => b.start <= activeDae && b.end > activeDae)
+    : null;
+  const selectedPhenology = cropDevelopmentStageLabel(audit.currentStage?.code, last.phase);
   const tooltipKc = activeDae == null ? null : activeDae <= (dae ?? 0)
     ? hoverRow?.kc ?? null
     : completeKc.length >= 2 ? calculateDailyKc(completeKc, activeDae) : null;
@@ -212,26 +225,28 @@ export function CropDevelopmentPanel({
       </header>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
-        {metric("◈", "Estádio atual", audit.currentStage?.code ?? "Não definido",
-          audit.currentStage ? audit.currentStage.label : "Sem data fenológica cadastrada", "#059669")}
+        {metric("◈", "Estádio / fase atual", selectedPhenology,
+          audit.currentStage ? audit.currentStage.label + " · calendário da cultivar"
+            : "Macrofase do manejo · VE/Vn/Rn sem calibração", "#059669")}
         {metric("▦", "DAE", dae == null ? "—" : String(dae),
           r8Dae != null ? "de " + r8Dae + " dias até R8 (estimado)" : "Ciclo final não cadastrado", "#0284c7")}
         {metric("⌁", "Kc atual", fmt(last.kc, 2), "Conforme cálculo do motor", "#0284c7")}
         {metric("♧", "Prof. radicular efetiva", effectiveCm == null ? "—" : fmt(last.rootDepth, 2) + " m",
           rootLimited ? "Potencial: " + fmt(estimatedCm! / 100, 2) + " m" : "Raiz usada no balanço", "#7c3aed")}
         {metric("▱", "Fase da cultura", last.phase ?? "—", "Macroestádio do manejo", "#d97706")}
-        {metric("◷", "Ciclo estimado", r8Dae == null ? "—" : r8Dae + " dias",
-          r8Dae == null ? "Cadastre R8 da cultivar" : "VE → R8 · referência", "#f97316")}
+        {metric("◷", "Ciclo estimado", r8Dae != null ? r8Dae + " dias" :
+          phaseEnd > 0 ? Math.round(phaseEnd) + " dias" : "—",
+          r8Dae != null ? "VE → R8 · cultivar" : "Duração das fases cadastradas", "#f97316")}
       </div>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm dark:border-white/10 dark:bg-graphite-900 sm:p-5">
         <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
           <div>
-            <h3 className="text-[17px] font-extrabold text-slate-900 dark:text-white">
-              Desenvolvimento da cultura, Kc e profundidade radicular
+            <h3 className="text-[18px] font-extrabold text-slate-900 dark:text-white">
+              Desenvolvimento fenológico da cultura
             </h3>
             <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-              Estádios fenológicos, Kc diário e crescimento radicular em um único gráfico.
+              Fases coloridas do ciclo, curva de Kc e crescimento radicular no mesmo eixo de tempo.
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -282,12 +297,19 @@ export function CropDevelopmentPanel({
           </div>
         </div>
 
+        {audit.currentStage == null && (
+          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
+            {phaseBands.length > 0
+              ? "As faixas coloridas vêm do cadastro das fases da cultura. Para indicar VE, VC, V1…R8 no dia correto, cadastre os DAE esperados ou calibrados da cultivar."
+              : "Não há fases nem datas de estádios registrados: complete o cadastro fenológico para preencher o desenvolvimento."}
+          </p>
+        )}
         {dae == null || observed.length === 0 ? (
           <div className="rounded-xl bg-amber-50 p-6 text-[12px] text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
             DAE ou histórico do balanço indisponível. Cadastre a referência de emergência e recalcule o manejo.
           </div>
         ) : (
-          <div className="w-full overflow-x-auto">
+          <div className="w-full overflow-x-auto rounded-xl border border-slate-100 bg-white dark:border-white/10 dark:bg-[#0d2328]">
             <svg viewBox="0 0 1190 414" className="block min-w-[900px] w-full"
               role="img" aria-label="Gráfico único de desenvolvimento da cultura com Kc e profundidade radicular">
               <defs>
@@ -298,7 +320,23 @@ export function CropDevelopmentPanel({
 
               {visible.stages && (
                 <g>
-                  {groupBands.map((group, i) => {
+                  {/* As macrofases reais do cadastro colorem o ciclo mesmo sem VC, V1 ou R1 com DAE. */}
+                  {phaseBands.map((band) => {
+                    const bx=px(band.start),bw=Math.max(0,px(band.end)-bx);
+                    return <g key={band.key}>
+                      <rect x={bx} y={plot.top} width={bw} height={plotHeight}
+                        fill={band.fill} opacity={.82}/>
+                      <rect x={bx} y={21} width={bw} height={33} fill={band.stripe} opacity={.97}/>
+                      <line x1={bx} y1={21} x2={bx} y2={plot.bottom}
+                        stroke={band.text} strokeOpacity={.18}/>
+                      {bw>=44 && <text x={bx+bw/2} y={42} textAnchor="middle"
+                        fontSize={bw>150?15:11} fontWeight={800} fill={band.text}>
+                        {band.label.length>23 && bw<180 ? band.label.slice(0,20)+"…" : band.label}
+                      </text>}
+                      <title>{band.label} · {Math.round(band.start)}–{Math.round(band.end)} DAE · cadastro da cultura</title>
+                    </g>;
+                  })}
+                  {phaseBands.length===0 && groupBands.map((group, i) => {
                     const palette = stagePalette[group.group] ?? stagePalette["Estádios vegetativos"];
                     const bx = px(group.start), bw = Math.max(0, px(group.end) - bx);
                     return <g key={group.group + i}>
@@ -321,8 +359,8 @@ export function CropDevelopmentPanel({
                       <title>{stage.code} · {stage.label} · a partir de {stage.dae} DAE ({stage.origin})</title>
                     </g>;
                   })}
-                  {visibleStages.length === 0 && <text x={plot.left + 12} y={63}
-                    fontSize={12} fill="#b45309">Marcos fenológicos não cadastrados: faixas indisponíveis</text>}
+                  {visibleStages.length === 0 && phaseBands.length === 0 && <text x={plot.left + 12} y={63}
+                    fontSize={12} fill="#b45309">Fases e marcos fenológicos não cadastrados</text>}
                 </g>
               )}
 
@@ -356,6 +394,22 @@ export function CropDevelopmentPanel({
               </text>
 
               <g clipPath="url(#culture-development-clip)">
+                {/* Curvas de referência completas, mais claras, mostram o ciclo cadastrado.
+                    Traços históricos mantêm os dados efetivos em primeiro plano. */}
+                {visible.kc && visible.potential && completeKc.length>=2 && (
+                  <polyline points={trace(
+                    Array.from({length:Math.min(451,Math.floor(endDae)+1)},(_,i)=>({
+                      dae:i, value:calculateDailyKc(completeKc,i),
+                    })),pyKc)} fill="none" stroke="#10b981" opacity={.32}
+                    strokeWidth={2.6} strokeLinejoin="round"/>
+                )}
+                {visible.root && visible.potential && completeRoot.length>=2 && (
+                  <polyline points={trace(
+                    Array.from({length:Math.min(451,Math.floor(endDae)+1)},(_,i)=>({
+                      dae:i,value:calculateRootDepthMeters(completeRoot,i),
+                    })),pyRoot)} fill="none" stroke="#3b82f6" opacity={.28}
+                    strokeWidth={2.6} strokeLinejoin="round"/>
+                )}
                 {visible.kc && kcObserved.length > 0 && (
                   <polyline points={trace(kcObserved, pyKc)} fill="none" stroke="#047857"
                     strokeWidth={3.6} strokeLinejoin="round" strokeLinecap="round" />
@@ -406,7 +460,7 @@ export function CropDevelopmentPanel({
                   </text>
                   <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
                     y={plot.top + 49} fill="#e2e8f0" fontSize={12}>
-                    Estádio: {hoverStage?.code ?? "não definido"}
+                    {hoverStage ? "Estádio: "+hoverStage.code : "Fase: "+(hoverPhase?.label ?? "não cadastrada")}
                   </text>
                   <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
                     y={plot.top + 65} fill="#e2e8f0" fontSize={12}>
@@ -430,7 +484,7 @@ export function CropDevelopmentPanel({
           {visible.kc && <GraphLegend color="#047857" name="Kc (direita)"/>}
           {visible.root && <GraphLegend color="#1672ef" name="Profundidade radicular efetiva (esquerda)"/>}
           {visible.potential && <GraphLegend color="#64748b" name="Referência futura cadastrada" dashed/>}
-          {visible.stages && Object.entries(stagePalette).map(([label,palette]) => (
+          {visible.stages && (phaseBands.length>0 ? phaseBands.map((b)=>[b.label,{header:b.stripe}] as const) : Object.entries(stagePalette)).map(([label,palette]) => (
             <span key={label} className="inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] text-slate-600 dark:text-slate-300">
               <span className="h-3 w-3 rounded-sm" style={{background:palette.header}}/>{label}
             </span>
