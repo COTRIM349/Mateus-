@@ -187,3 +187,59 @@ body {
 .season-audit-table td {
   white-space: nowrap;
 }
+
+/* Exclusivo da aba Decisão e Monitoramento: referência visual aprovada.
+   Não toca na aba Dados nem nos seus SVGs e escalas. */
+@media (min-width: 1024px) {
+  body:has(.decision-reference-shell) [data-irrigapro-topnav="true"] {
+    display: none;
+  }
+}
+.decision-reference-shell .season-audit-table[data-view="essencial"] table {
+  min-width: 1370px;
+}
+.decision-reference-shell .season-audit-table[data-view="completa"] table {
+  min-width: 2500px;
+}
+.decision-reference-shell .season-audit-table table {
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+.decision-reference-shell .season-audit-table th {
+  background: #06432e !important;
+  color: #fff !important;
+  padding: 9px 8px !important;
+  font-size: 12px !important;
+  font-weight: 700;
+  text-transform: none;
+  white-space: nowrap;
+  border: 0;
+}
+.decision-reference-shell .season-audit-table td {
+  padding: 7px 8px !important;
+  font-size: 12px !important;
+  color: #334155 !important;
+  border-bottom: 1px solid #eaf0ee;
+  background: transparent !important;
+}
+.decision-reference-shell .season-audit-table tbody tr:nth-child(even) {
+  background: #f4f8f6;
+}
+.decision-reference-shell .season-audit-table tbody tr:hover {
+  background: #e7f4eb;
+}
+.decision-reference-shell .season-audit-table td span:not([title]) {
+  /* Mantém badges coloridos de status e negativos no balanço. */
+  font-size: inherit;
+}
+@media print {
+  body:has(.decision-reference-shell) [data-irrigapro-topnav="true"],
+  .decision-reference-shell > aside,
+  .decision-reference-shell button {
+    display: none !important;
+  }
+  .decision-reference-shell .season-audit-table {
+    max-height: none !important;
+    overflow: visible !important;
+  }
+}

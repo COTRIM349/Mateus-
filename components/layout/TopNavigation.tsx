@@ -102,7 +102,7 @@ export function TopNavigation() {
   }
 
   return (
-    <div ref={navigationRef} className="relative border-t border-white/10 bg-santa-900">
+    <div ref={navigationRef} data-irrigapro-topnav="true" className="relative border-t border-white/10 bg-santa-900">
       <nav
         aria-label="Navegação principal"
         className="hidden min-h-[55px] flex-wrap items-center gap-1.5 px-4 py-1.5 lg:flex lg:px-6"

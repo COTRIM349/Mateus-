@@ -19,13 +19,29 @@ describe("Decisão e Monitoramento — auditoria de toda a safra", () => {
   });
 
   it("preserva os gráficos de Dados e não exibe a tabela nessa aba", () => {
-    const dados = source.split('{activeTab === "dados"')[1]?.split('{activeTab === "decisao"')[0] ?? "";
+    const dados = source.split('{/* ── ABA DADOS:')[1]?.split('{/* ── ABA DECISÃO:')[0] ?? "";
     expect(dados).toContain("<Cockpit");
     expect(dados).toContain('mode="dados"');
     expect(dados).toContain("rows={balanceRows}");
     expect(dados).not.toContain("<BalanceTab");
     expect(dados).not.toContain('panel="auditoria"');
     expect(dados).not.toContain("Tabela detalhada do balanço");
+  });
+
+  it("replica a referência visual apenas em Decisão e Monitoramento, preservando RAS", () => {
+    const app = readFileSync(join(process.cwd(), "components/water-balance/DecisionMonitoringReferenceLayout.tsx"), "utf8");
+    expect(source).toContain("decision-reference-shell");
+    expect(source).toContain("<DecisionMonitoringReferenceLayout");
+    expect(source).toContain("Todas as variáveis");
+    expect(app).toContain("Recomendação de irrigação");
+    expect(app).toContain("Monitoramento da safra");
+    expect(app).toContain("ETo média (7 dias)");
+    expect(source).toContain("17 colunas essenciais");
+    expect(source).toContain('columns={shownColumns}');
+    expect(css).toContain('.decision-reference-shell .season-audit-table');
+    const dados = source.split('{/* ── ABA DADOS:')[1]?.split('{/* ── ABA DECISÃO:')[0] ?? "";
+    expect(dados).toContain("<Cockpit");
+    expect(dados).not.toContain("DecisionMonitoringReferenceLayout");
   });
 
   it("mantém todos os campos, filtros, CSV e impressão somente em monitoramento", () => {
