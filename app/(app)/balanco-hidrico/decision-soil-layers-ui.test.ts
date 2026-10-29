@@ -28,10 +28,11 @@ describe("Decisão e Monitoramento — verde da fazenda com dados de solo por ca
     expect(page).toContain("/lancamentos/irrigacao");
     expect(page).toContain("/lancamentos/chuvas");
   });
-  it("aplica tons da fazenda em todos os painéis da decisão",()=>{
-    expect(decision).toContain('bg-gradient-to-b from-[#0b4433] to-[#092e24]');
-    expect(panel).toContain('bg-[#07382b]');
-    expect(panel).toContain('bg-[#064631]');
+  it("padroniza página e painéis brancos, com acentos institucionais verdes",()=>{
+    expect(decision).toContain("border border-emerald-100 bg-white");
+    expect(panel).toContain("border border-emerald-100 bg-white");
+    expect(panel).toContain("bg-emerald-50/75");
+    expect(panel).not.toContain('bg-[#07382b]');
     expect(page).toContain("decision-reference-shell");
   });
 });

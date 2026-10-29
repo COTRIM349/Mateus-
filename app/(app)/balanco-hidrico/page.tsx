@@ -1517,16 +1517,16 @@ export default function BalancoHidricoPage() {
 
   return (
     <div className={activeTab === "decisao"
-      ? "decision-reference-shell min-w-0 space-y-3 rounded-xl bg-[#073326] p-3 text-white lg:p-4"
+      ? "decision-reference-shell min-w-0 space-y-3 rounded-xl border border-emerald-100 bg-white p-3 text-slate-800 shadow-sm lg:p-4"
       : "space-y-4"}>
       {/* Cabeçalho — central de decisão */}
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className={`font-extrabold tracking-tight ${activeTab === "decisao" ? "text-[28px] text-white" : "text-[24px] text-graphite-900 dark:text-white"}`}>
-            {activeTab === "decisao" && <span className="mr-2 text-emerald-300" aria-hidden="true">◉</span>}
+          <h1 className={`font-extrabold tracking-tight ${activeTab === "decisao" ? "text-[28px] text-slate-900" : "text-[24px] text-graphite-900 dark:text-white"}`}>
+            {activeTab === "decisao" && <span className="mr-2 text-emerald-600" aria-hidden="true">◉</span>}
             Balanço Hídrico
           </h1>
-          <p className={activeTab === "decisao" ? "text-[13px] text-emerald-100/75" : "text-[12.5px] text-graphite-400 dark:text-gray-500"}>
+          <p className={activeTab === "decisao" ? "text-[13px] text-slate-600" : "text-[12.5px] text-graphite-400 dark:text-gray-500"}>
             {activeTab === "decisao"
               ? "Acompanhe o balanço hídrico da cultura e tome decisões de manejo com base em dados atualizados."
               : "Central de decisão do manejo de irrigação"}
@@ -1557,7 +1557,7 @@ export default function BalancoHidricoPage() {
       {selectedPivotId && assignment && (
         <>
           <div className={activeTab === "decisao"
-            ? "decision-tabs rounded-2xl border border-emerald-400/25 bg-[#0b4532] px-3 pt-1"
+            ? "decision-tabs rounded-2xl border border-emerald-200 bg-white px-3 pt-1"
             : "rounded-2xl border border-gray-100 bg-white px-3 pt-1 dark:border-white/[0.06] dark:bg-graphite-900"}>
             <Tabs tabs={TABS} activeTab={activeTab} onChange={(id) => setActiveTab(id as typeof activeTab)} />
           </div>
@@ -1724,7 +1724,7 @@ export default function BalancoHidricoPage() {
                 sensoryByDate={seasonSensoryByDate}
               />
               {assignment.planting_date && seasonRows[0].date > assignment.planting_date && (
-                <p className="px-2 text-[12px] text-amber-200">
+                <p className="px-2 text-[12px] text-amber-700">
                   O plantio foi em {fmtDia(assignment.planting_date)}, mas o histórico calculável começa em {fmtDia(seasonRows[0].date)}.
                   Os dias anteriores à condição inicial do balanço não são estimados nem incluídos nos totais.
                 </p>
@@ -1732,7 +1732,7 @@ export default function BalancoHidricoPage() {
             </section>
           )}
           {balanceRows.length > 0 && (
-            <details className="rounded-xl border border-emerald-500/20 bg-[#09291f] p-3 text-emerald-100">
+            <details className="rounded-xl border border-emerald-200 bg-white p-3 text-slate-800">
               <summary className="cursor-pointer text-[13px] font-semibold">Projeção climática de apoio à decisão (opcional)</summary>
               <div className="mt-3"><DecisionForecast projection={projectionRows} last={balanceRows[balanceRows.length - 1]} /></div>
             </details>
@@ -2180,16 +2180,16 @@ function BalanceTab({
     const shownColumns = auditColumnsView === "completa"
       ? columns : columns.filter(col => essentialHeaders.has(col.header));
     return (
-      <section className="overflow-hidden rounded-xl border border-emerald-400/25 bg-[#0b382b] text-emerald-50 shadow-[0_6px_26px_rgba(0,0,0,.12)]"
+      <section className="overflow-hidden rounded-xl border border-emerald-200 bg-white text-slate-800 shadow-[0_6px_26px_rgba(0,0,0,.07)]"
         aria-label="Tabela detalhada do balanço hídrico da safra">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-400/20 bg-[#084a34] px-4 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-emerald-200 bg-emerald-50/70 px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#126548] text-[23px] font-extrabold text-emerald-100" aria-hidden="true">▦</span>
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-[23px] font-extrabold text-emerald-700" aria-hidden="true">▦</span>
             <div className="min-w-0">
-              <h3 className="text-[17px] font-extrabold text-white">Tabela detalhada do balanço hídrico
-                <span className="ml-2 text-[13px] font-normal text-emerald-100/80">— auditoria diária da safra</span>
+              <h3 className="text-[17px] font-extrabold text-slate-900">Tabela detalhada do balanço hídrico
+                <span className="ml-2 text-[13px] font-normal text-slate-600">— auditoria diária da safra</span>
               </h3>
-              <p className="text-[12px] text-emerald-100/80">
+              <p className="text-[12px] text-slate-600">
                 {head.seasonName ? `Safra ${head.seasonName} · ` : "Safra · "}
                 {head.pivotName ?? "Pivô"}{head.cultureName ? ` — ${head.cultureName}` : ""}
                 {" · "}{startLabel} a {endLabel} · {seasonDays} dias calculados
@@ -2230,7 +2230,7 @@ function BalanceTab({
           role="region" aria-label="Histórico diário da safra, com cabeçalho fixo e rolagem horizontal" tabIndex={0}>
           <Table columns={shownColumns} data={filteredRows} getKey={row => row.date} />
         </div>
-        <div className="border-t border-emerald-400/20 bg-[#0a3528] px-4 py-2 text-[12px] text-emerald-100/80">
+        <div className="border-t border-emerald-100 bg-white px-4 py-2 text-[12px] text-slate-600">
           {filteredRows.length} de {seasonDays} dias da safra · {auditColumnsView === "essencial" ? "17 colunas essenciais" : "Todas as variáveis do balanço"} · a exportação inclui todas as colunas e respeita o filtro.
         </div>
       </section>

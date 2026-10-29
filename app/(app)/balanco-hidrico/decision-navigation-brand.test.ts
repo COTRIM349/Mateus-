@@ -24,12 +24,15 @@ describe("Decisão e Monitoramento — navegação padrão e identidade verde", 
     expect(dados).not.toContain("<DecisionMonitoringReferenceLayout");
   });
 
-  it("pinta a página e os painéis de decisão com o verde da fazenda", () => {
-    expect(css).toContain("background-color: #073326 !important");
+  it("deixa a página e os cartões brancos como as demais abas, usando verde só nos destaques", () => {
+    expect(css).toContain("background-color: #ffffff !important");
+    expect(css).not.toContain("background-color: #073326 !important");
+    expect(css).toContain("background: #0e5941 !important");
     expect(css).toContain(".decision-reference-shell .season-audit-table td");
     expect(page).toContain("decision-tabs");
-    expect(panel).toContain("bg-gradient-to-b from-[#0b4433] to-[#092e24]");
-    expect(page).toContain('bg-[#0b382b]');
+    expect(page).toContain("border border-emerald-100 bg-white");
+    expect(panel).toContain("border border-emerald-100 bg-white");
+    expect(panel).not.toContain('bg-gradient-to-b from-[#0b4433] to-[#092e24]');
     expect(page).toContain('panel="auditoria"');
   });
 });
