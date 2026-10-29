@@ -59,6 +59,7 @@ import { cn } from "@/utils/cn";
 import { type ReservatorioPoint } from "@/components/water-balance/CockpitCharts";
 import { useFarmHydricState } from "@/lib/hooks/use-farm-hydric-state-v2";
 import { DecisionMonitoringReferenceLayout } from "@/components/water-balance/DecisionMonitoringReferenceLayout";
+import { DecisionSoilLayerPanel } from "@/components/water-balance/DecisionSoilLayerPanel";
 
 // mapeia o status hídrico (3 níveis do motor) para o water_status legado (5 níveis)
 const HYDRIC_TO_WATER_STATUS: Record<HydricStatus, WaterStatus> = {
@@ -1704,9 +1705,12 @@ export default function BalancoHidricoPage() {
             summary={seasonSummary}
             pivotName={selPivot?.name ?? "Pivô"}
             cultureName={culture?.name ?? "Cultura"}
-            pivotId={selectedPivotId}
             seasonName={seasonName}
             onOpenHistory={() => document.getElementById("decision-season-audit")?.scrollIntoView({behavior:"smooth",block:"start"})}
+          />
+          <DecisionSoilLayerPanel
+            last={seasonRows[seasonRows.length - 1] ?? null}
+            soilLayers={soilLayers}
           />
           {seasonRows.length > 0 && (
             <section id="decision-season-audit" aria-label="Auditoria diária do balanço na safra" className="scroll-mt-24 space-y-2">
