@@ -2812,6 +2812,8 @@ function Cockpit({
                 markers={phenologyMarkers}
                 kcCurve={kcCurve?.points ?? null}
                 rootCurve={rootCurve}
+                culturePhases={culturePhases}
+                daeOffsetFromPlanting={daeOffsetFromPlanting}
                 pivotName={identity.pivotName}
                 seasonName={identity.seasonName}
                 kcCurveLabel={kcCurve ? kcCurve.name + " · v" + kcCurve.version +
