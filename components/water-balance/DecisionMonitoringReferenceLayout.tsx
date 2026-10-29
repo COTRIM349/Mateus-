@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import {
   calculateManagementUrgency, moisturePctCcForDisplay,
   type DailyBalanceRow,
@@ -14,7 +13,6 @@ type Props = {
   summary: Summary;
   pivotName: string;
   cultureName: string;
-  pivotId: string;
   seasonName: string | null;
   onOpenHistory: () => void;
 };
@@ -29,7 +27,7 @@ function Metric({
   return (
     <div className="min-w-0 rounded-xl border border-emerald-400/20 bg-gradient-to-br from-[#063c2c] to-[#082c23] px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,.04)]">
       <p className="truncate text-[11px] font-semibold text-emerald-100/80" title={label}>{label}</p>
-      <p className={`mt-1 truncate text-[clamp(17px,1.22vw,22px)] font-extrabold leading-tight tabular-nums ${accent}`} title={value}>
+      <p className={`mt-1 break-words text-[clamp(16px,1.18vw,22px)] font-extrabold leading-tight tabular-nums ${accent}`} title={value}>
         {symbol && <span className="mr-1" aria-hidden="true">{symbol}</span>}{value}
       </p>
       <p className="mt-1 truncate text-[11px] text-emerald-100/75" title={note}>{note}</p>
@@ -55,7 +53,7 @@ function PanelHeader({ icon, title, description, action }: {
 }
 
 export function DecisionMonitoringReferenceLayout({
-  rows, summary, pivotName, cultureName, pivotId, seasonName, onOpenHistory,
+  rows, summary, pivotName, cultureName, seasonName, onOpenHistory,
 }: Props) {
   if (!rows.length) {
     return (
@@ -122,7 +120,7 @@ export function DecisionMonitoringReferenceLayout({
             action={<span className={`rounded-lg border border-emerald-300/25 bg-white/10 px-3 py-1.5 text-[12px] font-bold ${statusColor}`}>{statusLabel}</span>} />
           <div className="space-y-3 p-4 text-emerald-50">
             <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${needsWater ? "border-rose-400/35 bg-rose-950/45" : isAttention ? "border-amber-400/35 bg-amber-950/45" : "border-emerald-400/30 bg-emerald-950/45"}`}>
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[19px] font-extrabold text-white ${needsWater ? "bg-rose-600" : isAttention ? "bg-amber-950/450" : "bg-emerald-600"}`} aria-hidden="true">
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[19px] font-extrabold text-white ${needsWater ? "bg-rose-600" : isAttention ? "bg-amber-600" : "bg-emerald-600"}`} aria-hidden="true">
                 {needsWater ? "!" : "✓"}
               </span>
               <div>
@@ -143,15 +141,7 @@ export function DecisionMonitoringReferenceLayout({
                 </div>
               ))}
             </div>
-            <div className="flex flex-wrap gap-2 border-t border-emerald-300/20 pt-3">
-              {needsWater ? (
-                <Link href="/programacao" className="rounded-lg bg-emerald-700 px-4 py-2 text-[13px] font-semibold text-white hover:bg-emerald-800">Programar irrigação</Link>
-              ) : (
-                <button disabled type="button" className="cursor-not-allowed rounded-lg bg-[#1a5841] px-4 py-2 text-[13px] font-semibold text-white">Programar irrigação</button>
-              )}
-              <Link href={`/lancamentos/irrigacao?pivot=${pivotId}&new=1`} className="rounded-lg border border-emerald-400/25 bg-emerald-700/15 px-3 py-2 text-[13px] font-semibold text-emerald-50 hover:bg-emerald-700/30">Registrar irrigação</Link>
-              <Link href={`/lancamentos/chuvas?pivot=${pivotId}&new=1`} className="rounded-lg border border-emerald-400/25 bg-emerald-700/15 px-3 py-2 text-[13px] font-semibold text-emerald-50 hover:bg-emerald-700/30">Registrar chuva</Link>
-            </div>
+
           </div>
         </article>
 
