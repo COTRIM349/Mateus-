@@ -13,8 +13,6 @@ export const OPEN_METEO_ATTRIBUTION = "Weather data by Open-Meteo.com (CC-BY 4.0
 
 const FORECAST_URL = "https://api.open-meteo.com/v1/forecast";
 const ARCHIVE_URL = "https://archive-api.open-meteo.com/v1/archive";
-// O arquivo histórico não oferece probabilidade diária de precipitação.
-const ARCHIVE_DAILY_VARS = DAILY_VARS.split(",").filter((v) => v !== "precipitation_probability_max").join(",");
 
 /**
  * Parâmetro `daily` compartilhado por observações e forecast.
@@ -31,6 +29,8 @@ const DAILY_VARS = [
   "precipitation_probability_max",
   "et0_fao_evapotranspiration",
 ].join(",");
+// O arquivo histórico não oferece probabilidade diária de precipitação.
+const ARCHIVE_DAILY_VARS = DAILY_VARS.split(",").filter((v) => v !== "precipitation_probability_max").join(",");
 
 /** Dado climático diário normalizado para as unidades usadas pela Cotrim. */
 export interface OpenMeteoDaily {
