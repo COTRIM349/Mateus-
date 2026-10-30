@@ -14,6 +14,7 @@ import { calculateET0 } from "@/modules/irrigation/services/irrigation.service";
 import { calculateEffectivePrecipitation, validateWeatherReading } from "./weather.service";
 import {
   fetchRecentObservations,
+  fetchArchive,
   fetchForecast,
   OPEN_METEO_PROVIDER,
   type OpenMeteoDaily,
@@ -107,6 +108,7 @@ export async function ingestOpenMeteoObservations(
   station: IngestionStation,
   pastDays = 7,
   dataKind: ProviderDataKind = "model_estimate",
+  archiveRange?: { startDate: string; endDate: string },
 ): Promise<ObservationIngestionResult> {
   const startedAt = Date.now();
   let rowsInserted = 0;
@@ -126,12 +128,14 @@ export async function ingestOpenMeteoObservations(
   let et0DeltaPctSum = 0;
 
   try {
-    const result = await fetchRecentObservations({
+    const location = {
       latitude: station.latitude,
       longitude: station.longitude,
       timezone: station.timezone || "America/Bahia",
-      pastDays,
-    });
+    };
+    const result = archiveRange
+      ? await fetchArchive({ ...location, ...archiveRange })
+      : await fetchRecentObservations({ ...location, pastDays });
     const { context, daily } = result;
     requestUrl = context.requestUrl;
     responseElevation = context.elevation;
