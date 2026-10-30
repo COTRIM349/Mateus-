@@ -29,6 +29,8 @@ const DAILY_VARS = [
   "precipitation_probability_max",
   "et0_fao_evapotranspiration",
 ].join(",");
+// O arquivo histórico não oferece probabilidade diária de precipitação.
+const ARCHIVE_DAILY_VARS = DAILY_VARS.split(",").filter((v) => v !== "precipitation_probability_max").join(",");
 
 /** Dado climático diário normalizado para as unidades usadas pela Cotrim. */
 export interface OpenMeteoDaily {
@@ -210,7 +212,7 @@ export async function fetchArchive(params: {
   const qs = new URLSearchParams({
     latitude: String(params.latitude),
     longitude: String(params.longitude),
-    daily: DAILY_VARS,
+    daily: ARCHIVE_DAILY_VARS,
     wind_speed_unit: "ms",
     timezone: params.timezone,
     start_date: params.startDate,
