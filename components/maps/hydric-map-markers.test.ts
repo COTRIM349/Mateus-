@@ -48,12 +48,21 @@ describe("hydricMapStates", () => {
 });
 
 describe("toHydricMapMarkers", () => {
-  it("pinta umidade confortável em verde e reserva azul para 100% CC", () => {
+  it("pinta a faixa verde corretamente no marcador", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
     expect(markers[0].color).toBe("#4CAF50");
     expect(markers[0].radiusMeters).toBe(500);
     expect(markers[0].id).toBe("parcela-1");
+  });
+
+  it("pinta faixa crítica abaixo de 70% em preto", () => {
+    const markers = toHydricMapMarkers([
+      stub({
+        current: { date: "2026-08-21", mapStatus: "critico", deficit: 90 } as PivotHydricState["current"],
+      }),
+    ]);
+    expect(markers[0].color).toBe("#000000");
   });
 
   it("usa a coordenada do pivô e os ângulos da parcela no quadrante", () => {
