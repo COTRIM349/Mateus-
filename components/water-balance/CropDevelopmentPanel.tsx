@@ -266,10 +266,10 @@ export function CropDevelopmentPanel({
       </header>
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 2xl:grid-cols-6">
-        {metric("◈", fieldStage?"Último estádio observado":"Estádio / fase estimada", selectedPhenology,
+        {metric("◈", "Estádio fenológico", selectedPhenology,
           fieldStage?fieldStage.stage.name+" · "+fieldStage.observation.observed_date+" (campo)"
             : audit.currentStage?audit.currentStage.label+" · referência da cultivar"
-            : "Macrofase estimada · sem observação detalhada", "#059669")}
+            : "Sem estádio fenológico disponível", "#059669")}
         {metric("▦", "DAE", dae == null ? "—" : String(dae),
           r8Dae != null ? "de " + r8Dae + " dias até R8 (estimado)" : "Ciclo final não cadastrado", "#0284c7")}
         {metric("⌁", "Kc atual", fmt(last.kc, 2), "Conforme cálculo do motor", "#0284c7")}
