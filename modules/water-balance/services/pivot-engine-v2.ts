@@ -415,7 +415,13 @@ export function computePivotBalanceSeries(input: PivotEngineInput): BalanceDay[]
     const moisturePctCc = moisturePercentOfFieldCapacity(storage, adt, fieldCapacity, wiltingPoint);
     const safetyPctCc = safetyPercentOfFieldCapacity(fieldCapacity, wiltingPoint, pFactor);
     const status = classifyHydricStatus(deficit, afd);
-    const mapStatus = classifyWaterStatus({ armMm: storage, cadMm: adt, afdMm: afd, safetyMoistureMm: safetyMm });
+    const mapStatus = classifyWaterStatus({
+      armMm: storage,
+      cadMm: adt,
+      afdMm: afd,
+      safetyMoistureMm: safetyMm,
+      moisturePctCc,
+    });
     const rec = buildRecommendation(deficit, afd, status, efficiency, pivot.area, pivot.flow_rate, assignment.deficit_irrigation === true);
 
     rows.push({
