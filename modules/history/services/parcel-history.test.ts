@@ -5,6 +5,9 @@ import {
   EMPTY_HISTORY_FILTERS,
   HISTORY_COST_PENDING_NOTE,
   filterHistoricParcels,
+  filterParcelRecords,
+  hasHistorySearchFilters,
+  parcelRecordState,
   summarizeClosedCycle,
   type HistoricParcelRow,
 } from "./parcel-history";
@@ -47,6 +50,16 @@ describe("filtro do histórico operacional (Etapa I)", () => {
   it("ignora parcela ativa — só histórico", () => {
     const list = filterHistoricParcels(rows, EMPTY_HISTORY_FILTERS);
     expect(list.map((r) => r.id)).toEqual(["soja-26", "algodao-27"]);
+  });
+
+  it("consulta parcelas ativas e históricas quando o usuário informa filtros", () => {
+    expect(hasHistorySearchFilters(EMPTY_HISTORY_FILTERS)).toBe(false);
+    expect(hasHistorySearchFilters({ ...EMPTY_HISTORY_FILTERS, pivotId: "pivot-31" })).toBe(true);
+
+    const list = filterParcelRecords(rows, { ...EMPTY_HISTORY_FILTERS, pivotId: "pivot-31" });
+    expect(list.map((r) => r.id)).toEqual(["soja-26", "algodao-27", "ativa"]);
+    expect(parcelRecordState(list[0])).toBe("historico");
+    expect(parcelRecordState(list[2])).toBe("ativa");
   });
 
   it("filtra por safra, módulo, pivô, parcela e cultura", () => {
@@ -125,6 +138,10 @@ describe("tela de histórico", () => {
     expect(src).toContain("filtro_modulo");
     expect(src).toContain("filtro_cultura");
     expect(src).toContain("Módulo");
+    expect(src).toContain('header: "Status"');
+    expect(src).toContain("hasSearch &&");
+    expect(src).toContain("Ativa");
+    expect(src).toContain("Histórico");
     expect(src).not.toContain(".delete()");
     expect(src).not.toContain("tarifa");
   });

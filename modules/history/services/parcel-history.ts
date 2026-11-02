@@ -52,8 +52,17 @@ function ymd(iso: string | null | undefined): string {
   return (iso ?? "").slice(0, 10);
 }
 
-export function matchesHistoryFilters(row: HistoricParcelRow, filters: HistoryFilters): boolean {
-  if (!isHistoricParcel(row.status, row.active)) return false;
+export function hasHistorySearchFilters(filters: HistoryFilters): boolean {
+  return Object.values(filters).some((value) => value.trim() !== "");
+}
+
+export function parcelRecordState(
+  row: Pick<HistoricParcelRow, "status" | "active">,
+): "ativa" | "historico" {
+  return isHistoricParcel(row.status, row.active) ? "historico" : "ativa";
+}
+
+export function matchesParcelFilters(row: HistoricParcelRow, filters: HistoryFilters): boolean {
   if (filters.seasonId && row.season_id !== filters.seasonId) return false;
   if (filters.moduleId && row.module_id !== filters.moduleId) return false;
   if (filters.pivotId && row.pivot_id !== filters.pivotId) return false;
@@ -67,6 +76,17 @@ export function matchesHistoryFilters(row: HistoricParcelRow, filters: HistoryFi
     if (filters.periodTo && start && start > filters.periodTo) return false;
   }
   return true;
+}
+
+export function filterParcelRecords(
+  rows: HistoricParcelRow[],
+  filters: HistoryFilters,
+): HistoricParcelRow[] {
+  return rows.filter((row) => matchesParcelFilters(row, filters));
+}
+
+export function matchesHistoryFilters(row: HistoricParcelRow, filters: HistoryFilters): boolean {
+  return isHistoricParcel(row.status, row.active) && matchesParcelFilters(row, filters);
 }
 
 export function filterHistoricParcels(
