@@ -320,7 +320,7 @@ export function CropDevelopmentPanel({
             <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
               Fases coloridas, estádios detalhados da cultivar, Kc e crescimento radicular.
               {effectiveMarkers.length>0 && <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
-                {effectiveMarkers.length} marcos fenológicos carregados
+                {effectiveMarkers.length} marcos da cultivar carregados
               </span>}
             </p>
           </div>
