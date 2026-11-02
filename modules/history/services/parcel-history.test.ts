@@ -147,6 +147,10 @@ describe("tela de histórico", () => {
     expect(src).toContain("Não informado");
     expect(src).toContain("Área plantada");
     expect(src).toContain("Solo e manejo hídrico");
+    expect(src).toContain("Ver dados");
+    expect(src).toContain("Ciclo atual");
+    expect(src).toContain("Situação atual");
+    expect(src).toContain("assignmentIds");
     expect(src).not.toContain(".delete()");
     expect(src).not.toContain("tarifa");
   });

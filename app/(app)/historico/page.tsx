@@ -182,11 +182,9 @@ export default function HistoricoOperacionalPage() {
     const assignmentRows = (asg ?? []) as AssignmentRow[];
     setAssignments(assignmentRows);
 
-    const historicIds = assignmentRows
-      .filter((a) => a.status === "encerrada" || a.status === "cancelada" || a.active === false)
-      .map((a) => a.id);
+    const assignmentIds = assignmentRows.map((a) => a.id);
 
-    if (historicIds.length === 0) {
+    if (assignmentIds.length === 0) {
       setEvents([]);
       setSensory([]);
       setLoading(false);
@@ -197,12 +195,12 @@ export default function HistoricoOperacionalPage() {
       supabase
         .from("irrigation_events")
         .select("id, parcel_id, started_at, depth_mm, percentimeter_pct, volume_m3, operating_hours, energy_kwh, cost, notes")
-        .in("parcel_id", historicIds)
+        .in("parcel_id", assignmentIds)
         .order("started_at", { ascending: false }),
       supabase
         .from("soil_sensory_readings")
         .select("id, parcel_id, reading_date, note, depth_cm")
-        .in("parcel_id", historicIds)
+        .in("parcel_id", assignmentIds)
         .order("reading_date", { ascending: false }),
     ]);
     setEvents((ev.data ?? []) as EventLite[]);
@@ -246,10 +244,8 @@ export default function HistoricoOperacionalPage() {
     [historicRows, filters],
   );
 
-  const selectedCandidate = assignments.find((a) => a.id === selectedId) ?? null;
-  const selected = selectedCandidate && parcelRecordState(selectedCandidate) === "historico"
-    ? selectedCandidate
-    : null;
+  const selected = assignments.find((a) => a.id === selectedId) ?? null;
+  const selectedState = selected ? parcelRecordState(selected) : null;
   const selectedEvents = useMemo(
     () => events.filter((e) => e.parcel_id === selectedId),
     [events, selectedId],
@@ -328,7 +324,7 @@ export default function HistoricoOperacionalPage() {
             </span>
           </>
         );
-        return state === "historico" ? (
+        return (
           <button
             type="button"
             className="group text-left transition-opacity hover:opacity-75"
@@ -336,8 +332,6 @@ export default function HistoricoOperacionalPage() {
           >
             {content}
           </button>
-        ) : (
-          <div className="text-left">{content}</div>
         );
       },
     },
@@ -375,12 +369,10 @@ export default function HistoricoOperacionalPage() {
     {
       header: "Ações",
       align: "right",
-      render: (r) => parcelRecordState(r) === "historico" ? (
+      render: (r) => (
         <Button variant="ghost" size="sm" onClick={() => setSelectedId(r.id)}>
-          Ver ciclo
+          {parcelRecordState(r) === "historico" ? "Ver ciclo" : "Ver dados"}
         </Button>
-      ) : (
-        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Ciclo atual</span>
       ),
     },
   ];
@@ -592,25 +584,32 @@ export default function HistoricoOperacionalPage() {
               <div className="min-w-0">
                 <div className="mb-1.5 flex flex-wrap items-center gap-2">
                   <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
-                    Detalhes do ciclo
+                    {selectedState === "ativa" ? "Ciclo atual" : "Detalhes do ciclo"}
                   </span>
-                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
-                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
-                    Histórico
-                  </span>
+                  {selectedState === "ativa" ? (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                      Ativa
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+                      <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                      Histórico
+                    </span>
+                  )}
                 </div>
                 <h2 className="truncate text-base font-bold text-graphite-900 dark:text-white">
                   {selected.name || pivotMap.get(selected.pivot_id)?.name || "Ciclo encerrado"}
                 </h2>
                 <p className="mt-1 text-xs leading-5 text-graphite-400 dark:text-gray-500">
-                  {cultureMap.get(selected.culture_id) ?? "—"} · {seasonMap.get(selected.season_id) ?? "—"} · {fmtDate(selected.planting_date)} → {fmtDate(selected.closed_at)}
-                  {selected.close_reason
+                  {cultureMap.get(selected.culture_id) ?? "—"} · {seasonMap.get(selected.season_id) ?? "—"} · {fmtDate(selected.planting_date)} → {selectedState === "ativa" ? "Em andamento" : fmtDate(selected.closed_at)}
+                  {selectedState === "historico" && selected.close_reason
                     ? ` · ${PARCEL_CLOSE_REASON_LABELS[selected.close_reason as ParcelCloseReason] ?? selected.close_reason}`
                     : ""}
                 </p>
               </div>
               <Button variant="secondary" onClick={() => { window.location.href = "/vinculacao"; }}>
-                Nova parcela neste pivô
+                {selectedState === "ativa" ? "Editar parcela" : "Nova parcela neste pivô"}
               </Button>
             </div>
           </Card>
@@ -620,7 +619,9 @@ export default function HistoricoOperacionalPage() {
               <div>
                 <h3 className="text-sm font-bold text-graphite-900 dark:text-white">Ficha da parcela</h3>
                 <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
-                  Dados cadastrais e agronômicos registrados para este ciclo.
+                  {selectedState === "ativa"
+                    ? "Dados cadastrais e agronômicos do ciclo atual."
+                    : "Dados cadastrais e agronômicos registrados para este ciclo."}
                 </p>
               </div>
               <div className="min-w-[210px]">
@@ -702,21 +703,33 @@ export default function HistoricoOperacionalPage() {
                 </div>
               </section>
 
-              <section className="border-t border-gray-100 pt-4 dark:border-white/[0.06]">
-                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-brand-700 dark:text-brand-300">Encerramento</h4>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  <DataField label="Data de encerramento" value={selected.closed_at ? fmtDate(selected.closed_at) : null} />
-                  <DataField
-                    label="Motivo"
-                    value={selected.close_reason ? PARCEL_CLOSE_REASON_LABELS[selected.close_reason as ParcelCloseReason] ?? humanize(selected.close_reason) : null}
-                  />
-                  <DataField
-                    label="Produtividade"
-                    value={selected.yield_kg_ha != null ? `${selected.yield_kg_ha.toLocaleString("pt-BR")} kg/ha` : null}
-                  />
-                  <DataField label="Observações da parcela" value={selected.notes ?? null} />
-                </div>
-              </section>
+              {selectedState === "historico" ? (
+                <section className="border-t border-gray-100 pt-4 dark:border-white/[0.06]">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-brand-700 dark:text-brand-300">Encerramento</h4>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <DataField label="Data de encerramento" value={selected.closed_at ? fmtDate(selected.closed_at) : null} />
+                    <DataField
+                      label="Motivo"
+                      value={selected.close_reason ? PARCEL_CLOSE_REASON_LABELS[selected.close_reason as ParcelCloseReason] ?? humanize(selected.close_reason) : null}
+                    />
+                    <DataField
+                      label="Produtividade"
+                      value={selected.yield_kg_ha != null ? `${selected.yield_kg_ha.toLocaleString("pt-BR")} kg/ha` : null}
+                    />
+                    <DataField label="Observações da parcela" value={selected.notes ?? null} />
+                  </div>
+                </section>
+              ) : (
+                <section className="border-t border-gray-100 pt-4 dark:border-white/[0.06]">
+                  <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-emerald-700 dark:text-emerald-300">Situação atual</h4>
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <DataField label="Status" value="Ativa" />
+                    <DataField label="Estádio registrado" value={selected.crop_stage ? humanize(selected.crop_stage) : null} />
+                    <DataField label="Colheita prevista" value={selected.expected_harvest_date ? fmtDate(selected.expected_harvest_date) : null} />
+                    <DataField label="Observações da parcela" value={selected.notes ?? null} />
+                  </div>
+                </section>
+              )}
             </div>
           </Card>
 
@@ -734,12 +747,12 @@ export default function HistoricoOperacionalPage() {
             />
           </div>
 
-          {selected.close_note && (
+          {selectedState === "historico" && selected.close_note && (
             <p className="text-sm text-graphite-500 dark:text-gray-400">Observação do encerramento: {selected.close_note}</p>
           )}
 
           <Card>
-            <h3 className="mb-4 text-sm font-semibold text-graphite-800 dark:text-white">Irrigações do ciclo</h3>
+            <h3 className="mb-4 text-sm font-semibold text-graphite-800 dark:text-white">{selectedState === "ativa" ? "Irrigações do ciclo atual" : "Irrigações do ciclo"}</h3>
             {selectedEvents.length === 0 ? (
               <p className="py-4 text-sm text-graphite-400 dark:text-gray-500">Nenhum evento de irrigação neste ciclo.</p>
             ) : (
@@ -748,7 +761,7 @@ export default function HistoricoOperacionalPage() {
           </Card>
 
           <Card>
-            <h3 className="mb-4 text-sm font-semibold text-graphite-800 dark:text-white">Notas sensoriais do ciclo</h3>
+            <h3 className="mb-4 text-sm font-semibold text-graphite-800 dark:text-white">{selectedState === "ativa" ? "Notas sensoriais do ciclo atual" : "Notas sensoriais do ciclo"}</h3>
             {selectedSensory.length === 0 ? (
               <p className="py-4 text-sm text-graphite-400 dark:text-gray-500">Nenhuma avaliação sensorial neste ciclo.</p>
             ) : (
