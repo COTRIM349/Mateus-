@@ -15,10 +15,10 @@ describe("classifyWaterStatus", () => {
   const afd = 50;
   const safety = 50;
 
-  it("marca incompleto sem CAD, ARM ou AFD válidos", () => {
+  it("marca incompleto sem CAD ou ARM válidos e não depende da AFD para a cor do dashboard", () => {
     expect(classifyWaterStatus({ armMm: 40, cadMm: 0, afdMm: 20 })).toBe("incompleto");
     expect(classifyWaterStatus({ armMm: null, cadMm: cad, afdMm: afd })).toBe("incompleto");
-    expect(classifyWaterStatus({ armMm: 90, cadMm: cad, afdMm: 0 })).toBe("incompleto");
+    expect(classifyWaterStatus({ armMm: 95, cadMm: cad, afdMm: 0 })).toBe("boa_umidade");
   });
 
   it("azul somente quando ARM está de fato em 100% da capacidade de campo", () => {
@@ -68,8 +68,10 @@ describe("classifyWaterStatus", () => {
     expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.blue);
     expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.label).toBe("100% CC");
     expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.green);
+    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.label).toBe("Umidade confortável");
     expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe(MAP_HYDRIC_COLORS.yellow);
     expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe(MAP_HYDRIC_COLORS.red);
+    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.label).toBe("Urgente");
   });
 });
 
