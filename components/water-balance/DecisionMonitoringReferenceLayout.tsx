@@ -134,7 +134,7 @@ export function DecisionMonitoringReferenceLayout({
 
   return (
     <section className="space-y-3" aria-label="Decisão e monitoramento da safra">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-10">
         <Metric label="Situação atual" value={statusLabel} note={decisionNeedsAction ? "Antecipação operacional" : "Condição hídrica"} accent={statusColor} symbol="◈" />
         <Metric label="ARM" value={`${fmt(last.storedWater)} mm`} note={`${fmt(percentCC,0)}% da CC`} accent="text-slate-900" />
         <Metric label="CRA / AFD" value={`${fmt(last.afd)} mm`} note={`F semanal: ${last.cad > 0 ? fmt(last.afd / last.cad,2) : "—"}`} />
@@ -149,8 +149,8 @@ export function DecisionMonitoringReferenceLayout({
 
       <div className="grid items-stretch gap-3 xl:grid-cols-2">
         <article className="min-w-0 overflow-hidden rounded-xl border border-emerald-100 bg-white text-slate-800 shadow-[0_3px_16px_rgba(17,79,56,.07)]">
-          <PanelHeader icon="◉" title="Recomendação de irrigação"
-            description="Com base no balanço hídrico, clima e estádio da cultura."
+          <PanelHeader icon="◉" title="Decisão operacional de irrigação"
+            description="Antecipa a AFD comparando a margem hídrica com o tempo real de aplicação do pivô."
             action={<span className={`rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-[12px] font-bold ${statusColor}`}>{statusLabel}</span>} />
           <div className="space-y-3 p-4 text-slate-800">
             <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${anticipatory.level === "critico" || anticipatory.level === "prioridade" ? "border-rose-200 bg-rose-50" : decisionNeedsAttention ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
