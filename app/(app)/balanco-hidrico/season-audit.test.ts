@@ -33,7 +33,7 @@ describe("Decisão e Monitoramento — auditoria de toda a safra", () => {
     expect(source).toContain("decision-reference-shell");
     expect(source).toContain("<DecisionMonitoringReferenceLayout");
     expect(source).toContain("Todas as variáveis");
-    expect(app).toContain("Recomendação de irrigação");
+    expect(app).toContain("Decisão operacional de irrigação");
     expect(app).toContain("Monitoramento da safra");
     expect(app).toContain("ETo média (7 dias)");
     expect(source).toContain("17 colunas essenciais");

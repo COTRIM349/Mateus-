@@ -18,8 +18,11 @@ describe("Decisão e Monitoramento — verde da fazenda com dados de solo por ca
     expect(panel).toContain("ARM estimada (mm)");
     expect(panel).toContain("não representa uma medição");
   });
-  it("remove ações de lançamento e programação da decisão, sem remover os registros reais",()=>{
-    expect(decision).not.toContain("Programar irrigação");
+  it("remove ações manuais de lançamento da decisão, mas permite recomendação antecipativa",()=>{
+    expect(decision).toContain("Programar irrigação");
+    expect(decision).toContain("Tempo para repor CC");
+    expect(decision).toContain("Margem operacional");
+    expect(decision).toContain("calculateAnticipatoryDecision");
     expect(decision).not.toContain("Registrar irrigação");
     expect(decision).not.toContain("Registrar chuva");
     const dados=page.split('{/* ── ABA DADOS:')[1]?.split('{/* ── ABA DECISÃO:')[0]??"";
