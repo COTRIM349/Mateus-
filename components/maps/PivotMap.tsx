@@ -29,6 +29,8 @@ interface PivotMapProps {
   center?: { lat: number; lng: number };
   className?: string;
   onSelect?: (id: string) => void;
+  /** Dashboard/painel: trava navegação mantendo apenas a visualização. */
+  interactive?: boolean;
 }
 
 const SATELLITE_URL =
@@ -49,7 +51,7 @@ function ringColor(fill: string): string {
   return fill;
 }
 
-export function PivotMap({ pivots, highlightId, center, className, onSelect }: PivotMapProps) {
+export function PivotMap({ pivots, highlightId, center, className, onSelect, interactive = true }: PivotMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
 
@@ -63,8 +65,14 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect }: P
     const map = L.map(containerRef.current, {
       center: defaultCenter,
       zoom: 14,
-      zoomControl: true,
+      zoomControl: interactive,
       attributionControl: false,
+      dragging: interactive,
+      scrollWheelZoom: interactive,
+      doubleClickZoom: interactive,
+      boxZoom: interactive,
+      keyboard: interactive,
+      touchZoom: interactive,
     });
 
     L.tileLayer(SATELLITE_URL, { maxZoom: 18 }).addTo(map);
