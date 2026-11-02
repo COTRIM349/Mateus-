@@ -21,25 +21,31 @@ describe("classifyWaterStatus", () => {
     expect(classifyWaterStatus({ armMm: 90, cadMm: cad, afdMm: 0 })).toBe("incompleto");
   });
 
-  it("verde somente quando ARM está na capacidade de campo", () => {
-    expect(classifyWaterStatus({ armMm: 99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+  it("azul somente quando ARM está de fato em 100% da capacidade de campo", () => {
+    expect(classifyWaterStatus({ armMm: 100, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("capacidade_campo");
+    expect(classifyWaterStatus({ armMm: 99.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .not.toBe("capacidade_campo");
   });
 
-  it("azul abaixo da CC enquanto ainda não há aproximação do limite", () => {
-    expect(classifyWaterStatus({ armMm: 85, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+  it("verde entre 95% e menos de 100% da CC", () => {
+    expect(classifyWaterStatus({ armMm: 95, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .toBe("boa_umidade");
+    expect(classifyWaterStatus({ armMm: 99.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("boa_umidade");
   });
 
-  it("amarelo quando consome de 70% até menos de 100% da AFD", () => {
-    expect(classifyWaterStatus({ armMm: 60, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+  it("amarelo entre 90% e menos de 95% da CC", () => {
+    expect(classifyWaterStatus({ armMm: 90, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .toBe("atencao");
+    expect(classifyWaterStatus({ armMm: 94.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("atencao");
   });
 
-  it("vermelho quando o déficit atinge a AFD e existe necessidade de irrigação", () => {
-    expect(classifyWaterStatus({ armMm: 50, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+  it("vermelho abaixo de 90% da CC, incluindo 85% como urgente", () => {
+    expect(classifyWaterStatus({ armMm: 89.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("deficit_hidrico");
-    expect(classifyWaterStatus({ armMm: 0, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+    expect(classifyWaterStatus({ armMm: 85, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("deficit_hidrico");
   });
 
@@ -50,25 +56,25 @@ describe("classifyWaterStatus", () => {
         cadMm: cad,
         afdMm: afd,
         safetyMoistureMm: safety,
-        thresholds: { ...MAP_HYDRIC_THRESHOLDS, fieldCapacityRatio: 0.9 },
+        thresholds: { ...MAP_HYDRIC_THRESHOLDS, fieldCapacityRatio: 0.9, comfortableCcRatio: 0.85, attentionCcRatio: 0.8 },
       }),
     ).toBe("capacidade_campo");
   });
 
   it("separa atenção de necessidade real de irrigação", () => {
-    expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "boa_umidade", "incompleto"]);
+    expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "boa_umidade"]);
     expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["deficit_hidrico"]);
     expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(4);
-    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.green);
-    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.label).toBe("Capacidade de campo");
-    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.blue);
+    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.blue);
+    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.label).toBe("100% CC");
+    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.green);
     expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe(MAP_HYDRIC_COLORS.yellow);
     expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe(MAP_HYDRIC_COLORS.red);
   });
 });
 
 describe("faixas do reservatório variam com o fator F da cultura e a ETc diária", () => {
-  it("usa 70% da CRA como início da atenção e 100% como limite para irrigar", () => {
+  it("mantém as faixas AFD/CRA do gráfico independentes das cores do dashboard", () => {
     // Pivô 06: CTA=84,4 mm; F=0,571 => CRA=48,1924 mm.
     const cta = 84.4;
     const cra = cta * 0.571;
@@ -77,12 +83,8 @@ describe("faixas do reservatório variam com o fator F da cultura e a ETc diári
     expect(bounds!.factorF).toBeCloseTo(0.571, 4);
     expect(bounds!.attentionAbs).toBeCloseTo(50.66532, 3);
     expect(bounds!.safetyAbs).toBeCloseTo(36.2076, 3);
-    expect(classifyWaterStatus({ armMm: bounds!.attentionAbs - 0.01, cadMm: cta, afdMm: cra }))
-      .toBe("atencao");
-    expect(classifyWaterStatus({ armMm: bounds!.attentionAbs + 0.01, cadMm: cta, afdMm: cra }))
-      .toBe("boa_umidade");
-    expect(classifyWaterStatus({ armMm: bounds!.safetyAbs, cadMm: cta, afdMm: cra }))
-      .toBe("deficit_hidrico");
+    expect(bounds!.attentionAbs).toBeLessThan(bounds!.ccAbs);
+    expect(bounds!.safetyAbs).toBeLessThan(bounds!.attentionAbs);
   });
 
   it("move ambas as faixas quando F ou CTA varia de um dia para outro", () => {
