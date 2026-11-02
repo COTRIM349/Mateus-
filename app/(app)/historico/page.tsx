@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Button, Card, Input, Select, StatCard, Table, type Column } from "@/components/ui";
 import { useAuth } from "@/components/providers";
@@ -118,7 +118,7 @@ function hasValue(value: unknown): boolean {
   return value !== null && value !== undefined && value !== "";
 }
 
-function DataField({ label, value }: { label: string; value: React.ReactNode }) {
+function DataField({ label, value }: { label: string; value: ReactNode }) {
   const empty = value === null || value === undefined || value === "" || value === "—";
   return (
     <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-3.5 py-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
