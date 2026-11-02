@@ -46,14 +46,14 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-[#194747] bg-[#194747] text-white shadow-soft">
-      <div className="flex min-h-[70px] items-center gap-3 px-4 py-2 sm:px-6 lg:px-7">
+      <div className="flex min-h-[64px] w-full min-w-0 items-center gap-2 px-3 py-2 sm:px-5 xl:min-h-[70px] xl:gap-3 xl:px-7">
         <Link
           href="/"
           title="Irriga Pro"
           aria-label="Irriga Pro — início"
-          className="flex shrink-0 items-center gap-2.5 rounded-lg pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
+          className="order-1 flex shrink-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200 sm:gap-2.5"
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-transparent ring-1 ring-white/15" aria-hidden="true">
+          <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-transparent ring-1 ring-white/15 sm:h-11 sm:w-11" aria-hidden="true">
             <svg viewBox="0 0 48 48" className="h-9 w-9" fill="none">
               <path d="M8 33h32M24 33V17M16 33l8-16 8 16" stroke="#e7f5e8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M13 18c2-6 6-9 11-9s9 3 11 9M6 21c4-11 10-16 18-16s14 5 18 16" stroke="#a9d36b" strokeWidth="2.5" strokeLinecap="round"/>
@@ -62,19 +62,19 @@ export function Topbar() {
             </svg>
           </span>
           <span className="flex flex-col leading-[1.05]">
-            <span className="text-[19px] font-black tracking-tight text-white">IRRIGA</span>
-            <span className="text-[18px] font-black tracking-[.12em] text-[#b7d97d]">PRO</span>
+            <span className="text-[17px] font-black tracking-tight text-white sm:text-[19px]">IRRIGA</span>
+            <span className="text-[16px] font-black tracking-[.12em] text-[#b7d97d] sm:text-[18px]">PRO</span>
           </span>
         </Link>
-        <div className="min-w-0 flex-1"><TopNavigation /></div>
+        <div className="order-3 ml-1 shrink-0 xl:order-2 xl:ml-0 xl:min-w-0 xl:flex-1"><TopNavigation /></div>
 
-        <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5">
+        <div className="order-2 ml-auto flex shrink-0 items-center gap-1 sm:gap-1.5 xl:order-3">
           {farms.length > 1 ? (
             <select
               aria-label="Selecionar fazenda"
               value={activeFarmId ?? ""}
               onChange={(event) => setActiveFarm(event.target.value)}
-              className="max-w-[115px] rounded-md border border-white/12 bg-white/[0.08] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white outline-none focus-visible:ring-2 focus-visible:ring-santa-200 sm:max-w-[165px] sm:px-3 sm:text-[14px]"
+              className="hidden max-w-[115px] rounded-md border border-white/12 bg-white/[0.08] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white outline-none focus-visible:ring-2 focus-visible:ring-santa-200 xl:block xl:max-w-[165px] xl:px-3 xl:text-[14px]"
             >
               {farms.map((farm) => (
                 <option key={farm.id} value={farm.id} className="text-graphite-900">
@@ -83,7 +83,7 @@ export function Topbar() {
               ))}
             </select>
           ) : (
-            <div className="max-w-[115px] truncate rounded-md border border-white/[0.06] bg-white/[0.07] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white/90 sm:max-w-[165px] sm:px-3 sm:text-[14px]">
+            <div className="hidden max-w-[115px] truncate rounded-md border border-white/[0.06] bg-white/[0.07] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white/90 xl:block xl:max-w-[165px] xl:px-3 xl:text-[14px]">
               {activeFarm?.name ?? profile?.companyName ?? "Fazenda"}
             </div>
           )}
