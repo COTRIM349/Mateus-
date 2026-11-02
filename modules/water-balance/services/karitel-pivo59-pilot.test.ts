@@ -93,7 +93,7 @@ describe("Karitel · Pivô 59 · piloto auditável", () => {
     expect(day.storage).toBe(11.59);
     expect(day.deficit).toBe(2.2);
     expect(day.shouldIrrigate).toBe(false);
-    expect(day.recommendedGrossDepth).toBe(0);
+    expect(day.recommendedGrossDepth).toBe(2.44);
 
     const urgency = calculateManagementUrgency(day);
     expect(urgency.remainingToAfdMm).toBe(4.86);
