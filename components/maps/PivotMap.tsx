@@ -126,8 +126,16 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect, int
       }
 
       if (pivot.plain) {
-        const equipmentBounds = L.circle(latlng, { radius: pivot.radiusMeters }).getBounds();
-        bounds.extend(equipmentBounds);
+        // Mantém o equipamento no enquadramento sem criar uma camada visual.
+        // Não usamos Circle.getBounds() aqui porque um círculo fora do mapa
+        // ainda não foi projetado pelo Leaflet e pode causar erro no cliente.
+        const lat = pivot.latitude;
+        const lng = pivot.longitude;
+        const latDelta = pivot.radiusMeters / 111_320;
+        const lngScale = Math.max(Math.cos((lat * Math.PI) / 180), 0.2);
+        const lngDelta = pivot.radiusMeters / (111_320 * lngScale);
+        bounds.extend([lat - latDelta, lng - lngDelta]);
+        bounds.extend([lat + latDelta, lng + lngDelta]);
         continue;
       }
 
