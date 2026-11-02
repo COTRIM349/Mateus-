@@ -204,6 +204,20 @@ export default function HistoricoOperacionalPage() {
     })
     : null;
 
+  const activeFilterCount = useMemo(
+    () => Object.values(filters).filter((value) => value.trim() !== "").length,
+    [filters],
+  );
+  const resultStats = useMemo(() => {
+    let active = 0;
+    let historic = 0;
+    for (const row of filtered) {
+      if (parcelRecordState(row) === "ativa") active += 1;
+      else historic += 1;
+    }
+    return { total: filtered.length, active, historic };
+  }, [filtered]);
+
   const patchFilter = (changes: Partial<HistoryFilters>) => {
     setSelectedId(null);
     setFilters((f) => ({ ...f, ...changes }));
@@ -213,14 +227,23 @@ export default function HistoricoOperacionalPage() {
     {
       header: "Parcela",
       render: (r) => {
+        const state = parcelRecordState(r);
         const content = (
           <>
-            <span className="font-medium text-graphite-800 dark:text-white">{r.name || pivotMap.get(r.pivot_id)?.name || "—"}</span>
-            <span className="block text-xs text-graphite-400 dark:text-gray-500">{pivotMap.get(r.pivot_id)?.name ?? "—"}</span>
+            <span className="block font-semibold text-graphite-900 dark:text-white">
+              {r.name || pivotMap.get(r.pivot_id)?.name || "—"}
+            </span>
+            <span className="mt-0.5 block text-[11px] text-graphite-400 dark:text-gray-500">
+              {pivotMap.get(r.pivot_id)?.name ?? "—"}
+            </span>
           </>
         );
-        return parcelRecordState(r) === "historico" ? (
-          <button type="button" className="text-left" onClick={() => setSelectedId(r.id)}>
+        return state === "historico" ? (
+          <button
+            type="button"
+            className="group text-left transition-opacity hover:opacity-75"
+            onClick={() => setSelectedId(r.id)}
+          >
             {content}
           </button>
         ) : (
@@ -228,39 +251,46 @@ export default function HistoricoOperacionalPage() {
         );
       },
     },
-    { header: "Safra", render: (r) => seasonMap.get(r.season_id) ?? "—" },
-    { header: "Cultura", render: (r) => cultureMap.get(r.culture_id) ?? "—" },
-    { header: "Módulo", render: (r) => (r.module_id ? moduleMap.get(r.module_id) ?? "—" : "—") },
     {
       header: "Status",
       render: (r) => {
         const state = parcelRecordState(r);
         return state === "ativa" ? (
-          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             Ativa
           </span>
         ) : (
-          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.08em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+            <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
             Histórico
           </span>
         );
       },
     },
+    { header: "Safra", render: (r) => <span className="font-medium">{seasonMap.get(r.season_id) ?? "—"}</span> },
+    { header: "Cultura", render: (r) => cultureMap.get(r.culture_id) ?? "—" },
+    { header: "Módulo", render: (r) => (r.module_id ? moduleMap.get(r.module_id) ?? "—" : "—") },
     {
       header: "Período",
       render: (r) => (
-        <span className="text-xs">
-          {fmtDate(r.planting_date)} → {parcelRecordState(r) === "ativa" ? "Em andamento" : fmtDate(r.closed_at)}
-        </span>
+        <div className="min-w-[150px]">
+          <span className="block text-xs text-graphite-700 dark:text-gray-300">{fmtDate(r.planting_date)}</span>
+          <span className="mt-0.5 block text-[11px] text-graphite-400 dark:text-gray-500">
+            {parcelRecordState(r) === "ativa" ? "Em andamento" : `até ${fmtDate(r.closed_at)}`}
+          </span>
+        </div>
       ),
     },
     {
       header: "Ações",
       align: "right",
       render: (r) => parcelRecordState(r) === "historico" ? (
-        <Button variant="ghost" size="sm" onClick={() => setSelectedId(r.id)}>Ver ciclo</Button>
+        <Button variant="ghost" size="sm" onClick={() => setSelectedId(r.id)}>
+          Ver ciclo
+        </Button>
       ) : (
-        <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Em andamento</span>
+        <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400">Ciclo atual</span>
       ),
     },
   ];
@@ -300,107 +330,200 @@ export default function HistoricoOperacionalPage() {
     <div className="space-y-6">
       <PageHeader
         titulo="Histórico operacional"
-        descricao="Consulte as parcelas pelos filtros e veja se cada registro está ativo ou já faz parte do histórico operacional."
+        descricao="Consulte parcelas por safra, módulo, pivô, cultura ou período e identifique rapidamente o que está ativo e o que já foi encerrado."
       />
 
-      <Card className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <Select
-          id="filtro_safra"
-          label="Safra"
-          value={filters.seasonId}
-          onChange={(e) => patchFilter({ seasonId: e.target.value })}
-          options={seasons.map((s) => ({ value: s.id, label: s.name }))}
-        />
-        <Select
-          id="filtro_modulo"
-          label="Módulo"
-          value={filters.moduleId}
-          onChange={(e) => patchFilter({ moduleId: e.target.value })}
-          options={modules.map((m) => ({ value: m.id, label: m.name }))}
-        />
-        <Select
-          id="filtro_pivo"
-          label="Pivô"
-          value={filters.pivotId}
-          onChange={(e) => patchFilter({ pivotId: e.target.value, parcelId: "" })}
-          options={pivots.map((p) => ({ value: p.id, label: p.name }))}
-        />
-        <Select
-          id="filtro_parcela"
-          label="Parcela"
-          value={filters.parcelId}
-          onChange={(e) => patchFilter({ parcelId: e.target.value })}
-          options={parcelOptions.map((p) => ({
-            value: p.id,
-            label: p.name || pivotMap.get(p.pivot_id)?.name || p.id,
-          }))}
-        />
-        <Select
-          id="filtro_cultura"
-          label="Cultura"
-          value={filters.cultureId}
-          onChange={(e) => patchFilter({ cultureId: e.target.value })}
-          options={cultures.map((c) => ({ value: c.id, label: c.name }))}
-        />
-        <div className="grid grid-cols-2 gap-2">
-          <Input
-            id="periodo_de"
-            label="Período de"
-            type="date"
-            value={filters.periodFrom}
-            onChange={(e) => patchFilter({ periodFrom: e.target.value })}
-          />
-          <Input
-            id="periodo_ate"
-            label="Período até"
-            type="date"
-            value={filters.periodTo}
-            onChange={(e) => patchFilter({ periodTo: e.target.value })}
-          />
+      <Card className="overflow-hidden p-0">
+        <div className="flex flex-col gap-3 border-b border-gray-100 bg-gray-50/70 px-5 py-4 dark:border-white/[0.06] dark:bg-white/[0.025] sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div className="flex items-center gap-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+                <svg className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M7 12h10M10 18h4" />
+                </svg>
+              </div>
+              <div>
+                <h2 className="text-sm font-bold text-graphite-900 dark:text-white">Consultar parcelas</h2>
+                <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
+                  Preencha um ou mais campos. Os resultados aparecem somente após informar algum filtro.
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 text-[10px] font-semibold">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" /> ATIVA
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-400" /> HISTÓRICO
+            </span>
+          </div>
+        </div>
+
+        <div className="space-y-5 p-5">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <Select
+              id="filtro_safra"
+              label="Safra"
+              value={filters.seasonId}
+              onChange={(e) => patchFilter({ seasonId: e.target.value })}
+              options={seasons.map((s) => ({ value: s.id, label: s.name }))}
+            />
+            <Select
+              id="filtro_modulo"
+              label="Módulo"
+              value={filters.moduleId}
+              onChange={(e) => patchFilter({ moduleId: e.target.value })}
+              options={modules.map((m) => ({ value: m.id, label: m.name }))}
+            />
+            <Select
+              id="filtro_pivo"
+              label="Pivô"
+              value={filters.pivotId}
+              onChange={(e) => patchFilter({ pivotId: e.target.value, parcelId: "" })}
+              options={pivots.map((p) => ({ value: p.id, label: p.name }))}
+            />
+            <Select
+              id="filtro_parcela"
+              label="Parcela"
+              value={filters.parcelId}
+              onChange={(e) => patchFilter({ parcelId: e.target.value })}
+              options={parcelOptions.map((p) => ({
+                value: p.id,
+                label: p.name || pivotMap.get(p.pivot_id)?.name || p.id,
+              }))}
+            />
+            <Select
+              id="filtro_cultura"
+              label="Cultura"
+              value={filters.cultureId}
+              onChange={(e) => patchFilter({ cultureId: e.target.value })}
+              options={cultures.map((cu) => ({ value: cu.id, label: cu.name }))}
+            />
+          </div>
+
+          <div className="flex flex-col gap-4 border-t border-gray-100 pt-4 dark:border-white/[0.06] lg:flex-row lg:items-end lg:justify-between">
+            <div className="grid w-full gap-3 sm:grid-cols-2 lg:max-w-[430px]">
+              <Input
+                id="periodo_de"
+                label="Período de"
+                type="date"
+                value={filters.periodFrom}
+                onChange={(e) => patchFilter({ periodFrom: e.target.value })}
+              />
+              <Input
+                id="periodo_ate"
+                label="Período até"
+                type="date"
+                value={filters.periodTo}
+                onChange={(e) => patchFilter({ periodTo: e.target.value })}
+              />
+            </div>
+
+            <div className="flex items-center justify-between gap-3 lg:justify-end">
+              {hasSearch && (
+                <span className="text-[11px] font-medium text-graphite-400 dark:text-gray-500">
+                  {activeFilterCount} filtro{activeFilterCount === 1 ? "" : "s"} aplicado{activeFilterCount === 1 ? "" : "s"}
+                </span>
+              )}
+              <Button
+                variant="secondary"
+                type="button"
+                disabled={!hasSearch}
+                onClick={() => { setFilters(EMPTY_HISTORY_FILTERS); setSelectedId(null); }}
+              >
+                Limpar filtros
+              </Button>
+            </div>
+          </div>
         </div>
       </Card>
 
-      <div className="flex justify-end">
-        <Button variant="secondary" type="button" onClick={() => { setFilters(EMPTY_HISTORY_FILTERS); setSelectedId(null); }}>
-          Limpar filtros
-        </Button>
-      </div>
-
-      {hasSearch && (
-        <Card>
-          {loading ? (
-            <div className="flex items-center justify-center gap-3 py-8">
-              <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-              <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+      {!hasSearch ? (
+        <Card className="border-dashed py-12 text-center">
+          <div className="mx-auto flex h-11 w-11 items-center justify-center rounded-full bg-brand-50 text-brand-700 dark:bg-brand-500/10 dark:text-brand-300">
+            <svg className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7} viewBox="0 0 24 24" aria-hidden="true">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M11 4a7 7 0 105.6 11.2L21 19.6M11 8v6m-3-3h6" />
+            </svg>
+          </div>
+          <h3 className="mt-3 text-sm font-bold text-graphite-800 dark:text-white">Escolha os dados para consultar</h3>
+          <p className="mx-auto mt-1 max-w-lg text-xs leading-5 text-graphite-400 dark:text-gray-500">
+            Selecione pelo menos uma safra, módulo, pivô, parcela, cultura ou período. Nenhum histórico é exibido antes da consulta.
+          </p>
+        </Card>
+      ) : (
+        <Card className="overflow-hidden p-0">
+          <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 dark:border-white/[0.06] sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-sm font-bold text-graphite-900 dark:text-white">Resultados da consulta</h2>
+              <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
+                {loading ? "Atualizando registros..." : `${resultStats.total} registro${resultStats.total === 1 ? "" : "s"} encontrado${resultStats.total === 1 ? "" : "s"}`}
+              </p>
             </div>
-          ) : filtered.length === 0 ? (
-            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-              Nenhuma parcela encontrada para os dados informados.
-            </p>
-          ) : (
-            <Table columns={parcelColumns} data={filtered} getKey={(r) => r.id} />
-          )}
+
+            {!loading && resultStats.total > 0 && (
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-lg border border-gray-100 bg-gray-50 px-2.5 py-1 text-[11px] font-semibold text-graphite-600 dark:border-white/[0.06] dark:bg-white/[0.03] dark:text-gray-300">
+                  Total <strong className="ml-1 text-graphite-900 dark:text-white">{resultStats.total}</strong>
+                </span>
+                <span className="rounded-lg border border-emerald-100 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+                  Ativas <strong className="ml-1">{resultStats.active}</strong>
+                </span>
+                <span className="rounded-lg border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+                  Histórico <strong className="ml-1">{resultStats.historic}</strong>
+                </span>
+              </div>
+            )}
+          </div>
+
+          <div className="p-4 sm:p-5">
+            {loading ? (
+              <div className="flex items-center justify-center gap-3 py-10">
+                <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+                <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando registros...</span>
+              </div>
+            ) : filtered.length === 0 ? (
+              <div className="py-10 text-center">
+                <p className="text-sm font-semibold text-graphite-700 dark:text-gray-300">Nenhuma parcela encontrada</p>
+                <p className="mt-1 text-xs text-graphite-400 dark:text-gray-500">Revise os filtros informados e tente uma combinação diferente.</p>
+              </div>
+            ) : (
+              <Table columns={parcelColumns} data={filtered} getKey={(r) => r.id} />
+            )}
+          </div>
         </Card>
       )}
 
       {selected && summary && (
         <div className="space-y-4">
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div>
-              <h2 className="text-base font-bold text-graphite-900 dark:text-white">
-                {selected.name || pivotMap.get(selected.pivot_id)?.name || "Ciclo encerrado"}
-              </h2>
-              <p className="mt-1 text-sm text-graphite-400 dark:text-gray-500">
-                {cultureMap.get(selected.culture_id) ?? "—"} · {seasonMap.get(selected.season_id) ?? "—"} · {fmtDate(selected.planting_date)} → {fmtDate(selected.closed_at)}
-                {selected.close_reason
-                  ? ` · ${PARCEL_CLOSE_REASON_LABELS[selected.close_reason as ParcelCloseReason] ?? selected.close_reason}`
-                  : ""}
-              </p>
+          <Card className="overflow-hidden p-0">
+            <div className="flex flex-col gap-4 border-l-4 border-brand-600 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <div className="mb-1.5 flex flex-wrap items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-brand-700 dark:text-brand-300">
+                    Detalhes do ciclo
+                  </span>
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[9px] font-bold uppercase tracking-[0.08em] text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+                    <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
+                    Histórico
+                  </span>
+                </div>
+                <h2 className="truncate text-base font-bold text-graphite-900 dark:text-white">
+                  {selected.name || pivotMap.get(selected.pivot_id)?.name || "Ciclo encerrado"}
+                </h2>
+                <p className="mt-1 text-xs leading-5 text-graphite-400 dark:text-gray-500">
+                  {cultureMap.get(selected.culture_id) ?? "—"} · {seasonMap.get(selected.season_id) ?? "—"} · {fmtDate(selected.planting_date)} → {fmtDate(selected.closed_at)}
+                  {selected.close_reason
+                    ? ` · ${PARCEL_CLOSE_REASON_LABELS[selected.close_reason as ParcelCloseReason] ?? selected.close_reason}`
+                    : ""}
+                </p>
+              </div>
+              <Button variant="secondary" onClick={() => { window.location.href = "/vinculacao"; }}>
+                Nova parcela neste pivô
+              </Button>
             </div>
-            <Button variant="secondary" onClick={() => { window.location.href = "/vinculacao"; }}>
-              Nova parcela neste pivô
-            </Button>
-          </div>
+          </Card>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
             <StatCard metric={{ id: "agua", title: "Água aplicada", value: `${summary.total_water_applied_mm.toFixed(0)} mm`, description: `${summary.irrigation_count} evento(s)` }} />
