@@ -21,6 +21,15 @@ describe("Central de Manejo — dashboard amplo", () => {
     expect(source).not.toContain("rastreamento das cores do mapa");
   });
 
+
+  it("explica a decisão, sinaliza qualidade dos dados e oferece auditoria", () => {
+    expect(source).toContain("Qualidade");
+    expect(source).toContain("decisionDataQuality");
+    expect(source).toContain("decisionSummary");
+    expect(source).toContain("Auditoria da decisão · últimos 7 dias");
+    expect(source).toContain("buildDecisionAudit");
+  });
+
   it("exibe as cinco faixas hídricas no painel lateral", () => {
     expect(source).toContain('status: "capacidade_campo"');
     expect(source).toContain('status: "boa_umidade"');
