@@ -45,8 +45,8 @@ function Legend({ color, text, dashed = false }: { color: string; text: string; 
   );
 }
 
-function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visible, expanded }: {
-  points: RasPoint[]; displayed: RasDisplayPoint[]; unit: RasDisplayUnit; replacementMm: number; mode: ZoomMode; visible: RASObservationsVisibility; expanded: boolean;
+function RasFullWidthChart({ points, displayed, unit, mode, visible, expanded }: {
+  points: RasPoint[]; displayed: RasDisplayPoint[]; unit: RasDisplayUnit; mode: ZoomMode; visible: RASObservationsVisibility; expanded: boolean;
 }) {
   // O SVG recebe dimensões em pixels reais: textos, círculos e nomes não são
   // deformados pelo redimensionamento da janela ou ao entrar em tela cheia.
@@ -100,10 +100,6 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
       const d = `M ${x(i)},${y(p[upper])} L ${x(i+1)},${y(next[upper])} L ${x(i+1)},${y(next[lower])} L ${x(i)},${y(p[lower])} Z`;
       return <path key={`${upper}-${lower}-${i}`} d={d} fill={fill} />;
     });
-  const lastX = x(points.length - 1);
-  const lastY = y(latest.current);
-  const hasReplacement = replacementMm > 0.05 && visible.current && visible.capacity;
-
   // A banda inferior utiliza escala INDEPENDENTE em mm/dia. Não mistura
   // eventos de entrada/ETo com o eixo da umidade em % da capacidade de campo.
   // Irrigação é a lâmina bruta REAL lançada; chuva é a chuva efetiva usada no
@@ -159,15 +155,6 @@ function RasFullWidthChart({ points, displayed, unit, replacementMm, mode, visib
             <title>{p.date}: atual {n(p.current,unit==="weight"?2:1)} {RAS_UNITS[unit].axis}; CC {n(p.capacity,1)}, limite {n(p.safety,1)}, PMP {n(p.pmp,1)}; ARM {n(points[i].armMm,1)} mm, CAD {n(points[i].ctaMm,1)} mm.</title>
           </circle>)}
         </g>
-        {hasReplacement && (
-          <g>
-            <line x1={lastX+18} y1={lastY} x2={lastX+18} y2={y(latest.capacity)+5} stroke="#24baff" strokeWidth={5} strokeLinecap="round"/>
-            <polygon points={`${lastX+18},${y(latest.capacity)-5} ${lastX+10},${y(latest.capacity)+10} ${lastX+26},${y(latest.capacity)+10}`} fill="#24baff"/>
-            <rect x={lastX-125} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))} width={118} height={51} rx={7} fill="#1068db" stroke="#3baaff"/>
-            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+20} textAnchor="middle" fontSize={18} fill="white" fontWeight="bold">Repor {n(replacementMm,1)} mm</text>
-            <text x={lastX-66} y={y(Math.min(yMax-0.5,Math.max(latest.current+(yMax-yMin)*.12,yMin+(yMax-yMin)*.72)))+39} textAnchor="middle" fontSize={18} fill="white">até CC do dia</text>
-          </g>
-        )}
         {/* Modo %CC: uma única área plotada; eixo direito exclusivo dos eventos em mm/dia.
             As barras começam exatamente em 0 mm na base, independentemente do eixo esquerdo. */}
         {integratedCc ? (
@@ -298,20 +285,21 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
   const irrigationAccumulatedMm = points.reduce((sum, point) => sum + (point.irrigationAppliedMm ?? 0), 0);
   const etcPotentialAccumulatedMm = rows.reduce((sum, row) => sum + (row.etcPotential ?? row.etc ?? 0), 0);
   const pivotAreaLabel = areaHa != null && Number.isFinite(areaHa) ? n(areaHa, 1) + " ha" : "—";
-  const recommendedGrossMm = repl.grossMm ?? 0;
+  const deficitToFieldCapacityMm = repl.netMm;
 
   return (
     <section className="w-full min-w-0 space-y-3 rounded-[18px] border border-emerald-900/40 bg-[#051216] p-3 text-white shadow-xl sm:p-4">
       <header className="flex flex-wrap items-center justify-between gap-3 px-1 py-1">
         <div>
           <h2 className="text-[22px] font-extrabold leading-tight tracking-tight text-white sm:text-[28px]">Reservatório de Água do Solo (RAS)</h2>
-          <p className="mt-1 text-[12px] text-slate-300">Disponibilidade hídrica e recomendação para retornar a 100% da capacidade de campo</p>
+          <p className="mt-1 text-[12px] text-slate-300">Disponibilidade hídrica, capacidade de campo e limite de manejo</p>
           <p className="mt-1 text-[11px] text-slate-400">As barras de chuva e irrigação utilizam os lançamentos realizados na operação, na data de cada registro.</p>
         </div>
       </header>
       <p className="px-1 text-[12px] text-slate-300">
-        Selecione uma das três visualizações do mesmo balanço diário. As barras de irrigação e chuva partem de 0 mm
-        no eixo direito, sem interferir na escala de umidade e na exploração radicular.
+        Selecione uma das três visualizações do mesmo balanço diário. A capacidade de campo é a referência superior
+        de armazenamento; a recomendação operacional de irrigação é definida pelo limite de manejo (AFD/CRA). As barras
+        de irrigação e chuva partem de 0 mm no eixo direito, sem interferir na escala de umidade e na exploração radicular.
       </p>
 
       <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-[#0c232a] p-2.5"
@@ -335,7 +323,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
         <Tile label="Fator de disponibilidade" value={n(now.f,3)} hint={n(now.f*100,1)+"% da CTA"} tone="purple" symbol="ƒ"/>
         <Tile label="Kc atual" value={n(now.kc,2)} hint="Coeficiente da cultura" tone="green" symbol="K"/>
         <Tile label="ETo atual" value={n(now.et0,2)+" mm/d"} hint="Demanda atmosférica" tone="orange" symbol="☀"/>
-        <Tile label="Irrigação recomendada" value={mmOrDash(recommendedGrossMm)} hint={recommendedGrossMm > 0 ? "Lâmina bruta para 100% CC" : "Sem reposição hoje"} tone={recommendedGrossMm > 0 ? "blue" : "green"} symbol="↥"/>
+        <Tile label="Déficit até CC" value={mmOrDash(deficitToFieldCapacityMm)} hint="Referência para 100% da CC · não é recomendação" tone="blue" symbol="↥"/>
       </div>
 
       <div className="rounded-xl border border-white/10 bg-[#0c232a] px-3 py-2.5">
@@ -404,8 +392,7 @@ export function SoilReservoirReferencePanel({ rows, soilLayers = [], bulkDensity
                 </div>
               ) : (
                 <RasFullWidthChart points={points} displayed={card.series} unit={card.id}
-                  replacementMm={repl.netMm} mode="full"
-                  visible={seriesVisibility} expanded={isExpanded}/>
+                  mode="full" visible={seriesVisibility} expanded={isExpanded}/>
               )}
               <div className="flex flex-wrap items-center justify-center gap-x-4 gap-y-1 px-2 py-2">
                 {seriesVisibility.current && <Legend color={colour.current} text={card.id === "mm" ? "Água disponível (ARM)" : "Umidade calculada"}/>}
