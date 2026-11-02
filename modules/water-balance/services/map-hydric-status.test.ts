@@ -68,10 +68,10 @@ describe("classifyWaterStatus", () => {
     expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.blue);
     expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.label).toBe("100% CC");
     expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.green);
-    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.label).toBe("Umidade confortável");
+    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.label).toBe("Ideal");
     expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe(MAP_HYDRIC_COLORS.yellow);
     expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe(MAP_HYDRIC_COLORS.red);
-    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.label).toBe("Urgente");
+    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.label).toBe("Déficit");
   });
 });
 
