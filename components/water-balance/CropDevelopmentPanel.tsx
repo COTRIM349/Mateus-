@@ -498,23 +498,6 @@ export function CropDevelopmentPanel({
                 )}
               </g>
 
-              {false && fieldStage && observedAtDae!=null && visible.stages && (
-                <g>
-                  {/* Marco de campo persistido: futuras faixas continuam como referência. */}
-                  <rect x={todayX??plot.right} y={plot.top}
-                    width={Math.max(0,plot.right-(todayX??plot.right))}
-                    height={plotHeight} fill="#f8fafc" opacity={.35}/>
-                  <line x1={px(observedAtDae)} x2={px(observedAtDae)}
-                    y1={plot.top} y2={plot.bottom}
-                    stroke="#eab308" strokeWidth={2.4} strokeDasharray="6 4"/>
-                  <rect x={Math.min(plot.right-166,Math.max(plot.left,px(observedAtDae)-83))}
-                    y={56} width={166} height={24} rx={6} fill="#065f46"/>
-                  <text x={Math.min(plot.right-83,Math.max(plot.left+83,px(observedAtDae)))}
-                    y={72} fill="white" fontSize={12} fontWeight={800} textAnchor="middle">
-                    {fieldStage.stage.code} · REGISTRO DE CAMPO
-                  </text>
-                </g>
-              )}
               {todayX != null && (
                 <g>
                   <rect x={Math.min(plot.right - 114, Math.max(plot.left, todayX - 48))} y={1}
