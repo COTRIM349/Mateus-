@@ -1,7 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
-import { useSearchParams } from "next/navigation";
+import { useState, useMemo, useEffect } from "react";
 import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
@@ -33,8 +32,10 @@ const TABS = [
 
 export default function DashboardPage() {
   const { profile, farms, activeFarmId } = useAuth();
-  const searchParams = useSearchParams();
-  const panelMode = searchParams.get("modo") === "painel";
+  const [panelMode, setPanelMode] = useState(false);
+  useEffect(() => {
+    setPanelMode(new URLSearchParams(window.location.search).get("modo") === "painel");
+  }, []);
   const activeFarm = farms.find((f) => f.id === activeFarmId);
   const [activeTab, setActiveTab] = useState("painel");
 
