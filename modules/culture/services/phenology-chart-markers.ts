@@ -27,7 +27,7 @@ export function buildPhenologyChartMarkers(
   targets: PhenologyTargetRow[],
 ): PhenologyChartMarker[] {
   const targetByMarker = new Map(targets.map((target) => [target.marker_id, target]));
-  return [...markers]
+  const resolved = [...markers]
     .sort((a, b) => a.marker_order - b.marker_order)
     .flatMap((marker) => {
       const target = targetByMarker.get(marker.id);
@@ -43,6 +43,17 @@ export function buildPhenologyChartMarkers(
         origin: calibrated ? "calibrado" as const : "esperado" as const,
         ...(target.confidence ? { confidence: target.confidence } : {}),
       }];
-    })
-    .sort((a, b) => a.dae - b.dae);
+    });
+
+  // Defesa de interface: um código fenológico só pode aparecer uma vez.
+  // Se houver duplicidade acidental no cadastro, a calibração ativa prevalece;
+  // em empate, preservamos o primeiro marco da ordem agronômica.
+  const unique = new Map<string, PhenologyChartMarker>();
+  for (const marker of resolved) {
+    const previous = unique.get(marker.code);
+    if (!previous || (previous.origin !== "calibrado" && marker.origin === "calibrado")) {
+      unique.set(marker.code, marker);
+    }
+  }
+  return Array.from(unique.values()).sort((a, b) => a.dae - b.dae);
 }
