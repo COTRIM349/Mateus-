@@ -12,17 +12,32 @@ function formatChip(date: string, today: string): string {
   return `${day}/${month}`;
 }
 
-function Swatch({ status, count }: { status: MapHydricStatus; count: number }) {
+function MoistureBand({
+  status,
+  count,
+  reference,
+  detail,
+}: {
+  status: MapHydricStatus;
+  count: number;
+  reference: string;
+  detail: string;
+}) {
   const conf = MAP_HYDRIC_STATUS_CONFIG[status];
   return (
-    <span className="inline-flex items-center gap-1.5 text-[11px] text-graphite-600 dark:text-[#A6B3C7]">
-      <span
-        className="h-3 w-3 shrink-0 rounded-[3px] ring-1 ring-black/10 dark:ring-white/10"
-        style={{ backgroundColor: conf.color }}
-      />
-      <span>{conf.label}</span>
-      <span className="tabular-nums text-graphite-400 dark:text-[#68778E]">{count}</span>
-    </span>
+    <div className="flex min-w-[118px] items-center gap-2.5">
+      <div
+        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border-[3px] border-white text-[10px] font-extrabold shadow-sm ring-1 ring-black/10 dark:border-[#060D17] dark:ring-white/10"
+        style={{ backgroundColor: conf.color, color: conf.onColor }}
+      >
+        {reference}
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold leading-tight text-graphite-800 dark:text-[#F3F7FF]">{conf.label}</p>
+        <p className="mt-0.5 text-[9.5px] leading-tight text-graphite-400 dark:text-[#68778E]">{detail}</p>
+        <p className="mt-0.5 text-[9.5px] font-semibold tabular-nums text-graphite-500 dark:text-[#8E9CB1]">{count} pivô(s)</p>
+      </div>
+    </div>
   );
 }
 
@@ -74,19 +89,17 @@ export function HydricMapLegend({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-graphite-400 dark:text-[#68778E]">
-            Faixas de umidade (% da capacidade de campo)
+            Umidade do solo · % da capacidade de campo
           </p>
-          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-            {MAP_HYDRIC_LEGEND_ORDER.map((status) => (
-              <Swatch key={status} status={status} count={counts[status] ?? 0} />
-            ))}
+          <div className="mt-2 flex flex-wrap gap-x-5 gap-y-3">
+            <MoistureBand status="capacidade_campo" count={counts.capacidade_campo ?? 0} reference="100%" detail="Capacidade de campo" />
+            <MoistureBand status="boa_umidade" count={counts.boa_umidade ?? 0} reference="95%" detail="95 a <100% da CC" />
+            <MoistureBand status="atencao" count={counts.atencao ?? 0} reference="90%" detail="90 a <95% da CC" />
+            <MoistureBand status="deficit_hidrico" count={counts.deficit_hidrico ?? 0} reference="<90%" detail="Déficit · ação prioritária" />
             {(counts.incompleto ?? 0) > 0 && (
-              <Swatch status="incompleto" count={counts.incompleto ?? 0} />
+              <MoistureBand status="incompleto" count={counts.incompleto ?? 0} reference="—" detail="Dados indisponíveis" />
             )}
           </div>
-          <p className="mt-1.5 text-[10px] text-graphite-400 dark:text-[#68778E]">
-            Azul 100% · Verde 95–&lt;100% · Amarelo 90–&lt;95% · Vermelho &lt;90%
-          </p>
         </div>
 
         {demand ? (
