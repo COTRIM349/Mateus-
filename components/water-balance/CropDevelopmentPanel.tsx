@@ -112,6 +112,7 @@ export function CropDevelopmentPanel({
       .map((r) => ({
         dae: r.dae!, date: r.date, kc: r.kc, root: r.rootDepth,
         estimatedRoot: r.rootDepthEstimated ?? null,
+        ky: r.ky ?? null,
       })).sort((a, b) => a.dae - b.dae),
     [rows],
   );
