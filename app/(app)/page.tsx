@@ -164,6 +164,7 @@ function DashboardPanelMode({
   const [modulePivots, setModulePivots] = useState<DashboardModulePivot[]>([]);
   const [modules, setModules] = useState<DashboardModule[]>([]);
   const [modulesLoading, setModulesLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState<"todos" | "deficit" | "atencao" | "manejo">("todos");
 
   useEffect(() => {
     let cancelled = false;
@@ -220,6 +221,16 @@ function DashboardPanelMode({
     };
   }, [activeFarmId]);
 
+  const pivotById = useMemo(
+    () => new Map(modulePivots.map((pivot) => [pivot.id, pivot])),
+    [modulePivots],
+  );
+
+  const moduleNameById = useMemo(
+    () => new Map(modules.map((module) => [module.id, module.name?.toUpperCase()])),
+    [modules],
+  );
+
   const hydricByPivot = useMemo(() => {
     const base = toHydricMapMarkers(states);
     const byPivot = new Map<string, typeof base>();
@@ -235,13 +246,65 @@ function DashboardPanelMode({
     return byPivot;
   }, [states]);
 
+  const stateMetrics = useMemo(() => {
+    return states
+      .filter((state) => state.current)
+      .map((state) => {
+        const current = state.current!;
+        const pivot = pivotById.get(state.pivotId);
+        const area = pivot?.area ?? 0;
+        const moisture = current.moisturePctCc ?? 0;
+        const depth = Math.max(0, current.recommendedGrossDepth ?? 0);
+        const volume = depth * area * 10;
+        const moduleName = pivot?.module_id ? moduleNameById.get(pivot.module_id) ?? "—" : "—";
+        const category = moisture < 85 ? "deficit" : moisture < 90 ? "atencao" : "manejo";
+
+        return {
+          state,
+          current,
+          pivot,
+          area,
+          moisture,
+          depth,
+          volume,
+          moduleName,
+          category,
+        };
+      })
+      .sort((a, b) => a.moisture - b.moisture);
+  }, [states, pivotById, moduleNameById]);
+
+  const farmSummary = useMemo(() => {
+    const totalArea = modulePivots.reduce((sum, pivot) => sum + (pivot.area ?? 0), 0);
+    const managedArea = stateMetrics.reduce((sum, item) => sum + item.area, 0);
+    const weightedCc = managedArea > 0
+      ? stateMetrics.reduce((sum, item) => sum + item.moisture * item.area, 0) / managedArea
+      : 0;
+    const irrigating = stateMetrics.filter((item) => item.depth > 0);
+    const irrigatingArea = irrigating.reduce((sum, item) => sum + item.area, 0);
+    const totalVolume = irrigating.reduce((sum, item) => sum + item.volume, 0);
+    const meanDepth = irrigatingArea > 0
+      ? irrigating.reduce((sum, item) => sum + item.depth * item.area, 0) / irrigatingArea
+      : 0;
+
+    return {
+      totalArea,
+      weightedCc,
+      deficit: stateMetrics.filter((item) => item.category === "deficit").length,
+      irrigatingArea,
+      totalVolume,
+      meanDepth,
+    };
+  }, [modulePivots, stateMetrics]);
+
   const moduleCards = useMemo(() => {
     const preferred = ["M1", "M2", "M3"];
+
     return preferred.map((moduleName) => {
       const module = modules.find((item) => item.name?.toUpperCase() === moduleName);
-      const pivots = module
-        ? modulePivots.filter((pivot) => pivot.module_id === module.id)
-        : [];
+      const pivots = module ? modulePivots.filter((pivot) => pivot.module_id === module.id) : [];
+      const pivotIds = new Set(pivots.map((pivot) => pivot.id));
+      const metrics = stateMetrics.filter((item) => pivotIds.has(item.state.pivotId));
 
       const markers = pivots
         .filter((pivot) => pivot.latitude != null && pivot.longitude != null)
@@ -262,103 +325,171 @@ function DashboardPanelMode({
         });
 
       const totalArea = pivots.reduce((sum, pivot) => sum + (pivot.area ?? 0), 0);
-      const hydricCount = pivots.filter((pivot) => hydricByPivot.has(pivot.id)).length;
+      const managedArea = metrics.reduce((sum, item) => sum + item.area, 0);
+      const weightedCc = managedArea > 0
+        ? metrics.reduce((sum, item) => sum + item.moisture * item.area, 0) / managedArea
+        : 0;
+      const irrigating = metrics.filter((item) => item.depth > 0);
+      const irrigatingArea = irrigating.reduce((sum, item) => sum + item.area, 0);
+      const totalVolume = irrigating.reduce((sum, item) => sum + item.volume, 0);
+      const meanDepth = irrigatingArea > 0
+        ? irrigating.reduce((sum, item) => sum + item.depth * item.area, 0) / irrigatingArea
+        : 0;
 
       return {
         name: moduleName,
         pivots,
         markers,
         totalArea,
-        hydricCount,
+        weightedCc,
+        deficit: metrics.filter((item) => item.category === "deficit").length,
+        attention: metrics.filter((item) => item.category === "atencao").length,
+        managed: metrics.filter((item) => item.category === "manejo").length,
+        irrigatingArea,
+        totalVolume,
+        meanDepth,
       };
     });
-  }, [modules, modulePivots, hydricByPivot]);
+  }, [modules, modulePivots, hydricByPivot, stateMetrics]);
 
-  const cards = useMemo(
+  const filteredCards = useMemo(
     () =>
-      states
-        .filter((s) => s.current)
-        .slice()
-        .sort((a, b) => (a.current?.moisturePctCc ?? 0) - (b.current?.moisturePctCc ?? 0)),
-    [states],
+      statusFilter === "todos"
+        ? stateMetrics
+        : stateMetrics.filter((item) => item.category === statusFilter),
+    [stateMetrics, statusFilter],
   );
 
-  const today = new Date().toLocaleDateString("pt-BR", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
+  const priorities = useMemo(
+    () => stateMetrics.filter((item) => item.depth > 0).slice(0, 5),
+    [stateMetrics],
+  );
+
+  const formatNumber = (value: number, digits = 0) =>
+    value.toLocaleString("pt-BR", {
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
+    });
+
+  const navItems = [
+    ["⌂", "Dashboard", "/"],
+    ["♙", "Cadastro", "/cadastro"],
+    ["☁", "Clima", "/clima"],
+    ["↗", "Manejo Diário", "/manejo-diario"],
+    ["ϟ", "Energia", "/energia"],
+    ["▥", "Relatórios", "/relatorios"],
+    ["◷", "Histórico", "/historico"],
+    ["⚙", "Configurações", "/configuracoes"],
+  ];
 
   return (
-    <div className="min-h-screen bg-[#f4f7f7] text-graphite-900">
-      <header className="flex min-h-[62px] items-center justify-between gap-4 bg-[#114f51] px-5 py-3 text-white sm:px-7 lg:px-8">
-        <div className="flex items-center gap-3">
-          <span className="text-2xl font-black tracking-tight">SCA</span>
-          <span className="h-7 w-px bg-white/45" />
-          <span className="text-base font-extrabold tracking-[0.12em]">
-            IRRIGA <span className="text-emerald-300">PRO</span>
+    <div className="min-h-screen bg-[#f5f7fa] text-[#142033]">
+      <header className="flex min-h-[64px] items-center gap-4 bg-[#073457] px-4 text-white shadow-sm lg:px-6">
+        <button
+          type="button"
+          onClick={() => { window.location.href = "/"; }}
+          className="mr-2 flex items-center gap-2.5"
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-xl">🌱</span>
+          <span className="hidden text-left leading-tight sm:block">
+            <span className="block text-xl font-black">SCA</span>
+            <span className="block text-sm font-extrabold">Irriga Pro</span>
           </span>
-        </div>
-        <div className="flex items-center gap-2 text-xs sm:gap-3 sm:text-sm">
-          <span className="hidden rounded-lg border border-white/15 bg-white/10 px-3 py-2 font-semibold sm:inline-flex">
-            {farmName.toUpperCase()}
+        </button>
+
+        <nav className="hidden min-w-0 flex-1 items-center gap-1 lg:flex">
+          {navItems.map(([icon, label, href], index) => (
+            <button
+              key={label}
+              type="button"
+              onClick={() => { window.location.href = href; }}
+              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition hover:bg-white/10 ${index === 0 ? "bg-[#1c67ad]" : "text-white/90"}`}
+            >
+              <span className="text-sm">{icon}</span>
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <div className="ml-auto flex items-center gap-2">
+          <span className="hidden rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold xl:inline-flex">
+            {farmName}
           </span>
-          <span className="hidden text-white/80 md:inline">{today}</span>
-          <button
-            type="button"
-            onClick={() => { window.location.href = "/"; }}
-            className="rounded-lg border border-white/25 bg-white/10 px-3 py-2 font-semibold transition hover:bg-white/20"
-          >
-            ↪ Sair do modo painel
-          </button>
+          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1f5f9d] text-xs font-black">
+            NM
+          </span>
         </div>
       </header>
 
-      <main className="space-y-3 p-2.5 sm:p-3.5">
-        <div className="flex items-end justify-between gap-3">
-          <div>
-            <h2 className="text-lg font-black tracking-tight sm:text-xl">Mapa hídrico por módulo</h2>
-            <p className="mt-0.5 text-[11px] text-graphite-400">M1, M2 e M3 visíveis simultaneamente</p>
+      <main className="space-y-3 p-3 lg:p-4">
+        <section className="grid grid-cols-2 gap-2 lg:grid-cols-6">
+          <div className="col-span-2 flex min-h-[84px] items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 shadow-sm lg:col-span-1">
+            <span className="text-3xl">🌾</span>
+            <div>
+              <div className="text-sm font-black">{farmName} (Geral)</div>
+              <div className="mt-0.5 text-[11px] font-semibold text-gray-500">
+                {modulePivots.length} pivôs | {formatNumber(farmSummary.totalArea)} ha
+              </div>
+            </div>
           </div>
-        </div>
+
+          <KpiTile icon="💧" value={`${formatNumber(farmSummary.weightedCc)}%`} label="CC média" />
+          <KpiTile icon="🌱" value={String(farmSummary.deficit)} label="Pivôs em déficit" />
+          <KpiTile icon="🛣️" value={`${formatNumber(farmSummary.irrigatingArea)} ha`} label="Área a irrigar" />
+          <KpiTile icon="💧" value={`${formatNumber(farmSummary.totalVolume)} m³`} label="Volume estimado" />
+          <KpiTile icon="◫" value={`${formatNumber(farmSummary.meanDepth, 1)} mm`} label="Lâmina média" />
+        </section>
 
         <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
           {moduleCards.map((module) => (
             <article
               key={module.name}
-              className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.05)]"
+              className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)]"
             >
-              <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-3.5 py-2.5">
-                <div className="flex items-center gap-2.5">
-                  <span className="rounded-lg bg-[#0e7358] px-3 py-1 text-sm font-black text-white">
-                    {module.name}
-                  </span>
-                  <span className="text-[11px] font-semibold text-graphite-500">
-                    {module.pivots.length} pivôs
-                  </span>
+              <div className="border-b border-gray-100 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="rounded-lg bg-[#164c7d] px-3 py-1.5 text-sm font-black text-white">
+                      {module.name}
+                    </span>
+                    <span className="text-[11px] font-bold text-gray-600">
+                      {module.pivots.length} pivôs
+                    </span>
+                    <span className="h-4 w-px bg-gray-200" />
+                    <span className="text-[11px] font-bold text-gray-600">
+                      {formatNumber(module.totalArea)} ha
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="inline-block h-8 w-8 rounded-full border-[5px] border-green-500 border-r-gray-200" />
+                    <span className="text-sm font-black">{formatNumber(module.weightedCc)}%</span>
+                    <span className="text-[8px] font-bold text-gray-500">CC</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-[11px] font-bold text-graphite-700">
-                    {module.totalArea.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ha
-                  </div>
-                  <div className="text-[9px] text-graphite-400">
-                    {module.hydricCount} em manejo
-                  </div>
+
+                <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1.5 rounded-xl border border-gray-100 bg-gray-50/70 p-2 text-[9px] font-semibold">
+                  <span>🔴 {module.deficit} em déficit</span>
+                  <span>🟡 {module.attention} em atenção</span>
+                  <span>🟢 {module.managed} em manejo</span>
+                  <span>🌱 {formatNumber(module.irrigatingArea)} ha a irrigar</span>
+                  <span>💧 {formatNumber(module.totalVolume)} m³</span>
+                  <span>▰ {formatNumber(module.meanDepth, 1)} mm</span>
                 </div>
               </div>
 
               {modulesLoading ? (
-                <div className="flex h-[290px] items-center justify-center">
+                <div className="flex h-[250px] items-center justify-center">
                   <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
                 </div>
               ) : module.markers.length > 0 ? (
                 <PivotMap
                   pivots={module.markers}
                   interactive
-                  className="h-[290px] w-full rounded-none border-0 2xl:h-[315px]"
+                  className="h-[250px] w-full rounded-none border-0 2xl:h-[275px]"
                 />
               ) : (
-                <div className="flex h-[290px] items-center justify-center text-xs text-graphite-400">
+                <div className="flex h-[250px] items-center justify-center text-xs text-gray-400">
                   Nenhum pivô com coordenadas em {module.name}.
                 </div>
               )}
@@ -366,70 +497,130 @@ function DashboardPanelMode({
           ))}
         </section>
 
-        <div className="flex items-center justify-between pt-0.5">
-          <h2 className="text-sm font-black tracking-tight">Status dos pivôs</h2>
-          <span className="text-[9px] text-graphite-400">{cards.length} pivôs em manejo</span>
-        </div>
+        <section className="grid grid-cols-1 gap-3 2xl:grid-cols-[1.5fr_1fr]">
+          <article className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">▣</span>
+                <h2 className="text-sm font-black">Status dos pivôs <span className="font-semibold text-gray-500">(todos os módulos)</span></h2>
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  ["todos", `Todos (${stateMetrics.length})`],
+                  ["deficit", `Déficit (${stateMetrics.filter((item) => item.category === "deficit").length})`],
+                  ["atencao", `Atenção (${stateMetrics.filter((item) => item.category === "atencao").length})`],
+                  ["manejo", `Manejo (${stateMetrics.filter((item) => item.category === "manejo").length})`],
+                ].map(([id, label]) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setStatusFilter(id as typeof statusFilter)}
+                    className={`rounded-full border px-3 py-1 text-[9px] font-bold transition ${
+                      statusFilter === id
+                        ? "border-[#164c7d] bg-[#164c7d] text-white"
+                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <section className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
-          {cards.map((state) => {
-            const c = state.current!;
-            const visual = panelVisual(c.moisturePctCc);
-            const pct = Math.max(0, Math.min(100, c.moisturePctCc));
-            return (
-              <article
-                key={hydricStateId(state)}
-                className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
-              >
-                <div className="flex items-center gap-1.5 p-2">
-                  <div className="relative h-[46px] w-[64px] shrink-0">
-                    <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
-                      <path
-                        d="M 12 62 A 48 48 0 0 1 108 62"
-                        fill="none"
-                        stroke="#e5e7eb"
-                        strokeWidth="5"
-                        strokeLinecap="round"
-                        pathLength="100"
-                      />
-                      <path
-                        d="M 12 62 A 48 48 0 0 1 108 62"
-                        fill="none"
-                        stroke={visual.ring}
-                        strokeWidth="5"
-                        strokeLinecap="round"
-                        pathLength="100"
-                        strokeDasharray={`${pct} 100`}
-                      />
-                    </svg>
-                    <div className="absolute inset-x-0 bottom-0 text-center">
-                      <div className="text-[13px] font-extrabold tracking-tight">
-                        {pct.toFixed(0)}% <span className="text-[7px] font-bold">CC</span>
+            <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
+              {filteredCards.slice(0, 14).map((item) => {
+                const visual = panelVisual(item.moisture);
+                const pct = Math.max(0, Math.min(100, item.moisture));
+                return (
+                  <div
+                    key={hydricStateId(item.state)}
+                    className="rounded-xl border border-gray-100 bg-white p-2 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
+                  >
+                    <div className="text-center text-[11px] font-black truncate">
+                      {item.state.parcelName?.trim() || item.state.pivotName}
+                    </div>
+                    <div className="relative mx-auto mt-1 h-[40px] w-[58px]">
+                      <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
+                        <path d="M 12 62 A 48 48 0 0 1 108 62" fill="none" stroke="#e5e7eb" strokeWidth="6" strokeLinecap="round" pathLength="100" />
+                        <path d="M 12 62 A 48 48 0 0 1 108 62" fill="none" stroke={visual.ring} strokeWidth="6" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />
+                      </svg>
+                      <div className="absolute inset-x-0 bottom-0 text-center text-[12px] font-black">
+                        {pct.toFixed(0)}% <span className="text-[7px]">CC</span>
                       </div>
                     </div>
+                    <div className="mt-1 flex justify-center">
+                      <span className={`rounded-full px-2 py-0.5 text-[7px] font-black ${visual.bg} ${visual.text}`}>
+                        {visual.label}
+                      </span>
+                    </div>
+                    <div className="mt-1.5 border-t border-gray-100 pt-1.5 text-center text-[9px] font-bold">
+                      💧 {formatNumber(item.depth, 1)} mm
+                    </div>
                   </div>
+                );
+              })}
+            </div>
+          </article>
 
-                  <div className="min-w-0 border-l border-gray-100 pl-2">
-                    <h3 className="truncate text-[11px] font-black tracking-tight">
-                      {state.parcelName?.trim() || state.pivotName}
-                    </h3>
-                    <p className="mt-0.5 truncate text-[8px] text-graphite-400">
-                      {state.cultureName}{state.varietyName ? ` · ${state.varietyName}` : ""}
-                    </p>
-                    <span className={`mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[7px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
-                      {visual.label}
-                    </span>
-                  </div>
-                </div>
+          <article className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">◎</span>
+                <h2 className="text-sm font-black">Prioridade de irrigação</h2>
+              </div>
+              <span className="text-[9px] font-semibold text-[#1b65a8]">Menor %CC primeiro</span>
+            </div>
 
-                <div className="border-t border-gray-100 bg-gray-50/70 px-2 py-1.5 text-[8px] text-graphite-500">
-                  💧 <span className="hidden 2xl:inline">Irrigação: </span><strong className="text-graphite-900">{c.recommendedGrossDepth.toFixed(1)} mm</strong>
-                </div>
-              </article>
-            );
-          })}
+            <div className="mt-3 overflow-hidden rounded-xl border border-gray-100">
+              <table className="w-full table-fixed text-left text-[9px]">
+                <thead className="bg-gray-50 text-gray-500">
+                  <tr>
+                    <th className="w-[8%] px-2 py-2">Ordem</th>
+                    <th className="w-[18%] px-2 py-2">Pivô</th>
+                    <th className="w-[12%] px-2 py-2">Mód.</th>
+                    <th className="w-[11%] px-2 py-2">%CC</th>
+                    <th className="w-[18%] px-2 py-2">Status</th>
+                    <th className="w-[15%] px-2 py-2">Lâmina</th>
+                    <th className="w-[18%] px-2 py-2">Volume</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {priorities.map((item, index) => {
+                    const visual = panelVisual(item.moisture);
+                    return (
+                      <tr key={hydricStateId(item.state)} className="border-t border-gray-100">
+                        <td className="px-2 py-2 font-black">{index + 1}º</td>
+                        <td className="truncate px-2 py-2 font-black">{item.state.pivotName}</td>
+                        <td className="px-2 py-2">{item.moduleName}</td>
+                        <td className="px-2 py-2 font-black">{formatNumber(item.moisture)}%</td>
+                        <td className="px-2 py-2">
+                          <span className={`rounded-full px-2 py-0.5 text-[7px] font-black ${visual.bg} ${visual.text}`}>
+                            {visual.label}
+                          </span>
+                        </td>
+                        <td className="px-2 py-2 font-bold">{formatNumber(item.depth, 1)} mm</td>
+                        <td className="px-2 py-2 font-bold">{formatNumber(item.volume)} m³</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </article>
         </section>
       </main>
+    </div>
+  );
+}
+
+function KpiTile({ icon, value, label }: { icon: string; value: string; label: string }) {
+  return (
+    <div className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 shadow-sm">
+      <span className="text-3xl">{icon}</span>
+      <div className="min-w-0">
+        <div className="truncate text-xl font-black tracking-tight">{value}</div>
+        <div className="mt-0.5 text-[10px] font-semibold text-gray-500">{label}</div>
+      </div>
     </div>
   );
 }
