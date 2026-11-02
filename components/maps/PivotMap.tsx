@@ -21,8 +21,6 @@ export interface PivotMarker {
   color?: string;
   sheetIncomplete?: boolean;
   statusLabel?: string;
-  /** Mantém o equipamento no enquadramento do mapa, mas sem sobreposição visual. */
-  plain?: boolean;
 }
 
 interface PivotMapProps {
@@ -125,20 +123,6 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect, int
         continue;
       }
 
-      if (pivot.plain) {
-        // Mantém o equipamento no enquadramento sem criar uma camada visual.
-        // Não usamos Circle.getBounds() aqui porque um círculo fora do mapa
-        // ainda não foi projetado pelo Leaflet e pode causar erro no cliente.
-        const lat = pivot.latitude;
-        const lng = pivot.longitude;
-        const latDelta = pivot.radiusMeters / 111_320;
-        const lngScale = Math.max(Math.cos((lat * Math.PI) / 180), 0.2);
-        const lngDelta = pivot.radiusMeters / (111_320 * lngScale);
-        bounds.extend([lat - latDelta, lng - lngDelta]);
-        bounds.extend([lat + latDelta, lng + lngDelta]);
-        continue;
-      }
-
       const style = {
         color: ringColor(baseColor),
         fillColor: baseColor,
@@ -185,7 +169,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect, int
     }
 
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [56, 56], maxZoom: 16 });
     }
   }, [pivots, highlightId, onSelect]);
 
