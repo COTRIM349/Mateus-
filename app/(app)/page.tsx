@@ -371,62 +371,14 @@ function DashboardPanelMode({
       maximumFractionDigits: digits,
     });
 
-  const navItems = [
-    ["⌂", "Dashboard", "/"],
-    ["♙", "Cadastro", "/cadastro"],
-    ["☁", "Clima", "/clima"],
-    ["↗", "Manejo Diário", "/manejo-diario"],
-    ["ϟ", "Energia", "/energia"],
-    ["▥", "Relatórios", "/relatorios"],
-    ["◷", "Histórico", "/historico"],
-    ["⚙", "Configurações", "/configuracoes"],
-  ];
-
   return (
     <div className="min-h-screen bg-[#f5f7fa] text-[#142033]">
-      <header className="flex min-h-[64px] items-center gap-4 bg-[#073457] px-4 text-white shadow-sm lg:px-6">
-        <button
-          type="button"
-          onClick={() => { window.location.href = "/"; }}
-          className="mr-2 flex items-center gap-2.5"
-        >
-          <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-500/20 text-xl">🌱</span>
-          <span className="hidden text-left leading-tight sm:block">
-            <span className="block text-xl font-black">SCA</span>
-            <span className="block text-sm font-extrabold">Irriga Pro</span>
-          </span>
-        </button>
-
-        <nav className="hidden min-w-0 flex-1 items-center gap-1 lg:flex">
-          {navItems.map(([icon, label, href], index) => (
-            <button
-              key={label}
-              type="button"
-              onClick={() => { window.location.href = href; }}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-semibold transition hover:bg-white/10 ${index === 0 ? "bg-[#1c67ad]" : "text-white/90"}`}
-            >
-              <span className="text-sm">{icon}</span>
-              {label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="ml-auto flex items-center gap-2">
-          <span className="hidden rounded-lg border border-white/15 bg-white/10 px-3 py-2 text-xs font-semibold xl:inline-flex">
-            {farmName}
-          </span>
-          <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#1f5f9d] text-xs font-black">
-            NM
-          </span>
-        </div>
-      </header>
-
       <main className="space-y-3 p-3 lg:p-4">
         <section className="grid grid-cols-2 gap-2 lg:grid-cols-6">
-          <div className="col-span-2 flex min-h-[84px] items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 shadow-sm lg:col-span-1">
-            <span className="text-3xl">🌾</span>
+          <div className="col-span-2 flex min-h-[72px] items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3.5 shadow-sm lg:col-span-1">
+            <span className="text-2xl">🌾</span>
             <div>
-              <div className="text-sm font-black">{farmName} (Geral)</div>
+              <div className="text-[13px] font-black">{farmName} (Geral)</div>
               <div className="mt-0.5 text-[11px] font-semibold text-gray-500">
                 {modulePivots.length} pivôs | {formatNumber(farmSummary.totalArea)} ha
               </div>
@@ -615,10 +567,10 @@ function DashboardPanelMode({
 
 function KpiTile({ icon, value, label }: { icon: string; value: string; label: string }) {
   return (
-    <div className="flex min-h-[84px] items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 shadow-sm">
-      <span className="text-3xl">{icon}</span>
+    <div className="flex min-h-[72px] items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3.5 shadow-sm">
+      <span className="text-2xl">{icon}</span>
       <div className="min-w-0">
-        <div className="truncate text-xl font-black tracking-tight">{value}</div>
+        <div className="truncate text-base font-black tracking-tight lg:text-lg">{value}</div>
         <div className="mt-0.5 text-[10px] font-semibold text-gray-500">{label}</div>
       </div>
     </div>
