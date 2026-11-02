@@ -379,8 +379,9 @@ export function CropDevelopmentPanel({
               {visible.stages && (
                 <g>
                   {/* As macrofases reais do cadastro colorem o ciclo mesmo sem VC, V1 ou R1 com DAE. */}
-                  {phaseBands.map((band, bandIndex) => {
+                  {phaseBands.map((band) => {
                     if (!phaseIsVisible(band.label)) return null;
+                    const bandIndex = phaseBands.findIndex((item) => item.key === band.key);
                     const visualEnd = bandIndex === phaseBands.length - 1 ? endDae : band.end;
                     const bx=px(band.start),bw=Math.max(0,px(visualEnd)-bx);
                     return <g key={band.key}>
