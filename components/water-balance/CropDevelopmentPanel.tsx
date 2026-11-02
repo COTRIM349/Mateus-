@@ -370,7 +370,6 @@ export function CropDevelopmentPanel({
                     ["kc", "Kc da cultura"],
                     ["root", "Raiz efetiva (histórico)"],
                     ["potential", "Curvas futuras aprovadas"],
-                    ["stages", "Faixas fenológicas"],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex cursor-pointer items-center gap-2 py-1.5 text-[12px] text-slate-700 dark:text-slate-200">
                       <input type="checkbox" checked={visible[key]}
@@ -397,7 +396,7 @@ export function CropDevelopmentPanel({
                     ))}
                   </div>
                   <button type="button" onClick={() => {
-                    setVisible({ kc: true, root: true, potential: true, stages: true });
+                    setVisible({ kc: true, root: true, potential: true, stages: false });
                     setHiddenPhases([]);
                   }} className="mt-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                     Mostrar todas
@@ -422,88 +421,6 @@ export function CropDevelopmentPanel({
                 </clipPath>
               </defs>
 
-              {visible.stages && (
-                <g>
-                  {/* As macrofases reais do cadastro colorem o ciclo mesmo sem VC, V1 ou R1 com DAE. */}
-                  {phaseBands.map((band) => {
-                    if (!phaseIsVisible(band.label)) return null;
-                    const bandIndex = phaseBands.findIndex((item) => item.key === band.key);
-                    const visualEnd = bandIndex === phaseBands.length - 1 ? endDae : band.end;
-                    const bx=px(band.start),bw=Math.max(0,px(visualEnd)-bx);
-                    return <g key={band.key}>
-                      <rect x={bx} y={plot.top} width={bw} height={plotHeight}
-                        fill={band.fill} opacity={.82}/>
-                      <rect x={bx} y={21} width={bw} height={33} fill={band.stripe} opacity={.97}/>
-                      <line x1={bx} y1={21} x2={bx} y2={plot.bottom}
-                        stroke={band.text} strokeOpacity={.18}/>
-                      {bw>=44 && <text x={bx+bw/2} y={42} textAnchor="middle"
-                        fontSize={bw>150?15:11} fontWeight={800} fill={band.text}>
-                        {band.label.length>23 && bw<180 ? band.label.slice(0,20)+"…" : band.label}
-                      </text>}
-                      <title>{band.label} · {Math.round(band.start)}–{Math.round(visualEnd)} DAE · cadastro da cultura</title>
-                    </g>;
-                  })}
-                  {phaseBands.length===0 && groupBands.map((group, i) => {
-                    if (!phaseIsVisible(group.group)) return null;
-                    const palette = stagePalette[group.group] ?? stagePalette["Estádios vegetativos"];
-                    const bx = px(group.start), bw = Math.max(0, px(group.end) - bx);
-                    return <g key={group.group + i}>
-                      <rect x={bx} y={plot.top} width={bw} height={plotHeight}
-                        fill={palette.fill} opacity={.62} />
-                      <rect x={bx} y={20} width={bw} height={34} fill={palette.header} />
-                      {bw >= 98 && <text x={bx + bw / 2} y={41} textAnchor="middle"
-                        fontSize={13} fontWeight={800} fill="#334155">{group.group}</text>}
-                    </g>;
-                  })}
-                  {stageBands.map((stage, i) => {
-                    // Um estádio pode atravessar a fronteira de duas macrofases.
-                    // As cores continuam recortadas pelas fases visíveis, mas o código
-                    // do estádio é renderizado UMA única vez para evitar VE/VE, R6/R6 etc.
-                    const spans = phaseBands.length
-                      ? phaseBands
-                          .map((b, bandIndex) => ({
-                            ...b,
-                            visualEnd: bandIndex === phaseBands.length - 1 ? endDae : b.end,
-                          }))
-                          .filter((b) => phaseIsVisible(b.label))
-                          .map((b) => ({
-                            start: Math.max(stage.start, b.start),
-                            end: Math.min(stage.end, b.visualEnd),
-                          }))
-                          .filter((span) => span.end > span.start)
-                      : phaseIsVisible(stage.group) ? [{start:stage.start,end:stage.end}] : [];
-                    if (spans.length === 0) return null;
-
-                    const isCurrentStage = stage.code.trim().toUpperCase() === selectedStageCode;
-                    const labelSpan = spans.reduce((best, span) =>
-                      (span.end - span.start) > (best.end - best.start) ? span : best, spans[0]);
-                    const labelX = px(labelSpan.start);
-                    const labelW = Math.max(0, px(labelSpan.end) - labelX);
-
-                    return <g key={stage.code + "-" + i}>
-                      {spans.map((span, j) => {
-                        const bx = px(span.start), bw = Math.max(0, px(span.end) - bx);
-                        return <g key={stage.code + "-" + i + "-" + j}>
-                          <rect x={bx} y={54} width={bw} height={29}
-                            fill={stagePalette[stage.group]?.fill ?? "#f1f5f9"}
-                            opacity={isCurrentStage ? 1 : .95}
-                            stroke={isCurrentStage ? "#047857" : "transparent"}
-                            strokeWidth={isCurrentStage ? 2.2 : 0}/>
-                          <line x1={bx} y1={54} x2={bx} y2={plot.bottom}
-                            stroke={isCurrentStage ? "#047857" : "#475569"}
-                            strokeOpacity={isCurrentStage ? .35 : .09} />
-                        </g>;
-                      })}
-                      {labelW >= 18 && <text x={labelX + labelW / 2} y={72} textAnchor="middle"
-                        fontSize={labelW >= 32 ? 12 : 10} fontWeight={900}
-                        fill={isCurrentStage ? "#047857" : "#334155"}>{stage.code}</text>}
-                      <title>{stage.code} · {stage.label} · a partir de {stage.dae} DAE ({stage.origin}){isCurrentStage ? " · estádio atual" : ""}</title>
-                    </g>;
-                  })}
-                  {visibleStages.length === 0 && phaseBands.length === 0 && <text x={plot.left + 12} y={63}
-                    fontSize={12} fill="#b45309">Fases e marcos fenológicos não cadastrados</text>}
-                </g>
-              )}
 
               {[0,.25,.5,.75,1].map((part) => (
                 <g key={part}>
@@ -581,7 +498,7 @@ export function CropDevelopmentPanel({
                 )}
               </g>
 
-              {fieldStage && observedAtDae!=null && visible.stages && (
+              {false && fieldStage && observedAtDae!=null && visible.stages && (
                 <g>
                   {/* Marco de campo persistido: futuras faixas continuam como referência. */}
                   <rect x={todayX??plot.right} y={plot.top}
