@@ -126,9 +126,6 @@ export function DecisionMonitoringReferenceLayout({
       : anticipatory.level === "monitorar"
         ? `A AFD ainda não foi atingida. Margem atual: ${fmt(anticipatory.remainingToAfdMm)} mm.`
         : "A AFD ainda possui margem suficiente em relação ao tempo operacional do pivô.";
-  const net = anticipatory.level === "programar" || anticipatory.level === "prioridade" || anticipatory.level === "critico"
-    ? anticipatory.deficitToCcNetMm
-    : 0;
   const gross = anticipatory.level === "programar" || anticipatory.level === "prioridade" || anticipatory.level === "critico"
     ? (anticipatory.grossDepthToCcMm ?? 0)
     : 0;
