@@ -160,7 +160,6 @@ export function CropDevelopmentPanel({
     [culturePhases, daeOffsetFromPlanting],
   );
   const phaseEnd = Math.max(0, ...phaseBands.map((b) => b.end));
-  const expectedNotValidated = markers.some(m=>m.origin==="esperado" && m.confidence==="nao_validada");
   // Legenda e seletor exibem as mesmas fases; nomes repetidos no cadastro
   // compartilham um único controle e nenhum filtro modifica o balanço.
   const phaseChoices = phaseBands.length
@@ -342,12 +341,6 @@ export function CropDevelopmentPanel({
             <h3 className="text-[18px] font-extrabold text-slate-900 dark:text-white">
               Desenvolvimento fenológico da cultura
             </h3>
-            <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-              Fases coloridas, estádios detalhados da cultivar, Kc e crescimento radicular.
-              {effectiveMarkers.length>0 && <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
-                {effectiveMarkers.length} marcos da cultivar carregados
-              </span>}
-            </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-lg border border-slate-200 px-3 py-2 text-[11px] font-semibold text-slate-600 dark:border-white/10 dark:text-slate-200">
@@ -415,19 +408,6 @@ export function CropDevelopmentPanel({
           </div>
         </div>
 
-        {expectedNotValidated && (
-          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
-            DAE da fenologia são referências estimadas da cultivar e ainda não foram validados em campo.
-            Observações registradas na parcela têm identificação própria; as curvas de Kc e raiz não são recalculadas ao exibir esses marcos.
-          </p>
-        )}
-        {audit.currentStage == null && fieldStage == null && (
-          <p className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-900 dark:border-amber-400/25 dark:bg-amber-950/20 dark:text-amber-200">
-            {phaseBands.length > 0
-              ? "As faixas coloridas vêm do cadastro das fases da cultura. Para indicar VE, VC, V1…R8 no dia correto, cadastre os DAE esperados ou calibrados da cultivar."
-              : "Não há fases nem datas de estádios registrados: complete o cadastro fenológico para preencher o desenvolvimento."}
-          </p>
-        )}
         {dae == null || observed.length === 0 ? (
           <div className="rounded-xl bg-amber-50 p-6 text-[12px] text-amber-900 dark:bg-amber-950/20 dark:text-amber-200">
             DAE ou histórico do balanço indisponível. Cadastre a referência de emergência e recalcule o manejo.
