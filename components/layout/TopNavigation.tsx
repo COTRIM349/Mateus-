@@ -86,9 +86,9 @@ export function TopNavigation() {
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
+          "flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[12px] 2xl:px-2.5 2xl:text-[13px] font-semibold tracking-[-0.01em] transition-colors",
           active
-            ? "bg-white/[0.14] text-white shadow-sm ring-1 ring-white/10"
+            ? "bg-santa-600 text-white shadow-sm ring-1 ring-white/15 border-b-[3px] border-[#b7d97d]"
             : "text-white/78 hover:bg-white/[0.08] hover:text-white",
         )}
       >
@@ -156,7 +156,7 @@ export function TopNavigation() {
           className={cn(
             "flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
             active || expanded
-              ? "bg-white/[0.14] text-white shadow-sm ring-1 ring-white/10"
+              ? "bg-santa-600 text-white shadow-sm ring-1 ring-white/15 border-b-[3px] border-[#b7d97d]"
               : "text-white/78 hover:bg-white/[0.08] hover:text-white",
           )}
         >
@@ -198,11 +198,11 @@ export function TopNavigation() {
     <div
       ref={navigationRef}
       data-irrigapro-topnav="true"
-      className="relative border-t border-white/[0.08] bg-santa-900"
+      className="relative bg-transparent"
     >
       <nav
         aria-label="Navegação principal"
-        className="hidden min-h-[49px] items-center gap-0.5 overflow-visible px-4 py-1 lg:flex lg:px-6"
+        className="hidden min-h-[54px] items-center justify-center gap-0.5 overflow-visible xl:flex"
       >
         {navigationEntries.map((entry, index) =>
           entry.type === "item"
@@ -211,7 +211,7 @@ export function TopNavigation() {
         )}
       </nav>
 
-      <div className="px-4 py-2 lg:hidden">
+      <div className="py-1 xl:hidden">
         <button
           type="button"
           onClick={() => setMobileOpen(!mobileOpen)}
@@ -233,7 +233,7 @@ export function TopNavigation() {
         <nav
           id="mobile-navigation"
           aria-label="Navegação para telas menores"
-          className="absolute inset-x-0 top-full z-[60] max-h-[72vh] overflow-y-auto border-t border-white/10 bg-santa-900 px-3 py-3 shadow-modal lg:hidden"
+          className="absolute left-0 top-full z-[60] w-[min(90vw,340px)] max-h-[72vh] overflow-y-auto rounded-b-xl border border-white/10 bg-santa-900 px-3 py-3 shadow-modal xl:hidden"
         >
           {navigationEntries.map((entry, index) => {
             if (entry.type === "item") return <MobileLink key={entry.item.href} item={entry.item} />;
