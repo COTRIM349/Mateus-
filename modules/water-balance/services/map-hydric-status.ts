@@ -4,8 +4,8 @@
  * A cor representa a faixa de ARM em relação à capacidade de campo (CAD/CTA):
  * - azul: ≥95% da capacidade de campo;
  * - verde: 90% até <95%;
- * - amarelo: 82% até <90%;
- * - vermelho: 70% até <82%;
+ * - amarelo: 85% até <90%;
+ * - vermelho: 70% até <85%;
  * - preto: <70%;
  * - cinza: dado insuficiente.
  */
@@ -37,7 +37,7 @@ export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
   fieldCapacityRatio: 1,
   blueCcRatio: 0.95,
   comfortableCcRatio: 0.90,
-  attentionCcRatio: 0.82,
+  attentionCcRatio: 0.85,
   criticalCcRatio: 0.70,
   attentionAfdRatio: 0.70,
 };
@@ -180,8 +180,8 @@ export interface ClassifyWaterStatusInput {
  * A referência visual do dashboard é ARM/CAD:
  * - Azul: ≥95% da capacidade de campo;
  * - Verde: 90% até <95%;
- * - Amarelo: 82% até <90%;
- * - Vermelho: 70% até <82%;
+ * - Amarelo: 85% até <90%;
+ * - Vermelho: 70% até <85%;
  * - Preto: <70%.
  *
  * Sem CAD/ARM válidos → `incompleto`.
