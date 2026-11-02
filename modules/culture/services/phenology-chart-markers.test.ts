@@ -21,6 +21,21 @@ describe("marcos fenológicos reais no gráfico Kc", () => {
     ]);
   });
 
+
+  it("deduplica o mesmo código fenológico e prioriza calibração ativa", () => {
+    const duplicatedMarkers = [
+      { id: "ve-a", stage_code: "VE", name: "Emergência A", marker_order: 1 },
+      { id: "ve-b", stage_code: "ve", name: "Emergência B", marker_order: 2 },
+    ];
+    const targets = [
+      { marker_id: "ve-a", expected_dae: 0, calibrated_dae: null, use_calibrated: false },
+      { marker_id: "ve-b", expected_dae: 1, calibrated_dae: 2, use_calibrated: true },
+    ];
+    expect(buildPhenologyChartMarkers(duplicatedMarkers, targets)).toEqual([
+      { code: "VE", label: "Emergência B", dae: 2, origin: "calibrado" },
+    ]);
+  });
+
   it("não inventa datas para estádio sem alvo cadastrado", () => {
     const targets = [
       { marker_id: "r1", expected_dae: null, calibrated_dae: null, use_calibrated: false },
