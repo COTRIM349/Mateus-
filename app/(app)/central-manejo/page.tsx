@@ -23,7 +23,6 @@ import {
   buildDecisionAudit,
   calculateManagementUrgency,
   decisionDataQuality,
-  decisionSummary,
   MAP_HYDRIC_LEGEND_ORDER,
   MAP_HYDRIC_STATUS_CONFIG,
   type MapHydricStatus,
@@ -55,11 +54,6 @@ function autonomyDays(c: BalanceDay): number | null {
 
 type Priority = { label: string; color: string; rank: number };
 
-const DATA_QUALITY_STYLE = {
-  completo: { color: "#047857", bg: "#ECFDF5", border: "#A7F3D0" },
-  atencao: { color: "#B45309", bg: "#FFFBEB", border: "#FDE68A" },
-  insuficiente: { color: "#64748B", bg: "#F8FAFC", border: "#CBD5E1" },
-} as const;
 function priorityOf(c: BalanceDay): Priority {
   const a = autonomyDays(c);
   if (c.status === "cinza") return { label: "Sem dado", color: "#94A3B8", rank: 5 };
@@ -105,6 +99,18 @@ export default function CentralDeManejoPage() {
     (state) => qualityByState.get(hydricStateId(state))?.level === "completo",
   ).length;
   const reliability = states.length > 0 ? Math.round((completeDataCount / states.length) * 100) : null;
+  const avgEto = withData.length > 0
+    ? withData.reduce((sum, s) => sum + (s.current?.et0 ?? 0), 0) / withData.length
+    : null;
+  const avgKc = withData.length > 0
+    ? withData.reduce((sum, s) => sum + (s.current?.kc ?? 0), 0) / withData.length
+    : null;
+  const avgEtc = withData.length > 0
+    ? withData.reduce((sum, s) => sum + (s.current?.etc ?? 0), 0) / withData.length
+    : null;
+  const avgFd = withData.length > 0
+    ? withData.reduce((sum, s) => sum + (s.current?.afd && s.current?.adt ? s.current.afd / s.current.adt : 0), 0) / withData.length
+    : null;
 
   // Fila de irrigação priorizada (regra do spec):
   // 1) abaixo do limite → 2) menor autonomia → 3) maior sensibilidade (Ky) →
@@ -227,8 +233,8 @@ export default function CentralDeManejoPage() {
   const totalWithIncomplete = totalMapped + (mapCounts.incompleto ?? 0);
 
   return (
-    <div className="space-y-5 pb-6">
-      <div className="overflow-hidden rounded-[22px] border border-gray-100 bg-gradient-to-r from-white via-white to-emerald-50/60 px-5 py-4 shadow-sm dark:border-[#182638] dark:from-[#07101B] dark:via-[#091421] dark:to-[#0A1A20]">
+    <div className="space-y-4 pb-6">
+      <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white px-5 py-3.5 shadow-sm dark:border-[#182638] dark:bg-[#07101B]">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <div className="flex items-center gap-2.5">
@@ -275,9 +281,9 @@ export default function CentralDeManejoPage() {
         </Card>
       ) : (
         <>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
             {kpis.map((k) => (
-              <Card key={k.label} className="relative overflow-hidden p-4 dark:border-[#1A2638] dark:bg-[#0A1220] dark:shadow-[0_14px_36px_rgba(0,0,0,0.28)]">
+              <Card key={k.label} className="relative overflow-hidden rounded-xl p-3.5 dark:border-[#1A2638] dark:bg-[#0A1220] dark:shadow-[0_14px_36px_rgba(0,0,0,0.28)]">
                 <span className="absolute right-3 top-3 text-[18px] font-bold text-emerald-600/18 dark:text-emerald-300/15">{k.icon}</span>
                 <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#74839A]">{k.label}</p>
                 <p className={`mt-2 text-[26px] font-black leading-none tabular-nums ${k.tone ?? "text-graphite-950 dark:text-[#F7FAFF]"}`}>
@@ -288,106 +294,125 @@ export default function CentralDeManejoPage() {
             ))}
           </div>
 
-          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.62fr)_minmax(390px,0.78fr)]">
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,2.05fr)_minmax(360px,0.92fr)]">
             <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_20px_54px_rgba(0,0,0,0.36)]">
-              <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 dark:border-[#162233] dark:bg-[#0A1220] sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="text-[15px] font-extrabold text-graphite-900 dark:text-[#F3F7FF]">Mapa hídrico operacional</p>
-                  <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-[#718096]">Clique em um pivô para abrir o manejo detalhado.</p>
-                </div>
-                <div className="flex items-center gap-2 text-[10px] text-graphite-400 dark:text-[#718096]">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              <div className="flex items-center gap-2 border-b border-gray-100 bg-white px-3 pt-3 dark:border-[#162233] dark:bg-[#0A1220]">
+                <button type="button" className="rounded-t-lg bg-[#075D53] px-4 py-2 text-[12px] font-extrabold text-white shadow-sm">
+                  Mapa hídrico operacional
+                </button>
+                <button type="button" className="rounded-t-lg border border-b-0 border-gray-200 bg-gray-50 px-4 py-2 text-[12px] font-bold text-graphite-600 dark:border-[#223146] dark:bg-[#0D1827] dark:text-[#AEB9CB]">
+                  Índice por pivô
+                </button>
+                <span className="ml-auto pb-2 pr-2 text-[10px] font-semibold text-graphite-400 dark:text-[#718096]">
                   {mapPivots.length} área(s) exibida(s)
-                </div>
+                </span>
               </div>
 
-              <PivotMap
-                pivots={mapPivots}
-                onSelect={(id) => { const s = states.find((x) => hydricStateId(x) === id); if (s) openPivot(s); }}
-                className="h-[min(68vh,690px)] min-h-[540px] w-full rounded-none border-0"
-              />
-
-              <HydricMapLegend counts={mapCounts} dates={dates} selectedDate={activeDate} onSelectDate={setSelectedDate} demand={demand} />
-            </Card>
-
-            <div className="flex min-h-[540px] flex-col gap-4">
-              <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#0A1220]">
-                <div className="border-b border-gray-100 px-4 py-3.5 dark:border-[#162233]">
-                  <p className="text-[13px] font-extrabold text-graphite-900 dark:text-white">Situação hídrica</p>
-                  <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#728096]">Resumo da condição atual do solo por faixa de %CC</p>
-                </div>
-
-                <div className="p-4">
-                  {(() => {
-                    const demandCount = (mapCounts.deficit_hidrico ?? 0) + (mapCounts.critico ?? 0);
-                    const demandPct = totalWithIncomplete > 0 ? Math.round((demandCount / totalWithIncomplete) * 100) : 0;
-                    const comfortableCount = (mapCounts.capacidade_campo ?? 0) + (mapCounts.boa_umidade ?? 0) + (mapCounts.atencao ?? 0);
-                    return (
-                      <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-[#172538] dark:bg-[#091421]">
-                        <div className="grid grid-cols-2 gap-3">
-                          <div className="rounded-xl bg-white px-3 py-3 shadow-sm dark:bg-[#0D1827]">
-                            <p className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#728096]">Em demanda</p>
-                            <div className="mt-1 flex items-baseline gap-2">
-                              <span className="text-[28px] font-black leading-none text-red-600 dark:text-red-400">{demandCount}</span>
-                              <span className="text-[10px] font-semibold text-graphite-400 dark:text-[#728096]">de {totalWithIncomplete}</span>
-                            </div>
-                            <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">{demandPct}% do total</p>
-                          </div>
-                          <div className="rounded-xl bg-white px-3 py-3 shadow-sm dark:bg-[#0D1827]">
-                            <p className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#728096]">Sem urgência</p>
-                            <div className="mt-1 flex items-baseline gap-2">
-                              <span className="text-[28px] font-black leading-none text-emerald-600 dark:text-emerald-400">{comfortableCount}</span>
-                              <span className="text-[10px] font-semibold text-graphite-400 dark:text-[#728096]">área(s)</span>
-                            </div>
-                            <p className="mt-1 text-[10px] font-semibold text-graphite-400 dark:text-[#728096]">azul, verde e amarelo</p>
-                          </div>
-                        </div>
-
-                        <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-[#142235]">
-                          {moistureBands.map((band) => {
-                            const count = mapCounts[band.status] ?? 0;
-                            const pct = totalWithIncomplete > 0 ? (count / totalWithIncomplete) * 100 : 0;
-                            const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
-                            return pct > 0 ? (
-                              <div key={band.status} title={`${band.description}: ${count}`} style={{ width: `${pct}%`, backgroundColor: conf.color }} />
-                            ) : null;
-                          })}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
-                  <div className="mt-3 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:divide-[#172538] dark:border-[#172538] dark:bg-[#091421]">
+              <div className="relative">
+                <PivotMap
+                  pivots={mapPivots}
+                  onSelect={(id) => { const s = states.find((x) => hydricStateId(x) === id); if (s) openPivot(s); }}
+                  className="h-[min(54vh,560px)] min-h-[470px] w-full rounded-none border-0"
+                />
+                <div className="absolute bottom-4 left-4 z-[500] w-[238px] rounded-xl border border-white/70 bg-white/95 p-3 shadow-xl backdrop-blur dark:border-white/10 dark:bg-[#08111F]/95">
+                  <p className="text-[10px] font-extrabold uppercase tracking-[0.06em] text-graphite-700 dark:text-white">% da Capacidade de Campo (CC)</p>
+                  <div className="mt-2 space-y-1.5">
                     {moistureBands.map((band) => {
-                      const count = mapCounts[band.status] ?? 0;
-                      const pct = totalWithIncomplete > 0 ? Math.round((count / totalWithIncomplete) * 100) : 0;
                       const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
                       return (
-                        <div key={band.status} className="flex items-center gap-3 px-3.5 py-2.5">
-                          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: conf.color }} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <span className="text-[11.5px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{band.description}</span>
-                                <span className="ml-2 text-[9.5px] font-semibold text-graphite-400 dark:text-[#718096]">{band.range}</span>
-                              </div>
-                              <div className="flex shrink-0 items-baseline gap-2">
-                                <span className="text-[13px] font-black tabular-nums text-graphite-900 dark:text-white">{count}</span>
-                                <span className="w-8 text-right text-[9.5px] font-semibold tabular-nums text-graphite-400 dark:text-[#718096]">{pct}%</span>
-                              </div>
-                            </div>
-                          </div>
+                        <div key={band.status} className="flex items-center gap-2 text-[10px]">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: conf.color }} />
+                          <span className="w-[62px] font-bold text-graphite-700 dark:text-[#E8EEF8]">{band.range}</span>
+                          <span className="text-graphite-500 dark:text-[#8E9CB1]">{band.description}</span>
                         </div>
                       );
                     })}
                   </div>
+                </div>
+              </div>
 
-                  {(mapCounts.incompleto ?? 0) > 0 && (
-                    <div className="mt-3 flex items-center justify-between rounded-xl border border-dashed border-gray-200 px-3 py-2.5 text-[10.5px] dark:border-[#26364B]">
-                      <span className="font-semibold text-graphite-500 dark:text-[#8290A5]">Dados insuficientes</span>
-                      <span className="font-black text-graphite-700 dark:text-[#D2D9E5]">{mapCounts.incompleto ?? 0} parcela(s)</span>
+              {dates.length > 0 && (
+                <div className="flex flex-wrap items-center gap-1.5 border-t border-gray-100 bg-white px-4 py-2.5 dark:border-[#162233] dark:bg-[#060D17]">
+                  <span className="mr-1 text-[10px] font-bold text-graphite-500 dark:text-[#8E9CB1]">Condição no dia:</span>
+                  {dates.map((date) => {
+                    const active = date === activeDate;
+                    const [, month, day] = date.split("-");
+                    return (
+                      <button
+                        key={date}
+                        type="button"
+                        onClick={() => setSelectedDate(date)}
+                        className={`rounded-full px-2.5 py-1 text-[10px] font-bold ${active ? "bg-emerald-700 text-white" : "bg-gray-100 text-graphite-600 dark:bg-[#111B2A] dark:text-[#A6B3C7]"}`}
+                      >
+                        {active ? "Hoje" : `${day}/${month}`}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </Card>
+
+            <div className="flex min-h-[470px] flex-col gap-3">
+              <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#0A1220]">
+                <div className="border-b border-gray-100 px-4 py-3 dark:border-[#162233]">
+                  <p className="text-[13px] font-extrabold text-graphite-900 dark:text-white">Situação hídrica da área</p>
+                </div>
+                <div className="grid grid-cols-[130px_1fr] items-center gap-3 p-4">
+                  {(() => {
+                    const counts = moistureBands.map((band) => mapCounts[band.status] ?? 0);
+                    const colors = moistureBands.map((band) => MAP_HYDRIC_STATUS_CONFIG[band.status].color);
+                    let acc = 0;
+                    const stops = counts.map((count, idx) => {
+                      const pct = totalMapped > 0 ? (count / totalMapped) * 100 : 0;
+                      const start = acc;
+                      acc += pct;
+                      return `${colors[idx]} ${start}% ${acc}%`;
+                    }).filter((_, idx) => counts[idx] > 0);
+                    const gradient = stops.length ? `conic-gradient(${stops.join(", ")})` : "conic-gradient(#E5E7EB 0 100%)";
+                    return (
+                      <div className="relative mx-auto h-[118px] w-[118px] rounded-full" style={{ background: gradient }}>
+                        <div className="absolute inset-[18px] flex flex-col items-center justify-center rounded-full bg-white text-center dark:bg-[#0A1220]">
+                          <span className="text-[21px] font-black text-graphite-950 dark:text-white">{fmtInt(managedArea)}</span>
+                          <span className="text-[9px] font-bold text-graphite-400 dark:text-[#728096]">ha total</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                  <div className="space-y-2">
+                    {moistureBands.map((band) => {
+                      const count = mapCounts[band.status] ?? 0;
+                      const pct = totalMapped > 0 ? Math.round((count / totalMapped) * 100) : 0;
+                      const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
+                      return (
+                        <div key={band.status} className="grid grid-cols-[12px_1fr_auto_auto] items-center gap-2 text-[10.5px]">
+                          <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: conf.color }} />
+                          <span className="font-bold text-graphite-700 dark:text-[#E8EEF8]">{band.description} <span className="font-medium text-graphite-400">({band.range})</span></span>
+                          <span className="font-black tabular-nums text-graphite-900 dark:text-white">{count}</span>
+                          <span className="w-9 text-right font-semibold tabular-nums text-graphite-400">{pct}%</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              </Card>
+
+              <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#0A1220]">
+                <div className="border-b border-gray-100 px-4 py-3 dark:border-[#162233]">
+                  <p className="text-[13px] font-extrabold text-graphite-900 dark:text-white">Indicadores da safra</p>
+                </div>
+                <div className="grid grid-cols-4 gap-2 p-3">
+                  {[
+                    { label: "ETo", value: avgEto == null ? "—" : fmtNum(avgEto), unit: "mm/d" },
+                    { label: "Kc", value: avgKc == null ? "—" : fmtNum(avgKc, 2), unit: "atual" },
+                    { label: "ETc", value: avgEtc == null ? "—" : fmtNum(avgEtc), unit: "mm/d" },
+                    { label: "FD", value: avgFd == null ? "—" : fmtNum(avgFd, 2), unit: "atual" },
+                  ].map((item) => (
+                    <div key={item.label} className="rounded-xl bg-emerald-50/60 px-2 py-2 text-center dark:bg-emerald-950/20">
+                      <p className="text-[9px] font-bold uppercase tracking-[0.05em] text-emerald-700 dark:text-emerald-300">{item.label}</p>
+                      <p className="mt-1 text-[16px] font-black leading-none text-graphite-950 dark:text-white">{item.value}</p>
+                      <p className="mt-1 text-[8.5px] text-graphite-400">{item.unit}</p>
                     </div>
-                  )}
+                  ))}
                 </div>
               </Card>
 
@@ -420,8 +445,8 @@ export default function CentralDeManejoPage() {
           <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_16px_40px_rgba(0,0,0,0.30)]">
             <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 dark:border-[#162233] dark:bg-[#0A1220] sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-[14px] font-extrabold text-graphite-900 dark:text-[#F3F7FF]">Fila operacional de irrigação</p>
-                <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#718096]">Ordenada por limite de manejo, autonomia, sensibilidade, ETc e lâmina.</p>
+                <p className="text-[14px] font-extrabold text-graphite-900 dark:text-[#F3F7FF]">Pivôs em manejo</p>
+                <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#718096]">Visão técnica resumida para decisão diária.</p>
               </div>
               <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10.5px] font-semibold text-graphite-600 dark:border-[#223146] dark:bg-[#0B1725] dark:text-[#AEB9CB]">
                 {fila.length} parcela(s)
@@ -432,25 +457,22 @@ export default function CentralDeManejoPage() {
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-gray-100 bg-gray-50 text-left text-[10px] font-bold uppercase tracking-[0.06em] text-graphite-400 dark:border-[#162233] dark:bg-[#0D1827] dark:text-[#75839A]">
                     <th className="px-4 py-3">Pivô</th>
-                    <th className="px-3 py-3">Cultura / estádio</th>
-                    <th className="px-3 py-3 text-right">AD</th>
-                    <th className="px-3 py-3 text-right">Depl.</th>
-                    <th className="px-3 py-3 text-right">Ks</th>
-                    <th className="px-3 py-3 text-right">ETc</th>
-                    <th className="px-3 py-3 text-right">Autonomia</th>
-                    <th className="px-3 py-3 text-right">Lâmina</th>
-                    <th className="px-3 py-3">Qualidade</th>
-                    <th className="px-4 py-3">Decisão</th>
+                    <th className="px-3 py-3">Cultura / cultivar</th>
+                    <th className="px-3 py-3 text-right">DAE</th>
+                    <th className="px-3 py-3">Estádio</th>
+                    <th className="px-3 py-3 text-right">Zr (m)</th>
+                    <th className="px-3 py-3 text-right">CAD (mm)</th>
+                    <th className="px-3 py-3 text-right">ARM (mm)</th>
+                    <th className="px-3 py-3 text-right">% CC</th>
+                    <th className="px-3 py-3 text-right">Déficit</th>
+                    <th className="px-3 py-3 text-right">Irrigação rec.</th>
+                    <th className="px-4 py-3">Situação</th>
                   </tr>
                 </thead>
                 <tbody>
                   {fila.map((s) => {
                     const c = s.current;
                     const pr = c ? priorityOf(c) : { label: "Sem dado", color: "#9ca3af", rank: 5 };
-                    const a = c ? autonomyDays(c) : null;
-                    const quality = qualityByState.get(hydricStateId(s)) ?? decisionDataQuality(s);
-                    const qualityStyle = DATA_QUALITY_STYLE[quality.level];
-                    const decision = decisionSummary(s);
                     return (
                       <tr
                         key={hydricStateId(s)}
@@ -465,38 +487,32 @@ export default function CentralDeManejoPage() {
                             return sector ? <span className="mt-0.5 block text-[10px] font-normal text-graphite-400 dark:text-[#6E7C92]">{sector}</span> : null;
                           })()}
                         </td>
-                        <td className="px-3 py-3 text-graphite-500 dark:text-[#9AA8BE]">
-                          {s.cultureName}{c?.phase ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.phase}</span> : ""}
-                          {c?.dae != null ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.dae} DAE</span> : ""}
-                        </td>
+                        <td className="px-3 py-3 text-graphite-600 dark:text-[#9AA8BE]">{s.cultureName}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{c?.dae ?? "—"}</td>
+                        <td className="px-3 py-3 font-semibold text-graphite-700 dark:text-[#D8E1ED]">{c?.phase ?? "—"}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.rootDepth, 2) : "—"}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.adt) : "—"}</td>
                         <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.storage) : "—"}</td>
-                        <td className="px-3 py-3 text-right tabular-nums text-amber-600 dark:text-amber-400">{c ? fmtNum(c.deficit) : "—"}</td>
-                        <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.ks, 2) : "—"}</td>
-                        <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.etc) : "—"}</td>
-                        <td className="px-3 py-3 text-right tabular-nums font-semibold" style={{ color: pr.color }}>
-                          {a == null ? "—" : a < 0.1 ? "0 d" : `${fmtNum(a)} d`}
+                        <td className="px-3 py-3 text-right">
+                          {c ? (
+                            <div className="flex items-center justify-end gap-2">
+                              <div className="h-2 w-14 overflow-hidden rounded-full bg-gray-200 dark:bg-[#162233]">
+                                <div className="h-full rounded-full" style={{ width: `${Math.max(0, Math.min(100, c.moisturePctCc ?? 0))}%`, backgroundColor: MAP_HYDRIC_STATUS_CONFIG[c.mapStatus].color }} />
+                              </div>
+                              <span className="w-9 text-right font-bold tabular-nums">{fmtInt(c.moisturePctCc ?? 0)}%</span>
+                            </div>
+                          ) : "—"}
                         </td>
-                        <td className="px-3 py-3 text-right tabular-nums">{c && c.shouldIrrigate ? fmtNum(c.recommendedGrossDepth) : "—"}</td>
-                        <td className="px-3 py-3">
-                          <span
-                            title={quality.reasons.length ? quality.reasons.join(" ") : "Dados operacionais completos para a decisão."}
-                            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-bold"
-                            style={{ color: qualityStyle.color, background: qualityStyle.bg, borderColor: qualityStyle.border }}
-                          >
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: qualityStyle.color }} />
-                            {quality.label}
-                          </span>
-                        </td>
-                        <td className="max-w-[340px] px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-bold" style={{ color: pr.color, background: `${pr.color}14`, borderColor: `${pr.color}2e` }}>
-                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: pr.color }} />{pr.label}
+                        <td className="px-3 py-3 text-right font-semibold tabular-nums text-red-600 dark:text-red-400">{c ? fmtNum(c.deficit) : "—"}</td>
+                        <td className="px-3 py-3 text-right font-black tabular-nums text-graphite-900 dark:text-white">{c ? fmtNum(c.recommendedGrossDepth) : "—"}</td>
+                        <td className="px-4 py-3">
+                          {c ? (
+                            <span className="inline-flex rounded-full px-2.5 py-1 text-[9.5px] font-extrabold" style={{ color: MAP_HYDRIC_STATUS_CONFIG[c.mapStatus].onColor, backgroundColor: MAP_HYDRIC_STATUS_CONFIG[c.mapStatus].color }}>
+                              {MAP_HYDRIC_STATUS_CONFIG[c.mapStatus].label}
                             </span>
-                            <span className="truncate text-[11px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{decision.title}</span>
-                          </div>
-                          <p className="mt-1 truncate text-[10px] text-graphite-400 dark:text-[#738197]" title={decision.detail}>
-                            {decision.detail}
-                          </p>
+                          ) : (
+                            <span className="text-[10px] font-semibold text-graphite-400">Sem dados</span>
+                          )}
                         </td>
                       </tr>
                     );
