@@ -74,6 +74,14 @@ const stagePalette: Record<string, { fill: string; header: string }> = {
   "Maturação": { fill: "#ffe6e6", header: "#fac6c6" },
 };
 
+const stageCardPalette: Record<string, { fill: string; header: string; text: string; label: string }> = {
+  "Estádios vegetativos": { fill: "#ecfdf5", header: "#bbf7d0", text: "#166534", label: "Vegetativo" },
+  "Florescimento": { fill: "#eff6ff", header: "#bfdbfe", text: "#1d4ed8", label: "Florescimento" },
+  "Formação de vagens": { fill: "#fffbeb", header: "#fde68a", text: "#92400e", label: "Formação de vagens" },
+  "Enchimento de grãos": { fill: "#f5f3ff", header: "#ddd6fe", text: "#6d28d9", label: "Enchimento de grãos" },
+  "Maturação": { fill: "#fff7ed", header: "#fed7aa", text: "#c2410c", label: "Maturação" },
+};
+
 function GraphLegend({ color, name, dashed = false }: { color: string; name: string; dashed?: boolean }) {
   return (
     <span className="inline-flex items-center gap-2 whitespace-nowrap text-[11px] font-medium text-slate-600 dark:text-slate-300">
@@ -235,6 +243,23 @@ export function CropDevelopmentPanel({
   const selectedPhenology=fieldStage?.stage.code ??
     cropDevelopmentStageLabel(audit.currentStage?.code,last.phase);
   const selectedStageCode=selectedPhenology.trim().toUpperCase();
+  const stageCardGroups: Array<{ group: string; start: number; span: number; firstCode: string; lastCode: string }> = [];
+  audit.stages.forEach((stage, index) => {
+    const group = groupFor(stage.code);
+    const previous = stageCardGroups.at(-1);
+    if (previous && previous.group === group) {
+      previous.span += 1;
+      previous.lastCode = stage.code;
+    } else {
+      stageCardGroups.push({
+        group,
+        start: index + 1,
+        span: 1,
+        firstCode: stage.code,
+        lastCode: stage.code,
+      });
+    }
+  });
   const observedAtDae=fieldStage?.observation.dae ?? null;
   const tooltipKc = activeDae == null ? null : activeDae <= (dae ?? 0)
     ? hoverRow?.kc ?? null
@@ -676,46 +701,87 @@ export function CropDevelopmentPanel({
           </div>
         </div>
 
-        <div className="border-t border-slate-100 pt-3 dark:border-white/10">
-          <h4 className="text-[13px] font-extrabold text-slate-800 dark:text-white">
+        <div className="border-t border-slate-100 pt-4 dark:border-white/10">
+          <h4 className="text-[15px] font-extrabold text-slate-900 dark:text-white">
             Estádios e parâmetros da cultivar
           </h4>
-          <p className="mt-1 text-[11px] text-slate-500 dark:text-slate-400">
-            DAE, Kc e profundidade radicular por estádio cadastrado.
-            Referências futuras são estimativas da cultivar; não representam medições de campo.
+          <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
+            Desenvolvimento fenológico, Kc e profundidade radicular por estádio.
           </p>
-          <div className="mt-3 flex gap-1 overflow-x-auto pb-2">
-            {audit.stages.map((stage) => {
-              const manuallyObserved=fieldStage?.stage.code===stage.code;
-              const stageDae=manuallyObserved?observedAtDae:stage.dae;
-              const kcAtStage = stageDae != null && completeKc.length >= 2
-                ? calculateDailyKc(completeKc, stageDae) : null;
-              const rootAtStage = stageDae != null && completeRoot.length >= 2
-                ? calculateRootDepthMeters(completeRoot, stageDae)
-                : observed.find((row) => row.dae === stageDae)?.root ?? null;
-              const palette = stagePalette[groupFor(stage.code)] ?? stagePalette["Estádios vegetativos"];
-              return (
-                <div key={stage.code} title={stageDae == null ? "Sem DAE cadastrado" :
-                  stage.label + " · " + stageDae + " DAE (" + stage.origin + ")"}
-                  className={"min-w-[100px] flex-1 rounded-lg border px-2 py-3 text-center " +
-                    (manuallyObserved || (!fieldStage && stage.current) ? "border-amber-500 bg-amber-50 shadow-sm dark:bg-amber-800/20" :
-                      "border-slate-200 dark:border-white/10")}
-                  style={stage.current ? undefined : {backgroundColor:palette.fill}}>
-                  <p className="text-[13px] font-black text-slate-800">{stage.code}</p>
-                  <p className="mt-1 text-[10px] font-semibold text-slate-600">
-                    {stageDae == null ? "DAE —" : stageDae + " DAE"}
-                  </p>
-                  <p className="mt-1 text-[10px] text-slate-700">
-                    Kc: {kcAtStage == null ? "—" : fmt(kcAtStage,2)}
-                  </p>
-                  <p className="mt-1 text-[10px] text-slate-700">
-                    Raiz: {rootAtStage == null ? "—" : fmt(rootAtStage,2) + " m"}
-                  </p>
-                  {manuallyObserved && <p className="mt-1 text-[10px] font-bold text-amber-700">Observado</p>}
-                  {!fieldStage && stage.current && <p className="mt-1 text-[10px] font-bold text-amber-700">Estimado</p>}
-                </div>
-              );
-            })}
+
+          <div className="mt-4 overflow-x-auto pb-3">
+            <div
+              className="grid gap-1.5"
+              style={{
+                minWidth: Math.max(860, audit.stages.length * 108) + "px",
+                gridTemplateColumns: `repeat(${Math.max(1, audit.stages.length)}, minmax(100px, 1fr))`,
+                gridTemplateRows: "64px auto",
+              }}
+            >
+              {stageCardGroups.map((phase) => {
+                const phasePalette = stageCardPalette[phase.group] ?? stageCardPalette["Estádios vegetativos"];
+                return (
+                  <div
+                    key={phase.group + "-" + phase.start}
+                    className="flex flex-col items-center justify-center rounded-xl border px-3 text-center shadow-sm"
+                    style={{
+                      gridColumn: `${phase.start} / span ${phase.span}`,
+                      gridRow: 1,
+                      backgroundColor: phasePalette.header,
+                      borderColor: phasePalette.header,
+                      color: phasePalette.text,
+                    }}
+                  >
+                    <p className="text-[13px] font-black leading-tight">{phasePalette.label}</p>
+                    <p className="mt-1 text-[10px] font-bold opacity-75">
+                      {phase.firstCode === phase.lastCode ? phase.firstCode : phase.firstCode + " a " + phase.lastCode}
+                    </p>
+                  </div>
+                );
+              })}
+
+              {audit.stages.map((stage, index) => {
+                const manuallyObserved=fieldStage?.stage.code===stage.code;
+                const isCurrent=manuallyObserved || (!fieldStage && stage.current);
+                const stageDae=manuallyObserved?observedAtDae:stage.dae;
+                const kcAtStage = stageDae != null && completeKc.length >= 2
+                  ? calculateDailyKc(completeKc, stageDae) : null;
+                const rootAtStage = stageDae != null && completeRoot.length >= 2
+                  ? calculateRootDepthMeters(completeRoot, stageDae)
+                  : observed.find((row) => row.dae === stageDae)?.root ?? null;
+                const phasePalette = stageCardPalette[groupFor(stage.code)] ?? stageCardPalette["Estádios vegetativos"];
+                return (
+                  <div
+                    key={stage.code}
+                    title={stageDae == null ? "Sem DAE cadastrado" :
+                      stage.label + " · " + stageDae + " DAE (" + stage.origin + ")"}
+                    className={"relative min-h-[142px] rounded-xl border px-2.5 py-3 text-center shadow-sm transition-shadow " +
+                      (isCurrent ? "border-emerald-600 ring-2 ring-emerald-500/25" : "border-slate-200 dark:border-white/10")}
+                    style={{
+                      gridColumn: index + 1,
+                      gridRow: 2,
+                      backgroundColor: phasePalette.fill,
+                    }}
+                  >
+                    <p className="text-[16px] font-black text-slate-900">{stage.code}</p>
+                    <p className="mt-2 text-[11px] font-bold text-slate-600">
+                      {stageDae == null ? "DAE —" : fmt(stageDae, stageDae % 1 === 0 ? 0 : 1) + " DAE"}
+                    </p>
+                    <p className="mt-2 text-[11px] font-semibold text-slate-700">
+                      Kc: {kcAtStage == null ? "—" : fmt(kcAtStage,2)}
+                    </p>
+                    <p className="mt-1 text-[11px] font-semibold text-slate-700">
+                      Raiz: {rootAtStage == null ? "—" : fmt(rootAtStage,2) + " m"}
+                    </p>
+                    {isCurrent && (
+                      <span className="absolute -bottom-3 left-1/2 -translate-x-1/2 rounded-md bg-emerald-600 px-3 py-1 text-[10px] font-black text-white shadow-sm">
+                        {manuallyObserved ? "Observado" : "Atual"}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </section>
