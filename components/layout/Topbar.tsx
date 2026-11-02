@@ -46,14 +46,14 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-santa-800 bg-santa-800 text-white shadow-soft">
-      <div className="mx-auto flex min-h-[60px] w-full max-w-[1680px] items-center gap-4 px-4 py-2 sm:px-6 lg:px-8">
+      <div className="flex min-h-[62px] items-center gap-3 px-4 py-2 sm:px-6 lg:px-7">
         <Link
           href="/"
           title={APP_NAME}
           aria-label="SCA Irriga Pro — início"
-          className="flex shrink-0 items-center gap-3 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
+          className="flex shrink-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
         >
-          <span className="border-r border-white/16 pr-3 text-[21px] font-black leading-none tracking-[-.035em] text-white sm:text-[23px]">
+          <span className="border-r border-white/18 pr-3 text-[21px] font-black leading-none tracking-[-.035em] text-white sm:text-[24px]">
             SCA
           </span>
           <span className="text-[11px] font-extrabold uppercase leading-tight tracking-[.14em] text-white sm:text-[13px]">
@@ -61,13 +61,13 @@ export function Topbar() {
           </span>
         </Link>
 
-        <div className="ml-auto flex min-w-0 items-center gap-2 sm:gap-2.5">
+        <div className="ml-auto flex min-w-0 items-center gap-1.5 sm:gap-2">
           {farms.length > 1 ? (
             <select
               aria-label="Selecionar fazenda"
               value={activeFarmId ?? ""}
               onChange={(event) => setActiveFarm(event.target.value)}
-              className="max-w-[150px] rounded-md border border-white/10 bg-white/[0.07] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white outline-none transition-colors hover:bg-white/[0.1] focus-visible:ring-2 focus-visible:ring-santa-200 sm:max-w-[230px] sm:px-3 sm:text-[14px]"
+              className="max-w-[150px] rounded-md border border-white/12 bg-white/[0.08] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white outline-none focus-visible:ring-2 focus-visible:ring-santa-200 sm:max-w-[230px] sm:px-3 sm:text-[14px]"
             >
               {farms.map((farm) => (
                 <option key={farm.id} value={farm.id} className="text-graphite-900">
@@ -76,7 +76,7 @@ export function Topbar() {
               ))}
             </select>
           ) : (
-            <div className="max-w-[140px] truncate rounded-md border border-white/[0.06] bg-white/[0.06] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white/90 sm:max-w-[230px] sm:px-3 sm:text-[14px]">
+            <div className="max-w-[140px] truncate rounded-md border border-white/[0.06] bg-white/[0.07] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white/90 sm:max-w-[230px] sm:px-3 sm:text-[14px]">
               {activeFarm?.name ?? profile?.companyName ?? "Fazenda"}
             </div>
           )}
@@ -88,7 +88,7 @@ export function Topbar() {
             type="button"
             aria-label={theme === "dark" ? "Ativar modo claro" : "Ativar modo escuro"}
             onClick={toggleTheme}
-            className="rounded-md p-2 text-white/70 transition-colors hover:bg-white/[0.08] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
+            className="rounded-lg p-2 text-white/75 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
           >
             {theme === "dark" ? (
               <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">

@@ -86,10 +86,10 @@ export function TopNavigation() {
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "relative flex min-h-[42px] items-center gap-2 whitespace-nowrap rounded-md px-3 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
+          "flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
           active
-            ? "bg-white/[0.1] text-white ring-1 ring-white/[0.08] after:absolute after:inset-x-3 after:-bottom-1 after:h-[2px] after:rounded-full after:bg-emerald-300"
-            : "text-white/72 hover:bg-white/[0.06] hover:text-white",
+            ? "bg-white/[0.14] text-white shadow-sm ring-1 ring-white/10"
+            : "text-white/78 hover:bg-white/[0.08] hover:text-white",
         )}
       >
         <NavIcon path={item.icon} />
@@ -108,7 +108,7 @@ export function TopNavigation() {
             <div key={item.href}>
               {showSection && (
                 <div className={cn(
-                  "px-3 pb-1.5 pt-2 text-[10px] font-bold uppercase tracking-[0.12em]",
+                  "px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.1em]",
                   mobile ? "text-white/45" : "text-slate-400 dark:text-slate-500",
                   index > 0 && "mt-1 border-t border-slate-100 dark:border-white/10",
                 )}>
@@ -120,7 +120,7 @@ export function TopNavigation() {
                 onClick={onNavigate}
                 aria-current={selected ? "page" : undefined}
                 className={cn(
-                  "flex items-center gap-2.5 rounded-lg px-3 transition-colors duration-150",
+                  "flex items-center gap-2.5 rounded-lg px-3 transition-colors",
                   mobile
                     ? "min-h-10 text-[14px] font-medium"
                     : "min-h-10 text-[14px] font-medium tracking-[-0.005em]",
@@ -154,10 +154,10 @@ export function TopNavigation() {
           aria-controls={"desktop-nav-group-" + index}
           onClick={() => setOpenGroup(expanded ? null : group.label)}
           className={cn(
-            "relative flex min-h-[42px] items-center gap-2 whitespace-nowrap rounded-md px-3 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
+            "flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
             active || expanded
-              ? "bg-white/[0.1] text-white ring-1 ring-white/[0.08] after:absolute after:inset-x-3 after:-bottom-1 after:h-[2px] after:rounded-full after:bg-emerald-300"
-              : "text-white/72 hover:bg-white/[0.06] hover:text-white",
+              ? "bg-white/[0.14] text-white shadow-sm ring-1 ring-white/10"
+              : "text-white/78 hover:bg-white/[0.08] hover:text-white",
           )}
         >
           <NavIcon path={group.icon} />
@@ -167,7 +167,7 @@ export function TopNavigation() {
         {expanded && (
           <div
             id={"desktop-nav-group-" + index}
-            className="absolute left-1/2 top-full z-[60] mt-2 min-w-[300px] -translate-x-1/2 rounded-xl border border-slate-200/90 bg-white p-2.5 shadow-[0_20px_50px_rgba(15,23,42,0.20)] dark:border-white/10 dark:bg-graphite-800"
+            className="absolute left-0 top-full z-[60] mt-2 min-w-[285px] rounded-xl border border-slate-200 bg-white p-2 shadow-[0_18px_45px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-graphite-800"
           >
             <GroupItems group={group} />
           </div>
@@ -198,19 +198,17 @@ export function TopNavigation() {
     <div
       ref={navigationRef}
       data-irrigapro-topnav="true"
-      className="relative border-t border-white/[0.07] bg-santa-900/95 shadow-[inset_0_1px_0_rgba(255,255,255,0.02)]"
+      className="relative border-t border-white/[0.08] bg-santa-900"
     >
       <nav
         aria-label="Navegação principal"
-        className="mx-auto hidden min-h-[52px] w-full max-w-[1680px] items-center justify-center gap-1 overflow-visible px-4 py-1 lg:flex lg:px-8"
+        className="hidden min-h-[49px] items-center gap-0.5 overflow-visible px-4 py-1 lg:flex lg:px-6"
       >
-        <div className="flex w-full items-center justify-center gap-1 xl:gap-1.5">
-          {navigationEntries.map((entry, index) =>
-            entry.type === "item"
-              ? <DesktopLink key={entry.item.href} item={entry.item} />
-              : <DesktopGroup key={entry.group.label} group={entry.group} index={index} />,
-          )}
-        </div>
+        {navigationEntries.map((entry, index) =>
+          entry.type === "item"
+            ? <DesktopLink key={entry.item.href} item={entry.item} />
+            : <DesktopGroup key={entry.group.label} group={entry.group} index={index} />,
+        )}
       </nav>
 
       <div className="px-4 py-2 lg:hidden">
