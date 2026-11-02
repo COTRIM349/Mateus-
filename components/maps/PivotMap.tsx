@@ -21,6 +21,8 @@ export interface PivotMarker {
   color?: string;
   sheetIncomplete?: boolean;
   statusLabel?: string;
+  /** Mantém o equipamento no enquadramento do mapa, mas sem sobreposição visual. */
+  plain?: boolean;
 }
 
 interface PivotMapProps {
@@ -123,6 +125,12 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect, int
         continue;
       }
 
+      if (pivot.plain) {
+        const equipmentBounds = L.circle(latlng, { radius: pivot.radiusMeters }).getBounds();
+        bounds.extend(equipmentBounds);
+        continue;
+      }
+
       const style = {
         color: ringColor(baseColor),
         fillColor: baseColor,
@@ -169,7 +177,7 @@ export function PivotMap({ pivots, highlightId, center, className, onSelect, int
     }
 
     if (bounds.isValid()) {
-      map.fitBounds(bounds, { padding: [56, 56], maxZoom: 16 });
+      map.fitBounds(bounds, { padding: [28, 28], maxZoom: 16 });
     }
   }, [pivots, highlightId, onSelect]);
 
