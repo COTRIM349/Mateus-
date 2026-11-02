@@ -5,7 +5,8 @@ import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
-import { useImplantationStatus, useFarmHydricState, useCrud } from "@/lib/hooks";
+import { createClient } from "@/lib/supabase/client";
+import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { HydricMapOverlay } from "@/components/maps/HydricMapOverlay";
@@ -52,12 +53,45 @@ export default function DashboardPage() {
 
   const implantation = useImplantationStatus();
   const { states, summary, loading } = useFarmHydricState();
-  const { data: farmPivots, loading: pivotsLoading } = useCrud<DashboardPivot>({
-    table: "pivots",
-    orderBy: "name",
-    ascending: true,
-    filters: { farm_id: activeFarmId },
-  });
+  const [farmPivots, setFarmPivots] = useState<DashboardPivot[]>([]);
+  const [pivotsLoading, setPivotsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadFarmPivots() {
+      if (!activeFarmId) {
+        if (!cancelled) {
+          setFarmPivots([]);
+          setPivotsLoading(false);
+        }
+        return;
+      }
+
+      setPivotsLoading(true);
+      try {
+        const supabase = createClient();
+        const { data, error } = await supabase
+          .from("pivots")
+          .select("id,farm_id,name,latitude,longitude,radius,active")
+          .eq("farm_id", activeFarmId)
+          .order("name", { ascending: true });
+
+        if (error) throw error;
+        if (!cancelled) setFarmPivots((data ?? []) as DashboardPivot[]);
+      } catch (err) {
+        console.error("Falha ao carregar pivôs do Dashboard:", err);
+        if (!cancelled) setFarmPivots([]);
+      } finally {
+        if (!cancelled) setPivotsLoading(false);
+      }
+    }
+
+    void loadFarmPivots();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFarmId]);
 
   if (implantation.loading || loading || pivotsLoading) {
     return (
