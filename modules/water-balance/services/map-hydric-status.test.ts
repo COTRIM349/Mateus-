@@ -18,60 +18,74 @@ describe("classifyWaterStatus", () => {
   it("marca incompleto sem CAD ou ARM válidos e não depende da AFD para a cor do dashboard", () => {
     expect(classifyWaterStatus({ armMm: 40, cadMm: 0, afdMm: 20 })).toBe("incompleto");
     expect(classifyWaterStatus({ armMm: null, cadMm: cad, afdMm: afd })).toBe("incompleto");
-    expect(classifyWaterStatus({ armMm: 95, cadMm: cad, afdMm: 0 })).toBe("boa_umidade");
+    expect(classifyWaterStatus({ armMm: 95, cadMm: cad, afdMm: 0 })).toBe("capacidade_campo");
   });
 
-  it("azul somente quando ARM está de fato em 100% da capacidade de campo", () => {
+  it("azul a partir de 95% da CC", () => {
+    expect(classifyWaterStatus({ armMm: 95, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .toBe("capacidade_campo");
     expect(classifyWaterStatus({ armMm: 100, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("capacidade_campo");
-    expect(classifyWaterStatus({ armMm: 99.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+    expect(classifyWaterStatus({ armMm: 94.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .not.toBe("capacidade_campo");
   });
 
-  it("verde entre 95% e menos de 100% da CC", () => {
-    expect(classifyWaterStatus({ armMm: 95, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
-      .toBe("boa_umidade");
-    expect(classifyWaterStatus({ armMm: 99.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
-      .toBe("boa_umidade");
-  });
-
-  it("amarelo entre 90% e menos de 95% da CC", () => {
+  it("verde entre 90% e menos de 95% da CC", () => {
     expect(classifyWaterStatus({ armMm: 90, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .toBe("boa_umidade");
+    expect(classifyWaterStatus({ armMm: 94.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .toBe("boa_umidade");
+  });
+
+  it("amarelo entre 82% e menos de 90% da CC", () => {
+    expect(classifyWaterStatus({ armMm: 82, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("atencao");
-    expect(classifyWaterStatus({ armMm: 94.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+    expect(classifyWaterStatus({ armMm: 89.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("atencao");
   });
 
-  it("vermelho abaixo de 90% da CC, incluindo 85% como urgente", () => {
-    expect(classifyWaterStatus({ armMm: 89.9, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+  it("vermelho entre 70% e menos de 82% da CC", () => {
+    expect(classifyWaterStatus({ armMm: 70, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("deficit_hidrico");
-    expect(classifyWaterStatus({ armMm: 85, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+    expect(classifyWaterStatus({ armMm: 81.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("deficit_hidrico");
+  });
+
+  it("preto abaixo de 70% da CC", () => {
+    expect(classifyWaterStatus({ armMm: 69.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .toBe("critico");
+    expect(classifyWaterStatus({ armMm: 0, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+      .toBe("critico");
   });
 
   it("respeita limiares parametrizados", () => {
     expect(
       classifyWaterStatus({
-        armMm: 90,
+        armMm: 80,
         cadMm: cad,
         afdMm: afd,
         safetyMoistureMm: safety,
-        thresholds: { ...MAP_HYDRIC_THRESHOLDS, fieldCapacityRatio: 0.9, comfortableCcRatio: 0.85, attentionCcRatio: 0.8 },
+        thresholds: {
+          ...MAP_HYDRIC_THRESHOLDS,
+          blueCcRatio: 0.8,
+          comfortableCcRatio: 0.7,
+          attentionCcRatio: 0.6,
+          criticalCcRatio: 0.5,
+        },
       }),
     ).toBe("capacidade_campo");
   });
 
-  it("separa atenção de necessidade real de irrigação", () => {
-    expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "boa_umidade"]);
-    expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["deficit_hidrico"]);
-    expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(4);
+  it("mantém a ordem e a paleta das cinco faixas", () => {
+    expect(MAP_HYDRIC_NO_IRRIGATE).toEqual(["capacidade_campo", "boa_umidade", "atencao"]);
+    expect(MAP_HYDRIC_NEED_IRRIGATE).toEqual(["deficit_hidrico", "critico"]);
+    expect(MAP_HYDRIC_LEGEND_ORDER).toHaveLength(5);
     expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.color).toBe(MAP_HYDRIC_COLORS.blue);
-    expect(MAP_HYDRIC_STATUS_CONFIG.capacidade_campo.label).toBe("100% CC");
     expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.color).toBe(MAP_HYDRIC_COLORS.green);
-    expect(MAP_HYDRIC_STATUS_CONFIG.boa_umidade.label).toBe("Ideal");
     expect(MAP_HYDRIC_STATUS_CONFIG.atencao.color).toBe(MAP_HYDRIC_COLORS.yellow);
     expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.color).toBe(MAP_HYDRIC_COLORS.red);
-    expect(MAP_HYDRIC_STATUS_CONFIG.deficit_hidrico.label).toBe("Déficit");
+    expect(MAP_HYDRIC_STATUS_CONFIG.critico.color).toBe(MAP_HYDRIC_COLORS.black);
+    expect(MAP_HYDRIC_STATUS_CONFIG.critico.label).toBe("Crítico");
   });
 });
 

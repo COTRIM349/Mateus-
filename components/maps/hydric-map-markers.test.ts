@@ -48,12 +48,21 @@ describe("hydricMapStates", () => {
 });
 
 describe("toHydricMapMarkers", () => {
-  it("pinta umidade confortável em verde e reserva azul para 100% CC", () => {
+  it("pinta a faixa verde corretamente no marcador", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
     expect(markers[0].color).toBe("#4CAF50");
     expect(markers[0].radiusMeters).toBe(500);
     expect(markers[0].id).toBe("parcela-1");
+  });
+
+  it("pinta faixa crítica abaixo de 70% em preto", () => {
+    const markers = toHydricMapMarkers([
+      stub({
+        current: { date: "2026-08-21", mapStatus: "critico", deficit: 90 } as PivotHydricState["current"],
+      }),
+    ]);
+    expect(markers[0].color).toBe("#000000");
   });
 
   it("usa a coordenada do pivô e os ângulos da parcela no quadrante", () => {
@@ -101,7 +110,7 @@ describe("hydricMapDates", () => {
 });
 
 describe("hydricDemandSummary", () => {
-  it("conta como demanda somente quem atingiu o limite de manejo", () => {
+  it("conta demanda nas faixas vermelha e preta", () => {
     const summary = hydricDemandSummary([
       stub({
         pivotId: "p1",
@@ -113,7 +122,13 @@ describe("hydricDemandSummary", () => {
         current: { date: "2026-08-21", mapStatus: "deficit_hidrico", deficit: 80 } as PivotHydricState["current"],
         history: [],
       }),
+      stub({
+        pivotId: "p3",
+        pivotName: "P03",
+        current: { date: "2026-08-21", mapStatus: "critico", deficit: 95 } as PivotHydricState["current"],
+        history: [],
+      }),
     ]);
-    expect(summary).toEqual({ needing: 1, total: 2, highestName: "P02" });
+    expect(summary).toEqual({ needing: 2, total: 3, highestName: "P03" });
   });
 });
