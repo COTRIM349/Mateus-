@@ -107,7 +107,7 @@ export function CropDevelopmentPanel({
   const [axisMode, setAxisMode] = useState<AxisMode>("dae");
   const [showPicker, setShowPicker] = useState(false);
   const [visible, setVisible] = useState<ChartVisibility>({
-    kc: true, root: true, potential: true, stages: true,
+    kc: true, root: true, potential: true, stages: false,
   });
   const [hoverDae, setHoverDae] = useState<number | null>(null);
   const [hiddenPhases, setHiddenPhases] = useState<string[]>([]);
