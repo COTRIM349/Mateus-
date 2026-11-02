@@ -88,8 +88,8 @@ export function TopNavigation() {
         className={cn(
           "flex min-h-[44px] items-center gap-1.5 whitespace-nowrap rounded-lg px-2 text-[12px] 2xl:px-2.5 2xl:text-[13px] font-semibold tracking-[-0.01em] transition-colors",
           active
-            ? "bg-santa-600 text-white shadow-sm ring-1 ring-white/15 border-b-[3px] border-[#b7d97d]"
-            : "text-white/78 hover:bg-white/[0.08] hover:text-white",
+            ? "bg-transparent text-white font-extrabold underline underline-offset-[12px] decoration-2 decoration-white/80"
+            : "text-white/78 hover:text-white",
         )}
       >
         <NavIcon path={item.icon} />
@@ -129,7 +129,7 @@ export function TopNavigation() {
                       ? "bg-white/10 text-white"
                       : "bg-santa-50 text-santa-800 dark:bg-santa-900/30 dark:text-santa-200"
                     : mobile
-                      ? "text-white/80 hover:bg-white/[0.08] hover:text-white"
+                      ? "text-white/80 hover:text-white"
                       : "text-graphite-700 hover:bg-santa-50 dark:text-gray-200 dark:hover:bg-white/10",
                 )}
               >
@@ -156,8 +156,8 @@ export function TopNavigation() {
           className={cn(
             "flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
             active || expanded
-              ? "bg-santa-600 text-white shadow-sm ring-1 ring-white/15 border-b-[3px] border-[#b7d97d]"
-              : "text-white/78 hover:bg-white/[0.08] hover:text-white",
+              ? "bg-transparent text-white font-extrabold underline underline-offset-[12px] decoration-2 decoration-white/80"
+              : "text-white/78 hover:text-white",
           )}
         >
           <NavIcon path={group.icon} />
@@ -217,7 +217,7 @@ export function TopNavigation() {
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-expanded={mobileOpen}
           aria-controls="mobile-navigation"
-          className="flex min-h-10 w-full items-center justify-between rounded-lg bg-white/[0.08] px-3 text-[15px] font-semibold text-white"
+          className="flex min-h-10 w-full items-center justify-between rounded-lg bg-transparent px-3 text-[15px] font-semibold text-white"
         >
           <span className="flex items-center gap-2">
             <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
