@@ -1,3 +1,7 @@
+"use client";
+
+import { useState } from "react";
+import { ResponsiveContainer, ComposedChart, CartesianGrid, XAxis, YAxis, Tooltip, Legend, Line, Bar } from "recharts";
 import { Card } from "@/components/ui/Card";
 import type { ClimateDashboardResponse } from "@/modules/weather/dashboard/climateDashboard";
 import { ClimateWeatherIcon } from "./ClimateWeatherIcon";
@@ -33,6 +37,74 @@ export function ensureSevenForecastCards(days: ClimateDashboardResponse["dailyFo
     const date = addIsoDays(today, index);
     return byDate.get(date) ?? emptyForecastDay(date);
   });
+}
+
+
+type ClimateMetric = "max" | "mean" | "min" | "eto" | "rain" | "prob";
+const metricConfig: Array<{ key: ClimateMetric; label: string; color: string }> = [
+  { key: "max", label: "Temperatura máxima", color: "#60d5c9" },
+  { key: "mean", label: "Temperatura média (estimada)", color: "#168d91" },
+  { key: "min", label: "Temperatura mínima", color: "#f15c5c" },
+  { key: "eto", label: "ETo", color: "#7b61d1" },
+  { key: "rain", label: "Previsão de chuva", color: "#258ac6" },
+  { key: "prob", label: "Probabilidade de chuva", color: "#f59e52" },
+];
+
+function ClimateForecastChart({ days }: { days: ClimateDashboardResponse["dailyForecast"] }) {
+  const [enabled, setEnabled] = useState<ClimateMetric[]>(["max", "mean", "min", "eto", "rain", "prob"]);
+  const chartDays = [...days].sort((a, b) => a.date.localeCompare(b.date));
+  const rows = chartDays.map((day) => ({
+    date: day.date.slice(8, 10) + "/" + day.date.slice(5, 7),
+    max: day.tempMaxC,
+    min: day.tempMinC,
+    // Estimativa explícita: o endpoint atual não expõe temperatura média diária.
+    mean: day.tempMaxC == null || day.tempMinC == null ? null : (day.tempMaxC + day.tempMinC) / 2,
+    eto: day.etoOperationalMm,
+    rain: day.precipitationMm,
+    prob: day.precipitationProbabilityPct,
+  }));
+  const toggle = (key: ClimateMetric) => setEnabled((old) => old.includes(key) ? old.filter((value) => value !== key) : [...old, key]);
+  return (
+    <section className="mb-6 rounded-2xl border border-gray-100 bg-white p-4 shadow-sm dark:border-white/10 dark:bg-graphite-800" aria-label="Gráfico climático diário">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-black text-graphite-900 dark:text-white">Temperaturas, ETo e previsão de chuva</h3>
+          <p className="text-xs text-graphite-500">Previsão disponível por dia · temperatura média estimada pela média das extremas</p>
+        </div>
+        <div className="flex gap-2">
+          <button type="button" onClick={() => setEnabled(metricConfig.map((m) => m.key))} className="rounded-lg border border-emerald-500 px-3 py-2 text-xs font-semibold text-emerald-700">Selecionar todas</button>
+          <button type="button" onClick={() => setEnabled([])} className="rounded-lg border border-red-400 px-3 py-2 text-xs font-semibold text-red-600">Desmarcar todas</button>
+        </div>
+      </div>
+      <div className="h-[380px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height="100%">
+          <ComposedChart data={rows} margin={{ top: 12, right: 14, bottom: 8, left: 0 }}>
+            <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" />
+            <XAxis dataKey="date" tick={{ fontSize: 11 }} />
+            <YAxis yAxisId="temp" orientation="right" domain={[0, 45]} unit="°C" tick={{ fontSize: 10 }} />
+            <YAxis yAxisId="mm" orientation="left" domain={[0, "auto"]} unit=" mm" tick={{ fontSize: 10 }} />
+            <YAxis yAxisId="pct" orientation="right" hide domain={[0, 100]} />
+            <Tooltip formatter={(value, name) => [value == null ? "—" : Number(value).toLocaleString("pt-BR", { maximumFractionDigits: 1 }), name]} />
+            <Legend />
+            {enabled.includes("rain") && <Bar yAxisId="mm" dataKey="rain" name="Chuva prevista (mm)" fill="#258ac6" maxBarSize={28} />}
+            {enabled.includes("prob") && <Bar yAxisId="pct" dataKey="prob" name="Probabilidade (%)" fill="#f59e52" maxBarSize={14} />}
+            {metricConfig.filter((m) => enabled.includes(m.key) && m.key !== "rain" && m.key !== "prob").map((m) => (
+              <Line key={m.key} yAxisId={m.key === "eto" ? "mm" : "temp"} type="monotone" dataKey={m.key} name={m.label} stroke={m.color} strokeWidth={2.5} dot={{ r: 3 }} connectNulls={false} />
+            ))}
+          </ComposedChart>
+        </ResponsiveContainer>
+      </div>
+      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2">
+        {metricConfig.map((m) => (
+          <label key={m.key} className="flex cursor-pointer items-center gap-2 text-xs text-graphite-600 dark:text-gray-300">
+            <input type="checkbox" checked={enabled.includes(m.key)} onChange={() => toggle(m.key)} style={{ accentColor: m.color }} />
+            <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: m.color }} />{m.label}
+          </label>
+        ))}
+      </div>
+      <p className="mt-3 text-[11px] text-graphite-400">Previsão não equivale a chuva observada; a ETo prevista não substitui a ETo operacional aprovada do balanço hídrico.</p>
+    </section>
+  );
 }
 
 function DailyForecast({
@@ -200,6 +272,7 @@ export function ClimateForecastPanel({
         </div>
       </div>
       <div className="p-5 sm:p-6">
+        <ClimateForecastChart days={daily} />
         <DailyForecast days={daily} today={today} />
         <details className="mt-3 rounded-xl border border-gray-100 px-4 py-3 dark:border-white/[0.06]">
           <summary className="cursor-pointer text-[11px] font-bold text-graphite-600 dark:text-gray-300">Previsão horária</summary>
