@@ -27,7 +27,21 @@ interface AssignmentRow {
   pivot_id: string;
   season_id: string;
   culture_id: string;
+  soil_id: string | null;
+  culture_variety_id: string | null;
+  variety_id: string | null;
+  planted_area: number | null;
   planting_date: string | null;
+  emergence_date: string | null;
+  expected_harvest_date: string | null;
+  crop_stage: string | null;
+  row_spacing_m: number | null;
+  plant_spacing_m: number | null;
+  irrigation_efficiency: number | null;
+  depletion_factor: number | null;
+  initial_root_depth: number | null;
+  max_root_depth: number | null;
+  notes: string | null;
   closed_at: string | null;
   close_reason: string | null;
   close_note: string | null;
@@ -39,8 +53,27 @@ interface AssignmentRow {
   active: boolean | null;
 }
 
-interface PivotLite { id: string; name: string; module_id: string | null }
+interface PivotLite {
+  id: string;
+  name: string;
+  module_id: string | null;
+  area: number;
+  soil_id: string | null;
+}
 interface Named { id: string; name: string }
+interface SoilLite {
+  id: string;
+  name: string;
+  texture: string | null;
+  cad: number | null;
+  afd: number | null;
+}
+interface VarietyLite {
+  id: string;
+  culture_id: string;
+  name: string;
+  maturity: string | null;
+}
 interface EventLite {
   id: string;
   parcel_id: string | null;
@@ -74,6 +107,29 @@ function fmtWhen(iso: string): string {
   return d.toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
 }
 
+function humanize(value: string | null | undefined): string {
+  if (!value) return "Não informado";
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function hasValue(value: unknown): boolean {
+  return value !== null && value !== undefined && value !== "";
+}
+
+function DataField({ label, value }: { label: string; value: React.ReactNode }) {
+  const empty = value === null || value === undefined || value === "" || value === "—";
+  return (
+    <div className="rounded-xl border border-gray-100 bg-gray-50/60 px-3.5 py-3 dark:border-white/[0.06] dark:bg-white/[0.025]">
+      <p className="text-[10px] font-semibold uppercase tracking-[0.08em] text-graphite-400 dark:text-gray-500">{label}</p>
+      <div className={`mt-1 text-sm font-semibold ${empty ? "text-graphite-400 dark:text-gray-500" : "text-graphite-900 dark:text-white"}`}>
+        {empty ? "Não informado" : value}
+      </div>
+    </div>
+  );
+}
+
 export default function HistoricoOperacionalPage() {
   const { activeFarmId } = useAuth();
   const supabase = createClient();
@@ -83,6 +139,8 @@ export default function HistoricoOperacionalPage() {
   const [modules, setModules] = useState<Named[]>([]);
   const [seasons, setSeasons] = useState<Named[]>([]);
   const [cultures, setCultures] = useState<Named[]>([]);
+  const [soils, setSoils] = useState<SoilLite[]>([]);
+  const [varieties, setVarieties] = useState<VarietyLite[]>([]);
   const [assignments, setAssignments] = useState<AssignmentRow[]>([]);
   const [events, setEvents] = useState<EventLite[]>([]);
   const [sensory, setSensory] = useState<SensoryLite[]>([]);
@@ -92,17 +150,21 @@ export default function HistoricoOperacionalPage() {
   const load = useCallback(async () => {
     if (!activeFarmId) return;
     setLoading(true);
-    const [pv, mo, ss, cu] = await Promise.all([
-      supabase.from("pivots").select("id, name, module_id").eq("farm_id", activeFarmId).order("name"),
+    const [pv, mo, ss, cu, so, va] = await Promise.all([
+      supabase.from("pivots").select("id, name, module_id, area, soil_id").eq("farm_id", activeFarmId).order("name"),
       supabase.from("production_modules").select("id, name").eq("farm_id", activeFarmId).order("name"),
       supabase.from("seasons").select("id, name").eq("farm_id", activeFarmId).order("start_date", { ascending: false }),
-      supabase.from("cultures").select("id, name").eq("active", true).order("name"),
+      supabase.from("cultures").select("id, name").order("name"),
+      supabase.from("soils").select("id, name, texture, cad, afd").eq("farm_id", activeFarmId).order("name"),
+      supabase.from("culture_varieties").select("id, culture_id, name, maturity").order("name"),
     ]);
     const pivotRows = (pv.data ?? []) as PivotLite[];
     setPivots(pivotRows);
     setModules((mo.data ?? []) as Named[]);
     setSeasons((ss.data ?? []) as Named[]);
     setCultures((cu.data ?? []) as Named[]);
+    setSoils((so.data ?? []) as SoilLite[]);
+    setVarieties((va.data ?? []) as VarietyLite[]);
 
     if (pivotRows.length === 0) {
       setAssignments([]);
@@ -114,7 +176,7 @@ export default function HistoricoOperacionalPage() {
     const pivotIds = pivotRows.map((p) => p.id);
     const { data: asg } = await supabase
       .from("pivot_crop_assignments")
-      .select("id, name, pivot_id, season_id, culture_id, planting_date, closed_at, close_reason, close_note, yield_kg_ha, total_water_applied_mm, total_energy_kwh, total_cost, status, active")
+      .select("id, name, pivot_id, season_id, culture_id, soil_id, culture_variety_id, variety_id, planted_area, planting_date, emergence_date, expected_harvest_date, crop_stage, row_spacing_m, plant_spacing_m, irrigation_efficiency, depletion_factor, initial_root_depth, max_root_depth, notes, closed_at, close_reason, close_note, yield_kg_ha, total_water_applied_mm, total_energy_kwh, total_cost, status, active")
       .in("pivot_id", pivotIds)
       .order("closed_at", { ascending: false });
     const assignmentRows = (asg ?? []) as AssignmentRow[];
@@ -154,6 +216,8 @@ export default function HistoricoOperacionalPage() {
   const moduleMap = useMemo(() => new Map(modules.map((m) => [m.id, m.name])), [modules]);
   const seasonMap = useMemo(() => new Map(seasons.map((s) => [s.id, s.name])), [seasons]);
   const cultureMap = useMemo(() => new Map(cultures.map((c) => [c.id, c.name])), [cultures]);
+  const soilMap = useMemo(() => new Map(soils.map((soil) => [soil.id, soil])), [soils]);
+  const varietyMap = useMemo(() => new Map(varieties.map((variety) => [variety.id, variety])), [varieties]);
 
   const historicRows: HistoricParcelRow[] = useMemo(
     () =>
@@ -203,6 +267,32 @@ export default function HistoricoOperacionalPage() {
       storedCost: selected.total_cost,
     })
     : null;
+
+  const selectedPivot = selected ? pivotMap.get(selected.pivot_id) ?? null : null;
+  const selectedSoilId = selected?.soil_id ?? selectedPivot?.soil_id ?? null;
+  const selectedSoil = selectedSoilId ? soilMap.get(selectedSoilId) ?? null : null;
+  const selectedVarietyId = selected?.culture_variety_id ?? selected?.variety_id ?? null;
+  const selectedVariety = selectedVarietyId ? varietyMap.get(selectedVarietyId) ?? null : null;
+
+  const parcelCompleteness = useMemo(() => {
+    if (!selected) return { filled: 0, total: 12, pct: 0 };
+    const fields = [
+      selected.planted_area,
+      selectedVarietyId,
+      selected.planting_date,
+      selected.emergence_date,
+      selected.expected_harvest_date,
+      selected.row_spacing_m,
+      selected.plant_spacing_m,
+      selectedSoilId,
+      selected.irrigation_efficiency,
+      selected.depletion_factor,
+      selected.initial_root_depth,
+      selected.max_root_depth,
+    ];
+    const filled = fields.filter(hasValue).length;
+    return { filled, total: fields.length, pct: Math.round((filled / fields.length) * 100) };
+  }, [selected, selectedSoilId, selectedVarietyId]);
 
   const activeFilterCount = useMemo(
     () => Object.values(filters).filter((value) => value.trim() !== "").length,
@@ -522,6 +612,111 @@ export default function HistoricoOperacionalPage() {
               <Button variant="secondary" onClick={() => { window.location.href = "/vinculacao"; }}>
                 Nova parcela neste pivô
               </Button>
+            </div>
+          </Card>
+
+          <Card className="overflow-hidden p-0">
+            <div className="flex flex-col gap-3 border-b border-gray-100 px-5 py-4 dark:border-white/[0.06] sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <h3 className="text-sm font-bold text-graphite-900 dark:text-white">Ficha da parcela</h3>
+                <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-gray-500">
+                  Dados cadastrais e agronômicos registrados para este ciclo.
+                </p>
+              </div>
+              <div className="min-w-[210px]">
+                <div className="flex items-center justify-between text-[10px] font-semibold text-graphite-500 dark:text-gray-400">
+                  <span>Completude do cadastro</span>
+                  <span>{parcelCompleteness.filled}/{parcelCompleteness.total} · {parcelCompleteness.pct}%</span>
+                </div>
+                <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-100 dark:bg-white/[0.06]">
+                  <div
+                    className="h-full rounded-full bg-brand-600 transition-all"
+                    style={{ width: `${parcelCompleteness.pct}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-5 p-5">
+              <section>
+                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-brand-700 dark:text-brand-300">Identificação</h4>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  <DataField label="Pivô" value={selectedPivot?.name ?? null} />
+                  <DataField label="Módulo" value={selectedPivot?.module_id ? moduleMap.get(selectedPivot.module_id) ?? null : null} />
+                  <DataField label="Safra" value={seasonMap.get(selected.season_id) ?? null} />
+                  <DataField label="Cultura" value={cultureMap.get(selected.culture_id) ?? null} />
+                  <DataField label="Cultivar" value={selectedVariety?.name ?? null} />
+                  <DataField
+                    label="Área plantada"
+                    value={selected.planted_area != null ? `${selected.planted_area.toLocaleString("pt-BR")} ha` : null}
+                  />
+                </div>
+                {selectedPivot?.area != null && (
+                  <p className="mt-2 text-[10px] text-graphite-400 dark:text-gray-500">
+                    Área total do pivô: {selectedPivot.area.toLocaleString("pt-BR")} ha
+                  </p>
+                )}
+              </section>
+
+              <section className="border-t border-gray-100 pt-4 dark:border-white/[0.06]">
+                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-brand-700 dark:text-brand-300">Implantação</h4>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  <DataField label="Plantio" value={selected.planting_date ? fmtDate(selected.planting_date) : null} />
+                  <DataField label="Emergência" value={selected.emergence_date ? fmtDate(selected.emergence_date) : null} />
+                  <DataField label="Colheita prevista" value={selected.expected_harvest_date ? fmtDate(selected.expected_harvest_date) : null} />
+                  <DataField label="Estádio registrado" value={selected.crop_stage ? humanize(selected.crop_stage) : null} />
+                  <DataField
+                    label="Espaçamento linhas"
+                    value={selected.row_spacing_m != null ? `${selected.row_spacing_m.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m` : null}
+                  />
+                  <DataField
+                    label="Entre plantas"
+                    value={selected.plant_spacing_m != null ? `${selected.plant_spacing_m.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m` : null}
+                  />
+                </div>
+              </section>
+
+              <section className="border-t border-gray-100 pt-4 dark:border-white/[0.06]">
+                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-brand-700 dark:text-brand-300">Solo e manejo hídrico</h4>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-8">
+                  <DataField label="Solo" value={selectedSoil?.name ?? null} />
+                  <DataField label="Textura" value={selectedSoil?.texture ? humanize(selectedSoil.texture) : null} />
+                  <DataField label="CAD" value={selectedSoil?.cad != null ? `${selectedSoil.cad.toLocaleString("pt-BR")} mm` : null} />
+                  <DataField label="AFD" value={selectedSoil?.afd != null ? `${selectedSoil.afd.toLocaleString("pt-BR")} mm` : null} />
+                  <DataField
+                    label="Fator p"
+                    value={selected.depletion_factor != null ? `${selected.depletion_factor.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} (${(selected.depletion_factor * 100).toFixed(0)}%)` : null}
+                  />
+                  <DataField
+                    label="Eficiência irrigação"
+                    value={selected.irrigation_efficiency != null ? `${((selected.irrigation_efficiency <= 1 ? selected.irrigation_efficiency * 100 : selected.irrigation_efficiency)).toFixed(0)}%` : null}
+                  />
+                  <DataField
+                    label="Raiz inicial"
+                    value={selected.initial_root_depth != null ? `${selected.initial_root_depth.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m` : null}
+                  />
+                  <DataField
+                    label="Raiz máxima"
+                    value={selected.max_root_depth != null ? `${selected.max_root_depth.toLocaleString("pt-BR", { maximumFractionDigits: 2 })} m` : null}
+                  />
+                </div>
+              </section>
+
+              <section className="border-t border-gray-100 pt-4 dark:border-white/[0.06]">
+                <h4 className="mb-2 text-[10px] font-bold uppercase tracking-[0.1em] text-brand-700 dark:text-brand-300">Encerramento</h4>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <DataField label="Data de encerramento" value={selected.closed_at ? fmtDate(selected.closed_at) : null} />
+                  <DataField
+                    label="Motivo"
+                    value={selected.close_reason ? PARCEL_CLOSE_REASON_LABELS[selected.close_reason as ParcelCloseReason] ?? humanize(selected.close_reason) : null}
+                  />
+                  <DataField
+                    label="Produtividade"
+                    value={selected.yield_kg_ha != null ? `${selected.yield_kg_ha.toLocaleString("pt-BR")} kg/ha` : null}
+                  />
+                  <DataField label="Observações da parcela" value={selected.notes ?? null} />
+                </div>
+              </section>
             </div>
           </Card>
 
