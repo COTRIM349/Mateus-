@@ -1,7 +1,6 @@
 "use client";
 
 import {
-  MAP_HYDRIC_LEGEND_ORDER,
   MAP_HYDRIC_STATUS_CONFIG,
   type MapHydricStatus,
 } from "@/modules/water-balance/services";
