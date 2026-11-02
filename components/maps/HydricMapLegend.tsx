@@ -1,8 +1,7 @@
 "use client";
 
 import {
-  MAP_HYDRIC_NEED_IRRIGATE,
-  MAP_HYDRIC_NO_IRRIGATE,
+  MAP_HYDRIC_LEGEND_ORDER,
   MAP_HYDRIC_STATUS_CONFIG,
   type MapHydricStatus,
 } from "@/modules/water-balance/services";
@@ -73,27 +72,21 @@ export function HydricMapLegend({
       ) : null}
 
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex flex-col gap-2 sm:flex-row sm:gap-8">
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-graphite-400 dark:text-[#68778E]">
-              Não é preciso irrigar
-            </p>
-            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-              {MAP_HYDRIC_NO_IRRIGATE.map((status) => (
-                <Swatch key={status} status={status} count={counts[status] ?? 0} />
-              ))}
-            </div>
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-graphite-400 dark:text-[#68778E]">
+            Faixas de umidade (% da capacidade de campo)
+          </p>
+          <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
+            {MAP_HYDRIC_LEGEND_ORDER.map((status) => (
+              <Swatch key={status} status={status} count={counts[status] ?? 0} />
+            ))}
+            {(counts.incompleto ?? 0) > 0 && (
+              <Swatch status="incompleto" count={counts.incompleto ?? 0} />
+            )}
           </div>
-          <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.12em] text-graphite-400 dark:text-[#68778E]">
-              É preciso irrigar
-            </p>
-            <div className="mt-1.5 flex flex-wrap gap-x-4 gap-y-1">
-              {MAP_HYDRIC_NEED_IRRIGATE.map((status) => (
-                <Swatch key={status} status={status} count={counts[status] ?? 0} />
-              ))}
-            </div>
-          </div>
+          <p className="mt-1.5 text-[10px] text-graphite-400 dark:text-[#68778E]">
+            Azul 100% · Verde 95–&lt;100% · Amarelo 90–&lt;95% · Vermelho &lt;90%
+          </p>
         </div>
 
         {demand ? (
