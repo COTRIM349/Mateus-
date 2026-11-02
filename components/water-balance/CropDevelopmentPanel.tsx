@@ -9,6 +9,7 @@ import { buildCropDevelopmentBands, cropDevelopmentStageLabel, isCropPhaseShown,
 import type { CulturePhase } from "@/modules/culture/services/culture.service";
 import type { DailyBalanceRow } from "@/modules/water-balance/services/water-balance.service";
 import type { PhenologyChartMarker } from "@/modules/culture/services/phenology-chart-markers";
+import { buildSoyLocalPhenologyMarkers } from "@/modules/culture/services/soy-phenology-local-model";
 
 type CurvePoint = { x: number; y: number };
 type ChartVariable = "kc" | "root" | "potential" | "stages";
@@ -31,6 +32,11 @@ interface Props {
   varietyName: string | null;
   pivotName?: string | null;
   seasonName?: string | null;
+  soyPhenology?: {
+    emergenceDate: string | null;
+    planningOccupancyDays: number | null;
+    growthHabit: string | null;
+  } | null;
 }
 
 const fmt = (n: number, digits = 1) =>
@@ -88,6 +94,7 @@ export function CropDevelopmentPanel({
   rows, markers, kcCurve, rootCurve = null, kcCurveLabel, cropName,
   varietyName, pivotName, seasonName, culturePhases = [], daeOffsetFromPlanting = 0,
   stageOptions = [],fieldObservations = [],observationContext = null,onObservationSaved,
+  soyPhenology = null,
 }: Props) {
   const [axisMode, setAxisMode] = useState<AxisMode>("dae");
   const [showPicker, setShowPicker] = useState(false);
@@ -101,9 +108,27 @@ export function CropDevelopmentPanel({
   const dae = last?.dae != null && Number.isFinite(last.dae) ? Math.max(0, last.dae) : null;
   const isSoy = /soja/i.test(cropName ?? "");
   const fieldStage=activeFieldObservation(fieldObservations,stageOptions,last?.date??"");
+  const modeledMarkers = useMemo(
+    () => isSoy && soyPhenology
+      ? buildSoyLocalPhenologyMarkers({
+          emergenceDate: soyPhenology.emergenceDate,
+          planningOccupancyDays: soyPhenology.planningOccupancyDays,
+          growthHabit: soyPhenology.growthHabit,
+          registeredMarkers: markers,
+        })
+      : [],
+    [
+      isSoy,
+      soyPhenology?.emergenceDate,
+      soyPhenology?.planningOccupancyDays,
+      soyPhenology?.growthHabit,
+      markers,
+    ],
+  );
+  const effectiveMarkers = modeledMarkers.length > 0 ? modeledMarkers : markers;
   const audit = useMemo(
-    () => buildDevelopmentAudit({ isSoy, currentDae: dae, markers, rows, kcCurve }),
-    [isSoy, dae, markers, rows, kcCurve],
+    () => buildDevelopmentAudit({ isSoy, currentDae: dae, markers: effectiveMarkers, rows, kcCurve }),
+    [isSoy, dae, effectiveMarkers, rows, kcCurve],
   );
 
   const observed = useMemo(
@@ -294,8 +319,8 @@ export function CropDevelopmentPanel({
             </h3>
             <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
               Fases coloridas, estádios detalhados da cultivar, Kc e crescimento radicular.
-              {markers.length>0 && <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
-                {markers.length} marcos da cultivar carregados
+              {effectiveMarkers.length>0 && <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
+                {effectiveMarkers.length} marcos da cultivar carregados
               </span>}
             </p>
           </div>
