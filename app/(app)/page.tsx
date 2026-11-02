@@ -188,6 +188,7 @@ function DashboardPanelMode({
           active: pivot.active,
           color: MAP_HYDRIC_COLORS.gray,
           statusLabel: "Sem parcela ativa",
+          plain: true,
         }];
       });
   }, [states, pivots]);
@@ -233,12 +234,12 @@ function DashboardPanelMode({
       </header>
 
       <main className="space-y-4 p-2.5 sm:p-4">
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <section className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {mapPivots.length > 0 ? (
             <PivotMap
               pivots={mapPivots}
               interactive={false}
-              className="h-[48vh] min-h-[390px] w-full rounded-none border-0 sm:h-[52vh]"
+              className="h-[44vh] min-h-[360px] w-full rounded-none border-0 sm:h-[46vh]"
             />
           ) : (
             <div className="flex h-[48vh] min-h-[390px] items-center justify-center text-sm text-graphite-400">
@@ -247,7 +248,7 @@ function DashboardPanelMode({
           )}
         </section>
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
           {cards.map((state) => {
             const c = state.current!;
             const visual = panelVisual(c.moisturePctCc);
@@ -257,8 +258,8 @@ function DashboardPanelMode({
                 key={hydricStateId(state)}
                 className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)]"
               >
-                <div className="flex items-center gap-4 p-4">
-                  <div className="relative h-[82px] w-[116px] shrink-0">
+                <div className="flex items-center gap-3 p-3.5">
+                  <div className="relative h-[72px] w-[100px] shrink-0">
                     <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
                       <path
                         d="M 12 62 A 48 48 0 0 1 108 62"
@@ -279,20 +280,20 @@ function DashboardPanelMode({
                       />
                     </svg>
                     <div className="absolute inset-x-0 bottom-0 text-center">
-                      <div className="text-xl font-extrabold tracking-tight">{pct.toFixed(0)}% <span className="text-xs font-bold">CC</span></div>
+                      <div className="text-lg font-extrabold tracking-tight">{pct.toFixed(0)}% <span className="text-[10px] font-bold">CC</span></div>
                     </div>
                   </div>
-                  <div className="min-w-0 border-l border-gray-100 pl-4">
-                    <h3 className="truncate text-xl font-black tracking-tight">{state.parcelName?.trim() || state.pivotName}</h3>
+                  <div className="min-w-0 border-l border-gray-100 pl-3">
+                    <h3 className="truncate text-base font-black tracking-tight">{state.parcelName?.trim() || state.pivotName}</h3>
                     <p className="mt-1 truncate text-xs text-graphite-400">
                       {state.cultureName}{state.varietyName ? ` · ${state.varietyName}` : ""}
                     </p>
-                    <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
+                    <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[9px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
                       {visual.label}
                     </span>
                   </div>
                 </div>
-                <div className="border-t border-gray-100 bg-gray-50/70 px-4 py-3 text-xs text-graphite-500">
+                <div className="border-t border-gray-100 bg-gray-50/70 px-3.5 py-2.5 text-[11px] text-graphite-500">
                   💧 Irrigação recomendada: <strong className="text-graphite-900">{c.recommendedGrossDepth.toFixed(1)} mm</strong>
                 </div>
               </article>
