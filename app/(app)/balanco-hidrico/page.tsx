@@ -1725,6 +1725,9 @@ export default function BalancoHidricoPage() {
             pivotName={selPivot?.name ?? "Pivô"}
             cultureName={culture?.name ?? "Cultura"}
             seasonName={seasonName}
+            areaHa={selPivot?.area ?? null}
+            flowRateM3h={selPivot?.flow_rate ?? null}
+            efficiencyPercent={selPivot ? ((selPivot.application_efficiency ?? selPivot.efficiency) * 100) : null}
             onOpenHistory={() => document.getElementById("decision-season-audit")?.scrollIntoView({behavior:"smooth",block:"start"})}
           />
           <DecisionSoilLayerPanel
