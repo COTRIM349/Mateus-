@@ -142,6 +142,11 @@ describe("tela de histórico", () => {
     expect(src).toContain("hasSearch &&");
     expect(src).toContain("Ativa");
     expect(src).toContain("Histórico");
+    expect(src).toContain("Ficha da parcela");
+    expect(src).toContain("Completude do cadastro");
+    expect(src).toContain("Não informado");
+    expect(src).toContain("Área plantada");
+    expect(src).toContain("Solo e manejo hídrico");
     expect(src).not.toContain(".delete()");
     expect(src).not.toContain("tarifa");
   });
