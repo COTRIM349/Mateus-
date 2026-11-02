@@ -366,12 +366,12 @@ function DashboardPanelMode({
           ))}
         </section>
 
-        <div className="flex items-center justify-between pt-1">
-          <h2 className="text-base font-black tracking-tight">Status dos pivôs</h2>
-          <span className="text-[10px] text-graphite-400">{cards.length} pivôs em manejo</span>
+        <div className="flex items-center justify-between pt-0.5">
+          <h2 className="text-sm font-black tracking-tight">Status dos pivôs</h2>
+          <span className="text-[9px] text-graphite-400">{cards.length} pivôs em manejo</span>
         </div>
 
-        <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
+        <section className="grid grid-cols-1 gap-1.5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-7">
           {cards.map((state) => {
             const c = state.current!;
             const visual = panelVisual(c.moisturePctCc);
@@ -379,16 +379,16 @@ function DashboardPanelMode({
             return (
               <article
                 key={hydricStateId(state)}
-                className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.05)]"
+                className="overflow-hidden rounded-lg border border-gray-100 bg-white shadow-[0_2px_8px_rgba(15,23,42,0.05)]"
               >
-                <div className="flex items-center gap-2 p-2.5">
-                  <div className="relative h-[54px] w-[76px] shrink-0">
+                <div className="flex items-center gap-1.5 p-2">
+                  <div className="relative h-[46px] w-[64px] shrink-0">
                     <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
                       <path
                         d="M 12 62 A 48 48 0 0 1 108 62"
                         fill="none"
                         stroke="#e5e7eb"
-                        strokeWidth="6"
+                        strokeWidth="5"
                         strokeLinecap="round"
                         pathLength="100"
                       />
@@ -396,34 +396,34 @@ function DashboardPanelMode({
                         d="M 12 62 A 48 48 0 0 1 108 62"
                         fill="none"
                         stroke={visual.ring}
-                        strokeWidth="6"
+                        strokeWidth="5"
                         strokeLinecap="round"
                         pathLength="100"
                         strokeDasharray={`${pct} 100`}
                       />
                     </svg>
                     <div className="absolute inset-x-0 bottom-0 text-center">
-                      <div className="text-sm font-extrabold tracking-tight">
-                        {pct.toFixed(0)}% <span className="text-[8px] font-bold">CC</span>
+                      <div className="text-[13px] font-extrabold tracking-tight">
+                        {pct.toFixed(0)}% <span className="text-[7px] font-bold">CC</span>
                       </div>
                     </div>
                   </div>
 
-                  <div className="min-w-0 border-l border-gray-100 pl-2.5">
-                    <h3 className="truncate text-[12px] font-black tracking-tight">
+                  <div className="min-w-0 border-l border-gray-100 pl-2">
+                    <h3 className="truncate text-[11px] font-black tracking-tight">
                       {state.parcelName?.trim() || state.pivotName}
                     </h3>
-                    <p className="mt-0.5 truncate text-[9px] text-graphite-400">
+                    <p className="mt-0.5 truncate text-[8px] text-graphite-400">
                       {state.cultureName}{state.varietyName ? ` · ${state.varietyName}` : ""}
                     </p>
-                    <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[8px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
+                    <span className={`mt-1 inline-flex rounded-full px-1.5 py-0.5 text-[7px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
                       {visual.label}
                     </span>
                   </div>
                 </div>
 
-                <div className="border-t border-gray-100 bg-gray-50/70 px-2.5 py-2 text-[9px] text-graphite-500">
-                  💧 Irrigação: <strong className="text-graphite-900">{c.recommendedGrossDepth.toFixed(1)} mm</strong>
+                <div className="border-t border-gray-100 bg-gray-50/70 px-2 py-1.5 text-[8px] text-graphite-500">
+                  💧 <span className="hidden 2xl:inline">Irrigação: </span><strong className="text-graphite-900">{c.recommendedGrossDepth.toFixed(1)} mm</strong>
                 </div>
               </article>
             );
