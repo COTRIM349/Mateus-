@@ -218,8 +218,8 @@ export default function CentralDeManejoPage() {
   }> = [
     { status: "capacidade_campo", range: "≥95% CC", description: "Alta umidade" },
     { status: "boa_umidade", range: "90–<95%", description: "Confortável" },
-    { status: "atencao", range: "82–<90%", description: "Atenção" },
-    { status: "deficit_hidrico", range: "70–<82%", description: "Déficit" },
+    { status: "atencao", range: "85–<90%", description: "Atenção" },
+    { status: "deficit_hidrico", range: "70–<85%", description: "Déficit" },
     { status: "critico", range: "<70%", description: "Crítico" },
   ];
 
@@ -313,37 +313,73 @@ export default function CentralDeManejoPage() {
               <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#0A1220]">
                 <div className="border-b border-gray-100 px-4 py-3.5 dark:border-[#162233]">
                   <p className="text-[13px] font-extrabold text-graphite-900 dark:text-white">Situação hídrica</p>
-                  <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#728096]">Distribuição dos pivôs por % da capacidade de campo</p>
+                  <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#728096]">Resumo da condição atual do solo por faixa de %CC</p>
                 </div>
-                <div className="space-y-2 p-3">
-                  {moistureBands.map((band) => {
-                    const count = mapCounts[band.status] ?? 0;
-                    const pct = totalMapped > 0 ? Math.round((count / totalMapped) * 100) : 0;
-                    const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
+
+                <div className="p-4">
+                  {(() => {
+                    const demandCount = (mapCounts.deficit_hidrico ?? 0) + (mapCounts.critico ?? 0);
+                    const demandPct = totalMapped > 0 ? Math.round((demandCount / totalMapped) * 100) : 0;
                     return (
-                      <div key={band.status} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3 dark:border-[#172538] dark:bg-[#091421]">
-                        <div
-                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold text-white shadow-sm"
-                          style={{ backgroundColor: conf.color }}
-                        >
-                          {band.range}
+                      <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-[#172538] dark:bg-[#091421]">
+                        <div className="flex items-end justify-between gap-4">
+                          <div>
+                            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#728096]">Áreas em demanda</p>
+                            <div className="mt-1 flex items-baseline gap-2">
+                              <span className="text-[32px] font-black leading-none text-graphite-950 dark:text-white">{demandCount}</span>
+                              <span className="text-[11px] font-semibold text-graphite-400 dark:text-[#728096]">de {totalMapped} mapeadas</span>
+                            </div>
+                          </div>
+                          <div className="text-right">
+                            <span className={`inline-flex rounded-full px-3 py-1.5 text-[11px] font-extrabold ${demandCount > 0 ? "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"}`}>
+                              {demandPct}% da área
+                            </span>
+                          </div>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="truncate text-[12px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{band.description}</p>
-                            <p className="text-[12px] font-black tabular-nums text-graphite-900 dark:text-white">{count}</p>
-                          </div>
-                          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-[#142235]">
-                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: conf.color }} />
-                          </div>
-                          <p className="mt-1 text-[9.5px] text-graphite-400 dark:text-[#718096]">{pct}% das áreas mapeadas</p>
+
+                        <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-[#142235]">
+                          {moistureBands.map((band) => {
+                            const count = mapCounts[band.status] ?? 0;
+                            const pct = totalMapped > 0 ? (count / totalMapped) * 100 : 0;
+                            const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
+                            return pct > 0 ? (
+                              <div key={band.status} title={`${band.description}: ${count}`} style={{ width: `${pct}%`, backgroundColor: conf.color }} />
+                            ) : null;
+                          })}
                         </div>
                       </div>
                     );
-                  })}
+                  })()}
+
+                  <div className="mt-3 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:divide-[#172538] dark:border-[#172538] dark:bg-[#091421]">
+                    {moistureBands.map((band) => {
+                      const count = mapCounts[band.status] ?? 0;
+                      const pct = totalMapped > 0 ? Math.round((count / totalMapped) * 100) : 0;
+                      const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
+                      return (
+                        <div key={band.status} className="flex items-center gap-3 px-3.5 py-2.5">
+                          <span className="h-3 w-3 shrink-0 rounded-full" style={{ backgroundColor: conf.color }} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-3">
+                              <div className="min-w-0">
+                                <span className="text-[11.5px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{band.description}</span>
+                                <span className="ml-2 text-[9.5px] font-semibold text-graphite-400 dark:text-[#718096]">{band.range}</span>
+                              </div>
+                              <div className="flex shrink-0 items-baseline gap-2">
+                                <span className="text-[13px] font-black tabular-nums text-graphite-900 dark:text-white">{count}</span>
+                                <span className="w-8 text-right text-[9.5px] font-semibold tabular-nums text-graphite-400 dark:text-[#718096]">{pct}%</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
                   {(mapCounts.incompleto ?? 0) > 0 && (
-                    <div className="rounded-xl border border-dashed border-gray-200 px-3 py-2.5 text-[10.5px] text-graphite-500 dark:border-[#26364B] dark:text-[#8290A5]">
-                      {mapCounts.incompleto ?? 0} parcela(s) com dados insuficientes.
+                    <div className="mt-3 flex items-center justify-between rounded-xl border border-dashed border-gray-200 px-3 py-2.5 text-[10.5px] dark:border-[#26364B]">
+                      <span className="font-semibold text-graphite-500 dark:text-[#8290A5]">Dados insuficientes</span>
+                      <span className="font-black text-graphite-700 dark:text-[#D2D9E5]">{mapCounts.incompleto ?? 0} parcela(s)</span>
                     </div>
                   )}
                 </div>
