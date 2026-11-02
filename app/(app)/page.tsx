@@ -5,7 +5,6 @@ import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
-import { createClient } from "@/lib/supabase/client";
 import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
@@ -15,7 +14,6 @@ import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricMapStates,
 import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   HYDRIC_STATUS_CONFIG,
-  MAP_HYDRIC_COLORS,
   type PivotHydricState,
   type FarmHydricSummary,
 } from "@/modules/water-balance/services";
@@ -32,16 +30,6 @@ const TABS = [
 
 // ── Page ──────────────────────────────────────────────────────────────
 
-type DashboardPivot = {
-  id: string;
-  farm_id: string;
-  name: string;
-  latitude: number | null;
-  longitude: number | null;
-  radius: number | null;
-  active: boolean;
-};
-
 export default function DashboardPage() {
   const { profile, farms, activeFarmId } = useAuth();
   const [panelMode, setPanelMode] = useState(false);
@@ -53,47 +41,8 @@ export default function DashboardPage() {
 
   const implantation = useImplantationStatus();
   const { states, summary, loading } = useFarmHydricState();
-  const [farmPivots, setFarmPivots] = useState<DashboardPivot[]>([]);
-  const [pivotsLoading, setPivotsLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadFarmPivots() {
-      if (!activeFarmId) {
-        if (!cancelled) {
-          setFarmPivots([]);
-          setPivotsLoading(false);
-        }
-        return;
-      }
-
-      setPivotsLoading(true);
-      try {
-        const supabase = createClient();
-        const { data, error } = await supabase
-          .from("pivots")
-          .select("id,farm_id,name,latitude,longitude,radius,active")
-          .eq("farm_id", activeFarmId)
-          .order("name", { ascending: true });
-
-        if (error) throw error;
-        if (!cancelled) setFarmPivots((data ?? []) as DashboardPivot[]);
-      } catch (err) {
-        console.error("Falha ao carregar pivôs do Dashboard:", err);
-        if (!cancelled) setFarmPivots([]);
-      } finally {
-        if (!cancelled) setPivotsLoading(false);
-      }
-    }
-
-    void loadFarmPivots();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeFarmId]);
-
-  if (implantation.loading || loading || pivotsLoading) {
+  if (implantation.loading || loading) {
     return (
       <div className="flex min-h-[60vh] items-center justify-center">
         <div className="h-8 w-8 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
@@ -101,8 +50,8 @@ export default function DashboardPage() {
     );
   }
 
-  if (panelMode && farmPivots.length > 0) {
-    return <DashboardPanelMode states={states} pivots={farmPivots} farmName={activeFarm?.name ?? "Fazenda"} />;
+  if (panelMode && summary && summary.totalPivots > 0) {
+    return <DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} />;
   }
 
   return (
@@ -185,47 +134,16 @@ function panelVisual(moisturePctCc: number | null | undefined) {
   return { color: "#171717", label: "CRÍTICO", text: "text-neutral-800", bg: "bg-neutral-100", ring: "#171717" };
 }
 
-function DashboardPanelMode({
-  states,
-  pivots,
-  farmName,
-}: {
-  states: PivotHydricState[];
-  pivots: DashboardPivot[];
-  farmName: string;
-}) {
+function DashboardPanelMode({ states, farmName }: { states: PivotHydricState[]; farmName: string }) {
   const mapPivots = useMemo(() => {
-    const hydricMarkers = toHydricMapMarkers(states);
-    const hydricByPivot = new Map<string, typeof hydricMarkers>();
-
-    for (const marker of hydricMarkers) {
-      const state = states.find((s) => hydricStateId(s) === marker.id);
-      if (!state) continue;
-      const list = hydricByPivot.get(state.pivotId) ?? [];
-      const visual = panelVisual(state.current?.moisturePctCc);
-      list.push({ ...marker, color: visual.color, statusLabel: visual.label });
-      hydricByPivot.set(state.pivotId, list);
-    }
-
-    return pivots
-      .filter((pivot) => pivot.latitude != null && pivot.longitude != null)
-      .flatMap((pivot) => {
-        const activeMarkers = hydricByPivot.get(pivot.id);
-        if (activeMarkers?.length) return activeMarkers;
-
-        return [{
-          id: `equipment-${pivot.id}`,
-          name: pivot.name,
-          latitude: pivot.latitude as number,
-          longitude: pivot.longitude as number,
-          radiusMeters: pivot.radius,
-          active: pivot.active,
-          color: MAP_HYDRIC_COLORS.gray,
-          statusLabel: "Sem parcela ativa",
-          plain: true,
-        }];
-      });
-  }, [states, pivots]);
+    const base = toHydricMapMarkers(states);
+    const byId = new Map(states.map((s) => [hydricStateId(s), s]));
+    return base.map((marker) => {
+      const state = byId.get(marker.id);
+      const visual = panelVisual(state?.current?.moisturePctCc);
+      return { ...marker, color: visual.color, statusLabel: visual.label };
+    });
+  }, [states]);
 
   const cards = useMemo(
     () =>
@@ -268,12 +186,12 @@ function DashboardPanelMode({
       </header>
 
       <main className="space-y-4 p-2.5 sm:p-4">
-        <section className="mx-auto w-full max-w-[1280px] overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
           {mapPivots.length > 0 ? (
             <PivotMap
               pivots={mapPivots}
               interactive={false}
-              className="h-[44vh] min-h-[360px] w-full rounded-none border-0 sm:h-[46vh]"
+              className="h-[48vh] min-h-[390px] w-full rounded-none border-0 sm:h-[52vh]"
             />
           ) : (
             <div className="flex h-[48vh] min-h-[390px] items-center justify-center text-sm text-graphite-400">
