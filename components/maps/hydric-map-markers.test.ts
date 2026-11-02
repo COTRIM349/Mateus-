@@ -110,7 +110,7 @@ describe("hydricMapDates", () => {
 });
 
 describe("hydricDemandSummary", () => {
-  it("conta como demanda somente quem atingiu o limite de manejo", () => {
+  it("conta demanda nas faixas vermelha e preta", () => {
     const summary = hydricDemandSummary([
       stub({
         pivotId: "p1",
@@ -122,7 +122,13 @@ describe("hydricDemandSummary", () => {
         current: { date: "2026-08-21", mapStatus: "deficit_hidrico", deficit: 80 } as PivotHydricState["current"],
         history: [],
       }),
+      stub({
+        pivotId: "p3",
+        pivotName: "P03",
+        current: { date: "2026-08-21", mapStatus: "critico", deficit: 95 } as PivotHydricState["current"],
+        history: [],
+      }),
     ]);
-    expect(summary).toEqual({ needing: 1, total: 2, highestName: "P02" });
+    expect(summary).toEqual({ needing: 2, total: 3, highestName: "P03" });
   });
 });
