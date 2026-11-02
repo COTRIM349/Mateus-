@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo } from "react";
+import { useSearchParams } from "next/navigation";
 import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
@@ -32,6 +33,8 @@ const TABS = [
 
 export default function DashboardPage() {
   const { profile, farms, activeFarmId } = useAuth();
+  const searchParams = useSearchParams();
+  const panelMode = searchParams.get("modo") === "painel";
   const activeFarm = farms.find((f) => f.id === activeFarmId);
   const [activeTab, setActiveTab] = useState("painel");
 
@@ -46,12 +49,26 @@ export default function DashboardPage() {
     );
   }
 
+  if (panelMode && summary && summary.totalPivots > 0) {
+    return <DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} />;
+  }
+
   return (
     <div className="space-y-8">
-      <PageHeader
-        titulo="Centro de Controle Operacional"
-        descricao={activeFarm ? `${activeFarm.name} · Balanço hídrico em tempo real` : "Balanço hídrico da operação"}
-      />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <PageHeader
+          titulo="Centro de Controle Operacional"
+          descricao={activeFarm ? `${activeFarm.name} · Balanço hídrico em tempo real` : "Balanço hídrico da operação"}
+        />
+        <button
+          type="button"
+          onClick={() => { window.location.href = "/?modo=painel"; }}
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-white px-4 text-sm font-semibold text-brand-700 shadow-sm transition hover:bg-brand-50 dark:border-brand-500/30 dark:bg-graphite-900 dark:text-brand-300"
+        >
+          <span className="text-base">⛶</span>
+          Modo Painel
+        </button>
+      </div>
 
       {profile && implantation.foundationComplete && summary && (
         <Card className="border-brand-200/60 bg-gradient-to-r from-brand-50 to-white dark:border-brand-500/20 dark:from-brand-900/30 dark:to-graphite-800">
@@ -105,6 +122,139 @@ export default function DashboardPage() {
     </div>
   );
 }
+
+
+function panelVisual(moisturePctCc: number | null | undefined) {
+  const value = moisturePctCc ?? 0;
+  if (value >= 95) return { color: "#1877d3", label: "CAP. CAMPO", text: "text-blue-700", bg: "bg-blue-50", ring: "#1877d3" };
+  if (value >= 90) return { color: "#16a34a", label: "IDEAL", text: "text-green-700", bg: "bg-green-50", ring: "#16a34a" };
+  if (value >= 82) return { color: "#f59e0b", label: "ATENÇÃO", text: "text-amber-700", bg: "bg-amber-50", ring: "#f59e0b" };
+  if (value >= 70) return { color: "#ef4444", label: "DÉFICIT", text: "text-red-700", bg: "bg-red-50", ring: "#ef4444" };
+  return { color: "#171717", label: "CRÍTICO", text: "text-neutral-800", bg: "bg-neutral-100", ring: "#171717" };
+}
+
+function DashboardPanelMode({ states, farmName }: { states: PivotHydricState[]; farmName: string }) {
+  const mapPivots = useMemo(() => {
+    const base = toHydricMapMarkers(states);
+    const byId = new Map(states.map((s) => [hydricStateId(s), s]));
+    return base.map((marker) => {
+      const state = byId.get(marker.id);
+      const visual = panelVisual(state?.current?.moisturePctCc);
+      return { ...marker, color: visual.color, statusLabel: visual.label };
+    });
+  }, [states]);
+
+  const cards = useMemo(
+    () =>
+      states
+        .filter((s) => s.current)
+        .slice()
+        .sort((a, b) => (a.current?.moisturePctCc ?? 0) - (b.current?.moisturePctCc ?? 0)),
+    [states],
+  );
+
+  const today = new Date().toLocaleDateString("pt-BR", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+
+  return (
+    <div className="min-h-screen bg-[#f4f7f7] text-graphite-900">
+      <header className="flex min-h-[62px] items-center justify-between gap-4 bg-[#114f51] px-5 py-3 text-white sm:px-7 lg:px-8">
+        <div className="flex items-center gap-3">
+          <span className="text-2xl font-black tracking-tight">SCA</span>
+          <span className="h-7 w-px bg-white/45" />
+          <span className="text-base font-extrabold tracking-[0.12em]">
+            IRRIGA <span className="text-emerald-300">PRO</span>
+          </span>
+        </div>
+        <div className="flex items-center gap-2 text-xs sm:gap-3 sm:text-sm">
+          <span className="hidden rounded-lg border border-white/15 bg-white/10 px-3 py-2 font-semibold sm:inline-flex">
+            {farmName.toUpperCase()}
+          </span>
+          <span className="hidden text-white/80 md:inline">{today}</span>
+          <button
+            type="button"
+            onClick={() => { window.location.href = "/"; }}
+            className="rounded-lg border border-white/25 bg-white/10 px-3 py-2 font-semibold transition hover:bg-white/20"
+          >
+            ↪ Sair do modo painel
+          </button>
+        </div>
+      </header>
+
+      <main className="space-y-4 p-2.5 sm:p-4">
+        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+          {mapPivots.length > 0 ? (
+            <PivotMap
+              pivots={mapPivots}
+              className="h-[48vh] min-h-[390px] w-full rounded-none border-0 sm:h-[52vh]"
+            />
+          ) : (
+            <div className="flex h-[48vh] min-h-[390px] items-center justify-center text-sm text-graphite-400">
+              Nenhum pivô com coordenadas disponíveis para o mapa.
+            </div>
+          )}
+        </section>
+
+        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+          {cards.map((state) => {
+            const c = state.current!;
+            const visual = panelVisual(c.moisturePctCc);
+            const pct = Math.max(0, Math.min(100, c.moisturePctCc));
+            return (
+              <article
+                key={hydricStateId(state)}
+                className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)]"
+              >
+                <div className="flex items-center gap-4 p-4">
+                  <div className="relative h-[82px] w-[116px] shrink-0">
+                    <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
+                      <path
+                        d="M 12 62 A 48 48 0 0 1 108 62"
+                        fill="none"
+                        stroke="#e5e7eb"
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                        pathLength="100"
+                      />
+                      <path
+                        d="M 12 62 A 48 48 0 0 1 108 62"
+                        fill="none"
+                        stroke={visual.ring}
+                        strokeWidth="7"
+                        strokeLinecap="round"
+                        pathLength="100"
+                        strokeDasharray={`${pct} 100`}
+                      />
+                    </svg>
+                    <div className="absolute inset-x-0 bottom-0 text-center">
+                      <div className="text-xl font-extrabold tracking-tight">{pct.toFixed(0)}% <span className="text-xs font-bold">CC</span></div>
+                    </div>
+                  </div>
+                  <div className="min-w-0 border-l border-gray-100 pl-4">
+                    <h3 className="truncate text-xl font-black tracking-tight">{state.parcelName?.trim() || state.pivotName}</h3>
+                    <p className="mt-1 truncate text-xs text-graphite-400">
+                      {state.cultureName}{state.varietyName ? ` · ${state.varietyName}` : ""}
+                    </p>
+                    <span className={`mt-3 inline-flex rounded-full px-3 py-1 text-[10px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
+                      {visual.label}
+                    </span>
+                  </div>
+                </div>
+                <div className="border-t border-gray-100 bg-gray-50/70 px-4 py-3 text-xs text-graphite-500">
+                  💧 Irrigação recomendada: <strong className="text-graphite-900">{c.recommendedGrossDepth.toFixed(1)} mm</strong>
+                </div>
+              </article>
+            );
+          })}
+        </section>
+      </main>
+    </div>
+  );
+}
+
 
 // ── Dashboard Operacional (item 16) ───────────────────────────────────
 
