@@ -46,17 +46,17 @@ export function Topbar() {
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-santa-800 bg-santa-800 text-white shadow-soft">
-      <div className="flex min-h-[70px] items-center gap-3 px-4 py-2 sm:px-6 lg:px-8">
+      <div className="flex min-h-[62px] items-center gap-3 px-4 py-2 sm:px-6 lg:px-7">
         <Link
           href="/"
           title={APP_NAME}
           aria-label="SCA Irriga Pro — início"
-          className="flex shrink-0 items-center gap-2.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
+          className="flex shrink-0 items-center gap-2.5 rounded-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
         >
-          <span className="border-r border-white/20 pr-3 text-[21px] font-black leading-none tracking-[-.04em] text-white sm:text-[26px]">
+          <span className="border-r border-white/18 pr-3 text-[21px] font-black leading-none tracking-[-.035em] text-white sm:text-[24px]">
             SCA
           </span>
-          <span className="text-[12px] font-extrabold uppercase leading-tight tracking-[.12em] text-white sm:text-[14px]">
+          <span className="text-[11px] font-extrabold uppercase leading-tight tracking-[.14em] text-white sm:text-[13px]">
             IRRIGA <span className="text-emerald-300">PRO</span>
           </span>
         </Link>
@@ -67,7 +67,7 @@ export function Topbar() {
               aria-label="Selecionar fazenda"
               value={activeFarmId ?? ""}
               onChange={(event) => setActiveFarm(event.target.value)}
-              className="max-w-[142px] rounded-lg border border-white/15 bg-white/10 px-2 py-2.5 text-[14px] font-semibold text-white outline-none focus-visible:ring-2 focus-visible:ring-santa-200 sm:max-w-[220px] sm:px-3 sm:text-[15px]"
+              className="max-w-[150px] rounded-md border border-white/12 bg-white/[0.08] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white outline-none focus-visible:ring-2 focus-visible:ring-santa-200 sm:max-w-[230px] sm:px-3 sm:text-[14px]"
             >
               {farms.map((farm) => (
                 <option key={farm.id} value={farm.id} className="text-graphite-900">
@@ -76,12 +76,12 @@ export function Topbar() {
               ))}
             </select>
           ) : (
-            <div className="max-w-[130px] truncate rounded-lg bg-white/[0.07] px-2 py-2 text-[14px] font-semibold text-white/90 sm:max-w-[230px] sm:px-3 sm:text-[15px]">
+            <div className="max-w-[140px] truncate rounded-md border border-white/[0.06] bg-white/[0.07] px-2.5 py-2 text-[13px] font-semibold tracking-[-0.01em] text-white/90 sm:max-w-[230px] sm:px-3 sm:text-[14px]">
               {activeFarm?.name ?? profile?.companyName ?? "Fazenda"}
             </div>
           )}
 
-          <span className="hidden whitespace-nowrap text-[14px] font-medium text-white/65 xl:block">
+          <span className="hidden whitespace-nowrap text-[13px] font-medium tracking-[-0.01em] text-white/60 xl:block">
             {today}
           </span>
           <button
@@ -106,7 +106,7 @@ export function Topbar() {
               aria-label="Menu do usuário"
               aria-expanded={userMenuOpen}
               onClick={() => setUserMenuOpen((current) => !current)}
-              className="flex h-9 w-9 items-center justify-center rounded-full bg-santa-500 text-[15px] font-bold text-white transition-colors hover:bg-santa-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-white/10 bg-santa-500 text-[13px] font-bold text-white transition-colors hover:bg-santa-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
             >
               {profile?.name
                 ? profile.name.split(" ").map((name) => name[0]).slice(0, 2).join("").toUpperCase()
@@ -115,16 +115,16 @@ export function Topbar() {
             {userMenuOpen && (
               <div className="absolute right-0 top-full z-[70] mt-3 w-56 rounded-xl border border-santa-100 bg-white p-2 text-graphite-900 shadow-modal dark:border-white/10 dark:bg-graphite-800 dark:text-white">
                 <div className="border-b border-gray-100 px-2 py-2 dark:border-white/10">
-                  <p className="truncate text-[15px] font-semibold">{profile?.name ?? "Usuário"}</p>
-                  <p className="truncate text-[13px] text-graphite-500 dark:text-gray-400">{profile?.email}</p>
+                  <p className="truncate text-[14px] font-semibold tracking-[-0.01em]">{profile?.name ?? "Usuário"}</p>
+                  <p className="truncate text-[12px] text-graphite-500 dark:text-gray-400">{profile?.email}</p>
                 </div>
-                <Link href="/configuracoes" onClick={() => setUserMenuOpen(false)} className="mt-1 block rounded-lg px-3 py-2 text-[15px] hover:bg-santa-50 dark:hover:bg-white/10">
+                <Link href="/configuracoes" onClick={() => setUserMenuOpen(false)} className="mt-1 block rounded-lg px-3 py-2 text-[14px] font-medium hover:bg-santa-50 dark:hover:bg-white/10">
                   Configurações
                 </Link>
                 <button
                   type="button"
                   onClick={handleSignOut}
-                  className="w-full rounded-lg px-3 py-2 text-left text-[15px] font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
+                  className="w-full rounded-lg px-3 py-2 text-left text-[14px] font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                 >
                   Sair
                 </button>
