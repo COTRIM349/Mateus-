@@ -21,7 +21,8 @@ import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricStateId, t
 import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   calculateManagementUrgency,
-  HYDRIC_STATUS_CONFIG,
+  MAP_HYDRIC_LEGEND_ORDER,
+  MAP_HYDRIC_STATUS_CONFIG,
   type PivotHydricState,
   type BalanceDay,
 } from "@/modules/water-balance/services";
@@ -316,10 +317,10 @@ export default function CentralDeManejoPage() {
 
           {/* rastreabilidade das cores do mapa */}
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-graphite-400 dark:text-[#6E7C92]">
-            {(["verde", "amarelo", "vermelho", "cinza"] as const).map((st) => (
+            {MAP_HYDRIC_LEGEND_ORDER.map((st) => (
               <span key={st} className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: HYDRIC_STATUS_CONFIG[st].color }} />
-                {HYDRIC_STATUS_CONFIG[st].label}
+                <span className="h-2 w-2 rounded-full" style={{ background: MAP_HYDRIC_STATUS_CONFIG[st].color }} />
+                {MAP_HYDRIC_STATUS_CONFIG[st].label}
               </span>
             ))}
           </div>
