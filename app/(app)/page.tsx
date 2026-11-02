@@ -129,7 +129,7 @@ function panelVisual(moisturePctCc: number | null | undefined) {
   const value = moisturePctCc ?? 0;
   if (value >= 95) return { color: "#1877d3", label: "CAP. CAMPO", text: "text-blue-700", bg: "bg-blue-50", ring: "#1877d3" };
   if (value >= 90) return { color: "#16a34a", label: "IDEAL", text: "text-green-700", bg: "bg-green-50", ring: "#16a34a" };
-  if (value >= 82) return { color: "#f59e0b", label: "ATENÇÃO", text: "text-amber-700", bg: "bg-amber-50", ring: "#f59e0b" };
+  if (value >= 85) return { color: "#f59e0b", label: "ATENÇÃO", text: "text-amber-700", bg: "bg-amber-50", ring: "#f59e0b" };
   if (value >= 70) return { color: "#ef4444", label: "DÉFICIT", text: "text-red-700", bg: "bg-red-50", ring: "#ef4444" };
   return { color: "#171717", label: "CRÍTICO", text: "text-neutral-800", bg: "bg-neutral-100", ring: "#171717" };
 }
