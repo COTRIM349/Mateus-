@@ -326,6 +326,10 @@ export default function BalancoHidricoPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [varietyName, setVarietyName] = useState<string | null>(null);
+  const [cultivarPhenologyModel, setCultivarPhenologyModel] = useState<{
+    growthHabit: string | null;
+    planningOccupancyDays: number | null;
+  } | null>(null);
   const [seasonName, setSeasonName] = useState<string | null>(null);
   // Origem do Kc usado no último cálculo — rastreabilidade e checklist.
   //  cadastro-cultivar / cadastro-cultura = curva ATIVA do cadastro (DAE);
@@ -445,6 +449,7 @@ export default function BalancoHidricoPage() {
       setPhases([]);
       setHydricAnchor(null);
       setVarietyName(null);
+      setCultivarPhenologyModel(null);
       setSeasonName(null);
       return;
     }
@@ -503,14 +508,23 @@ export default function BalancoHidricoPage() {
       const effectiveVarietyId = a.culture_variety_id ?? a.variety_id;
       const [{ data: varietyRow }, { data: seasonRow }] = await Promise.all([
         effectiveVarietyId
-          ? supabase.from("culture_varieties").select("name").eq("id", effectiveVarietyId).maybeSingle()
+          ? supabase.from("culture_varieties").select("name,growth_habit,planning_occupancy_days").eq("id", effectiveVarietyId).maybeSingle()
           : Promise.resolve({ data: null }),
         a.season_id
           ? supabase.from("seasons").select("name").eq("id", a.season_id).maybeSingle()
           : Promise.resolve({ data: null }),
       ]);
       if (cancelled) return;
-      setVarietyName((varietyRow as { name: string } | null)?.name ?? null);
+      const varietyInfo = varietyRow as {
+        name: string;
+        growth_habit: string | null;
+        planning_occupancy_days: number | null;
+      } | null;
+      setVarietyName(varietyInfo?.name ?? null);
+      setCultivarPhenologyModel(varietyInfo ? {
+        growthHabit: varietyInfo.growth_habit,
+        planningOccupancyDays: varietyInfo.planning_occupancy_days,
+      } : null);
       setSeasonName((seasonRow as { name: string } | null)?.name ?? null);
 
       // O perfil físico 1:1 do pivô é a fonte operacional. O catálogo antigo
@@ -1674,6 +1688,11 @@ export default function BalancoHidricoPage() {
                     ? Math.max(0, daysBetweenIso(assignment.planting_date, assignment.emergence_date))
                     : 0
                 }
+                soyPhenology={assignment?.emergence_date && cultivarPhenologyModel ? {
+                  emergenceDate: assignment.emergence_date,
+                  planningOccupancyDays: cultivarPhenologyModel.planningOccupancyDays,
+                  growthHabit: cultivarPhenologyModel.growthHabit,
+                } : null}
               />
 
             </>
@@ -2706,6 +2725,7 @@ function Cockpit({
   phenologyObservationContext = null,
   onPhenologyObservationSaved,
   daeOffsetFromPlanting = 0,
+  soyPhenology = null,
 }: {
   rows: DailyBalanceRow[];
   summary: ReturnType<typeof calculateSummary>;
@@ -2736,6 +2756,12 @@ function Cockpit({
   onPhenologyObservationSaved?: (saved:PhenologyFieldObservation)=>void;
   /** Diferença plantio→emergência para alinhar DAP das fases com DAE do manejo. */
   daeOffsetFromPlanting?: number;
+  /** Dados da cultivar usados apenas para posicionar o estádio fenológico da soja. */
+  soyPhenology?: {
+    emergenceDate: string | null;
+    planningOccupancyDays: number | null;
+    growthHabit: string | null;
+  } | null;
 }) {
   const series = useMemo(() => buildCockpitSeries(rows, projection), [rows, projection]);
 
@@ -2885,6 +2911,7 @@ function Cockpit({
                   " (" + (kcCurve.scope === "cultivar" ? "cultivar" : "cultura") + ")" : null}
                 cropName={identity.cultureName}
                 varietyName={identity.varietyName}
+                soyPhenology={soyPhenology}
               />
             </Card>
           )}
