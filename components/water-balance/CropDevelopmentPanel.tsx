@@ -208,6 +208,7 @@ export function CropDevelopmentPanel({
     : null;
   const selectedPhenology=fieldStage?.stage.code ??
     cropDevelopmentStageLabel(audit.currentStage?.code,last.phase);
+  const selectedStageCode=selectedPhenology.trim().toUpperCase();
   const observedAtDae=fieldStage?.observation.dae ?? null;
   const tooltipKc = activeDae == null ? null : activeDae <= (dae ?? 0)
     ? hoverRow?.kc ?? null
@@ -215,6 +216,20 @@ export function CropDevelopmentPanel({
   const tooltipRoot = activeDae == null ? null : activeDae <= (dae ?? 0)
     ? hoverRow?.root ?? null
     : completeRoot.length >= 2 ? calculateRootDepthMeters(completeRoot, activeDae) : null;
+  const hoverPhaseKy = hoverPhase
+    ? culturePhases.find((phase) => phase.name === hoverPhase.label)?.ky ?? null
+    : null;
+  const tooltipKy = activeDae == null
+    ? null
+    : activeDae <= (dae ?? 0)
+      ? hoverRow?.ky ?? hoverPhaseKy
+      : hoverPhaseKy;
+  const tooltipSensitivity = tooltipKy == null || !Number.isFinite(tooltipKy)
+    ? null
+    : tooltipKy >= 1.15 ? "Muito alta"
+    : tooltipKy >= 1 ? "Alta"
+    : tooltipKy >= 0.85 ? "Média"
+    : "Baixa";
   const seasonDateRange = dae != null
     ? fullDateAtDae(last.date, dae, 0) + " – " + fullDateAtDae(last.date, dae, endDae)
     : "Ciclo sem DAE";
@@ -410,7 +425,9 @@ export function CropDevelopmentPanel({
                     </g>;
                   })}
                   {stageBands.map((stage, i) => {
-                    // Interseção impede que um estádio desenhe sobre uma fase desmarcada.
+                    // Um estádio pode atravessar a fronteira de duas macrofases.
+                    // As cores continuam recortadas pelas fases visíveis, mas o código
+                    // do estádio é renderizado UMA única vez para evitar VE/VE, R6/R6 etc.
                     const spans = phaseBands.length
                       ? phaseBands
                           .map((b, bandIndex) => ({
@@ -424,18 +441,33 @@ export function CropDevelopmentPanel({
                           }))
                           .filter((span) => span.end > span.start)
                       : phaseIsVisible(stage.group) ? [{start:stage.start,end:stage.end}] : [];
-                    return spans.map((span, j) => {
-                    const bx = px(span.start), bw = Math.max(0, px(span.end) - bx);
-                    return <g key={stage.code + "-" + i + "-" + j}>
-                      <rect x={bx} y={54} width={bw} height={29}
-                        fill={stagePalette[stage.group]?.fill ?? "#f1f5f9"} opacity={.95}/>
-                      <line x1={bx} y1={54} x2={bx} y2={plot.bottom}
-                        stroke="#475569" strokeOpacity={.09} />
-                      {bw >= 18 && <text x={bx + bw / 2} y={72} textAnchor="middle"
-                        fontSize={bw >= 32 ? 12 : 10} fontWeight={800} fill="#334155">{stage.code}</text>}
-                      <title>{stage.code} · {stage.label} · a partir de {stage.dae} DAE ({stage.origin})</title>
+                    if (spans.length === 0) return null;
+
+                    const isCurrentStage = stage.code.trim().toUpperCase() === selectedStageCode;
+                    const labelSpan = spans.reduce((best, span) =>
+                      (span.end - span.start) > (best.end - best.start) ? span : best, spans[0]);
+                    const labelX = px(labelSpan.start);
+                    const labelW = Math.max(0, px(labelSpan.end) - labelX);
+
+                    return <g key={stage.code + "-" + i}>
+                      {spans.map((span, j) => {
+                        const bx = px(span.start), bw = Math.max(0, px(span.end) - bx);
+                        return <g key={stage.code + "-" + i + "-" + j}>
+                          <rect x={bx} y={54} width={bw} height={29}
+                            fill={stagePalette[stage.group]?.fill ?? "#f1f5f9"}
+                            opacity={isCurrentStage ? 1 : .95}
+                            stroke={isCurrentStage ? "#047857" : "transparent"}
+                            strokeWidth={isCurrentStage ? 2.2 : 0}/>
+                          <line x1={bx} y1={54} x2={bx} y2={plot.bottom}
+                            stroke={isCurrentStage ? "#047857" : "#475569"}
+                            strokeOpacity={isCurrentStage ? .35 : .09} />
+                        </g>;
+                      })}
+                      {labelW >= 18 && <text x={labelX + labelW / 2} y={72} textAnchor="middle"
+                        fontSize={labelW >= 32 ? 12 : 10} fontWeight={900}
+                        fill={isCurrentStage ? "#047857" : "#334155"}>{stage.code}</text>}
+                      <title>{stage.code} · {stage.label} · a partir de {stage.dae} DAE ({stage.origin}){isCurrentStage ? " · estádio atual" : ""}</title>
                     </g>;
-                    });
                   })}
                   {visibleStages.length === 0 && phaseBands.length === 0 && <text x={plot.left + 12} y={63}
                     fontSize={12} fill="#b45309">Fases e marcos fenológicos não cadastrados</text>}
@@ -547,22 +579,28 @@ export function CropDevelopmentPanel({
               )}
               {activeDae != null && (
                 <g>
-                  <rect x={Math.min(plot.right - 202, Math.max(plot.left + 8, px(activeDae) - 82))}
-                    y={plot.top + 14} width={200} height={75} rx={8} fill="#0f2336" opacity={.96}/>
-                  <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
+                  <rect x={Math.min(plot.right - 222, Math.max(plot.left + 8, px(activeDae) - 92))}
+                    y={plot.top + 14} width={220} height={tooltipSensitivity ? 92 : 75}
+                    rx={8} fill="#0f2336" opacity={.96}/>
+                  <text x={Math.min(plot.right - 212, Math.max(plot.left + 18, px(activeDae) - 82))}
                     y={plot.top + 32} fill="white" fontSize={12} fontWeight={800}>
                     {activeDae > dae ? "Referência · " : "Histórico · "}{Math.round(activeDae)} DAE
                   </text>
-                  <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
+                  <text x={Math.min(plot.right - 212, Math.max(plot.left + 18, px(activeDae) - 82))}
                     y={plot.top + 49} fill="#e2e8f0" fontSize={12}>
                     {fieldStage && activeDae>=fieldStage.observation.dae && activeDae<=dae
                       ? "Observado: "+fieldStage.stage.code
                       : hoverStage ? "Estimado: "+hoverStage.code : "Fase: "+(hoverPhase?.label ?? "não cadastrada")}
                   </text>
-                  <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
+                  <text x={Math.min(plot.right - 212, Math.max(plot.left + 18, px(activeDae) - 82))}
                     y={plot.top + 65} fill="#e2e8f0" fontSize={12}>
                     Kc: {tooltipKc == null ? "—" : fmt(tooltipKc, 2)} · Raiz: {tooltipRoot == null ? "—" : fmt(tooltipRoot, 2) + " m"}
                   </text>
+                  {tooltipSensitivity && <text
+                    x={Math.min(plot.right - 212, Math.max(plot.left + 18, px(activeDae) - 82))}
+                    y={plot.top + 82} fill="#fcd34d" fontSize={12} fontWeight={700}>
+                    Sensibilidade hídrica: {tooltipSensitivity}
+                  </text>}
                 </g>
               )}
               <rect x={plot.left} y={plot.top} width={plotWidth} height={plotHeight}
