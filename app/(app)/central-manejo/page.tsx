@@ -23,6 +23,7 @@ import {
   calculateManagementUrgency,
   MAP_HYDRIC_LEGEND_ORDER,
   MAP_HYDRIC_STATUS_CONFIG,
+  type MapHydricStatus,
   type PivotHydricState,
   type BalanceDay,
 } from "@/modules/water-balance/services";
@@ -164,17 +165,53 @@ export default function CentralDeManejoPage() {
   }
 
   const kpis = [
-    { label: "Pivôs ativos", value: String(distinctPivots), sub: "com parcela em manejo" },
-    { label: "Área em manejo", value: fmtInt(managedArea), unit: "ha", sub: `${states.length} parcela(s) ativa(s)` },
-    { label: "Irrigar agora", value: String(pivotsNeeding), sub: "abaixo do limite", tone: pivotsNeeding > 0 ? "text-red-600 dark:text-red-400" : undefined },
-    { label: "Próximas 24 h", value: String(pivots24h), sub: "atingem o limite", tone: pivots24h > 0 ? "text-orange-600 dark:text-orange-400" : undefined },
-    { label: "Lâmina média rec.", value: summary ? fmtInt(summary.avgRecommendedDepth) : "—", unit: "mm", sub: "para quem precisa irrigar" },
-    { label: "Confiabilidade", value: reliability != null ? String(reliability) : "—", unit: "%", sub: "parcelas com dados completos" },
+    { label: "Pivôs ativos", value: String(distinctPivots), sub: "com parcela em manejo", icon: "◉" },
+    { label: "Área em manejo", value: fmtInt(managedArea), unit: "ha", sub: `${states.length} parcela(s) ativa(s)`, icon: "▦" },
+    { label: "Irrigar agora", value: String(pivotsNeeding), sub: "abaixo do limite", tone: pivotsNeeding > 0 ? "text-red-600 dark:text-red-400" : undefined, icon: "↥" },
+    { label: "Próximas 24 h", value: String(pivots24h), sub: "atingem o limite", tone: pivots24h > 0 ? "text-orange-600 dark:text-orange-400" : undefined, icon: "◷" },
+    { label: "Lâmina média rec.", value: summary ? fmtInt(summary.avgRecommendedDepth) : "—", unit: "mm", sub: "para quem precisa irrigar", icon: "≋" },
+    { label: "Confiabilidade", value: reliability != null ? String(reliability) : "—", unit: "%", sub: "parcelas com dados completos", icon: "✓" },
   ];
 
+  const moistureBands: Array<{
+    status: MapHydricStatus;
+    range: string;
+    description: string;
+  }> = [
+    { status: "capacidade_campo", range: "≥95% CC", description: "Alta umidade" },
+    { status: "boa_umidade", range: "90–<95%", description: "Confortável" },
+    { status: "atencao", range: "82–<90%", description: "Atenção" },
+    { status: "deficit_hidrico", range: "70–<82%", description: "Déficit" },
+    { status: "critico", range: "<70%", description: "Crítico" },
+  ];
+
+  const totalMapped = moistureBands.reduce((sum, band) => sum + (mapCounts[band.status] ?? 0), 0);
+
   return (
-    <div className="space-y-4">
-      <PageHeader titulo="Central de Manejo" descricao={`${activeFarm?.name ?? "Fazenda"} · decisão hídrica da fazenda`} />
+    <div className="space-y-5 pb-6">
+      <div className="overflow-hidden rounded-[22px] border border-gray-100 bg-gradient-to-r from-white via-white to-emerald-50/60 px-5 py-4 shadow-sm dark:border-[#182638] dark:from-[#07101B] dark:via-[#091421] dark:to-[#0A1A20]">
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-600 text-lg font-black text-white shadow-[0_8px_22px_rgba(5,150,105,0.22)]">◉</span>
+              <div>
+                <h1 className="text-xl font-extrabold tracking-tight text-graphite-950 dark:text-white sm:text-2xl">Central de Manejo</h1>
+                <p className="mt-0.5 text-[12px] text-graphite-500 dark:text-[#93A2B8]">
+                  {activeFarm?.name ?? "Fazenda"} · visão hídrica e prioridade operacional da fazenda
+                </p>
+              </div>
+            </div>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 text-[11px]">
+            <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 font-semibold text-graphite-600 shadow-sm dark:border-[#223146] dark:bg-[#0C1725] dark:text-[#B4C0D2]">
+              {distinctPivots} pivô(s) ativos
+            </span>
+            <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1.5 font-semibold text-emerald-700 dark:border-emerald-900/60 dark:bg-emerald-950/30 dark:text-emerald-300">
+              {activeDate ? `Atualizado em ${activeDate.split("-").reverse().join("/")}` : "Sem data"}
+            </span>
+          </div>
+        </div>
+      </div>
 
       {error ? (
         <Card className="py-16 text-center dark:border-[#1A2638] dark:bg-[#0A1220]">
@@ -199,131 +236,175 @@ export default function CentralDeManejoPage() {
         </Card>
       ) : (
         <>
-          {/* KPIs da fazenda */}
-          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3 xl:grid-cols-6">
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-6">
             {kpis.map((k) => (
-              <Card key={k.label} className="p-3.5 dark:border-[#1A2638] dark:bg-[#0A1220] dark:shadow-[0_12px_34px_rgba(0,0,0,0.28)]">
-                <p className="truncate text-[11px] font-medium text-graphite-400 dark:text-[#7F8DA3]">{k.label}</p>
-                <p className={`mt-0.5 text-[20px] font-extrabold leading-tight tabular-nums ${k.tone ?? "text-graphite-900 dark:text-[#F3F7FF]"}`}>
-                  {k.value}{k.unit && <span className="ml-0.5 text-[12px] font-semibold text-graphite-400 dark:text-[#6E7C92]">{k.unit}</span>}
+              <Card key={k.label} className="relative overflow-hidden p-4 dark:border-[#1A2638] dark:bg-[#0A1220] dark:shadow-[0_14px_36px_rgba(0,0,0,0.28)]">
+                <span className="absolute right-3 top-3 text-[18px] font-bold text-emerald-600/18 dark:text-emerald-300/15">{k.icon}</span>
+                <p className="truncate text-[10px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#74839A]">{k.label}</p>
+                <p className={`mt-2 text-[26px] font-black leading-none tabular-nums ${k.tone ?? "text-graphite-950 dark:text-[#F7FAFF]"}`}>
+                  {k.value}{k.unit && <span className="ml-1 text-[12px] font-semibold text-graphite-400 dark:text-[#728096]">{k.unit}</span>}
                 </p>
-                <p className="mt-0.5 truncate text-[10.5px] text-graphite-400 dark:text-[#6E7C92]">{k.sub}</p>
+                <p className="mt-2 truncate text-[10.5px] text-graphite-400 dark:text-[#6E7C92]">{k.sub}</p>
               </Card>
             ))}
           </div>
 
-          <div className="grid gap-4 xl:grid-cols-2">
-            {/* Mapa operacional */}
-            <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_16px_40px_rgba(0,0,0,0.32)]">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-[#162233] dark:bg-[#0A1220]">
-                <p className="text-[13px] font-bold text-graphite-800 dark:text-[#F3F7FF]">Mapa operacional</p>
-                <span className="hidden text-[11px] text-graphite-400 sm:inline dark:text-gray-500">toque no pivô para abrir o manejo</span>
+          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.75fr)_minmax(340px,0.65fr)]">
+            <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_20px_54px_rgba(0,0,0,0.36)]">
+              <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 dark:border-[#162233] dark:bg-[#0A1220] sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-[15px] font-extrabold text-graphite-900 dark:text-[#F3F7FF]">Mapa hídrico operacional</p>
+                  <p className="mt-0.5 text-[11px] text-graphite-400 dark:text-[#718096]">Clique em um pivô para abrir o manejo detalhado.</p>
+                </div>
+                <div className="flex items-center gap-2 text-[10px] text-graphite-400 dark:text-[#718096]">
+                  <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                  {mapPivots.length} área(s) exibida(s)
+                </div>
               </div>
+
               <PivotMap
                 pivots={mapPivots}
                 onSelect={(id) => { const s = states.find((x) => hydricStateId(x) === id); if (s) openPivot(s); }}
-                className="h-[min(52vh,520px)] min-h-[400px] w-full rounded-none border-0"
+                className="h-[min(68vh,690px)] min-h-[540px] w-full rounded-none border-0"
               />
+
               <HydricMapLegend counts={mapCounts} dates={dates} selectedDate={activeDate} onSelectDate={setSelectedDate} demand={demand} />
             </Card>
 
-            {/* Fila de irrigação */}
-            <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_16px_40px_rgba(0,0,0,0.32)]">
-              <div className="flex items-center justify-between border-b border-gray-100 px-5 py-3 dark:border-[#162233] dark:bg-[#0A1220]">
-                <p className="text-[13px] font-bold text-graphite-800 dark:text-[#F3F7FF]">Fila de irrigação</p>
-                <span className="text-[11px] text-graphite-400 dark:text-[#6E7C92]">{fila.length} parcela(s) · por prioridade</span>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-[12px]">
-                  <thead>
-                    <tr className="border-b border-gray-100 text-left text-[10px] font-semibold uppercase tracking-wide text-graphite-400 dark:border-[#162233] dark:bg-[#0A1220] dark:text-[#6E7C92]">
-                      <th className="px-3 py-2">Pivô</th>
-                      <th className="px-2 py-2">Cultura / estádio</th>
-                      <th className="px-2 py-2 text-right">AD</th>
-                      <th className="px-2 py-2 text-right">Depl.</th>
-                      <th className="px-2 py-2 text-right">Ks</th>
-                      <th className="px-2 py-2 text-right">ETc</th>
-                      <th className="px-2 py-2 text-right">Auton.</th>
-                      <th className="px-2 py-2 text-right">Lâmina</th>
-                      <th className="px-3 py-2">Prioridade</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fila.map((s) => {
-                      const c = s.current;
-                      const pr = c ? priorityOf(c) : { label: "Sem dado", color: "#9ca3af", rank: 5 };
-                      const a = c ? autonomyDays(c) : null;
-                      return (
-                        <tr
-                          key={hydricStateId(s)}
-                          onClick={() => openPivot(s)}
-                          className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-gray-50 dark:border-[#162233] dark:bg-[#08111F] dark:hover:bg-[#101C2D]"
+            <div className="flex min-h-[540px] flex-col gap-4">
+              <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#0A1220]">
+                <div className="border-b border-gray-100 px-4 py-3.5 dark:border-[#162233]">
+                  <p className="text-[13px] font-extrabold text-graphite-900 dark:text-white">Situação hídrica</p>
+                  <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#728096]">Distribuição dos pivôs por % da capacidade de campo</p>
+                </div>
+                <div className="space-y-2 p-3">
+                  {moistureBands.map((band) => {
+                    const count = mapCounts[band.status] ?? 0;
+                    const pct = totalMapped > 0 ? Math.round((count / totalMapped) * 100) : 0;
+                    const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
+                    return (
+                      <div key={band.status} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-gray-50/70 px-3 py-3 dark:border-[#172538] dark:bg-[#091421]">
+                        <div
+                          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-[10px] font-extrabold text-white shadow-sm"
+                          style={{ backgroundColor: conf.color }}
                         >
-                          <td className="px-3 py-2">
-                            <span className="font-bold text-graphite-800 dark:text-[#F3F7FF]">{s.pivotName}</span>
-                            {(() => {
-                              const sector = s.parcelName
-                                ?? (s.startAngleDeg != null && s.endAngleDeg != null ? formatParcelAngles(s.startAngleDeg, s.endAngleDeg) : null);
-                              return sector ? <span className="block text-[10.5px] font-normal text-graphite-400 dark:text-[#6E7C92]">{sector}</span> : null;
-                            })()}
-                          </td>
-                          <td className="px-2 py-2 text-graphite-500 dark:text-[#9AA8BE]">
-                            {s.cultureName}{c?.phase ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.phase}</span> : ""}
-                            {c?.dae != null ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.dae} DAE</span> : ""}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">{c ? `${fmtNum(c.storage)}` : "—"}</td>
-                          <td className="px-2 py-2 text-right tabular-nums text-amber-600 dark:text-amber-400">{c ? fmtNum(c.deficit) : "—"}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{c ? fmtNum(c.ks, 2) : "—"}</td>
-                          <td className="px-2 py-2 text-right tabular-nums">{c ? fmtNum(c.etc) : "—"}</td>
-                          <td className="px-2 py-2 text-right tabular-nums font-semibold" style={{ color: pr.color }}>
-                            {a == null ? "—" : a < 0.1 ? "0 d" : `${fmtNum(a)} d`}
-                          </td>
-                          <td className="px-2 py-2 text-right tabular-nums">{c && c.shouldIrrigate ? `${fmtNum(c.recommendedGrossDepth)}` : "—"}</td>
-                          <td className="px-3 py-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-bold" style={{ color: pr.color, background: `${pr.color}14`, borderColor: `${pr.color}2e` }}>
-                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: pr.color }} />{pr.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
+                          {band.range}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center justify-between gap-2">
+                            <p className="truncate text-[12px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{band.description}</p>
+                            <p className="text-[12px] font-black tabular-nums text-graphite-900 dark:text-white">{count}</p>
+                          </div>
+                          <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-gray-200 dark:bg-[#142235]">
+                            <div className="h-full rounded-full" style={{ width: `${pct}%`, backgroundColor: conf.color }} />
+                          </div>
+                          <p className="mt-1 text-[9.5px] text-graphite-400 dark:text-[#718096]">{pct}% das áreas mapeadas</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {(mapCounts.incompleto ?? 0) > 0 && (
+                    <div className="rounded-xl border border-dashed border-gray-200 px-3 py-2.5 text-[10.5px] text-graphite-500 dark:border-[#26364B] dark:text-[#8290A5]">
+                      {mapCounts.incompleto ?? 0} parcela(s) com dados insuficientes.
+                    </div>
+                  )}
+                </div>
+              </Card>
+
+              <Card className="flex-1 overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#0A1220]">
+                <div className="flex items-center justify-between border-b border-gray-100 px-4 py-3.5 dark:border-[#162233]">
+                  <div>
+                    <p className="text-[13px] font-extrabold text-graphite-900 dark:text-white">Alertas prioritários</p>
+                    <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#728096]">Pontos que exigem atenção operacional</p>
+                  </div>
+                  <span className="rounded-full bg-amber-50 px-2 py-1 text-[10px] font-bold text-amber-700 dark:bg-amber-950/30 dark:text-amber-300">{alerts.length}</span>
+                </div>
+                <div className="space-y-2 p-3">
+                  {alerts.slice(0, 4).map((al, i) => {
+                    const dot = { hi: "#EF4444", md: "#F59E0B", lo: "#10B981" } as const;
+                    return (
+                      <div key={i} className="flex gap-3 rounded-xl border border-gray-100 px-3 py-3 dark:border-[#172538] dark:bg-[#091421]">
+                        <span className="mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: dot[al.sev] }} />
+                        <div className="min-w-0">
+                          <p className="text-[11.5px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{al.title}</p>
+                          <p className="mt-1 text-[10.5px] leading-4 text-graphite-500 dark:text-[#8290A5]">{al.desc}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </Card>
+            </div>
           </div>
 
-          {/* Alertas e decisões */}
-          <Card className="p-4 dark:border-[#1A2638] dark:bg-[#0A1220] dark:shadow-[0_14px_36px_rgba(0,0,0,0.28)]">
-            <p className="mb-3 flex items-center gap-2 text-[13px] font-bold text-graphite-900 dark:text-[#F3F7FF]">
-              <svg className="h-4 w-4 text-amber-500" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.3 3.9L1.8 18a1 1 0 00.9 1.5h18.6a1 1 0 00.9-1.5L13.7 3.9a1 1 0 00-1.7 0z" /></svg>
-              Alertas e decisões
-            </p>
-            <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-              {alerts.map((al, i) => {
-                const dot = { hi: "bg-red-500", md: "bg-orange-500", lo: "bg-brand-500" } as const;
-                return (
-                  <div key={i} className="flex gap-2.5 rounded-xl border border-gray-100 p-3 dark:border-[#162233] dark:bg-[#08111F]">
-                    <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${dot[al.sev]}`} />
-                    <div className="min-w-0">
-                      <p className="text-[12.5px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{al.title}</p>
-                      <p className="mt-0.5 text-[11.5px] leading-snug text-graphite-500 dark:text-[#9AA8BE]">{al.desc}</p>
-                    </div>
-                  </div>
-                );
-              })}
+          <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_16px_40px_rgba(0,0,0,0.30)]">
+            <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 dark:border-[#162233] dark:bg-[#0A1220] sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-[14px] font-extrabold text-graphite-900 dark:text-[#F3F7FF]">Fila operacional de irrigação</p>
+                <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#718096]">Ordenada por limite de manejo, autonomia, sensibilidade, ETc e lâmina.</p>
+              </div>
+              <span className="rounded-full border border-gray-200 bg-white px-3 py-1.5 text-[10.5px] font-semibold text-graphite-600 dark:border-[#223146] dark:bg-[#0B1725] dark:text-[#AEB9CB]">
+                {fila.length} parcela(s)
+              </span>
+            </div>
+            <div className="max-h-[460px] overflow-auto">
+              <table className="w-full min-w-[980px] text-[12px]">
+                <thead className="sticky top-0 z-10">
+                  <tr className="border-b border-gray-100 bg-gray-50 text-left text-[10px] font-bold uppercase tracking-[0.06em] text-graphite-400 dark:border-[#162233] dark:bg-[#0D1827] dark:text-[#75839A]">
+                    <th className="px-4 py-3">Pivô</th>
+                    <th className="px-3 py-3">Cultura / estádio</th>
+                    <th className="px-3 py-3 text-right">AD</th>
+                    <th className="px-3 py-3 text-right">Depl.</th>
+                    <th className="px-3 py-3 text-right">Ks</th>
+                    <th className="px-3 py-3 text-right">ETc</th>
+                    <th className="px-3 py-3 text-right">Autonomia</th>
+                    <th className="px-3 py-3 text-right">Lâmina</th>
+                    <th className="px-4 py-3">Prioridade</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {fila.map((s) => {
+                    const c = s.current;
+                    const pr = c ? priorityOf(c) : { label: "Sem dado", color: "#9ca3af", rank: 5 };
+                    const a = c ? autonomyDays(c) : null;
+                    return (
+                      <tr
+                        key={hydricStateId(s)}
+                        onClick={() => openPivot(s)}
+                        className="cursor-pointer border-b border-gray-50 transition-colors hover:bg-emerald-50/45 dark:border-[#142235] dark:bg-[#08111F] dark:hover:bg-[#0E1C2D]"
+                      >
+                        <td className="px-4 py-3">
+                          <span className="font-extrabold text-graphite-900 dark:text-[#F3F7FF]">{s.pivotName}</span>
+                          {(() => {
+                            const sector = s.parcelName
+                              ?? (s.startAngleDeg != null && s.endAngleDeg != null ? formatParcelAngles(s.startAngleDeg, s.endAngleDeg) : null);
+                            return sector ? <span className="mt-0.5 block text-[10px] font-normal text-graphite-400 dark:text-[#6E7C92]">{sector}</span> : null;
+                          })()}
+                        </td>
+                        <td className="px-3 py-3 text-graphite-500 dark:text-[#9AA8BE]">
+                          {s.cultureName}{c?.phase ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.phase}</span> : ""}
+                          {c?.dae != null ? <span className="text-graphite-400 dark:text-[#6E7C92]"> · {c.dae} DAE</span> : ""}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.storage) : "—"}</td>
+                        <td className="px-3 py-3 text-right tabular-nums text-amber-600 dark:text-amber-400">{c ? fmtNum(c.deficit) : "—"}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.ks, 2) : "—"}</td>
+                        <td className="px-3 py-3 text-right tabular-nums">{c ? fmtNum(c.etc) : "—"}</td>
+                        <td className="px-3 py-3 text-right tabular-nums font-semibold" style={{ color: pr.color }}>
+                          {a == null ? "—" : a < 0.1 ? "0 d" : `${fmtNum(a)} d`}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums">{c && c.shouldIrrigate ? fmtNum(c.recommendedGrossDepth) : "—"}</td>
+                        <td className="px-4 py-3">
+                          <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-bold" style={{ color: pr.color, background: `${pr.color}14`, borderColor: `${pr.color}2e` }}>
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: pr.color }} />{pr.label}
+                          </span>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </Card>
-
-          {/* rastreabilidade das cores do mapa */}
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 px-1 text-[11px] text-graphite-400 dark:text-[#6E7C92]">
-            {MAP_HYDRIC_LEGEND_ORDER.map((st) => (
-              <span key={st} className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full" style={{ background: MAP_HYDRIC_STATUS_CONFIG[st].color }} />
-                {MAP_HYDRIC_STATUS_CONFIG[st].label}
-              </span>
-            ))}
-          </div>
         </>
       )}
     </div>
