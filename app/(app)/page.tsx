@@ -5,6 +5,7 @@ import dynamic from "next/dynamic";
 import { PageHeader } from "@/components/layout/PageHeader";
 import { Card, StatCard, Tabs, EmptyState } from "@/components/ui";
 import { useAuth } from "@/components/providers";
+import { createClient } from "@/lib/supabase/client";
 import { useImplantationStatus, useFarmHydricState } from "@/lib/hooks";
 import { ImplantationGuide } from "@/components/onboarding";
 import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
@@ -14,6 +15,7 @@ import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricMapStates,
 import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   HYDRIC_STATUS_CONFIG,
+  MAP_HYDRIC_COLORS,
   type PivotHydricState,
   type FarmHydricSummary,
 } from "@/modules/water-balance/services";
@@ -29,6 +31,22 @@ const TABS = [
 ];
 
 // ── Page ──────────────────────────────────────────────────────────────
+
+type DashboardModulePivot = {
+  id: string;
+  module_id: string | null;
+  name: string;
+  area: number | null;
+  latitude: number | null;
+  longitude: number | null;
+  radius: number | null;
+  active: boolean;
+};
+
+type DashboardModule = {
+  id: string;
+  name: string;
+};
 
 export default function DashboardPage() {
   const { profile, farms, activeFarmId } = useAuth();
@@ -51,7 +69,7 @@ export default function DashboardPage() {
   }
 
   if (panelMode && summary && summary.totalPivots > 0) {
-    return <DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} />;
+    return <DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} activeFarmId={activeFarmId} />;
   }
 
   return (
@@ -134,16 +152,127 @@ function panelVisual(moisturePctCc: number | null | undefined) {
   return { color: "#171717", label: "CRÍTICO", text: "text-neutral-800", bg: "bg-neutral-100", ring: "#171717" };
 }
 
-function DashboardPanelMode({ states, farmName }: { states: PivotHydricState[]; farmName: string }) {
-  const mapPivots = useMemo(() => {
+function DashboardPanelMode({
+  states,
+  farmName,
+  activeFarmId,
+}: {
+  states: PivotHydricState[];
+  farmName: string;
+  activeFarmId: string | null;
+}) {
+  const [modulePivots, setModulePivots] = useState<DashboardModulePivot[]>([]);
+  const [modules, setModules] = useState<DashboardModule[]>([]);
+  const [modulesLoading, setModulesLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadModules() {
+      if (!activeFarmId) {
+        if (!cancelled) {
+          setModulePivots([]);
+          setModules([]);
+          setModulesLoading(false);
+        }
+        return;
+      }
+
+      setModulesLoading(true);
+      try {
+        const supabase = createClient();
+        const [{ data: pivotsData, error: pivotsError }, { data: modulesData, error: modulesError }] = await Promise.all([
+          supabase
+            .from("pivots")
+            .select("id,module_id,name,area,latitude,longitude,radius,active")
+            .eq("farm_id", activeFarmId)
+            .eq("active", true)
+            .order("name", { ascending: true }),
+          supabase
+            .from("production_modules")
+            .select("id,name")
+            .eq("farm_id", activeFarmId)
+            .in("name", ["M1", "M2", "M3"])
+            .order("name", { ascending: true }),
+        ]);
+
+        if (pivotsError) throw pivotsError;
+        if (modulesError) throw modulesError;
+
+        if (!cancelled) {
+          setModulePivots((pivotsData ?? []) as DashboardModulePivot[]);
+          setModules((modulesData ?? []) as DashboardModule[]);
+        }
+      } catch (err) {
+        console.error("Falha ao carregar módulos do Dashboard:", err);
+        if (!cancelled) {
+          setModulePivots([]);
+          setModules([]);
+        }
+      } finally {
+        if (!cancelled) setModulesLoading(false);
+      }
+    }
+
+    void loadModules();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeFarmId]);
+
+  const hydricByPivot = useMemo(() => {
     const base = toHydricMapMarkers(states);
-    const byId = new Map(states.map((s) => [hydricStateId(s), s]));
-    return base.map((marker) => {
-      const state = byId.get(marker.id);
-      const visual = panelVisual(state?.current?.moisturePctCc);
-      return { ...marker, color: visual.color, statusLabel: visual.label };
-    });
+    const byPivot = new Map<string, typeof base>();
+
+    for (const marker of base) {
+      const state = states.find((s) => hydricStateId(s) === marker.id);
+      if (!state) continue;
+      const visual = panelVisual(state.current?.moisturePctCc);
+      const list = byPivot.get(state.pivotId) ?? [];
+      list.push({ ...marker, color: visual.color, statusLabel: visual.label });
+      byPivot.set(state.pivotId, list);
+    }
+    return byPivot;
   }, [states]);
+
+  const moduleCards = useMemo(() => {
+    const preferred = ["M1", "M2", "M3"];
+    return preferred.map((moduleName) => {
+      const module = modules.find((item) => item.name?.toUpperCase() === moduleName);
+      const pivots = module
+        ? modulePivots.filter((pivot) => pivot.module_id === module.id)
+        : [];
+
+      const markers = pivots
+        .filter((pivot) => pivot.latitude != null && pivot.longitude != null)
+        .flatMap((pivot) => {
+          const activeMarkers = hydricByPivot.get(pivot.id);
+          if (activeMarkers?.length) return activeMarkers;
+
+          return [{
+            id: `module-equipment-${pivot.id}`,
+            name: pivot.name,
+            latitude: pivot.latitude as number,
+            longitude: pivot.longitude as number,
+            radiusMeters: pivot.radius,
+            active: pivot.active,
+            color: MAP_HYDRIC_COLORS.gray,
+            statusLabel: "Sem manejo hídrico",
+          }];
+        });
+
+      const totalArea = pivots.reduce((sum, pivot) => sum + (pivot.area ?? 0), 0);
+      const hydricCount = pivots.filter((pivot) => hydricByPivot.has(pivot.id)).length;
+
+      return {
+        name: moduleName,
+        pivots,
+        markers,
+        totalArea,
+        hydricCount,
+      };
+    });
+  }, [modules, modulePivots, hydricByPivot]);
 
   const cards = useMemo(
     () =>
@@ -185,22 +314,64 @@ function DashboardPanelMode({ states, farmName }: { states: PivotHydricState[]; 
         </div>
       </header>
 
-      <main className="space-y-4 p-2.5 sm:p-4">
-        <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
-          {mapPivots.length > 0 ? (
-            <PivotMap
-              pivots={mapPivots}
-              interactive
-              className="h-[48vh] min-h-[390px] w-full rounded-none border-0 sm:h-[52vh]"
-            />
-          ) : (
-            <div className="flex h-[48vh] min-h-[390px] items-center justify-center text-sm text-graphite-400">
-              Nenhum pivô com coordenadas disponíveis para o mapa.
-            </div>
-          )}
+      <main className="space-y-3 p-2.5 sm:p-3.5">
+        <div className="flex items-end justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-black tracking-tight sm:text-xl">Mapa hídrico por módulo</h2>
+            <p className="mt-0.5 text-[11px] text-graphite-400">M1, M2 e M3 visíveis simultaneamente</p>
+          </div>
+        </div>
+
+        <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+          {moduleCards.map((module) => (
+            <article
+              key={module.name}
+              className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.05)]"
+            >
+              <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-3.5 py-2.5">
+                <div className="flex items-center gap-2.5">
+                  <span className="rounded-lg bg-[#0e7358] px-3 py-1 text-sm font-black text-white">
+                    {module.name}
+                  </span>
+                  <span className="text-[11px] font-semibold text-graphite-500">
+                    {module.pivots.length} pivôs
+                  </span>
+                </div>
+                <div className="text-right">
+                  <div className="text-[11px] font-bold text-graphite-700">
+                    {module.totalArea.toLocaleString("pt-BR", { maximumFractionDigits: 0 })} ha
+                  </div>
+                  <div className="text-[9px] text-graphite-400">
+                    {module.hydricCount} em manejo
+                  </div>
+                </div>
+              </div>
+
+              {modulesLoading ? (
+                <div className="flex h-[290px] items-center justify-center">
+                  <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand-100 border-t-brand-600" />
+                </div>
+              ) : module.markers.length > 0 ? (
+                <PivotMap
+                  pivots={module.markers}
+                  interactive
+                  className="h-[290px] w-full rounded-none border-0 2xl:h-[315px]"
+                />
+              ) : (
+                <div className="flex h-[290px] items-center justify-center text-xs text-graphite-400">
+                  Nenhum pivô com coordenadas em {module.name}.
+                </div>
+              )}
+            </article>
+          ))}
         </section>
 
-        <section className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-7">
+        <div className="flex items-center justify-between pt-1">
+          <h2 className="text-base font-black tracking-tight">Status dos pivôs</h2>
+          <span className="text-[10px] text-graphite-400">{cards.length} pivôs em manejo</span>
+        </div>
+
+        <section className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-7">
           {cards.map((state) => {
             const c = state.current!;
             const visual = panelVisual(c.moisturePctCc);
@@ -208,16 +379,16 @@ function DashboardPanelMode({ states, farmName }: { states: PivotHydricState[]; 
             return (
               <article
                 key={hydricStateId(state)}
-                className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)]"
+                className="overflow-hidden rounded-xl border border-gray-100 bg-white shadow-[0_3px_10px_rgba(15,23,42,0.05)]"
               >
-                <div className="flex items-center gap-3 p-3.5">
-                  <div className="relative h-[72px] w-[100px] shrink-0">
+                <div className="flex items-center gap-2 p-2.5">
+                  <div className="relative h-[54px] w-[76px] shrink-0">
                     <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
                       <path
                         d="M 12 62 A 48 48 0 0 1 108 62"
                         fill="none"
                         stroke="#e5e7eb"
-                        strokeWidth="7"
+                        strokeWidth="6"
                         strokeLinecap="round"
                         pathLength="100"
                       />
@@ -225,28 +396,34 @@ function DashboardPanelMode({ states, farmName }: { states: PivotHydricState[]; 
                         d="M 12 62 A 48 48 0 0 1 108 62"
                         fill="none"
                         stroke={visual.ring}
-                        strokeWidth="7"
+                        strokeWidth="6"
                         strokeLinecap="round"
                         pathLength="100"
                         strokeDasharray={`${pct} 100`}
                       />
                     </svg>
                     <div className="absolute inset-x-0 bottom-0 text-center">
-                      <div className="text-lg font-extrabold tracking-tight">{pct.toFixed(0)}% <span className="text-[10px] font-bold">CC</span></div>
+                      <div className="text-sm font-extrabold tracking-tight">
+                        {pct.toFixed(0)}% <span className="text-[8px] font-bold">CC</span>
+                      </div>
                     </div>
                   </div>
-                  <div className="min-w-0 border-l border-gray-100 pl-3">
-                    <h3 className="truncate text-base font-black tracking-tight">{state.parcelName?.trim() || state.pivotName}</h3>
-                    <p className="mt-1 truncate text-xs text-graphite-400">
+
+                  <div className="min-w-0 border-l border-gray-100 pl-2.5">
+                    <h3 className="truncate text-[12px] font-black tracking-tight">
+                      {state.parcelName?.trim() || state.pivotName}
+                    </h3>
+                    <p className="mt-0.5 truncate text-[9px] text-graphite-400">
                       {state.cultureName}{state.varietyName ? ` · ${state.varietyName}` : ""}
                     </p>
-                    <span className={`mt-2 inline-flex rounded-full px-2.5 py-1 text-[9px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
+                    <span className={`mt-1.5 inline-flex rounded-full px-2 py-0.5 text-[8px] font-extrabold tracking-wide ${visual.bg} ${visual.text}`}>
                       {visual.label}
                     </span>
                   </div>
                 </div>
-                <div className="border-t border-gray-100 bg-gray-50/70 px-3.5 py-2.5 text-[11px] text-graphite-500">
-                  💧 Irrigação recomendada: <strong className="text-graphite-900">{c.recommendedGrossDepth.toFixed(1)} mm</strong>
+
+                <div className="border-t border-gray-100 bg-gray-50/70 px-2.5 py-2 text-[9px] text-graphite-500">
+                  💧 Irrigação: <strong className="text-graphite-900">{c.recommendedGrossDepth.toFixed(1)} mm</strong>
                 </div>
               </article>
             );
