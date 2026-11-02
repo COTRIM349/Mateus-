@@ -2,10 +2,11 @@
  * Classificação hídrica do mapa (única fonte visual).
  *
  * A cor representa a faixa de ARM em relação à capacidade de campo (CAD/CTA):
- * - azul: somente 100% da capacidade de campo;
- * - verde: 95% até <100% — umidade confortável;
- * - amarelo: 90% até <95% — atenção;
- * - vermelho: <90% — urgente;
+ * - azul: ≥95% da capacidade de campo;
+ * - verde: 90% até <95%;
+ * - amarelo: 82% até <90%;
+ * - vermelho: 70% até <82%;
+ * - preto: <70%;
  * - cinza: dado insuficiente.
  */
 
@@ -14,23 +15,30 @@ export type MapHydricStatus =
   | "boa_umidade"
   | "atencao"
   | "deficit_hidrico"
+  | "critico"
   | "incompleto";
 
 export interface MapHydricThresholds {
-  /** ARM/CAD ≥ 1,00 → capacidade de campo real. */
+  /** Mantido para o gráfico de faixas AFD/CRA; não define a cor do dashboard. */
   fieldCapacityRatio: number;
-  /** ARM/CAD ≥ este valor e <100% → umidade confortável. */
+  /** ARM/CAD ≥ este valor → azul. */
+  blueCcRatio: number;
+  /** ARM/CAD ≥ este valor e < azul → verde. */
   comfortableCcRatio: number;
-  /** ARM/CAD ≥ este valor e < confortável → atenção. */
+  /** ARM/CAD ≥ este valor e < verde → amarelo. */
   attentionCcRatio: number;
+  /** ARM/CAD ≥ este valor e < amarelo → vermelho; abaixo → preto. */
+  criticalCcRatio: number;
   /** Mantido para o gráfico de faixas AFD/CRA, não para a cor do dashboard. */
   attentionAfdRatio: number;
 }
 
 export const MAP_HYDRIC_THRESHOLDS: MapHydricThresholds = {
   fieldCapacityRatio: 1,
-  comfortableCcRatio: 0.95,
-  attentionCcRatio: 0.90,
+  blueCcRatio: 0.95,
+  comfortableCcRatio: 0.90,
+  attentionCcRatio: 0.82,
+  criticalCcRatio: 0.70,
   attentionAfdRatio: 0.70,
 };
 
@@ -66,10 +74,12 @@ export function calculateHydricZoneBounds(input: {
   if (![ctaMm, craMm, pmpMm].every(Number.isFinite) ||
       ctaMm <= 0 || craMm <= 0 || craMm > ctaMm || pmpMm < 0) return null;
   const t = { ...MAP_HYDRIC_THRESHOLDS, ...input.thresholds };
-  if (![t.fieldCapacityRatio, t.comfortableCcRatio, t.attentionCcRatio, t.attentionAfdRatio].every(Number.isFinite) ||
+  if (![t.fieldCapacityRatio, t.blueCcRatio, t.comfortableCcRatio, t.attentionCcRatio, t.criticalCcRatio, t.attentionAfdRatio].every(Number.isFinite) ||
       t.fieldCapacityRatio < 0 || t.fieldCapacityRatio > 1 ||
-      t.comfortableCcRatio < 0 || t.comfortableCcRatio > t.fieldCapacityRatio ||
+      t.blueCcRatio < 0 || t.blueCcRatio > 1 ||
+      t.comfortableCcRatio < 0 || t.comfortableCcRatio > t.blueCcRatio ||
       t.attentionCcRatio < 0 || t.attentionCcRatio > t.comfortableCcRatio ||
+      t.criticalCcRatio < 0 || t.criticalCcRatio > t.attentionCcRatio ||
       t.attentionAfdRatio < 0 || t.attentionAfdRatio > 1) return null;
   const ccAbs = pmpMm + ctaMm;
   return {
@@ -89,6 +99,7 @@ export const MAP_HYDRIC_COLORS = {
   green: "#4CAF50",
   yellow: "#FFC107",
   red: "#F44336",
+  black: "#000000",
   gray: "#9E9E9E",
 } as const;
 
@@ -97,13 +108,13 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
   { label: string; color: string; onColor: string; bgClass: string }
 > = {
   capacidade_campo: {
-    label: "100% CC",
+    label: "Alta umidade",
     color: MAP_HYDRIC_COLORS.blue,
     onColor: "#ffffff",
     bgClass: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
   },
   boa_umidade: {
-    label: "Ideal",
+    label: "Confortável",
     color: MAP_HYDRIC_COLORS.green,
     onColor: "#ffffff",
     bgClass: "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300",
@@ -120,6 +131,12 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
     onColor: "#ffffff",
     bgClass: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
   },
+  critico: {
+    label: "Crítico",
+    color: MAP_HYDRIC_COLORS.black,
+    onColor: "#ffffff",
+    bgClass: "bg-black text-white",
+  },
   incompleto: {
     label: "Dados indisponíveis",
     color: MAP_HYDRIC_COLORS.gray,
@@ -132,11 +149,13 @@ export const MAP_HYDRIC_STATUS_CONFIG: Record<
 export const MAP_HYDRIC_NO_IRRIGATE: MapHydricStatus[] = [
   "capacidade_campo",
   "boa_umidade",
+  "atencao",
 ];
 
-/** Precisa irrigar agora — vermelho. */
+/** Faixas de demanda imediata no dashboard — vermelho e preto. */
 export const MAP_HYDRIC_NEED_IRRIGATE: MapHydricStatus[] = [
   "deficit_hidrico",
+  "critico",
 ];
 
 export const MAP_HYDRIC_LEGEND_ORDER: MapHydricStatus[] = [
@@ -144,6 +163,7 @@ export const MAP_HYDRIC_LEGEND_ORDER: MapHydricStatus[] = [
   "boa_umidade",
   "atencao",
   "deficit_hidrico",
+  "critico",
 ];
 
 export interface ClassifyWaterStatusInput {
@@ -158,10 +178,11 @@ export interface ClassifyWaterStatusInput {
  * Classifica a condição hídrica do solo para o mapa.
  *
  * A referência visual do dashboard é ARM/CAD:
- * - Azul: 100% da capacidade de campo;
- * - Verde: 95% até <100%;
- * - Amarelo: 90% até <95%;
- * - Vermelho: <90%.
+ * - Azul: ≥95% da capacidade de campo;
+ * - Verde: 90% até <95%;
+ * - Amarelo: 82% até <90%;
+ * - Vermelho: 70% até <82%;
+ * - Preto: <70%.
  *
  * Sem CAD/ARM válidos → `incompleto`.
  */
@@ -179,8 +200,9 @@ export function classifyWaterStatus(input: ClassifyWaterStatusInput): MapHydricS
 
   const fill = arm / cad;
 
-  if (fill >= t.fieldCapacityRatio) return "capacidade_campo";
+  if (fill >= t.blueCcRatio) return "capacidade_campo";
   if (fill >= t.comfortableCcRatio) return "boa_umidade";
   if (fill >= t.attentionCcRatio) return "atencao";
-  return "deficit_hidrico";
+  if (fill >= t.criticalCcRatio) return "deficit_hidrico";
+  return "critico";
 }
