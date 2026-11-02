@@ -411,8 +411,16 @@ export function CropDevelopmentPanel({
                   {stageBands.map((stage, i) => {
                     // Interseção impede que um estádio desenhe sobre uma fase desmarcada.
                     const spans = phaseBands.length
-                      ? phaseBands.filter((b) => phaseIsVisible(b.label))
-                          .map((b) => ({ start: Math.max(stage.start, b.start), end: Math.min(stage.end, b.end) }))
+                      ? phaseBands
+                          .map((b, bandIndex) => ({
+                            ...b,
+                            visualEnd: bandIndex === phaseBands.length - 1 ? endDae : b.end,
+                          }))
+                          .filter((b) => phaseIsVisible(b.label))
+                          .map((b) => ({
+                            start: Math.max(stage.start, b.start),
+                            end: Math.min(stage.end, b.visualEnd),
+                          }))
                           .filter((span) => span.end > span.start)
                       : phaseIsVisible(stage.group) ? [{start:stage.start,end:stage.end}] : [];
                     return spans.map((span, j) => {
