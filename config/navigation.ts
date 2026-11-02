@@ -62,7 +62,7 @@ const dailyManagementGroup: NavGroup = {
 };
 
 const registrationGroup: NavGroup = {
-  label: "Cadastros",
+  label: "Cadastro",
   icon: ICON.farm,
   items: [
     { label: "Fazendas", href: "/fazendas", icon: ICON.farm },
@@ -105,9 +105,9 @@ export type NavigationEntry =
 /** Ordem visual do menu principal no desktop e mobile. */
 export const navigationEntries: NavigationEntry[] = [
   { type: "item", item: dashboardItem },
-  { type: "group", group: dailyManagementGroup },
-  { type: "item", item: climateItem },
   { type: "group", group: registrationGroup },
+  { type: "item", item: climateItem },
+  { type: "group", group: dailyManagementGroup },
   { type: "group", group: energyGroup },
   { type: "item", item: reportsItem },
   { type: "item", item: historyItem },
