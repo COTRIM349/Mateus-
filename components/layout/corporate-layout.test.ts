@@ -33,9 +33,10 @@ describe("layout corporativo horizontal Santa Colomba", () => {
     const css = source("app/globals.css");
     const charts = source("components/water-balance/CockpitCharts.tsx");
     const ras = source("components/water-balance/SoilReservoirReferencePanel.tsx");
-    expect(css).toContain(".app-readable-ui .text-xs");
-    expect(css).toContain(".app-readable-ui .text-sm");
-    expect(css).toContain('[class~="text-[10px]"]');
+    expect(css).toContain(".app-readable-ui > main .text-xs");
+    expect(css).toContain(".app-readable-ui > main .text-sm");
+    expect(css).toContain('.app-readable-ui > main [class~="text-[10px]"]');
+    expect(css).toContain('[data-irrigapro-topnav="true"]');
     expect(charts).toContain("useResponsivePlotSize");
     expect(charts).not.toContain('preserveAspectRatio="none" role="img" aria-label="Curva progressiva');
     expect(ras).toContain("ResizeObserver");
