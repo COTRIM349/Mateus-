@@ -48,10 +48,10 @@ describe("hydricMapStates", () => {
 });
 
 describe("toHydricMapMarkers", () => {
-  it("pinta condição sem necessidade em azul, reservando verde para CC", () => {
+  it("pinta umidade confortável em verde e reserva azul para 100% CC", () => {
     const markers = toHydricMapMarkers([stub({})]);
     expect(markers).toHaveLength(1);
-    expect(markers[0].color).toBe("#2196F3");
+    expect(markers[0].color).toBe("#4CAF50");
     expect(markers[0].radiusMeters).toBe(500);
     expect(markers[0].id).toBe("parcela-1");
   });
