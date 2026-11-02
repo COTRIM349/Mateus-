@@ -374,24 +374,6 @@ function DashboardPanelMode({
   return (
     <div className="min-h-screen bg-[#f5f7fa] text-[#142033]">
       <main className="space-y-3 p-3 lg:p-4">
-        <section className="grid grid-cols-2 gap-2 lg:grid-cols-6">
-          <div className="col-span-2 flex min-h-[72px] items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3.5 shadow-sm lg:col-span-1">
-            <span className="text-2xl">🌾</span>
-            <div>
-              <div className="text-[13px] font-black">{farmName} (Geral)</div>
-              <div className="mt-0.5 text-[11px] font-semibold text-gray-500">
-                {modulePivots.length} pivôs | {formatNumber(farmSummary.totalArea)} ha
-              </div>
-            </div>
-          </div>
-
-          <KpiTile icon="💧" value={`${formatNumber(farmSummary.weightedCc)}%`} label="CC média" />
-          <KpiTile icon="🌱" value={String(farmSummary.deficit)} label="Pivôs em déficit" />
-          <KpiTile icon="🛣️" value={`${formatNumber(farmSummary.irrigatingArea)} ha`} label="Área a irrigar" />
-          <KpiTile icon="💧" value={`${formatNumber(farmSummary.totalVolume)} m³`} label="Volume estimado" />
-          <KpiTile icon="◫" value={`${formatNumber(farmSummary.meanDepth, 1)} mm`} label="Lâmina média" />
-        </section>
-
         <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
           {moduleCards.map((module) => (
             <article
