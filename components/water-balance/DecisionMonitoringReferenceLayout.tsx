@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  calculateManagementUrgency, moisturePctCcForDisplay,
+  calculateAnticipatoryDecision, calculateManagementUrgency, moisturePctCcForDisplay,
   type DailyBalanceRow,
   type calculateSummary,
 } from "@/modules/water-balance/services";
@@ -14,6 +14,9 @@ type Props = {
   pivotName: string;
   cultureName: string;
   seasonName: string | null;
+  areaHa: number | null;
+  flowRateM3h: number | null;
+  efficiencyPercent: number | null;
   onOpenHistory: () => void;
 };
 
@@ -53,7 +56,7 @@ function PanelHeader({ icon, title, description, action }: {
 }
 
 export function DecisionMonitoringReferenceLayout({
-  rows, summary, pivotName, cultureName, seasonName, onOpenHistory,
+  rows, summary, pivotName, cultureName, seasonName, areaHa, flowRateM3h, efficiencyPercent, onOpenHistory,
 }: Props) {
   if (!rows.length) {
     return (
@@ -73,44 +76,78 @@ export function DecisionMonitoringReferenceLayout({
   const etcAvg = avg(sevenDays, row => row.etc);
   const percentDelta = etoAvg != null && etoPrev != null && etoPrev > 0
     ? ((etoAvg / etoPrev) - 1) * 100 : null;
-  const status = last.waterStatus;
-  const needsWater = status === "deficit" || status === "deficit_critico" || last.grossDepth > 0.05;
-  const isAttention = status === "atencao";
-  const statusLabel = needsWater ? "Irrigar" : isAttention ? "Atenção" : status === "saturado" ? "Capacidade de campo" : "Sem necessidade";
-  const statusColor = needsWater ? "text-rose-700" : isAttention ? "text-amber-700" : "text-emerald-700";
   const urgency = calculateManagementUrgency({
     afd: last.afd, deficit: last.deficit, etcPotential: last.etcPotential ?? last.etc,
   });
+  const anticipatory = calculateAnticipatoryDecision({
+    cadMm: last.cad,
+    armMm: last.storedWater,
+    afdMm: last.afd,
+    etcPotentialMmDay: last.etcPotential ?? last.etc,
+    areaHa,
+    flowRateM3h,
+    efficiencyFraction: efficiencyPercent != null && efficiencyPercent > 0 ? efficiencyPercent / 100 : null,
+  });
+  const statusLabel = anticipatory.level === "critico" ? "Crítico"
+    : anticipatory.level === "prioridade" ? "Irrigar prioritariamente"
+      : anticipatory.level === "programar" ? "Programar irrigação"
+        : anticipatory.level === "monitorar" ? "Monitorar"
+          : "Confortável";
+  const statusColor = anticipatory.level === "critico" || anticipatory.level === "prioridade"
+    ? "text-rose-700"
+    : anticipatory.level === "programar" || anticipatory.level === "monitorar"
+      ? "text-amber-700"
+      : "text-emerald-700";
   const timeToLimit = urgency.atOrBeyondAfd ? "Limite atingido"
     : urgency.daysToAfd == null ? "Indisponível"
       : urgency.daysToAfd < 1 ? "< 1 dia" : `${fmt(urgency.daysToAfd)} dias`;
   const percentCC = moisturePctCcForDisplay(last.moisturePctCc, last.storedWater, last.cad);
   const appliedRain = [...rows].reverse().find(r => r.precipitation > 0);
   const appliedIrrigation = [...rows].reverse().find(r => r.irrigationApplied > 0);
-  const risk = needsWater ? "Alta" : isAttention ? "Média" : "Baixa";
   const historicalCritical = summary.daysInCritical;
-  const actionMessage = needsWater ? "Há necessidade de reposição de água."
-    : isAttention ? "O solo está próximo do limite de manejo."
-      : "No momento não há necessidade de irrigação.";
-  const actionDescription = needsWater
-    ? "Confira a lâmina recomendada e a disponibilidade hidráulica antes de programar."
-    : isAttention ? "Acompanhe a evolução da umidade e a demanda da cultura."
-      : "A umidade está em nível adequado para o estádio atual da cultura.";
-  const gross = needsWater ? Math.max(0, last.grossDepth) : 0;
-  const net = needsWater ? Math.max(0, last.netDepth) : 0;
+  const risk = anticipatory.level === "critico" ? "Crítica"
+    : anticipatory.level === "prioridade" ? "Muito alta"
+      : anticipatory.level === "programar" ? "Alta"
+        : anticipatory.level === "monitorar" ? "Média"
+          : "Baixa";
+  const actionMessage = anticipatory.level === "critico"
+    ? "O limite de manejo já foi ultrapassado."
+    : anticipatory.level === "prioridade"
+      ? "O limite de manejo foi atingido: irrigar com prioridade."
+      : anticipatory.level === "programar"
+        ? "Programar irrigação antes de atingir o limite."
+        : anticipatory.level === "monitorar"
+          ? "A margem hídrica está diminuindo: intensificar o monitoramento."
+          : "Há folga hídrica e operacional no momento.";
+  const actionDescription = anticipatory.level === "programar"
+    ? `Restam ${anticipatory.daysToAfd == null ? "—" : fmt(anticipatory.daysToAfd)} dia(s) até a AFD, enquanto a reposição estimada até a CC exige ${anticipatory.applicationHoursToCc == null ? "—" : fmt(anticipatory.applicationHoursToCc)} h de operação.`
+    : anticipatory.level === "prioridade" || anticipatory.level === "critico"
+      ? "A planta entrou na faixa de maior risco hídrico; priorize a operação e acompanhe a recuperação do ARM."
+      : anticipatory.level === "monitorar"
+        ? `A AFD ainda não foi atingida. Margem atual: ${fmt(anticipatory.remainingToAfdMm)} mm.`
+        : "A AFD ainda possui margem suficiente em relação ao tempo operacional do pivô.";
+  const net = anticipatory.level === "programar" || anticipatory.level === "prioridade" || anticipatory.level === "critico"
+    ? anticipatory.deficitToCcNetMm
+    : 0;
+  const gross = anticipatory.level === "programar" || anticipatory.level === "prioridade" || anticipatory.level === "critico"
+    ? (anticipatory.grossDepthToCcMm ?? 0)
+    : 0;
+  const decisionNeedsAction = anticipatory.level === "programar" || anticipatory.level === "prioridade" || anticipatory.level === "critico";
+  const decisionNeedsAttention = anticipatory.level === "monitorar" || anticipatory.level === "programar";
 
   return (
     <section className="space-y-3" aria-label="Decisão e monitoramento da safra">
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5 2xl:grid-cols-9">
-        <Metric label="Situação atual" value={statusLabel} note={needsWater ? "Necessita reposição" : "Condição do solo"} accent={statusColor} symbol="◈" />
+        <Metric label="Situação atual" value={statusLabel} note={decisionNeedsAction ? "Antecipação operacional" : "Condição hídrica"} accent={statusColor} symbol="◈" />
         <Metric label="ARM" value={`${fmt(last.storedWater)} mm`} note={`${fmt(percentCC,0)}% da CC`} accent="text-slate-900" />
         <Metric label="CRA / AFD" value={`${fmt(last.afd)} mm`} note={`F semanal: ${last.cad > 0 ? fmt(last.afd / last.cad,2) : "—"}`} />
         <Metric label="CTA" value={`${fmt(last.cad)} mm`} note="Capacidade total disponível" />
         <Metric label="ETo média (7 dias)" value={etoAvg == null ? "—" : `${fmt(etoAvg)} mm/dia`} note={percentDelta == null ? "Últimos 7 dias disponíveis" : `${percentDelta > 0 ? "+" : ""}${fmt(percentDelta,0)}% vs. 7 dias anteriores`} accent="text-amber-700" />
         <Metric label="ETc média (7 dias)" value={etcAvg == null ? "—" : `${fmt(etcAvg)} mm/dia`} note="Consumo médio da cultura" />
         <Metric label="Kc atual" value={fmt(last.kc,2)} note={last.phase || "Fase não informada"} />
-        <Metric label="Dias até o limite" value={timeToLimit} note={urgency.atOrBeyondAfd ? "CRA atingida" : `${fmt(urgency.remainingToAfdMm)} mm de margem`} accent={needsWater ? "text-rose-700" : "text-slate-900"} />
-        <Metric label="Prioridade" value={risk} note={needsWater ? "Irrigação necessária" : "Sob monitoramento"} accent={statusColor} symbol="≡" />
+        <Metric label="Dias até o limite" value={timeToLimit} note={urgency.atOrBeyondAfd ? "CRA/AFD atingida" : `${fmt(urgency.remainingToAfdMm)} mm de margem`} accent={anticipatory.level === "critico" || anticipatory.level === "prioridade" ? "text-rose-700" : "text-slate-900"} />
+        <Metric label="Tempo para repor CC" value={anticipatory.applicationHoursToCc == null ? "—" : `${fmt(anticipatory.applicationHoursToCc)} h`} note={anticipatory.grossDepthToCcMm == null ? "Dados operacionais incompletos" : `${fmt(anticipatory.grossDepthToCcMm)} mm brutos`} accent={anticipatory.level === "programar" ? "text-amber-700" : "text-slate-900"} />
+        <Metric label="Prioridade" value={risk} note={anticipatory.operationalMarginDays == null ? "Sem margem operacional calculável" : `Margem operacional: ${fmt(anticipatory.operationalMarginDays)} d`} accent={statusColor} symbol="≡" />
       </div>
 
       <div className="grid items-stretch gap-3 xl:grid-cols-2">
@@ -119,9 +156,9 @@ export function DecisionMonitoringReferenceLayout({
             description="Com base no balanço hídrico, clima e estádio da cultura."
             action={<span className={`rounded-lg border border-emerald-200 bg-white px-3 py-1.5 text-[12px] font-bold ${statusColor}`}>{statusLabel}</span>} />
           <div className="space-y-3 p-4 text-slate-800">
-            <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${needsWater ? "border-rose-200 bg-rose-50" : isAttention ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[19px] font-extrabold text-white ${needsWater ? "bg-rose-600" : isAttention ? "bg-amber-600" : "bg-emerald-600"}`} aria-hidden="true">
-                {needsWater ? "!" : "✓"}
+            <div className={`flex items-start gap-3 rounded-lg border px-4 py-3 ${anticipatory.level === "critico" || anticipatory.level === "prioridade" ? "border-rose-200 bg-rose-50" : decisionNeedsAttention ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[19px] font-extrabold text-white ${anticipatory.level === "critico" || anticipatory.level === "prioridade" ? "bg-rose-600" : decisionNeedsAttention ? "bg-amber-500" : "bg-emerald-600"}`} aria-hidden="true">
+                {decisionNeedsAction ? "!" : anticipatory.level === "monitorar" ? "•" : "✓"}
               </span>
               <div>
                 <p className="text-[15px] font-extrabold text-slate-900">{actionMessage}</p>
@@ -130,10 +167,10 @@ export function DecisionMonitoringReferenceLayout({
             </div>
             <div className="grid grid-cols-2 gap-3 divide-emerald-100 sm:grid-cols-4 sm:divide-x">
               {[
-                { label:"Lâmina líquida", value:`${fmt(net)} mm` },
-                { label:"Lâmina bruta", value:`${fmt(gross)} mm` },
-                { label:"Tempo estimado", value:needsWater && last.irrigationTime > 0 ? `${fmt(last.irrigationTime)} h` : "0 h" },
-                { label:"Urgência", value:risk },
+                { label:"Déficit até CC", value:`${fmt(anticipatory.deficitToCcNetMm)} mm` },
+                { label:"Lâmina bruta p/ CC", value:decisionNeedsAction ? `${fmt(gross)} mm` : "—" },
+                { label:"Tempo de aplicação", value:decisionNeedsAction && anticipatory.applicationHoursToCc != null ? `${fmt(anticipatory.applicationHoursToCc)} h` : "—" },
+                { label:"Margem operacional", value:anticipatory.operationalMarginDays == null ? "—" : `${fmt(anticipatory.operationalMarginDays)} d` },
               ].map(item=>(
                 <div key={item.label} className="min-w-0 px-2 py-2 first:pl-0">
                   <p className="text-[12px] text-slate-500">{item.label}</p>
@@ -155,7 +192,7 @@ export function DecisionMonitoringReferenceLayout({
                 { icon:"☁", label:"Última chuva", value:appliedRain ? `${fmt(appliedRain.precipitation)} mm` : "Sem registro", note:appliedRain ? fmtDay(appliedRain.date) : "Lançamentos manuais" },
                 { icon:"▦", label:"Última irrigação", value:appliedIrrigation ? `${fmt(appliedIrrigation.irrigationApplied)} mm` : "Sem registro", note:appliedIrrigation ? fmtDay(appliedIrrigation.date) : "Eventos realizados" },
                 { icon:"◈", label:"Estádio da cultura", value:last.phase || "Não informado", note:`${cultureName} · DAE ${last.dae ?? "—"}` },
-                { icon:"◉", label:"Índice de estresse", value:summary.days ? `${fmt(summary.daysInDeficit / summary.days * 100, 0)}%` : "—", note:"Dias em déficit na safra" },
+                { icon:"◉", label:"Histórico de déficit", value:summary.days ? `${fmt(summary.daysInDeficit / summary.days * 100, 0)}%` : "—", note:"Percentual de dias da safra" },
               ].map(item => (
                 <div key={item.label} className="flex items-center gap-3 py-2 first:pt-0 last:pb-0">
                   <span className="w-7 shrink-0 text-center text-[21px] text-emerald-600" aria-hidden="true">{item.icon}</span>
@@ -170,9 +207,13 @@ export function DecisionMonitoringReferenceLayout({
             <div className="space-y-2">
               <div className="rounded-lg bg-emerald-50/70 p-3">
                 <p className="mb-2 text-[13px] font-bold text-emerald-950">Alertas e ocorrências</p>
-                <div className={`rounded-lg border px-3 py-3 ${needsWater ? "border-rose-200 bg-rose-50" : isAttention ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
-                  <p className={`text-[13px] font-extrabold ${needsWater ? "text-rose-800" : isAttention ? "text-amber-800" : "text-emerald-800"}`}>
-                    {needsWater ? "Ação de irrigação necessária" : isAttention ? "Monitorar limite de manejo" : "Sem alerta de irrigação no momento"}
+                <div className={`rounded-lg border px-3 py-3 ${anticipatory.level === "critico" || anticipatory.level === "prioridade" ? "border-rose-200 bg-rose-50" : decisionNeedsAttention ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
+                  <p className={`text-[13px] font-extrabold ${anticipatory.level === "critico" || anticipatory.level === "prioridade" ? "text-rose-800" : decisionNeedsAttention ? "text-amber-800" : "text-emerald-800"}`}>
+                    {anticipatory.level === "critico" ? "Déficit hídrico crítico"
+                      : anticipatory.level === "prioridade" ? "Irrigação prioritária"
+                        : anticipatory.level === "programar" ? "Programar irrigação agora"
+                          : anticipatory.level === "monitorar" ? "Monitorar margem até a AFD"
+                            : "Sem alerta operacional no momento"}
                   </p>
                   <p className="mt-1 text-[12px] text-slate-600">{actionDescription}</p>
                 </div>
@@ -181,8 +222,8 @@ export function DecisionMonitoringReferenceLayout({
                 <p className="text-[13px] font-bold text-emerald-950">Observações da safra</p>
                 <p className="mt-1 text-[12px] text-slate-600">
                   {historicalCritical > 0
-                    ? `${historicalCritical} dia(s) de déficit crítico registrados no histórico. Situação atual: ${statusLabel.toLowerCase()}.`
-                    : "Nenhuma ocorrência de déficit crítico registrada nesta safra."}
+                    ? `${historicalCritical} dia(s) de déficit crítico registrados no histórico. Decisão atual: ${statusLabel.toLowerCase()}.`
+                    : `Nenhuma ocorrência de déficit crítico registrada nesta safra. Decisão atual: ${statusLabel.toLowerCase()}.`}
                 </p>
                 <p className="mt-1 text-[11px] text-slate-500">{pivotName} · Safra {seasonName ?? "em andamento"}</p>
               </div>
