@@ -2,13 +2,14 @@
 
 import { Topbar } from "@/components/layout/Topbar";
 import { useAuth } from "@/components/providers";
-import { usePathname, useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-  const panelMode = pathname === "/" && searchParams.get("modo") === "painel";
+  const [panelMode, setPanelMode] = useState(false);
+  useEffect(() => {
+    setPanelMode(window.location.pathname === "/" && new URLSearchParams(window.location.search).get("modo") === "painel");
+  }, []);
 
   if (loading) {
     return (
