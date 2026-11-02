@@ -224,6 +224,7 @@ export default function CentralDeManejoPage() {
   ];
 
   const totalMapped = moistureBands.reduce((sum, band) => sum + (mapCounts[band.status] ?? 0), 0);
+  const totalWithIncomplete = totalMapped + (mapCounts.incompleto ?? 0);
 
   return (
     <div className="space-y-5 pb-6">
@@ -287,7 +288,7 @@ export default function CentralDeManejoPage() {
             ))}
           </div>
 
-          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.75fr)_minmax(340px,0.65fr)]">
+          <div className="grid gap-4 2xl:grid-cols-[minmax(0,1.62fr)_minmax(390px,0.78fr)]">
             <Card className="overflow-hidden p-0 dark:border-[#1A2638] dark:bg-[#08111F] dark:shadow-[0_20px_54px_rgba(0,0,0,0.36)]">
               <div className="flex flex-col gap-2 border-b border-gray-100 px-5 py-4 dark:border-[#162233] dark:bg-[#0A1220] sm:flex-row sm:items-center sm:justify-between">
                 <div>
@@ -319,28 +320,33 @@ export default function CentralDeManejoPage() {
                 <div className="p-4">
                   {(() => {
                     const demandCount = (mapCounts.deficit_hidrico ?? 0) + (mapCounts.critico ?? 0);
-                    const demandPct = totalMapped > 0 ? Math.round((demandCount / totalMapped) * 100) : 0;
+                    const demandPct = totalWithIncomplete > 0 ? Math.round((demandCount / totalWithIncomplete) * 100) : 0;
+                    const comfortableCount = (mapCounts.capacidade_campo ?? 0) + (mapCounts.boa_umidade ?? 0) + (mapCounts.atencao ?? 0);
                     return (
                       <div className="rounded-2xl border border-gray-100 bg-gray-50/70 p-4 dark:border-[#172538] dark:bg-[#091421]">
-                        <div className="flex items-end justify-between gap-4">
-                          <div>
-                            <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#728096]">Áreas em demanda</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="rounded-xl bg-white px-3 py-3 shadow-sm dark:bg-[#0D1827]">
+                            <p className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#728096]">Em demanda</p>
                             <div className="mt-1 flex items-baseline gap-2">
-                              <span className="text-[32px] font-black leading-none text-graphite-950 dark:text-white">{demandCount}</span>
-                              <span className="text-[11px] font-semibold text-graphite-400 dark:text-[#728096]">de {totalMapped} mapeadas</span>
+                              <span className="text-[28px] font-black leading-none text-red-600 dark:text-red-400">{demandCount}</span>
+                              <span className="text-[10px] font-semibold text-graphite-400 dark:text-[#728096]">de {totalWithIncomplete}</span>
                             </div>
+                            <p className="mt-1 text-[10px] font-semibold text-red-600 dark:text-red-400">{demandPct}% do total</p>
                           </div>
-                          <div className="text-right">
-                            <span className={`inline-flex rounded-full px-3 py-1.5 text-[11px] font-extrabold ${demandCount > 0 ? "bg-red-50 text-red-700 dark:bg-red-950/30 dark:text-red-300" : "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/30 dark:text-emerald-300"}`}>
-                              {demandPct}% da área
-                            </span>
+                          <div className="rounded-xl bg-white px-3 py-3 shadow-sm dark:bg-[#0D1827]">
+                            <p className="text-[9.5px] font-bold uppercase tracking-[0.08em] text-graphite-400 dark:text-[#728096]">Sem urgência</p>
+                            <div className="mt-1 flex items-baseline gap-2">
+                              <span className="text-[28px] font-black leading-none text-emerald-600 dark:text-emerald-400">{comfortableCount}</span>
+                              <span className="text-[10px] font-semibold text-graphite-400 dark:text-[#728096]">área(s)</span>
+                            </div>
+                            <p className="mt-1 text-[10px] font-semibold text-graphite-400 dark:text-[#728096]">azul, verde e amarelo</p>
                           </div>
                         </div>
 
-                        <div className="mt-4 flex h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-[#142235]">
+                        <div className="mt-3 flex h-3 overflow-hidden rounded-full bg-gray-200 dark:bg-[#142235]">
                           {moistureBands.map((band) => {
                             const count = mapCounts[band.status] ?? 0;
-                            const pct = totalMapped > 0 ? (count / totalMapped) * 100 : 0;
+                            const pct = totalWithIncomplete > 0 ? (count / totalWithIncomplete) * 100 : 0;
                             const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
                             return pct > 0 ? (
                               <div key={band.status} title={`${band.description}: ${count}`} style={{ width: `${pct}%`, backgroundColor: conf.color }} />
@@ -354,7 +360,7 @@ export default function CentralDeManejoPage() {
                   <div className="mt-3 divide-y divide-gray-100 overflow-hidden rounded-2xl border border-gray-100 bg-white dark:divide-[#172538] dark:border-[#172538] dark:bg-[#091421]">
                     {moistureBands.map((band) => {
                       const count = mapCounts[band.status] ?? 0;
-                      const pct = totalMapped > 0 ? Math.round((count / totalMapped) * 100) : 0;
+                      const pct = totalWithIncomplete > 0 ? Math.round((count / totalWithIncomplete) * 100) : 0;
                       const conf = MAP_HYDRIC_STATUS_CONFIG[band.status];
                       return (
                         <div key={band.status} className="flex items-center gap-3 px-3.5 py-2.5">
