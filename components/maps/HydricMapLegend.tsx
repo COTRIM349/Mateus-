@@ -93,8 +93,8 @@ export function HydricMapLegend({
           <div className="mt-2 flex flex-wrap gap-x-5 gap-y-3">
             <MoistureBand status="capacidade_campo" count={counts.capacidade_campo ?? 0} reference="≥95%" detail="Azul · 95 a 100% da CC" />
             <MoistureBand status="boa_umidade" count={counts.boa_umidade ?? 0} reference="90%" detail="Verde · 90 a <95% da CC" />
-            <MoistureBand status="atencao" count={counts.atencao ?? 0} reference="82%" detail="Amarelo · 82 a <90% da CC" />
-            <MoistureBand status="deficit_hidrico" count={counts.deficit_hidrico ?? 0} reference="70%" detail="Vermelho · 70 a <82% da CC" />
+            <MoistureBand status="atencao" count={counts.atencao ?? 0} reference="85%" detail="Amarelo · 85 a <90% da CC" />
+            <MoistureBand status="deficit_hidrico" count={counts.deficit_hidrico ?? 0} reference="70%" detail="Vermelho · 70 a <85% da CC" />
             <MoistureBand status="critico" count={counts.critico ?? 0} reference="<70%" detail="Preto · abaixo de 70% da CC" />
             {(counts.incompleto ?? 0) > 0 && (
               <MoistureBand status="incompleto" count={counts.incompleto ?? 0} reference="—" detail="Dados indisponíveis" />
