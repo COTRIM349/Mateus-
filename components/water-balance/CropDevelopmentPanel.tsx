@@ -81,8 +81,9 @@ function GraphLegend({ color, name, dashed = false }: { color: string; name: str
 }
 
 /**
- * Gráfico único como referência: Kc no eixo direito, raiz no esquerdo,
- * bandas com DAE cadastrados, e histórico separado visualmente de curvas futuras.
+ * Gráfico único de desenvolvimento: Kc no eixo direito, raiz no esquerdo.
+ * As faixas fenológicas e os estádios percorrem o ciclo inteiro; as curvas de
+ * Kc e raiz mostram somente o histórico realizado até o dia atual.
  */
 export function CropDevelopmentPanel({
   rows, markers, kcCurve, rootCurve = null, kcCurveLabel, cropName,
@@ -92,7 +93,7 @@ export function CropDevelopmentPanel({
   const [axisMode, setAxisMode] = useState<AxisMode>("dae");
   const [showPicker, setShowPicker] = useState(false);
   const [visible, setVisible] = useState<ChartVisibility>({
-    kc: true, root: true, potential: true, stages: true,
+    kc: true, root: true, potential: false, stages: true,
   });
   const [hoverDae, setHoverDae] = useState<number | null>(null);
   const [hiddenPhases, setHiddenPhases] = useState<string[]>([]);
@@ -163,9 +164,9 @@ export function CropDevelopmentPanel({
     : [];
 
   const rootCeiling = Math.max(0.6, last.rootDepth,
-    ...observed.map((r) => r.root), ...futureRoot.map((r) => r.value));
+    ...observed.map((r) => r.root));
   const kcCeiling = Math.max(1.1, last.kc,
-    ...observed.map((r) => r.kc), ...futureKc.map((r) => r.value));
+    ...observed.map((r) => r.kc));
   const rootAxisMax = Math.ceil(rootCeiling * 5.2) / 5;
   const kcAxisMax = Math.ceil(kcCeiling * 5.2) / 5;
 
@@ -209,12 +210,12 @@ export function CropDevelopmentPanel({
   const selectedPhenology=fieldStage?.stage.code ??
     cropDevelopmentStageLabel(audit.currentStage?.code,last.phase);
   const observedAtDae=fieldStage?.observation.dae ?? null;
-  const tooltipKc = activeDae == null ? null : activeDae <= (dae ?? 0)
-    ? hoverRow?.kc ?? null
-    : completeKc.length >= 2 ? calculateDailyKc(completeKc, activeDae) : null;
-  const tooltipRoot = activeDae == null ? null : activeDae <= (dae ?? 0)
-    ? hoverRow?.root ?? null
-    : completeRoot.length >= 2 ? calculateRootDepthMeters(completeRoot, activeDae) : null;
+  const tooltipKc = activeDae == null || activeDae > (dae ?? 0)
+    ? null
+    : hoverRow?.kc ?? null;
+  const tooltipRoot = activeDae == null || activeDae > (dae ?? 0)
+    ? null
+    : hoverRow?.root ?? null;
   const seasonDateRange = dae != null
     ? fullDateAtDae(last.date, dae, 0) + " – " + fullDateAtDae(last.date, dae, endDae)
     : "Ciclo sem DAE";
@@ -277,7 +278,7 @@ export function CropDevelopmentPanel({
               Desenvolvimento fenológico da cultura
             </h3>
             <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">
-              Fases coloridas, estádios detalhados da cultivar, Kc e crescimento radicular.
+              Fases e estádios seguem até o fim do ciclo; Kc e raiz mostram somente a evolução realizada até hoje.
               {markers.length>0 && <span className="ml-2 font-semibold text-emerald-700 dark:text-emerald-300">
                 {markers.length} marcos da cultivar carregados
               </span>}
@@ -310,7 +311,6 @@ export function CropDevelopmentPanel({
                   {([
                     ["kc", "Kc da cultura"],
                     ["root", "Raiz efetiva (histórico)"],
-                    ["potential", "Curvas futuras aprovadas"],
                     ["stages", "Faixas fenológicas"],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex cursor-pointer items-center gap-2 py-1.5 text-[12px] text-slate-700 dark:text-slate-200">
@@ -338,7 +338,7 @@ export function CropDevelopmentPanel({
                     ))}
                   </div>
                   <button type="button" onClick={() => {
-                    setVisible({ kc: true, root: true, potential: true, stages: true });
+                    setVisible({ kc: true, root: true, potential: false, stages: true });
                     setHiddenPhases([]);
                   }} className="mt-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                     Mostrar todas
@@ -486,17 +486,13 @@ export function CropDevelopmentPanel({
                   <polyline points={trace(rootObserved, pyRoot)} fill="none" stroke="#1672ef"
                     strokeWidth={3.6} strokeLinejoin="round" strokeLinecap="round" />
                 )}
-                {visible.kc && visible.potential && futureKc.length > 1 && (
-                  <polyline points={trace(futureKc, pyKc)} fill="none" stroke="#047857"
-                    strokeWidth={3} strokeDasharray="8 5" opacity={.76} strokeLinejoin="round"/>
-                )}
-                {visible.root && visible.potential && futureRoot.length > 1 && (
-                  <polyline points={trace(futureRoot, pyRoot)} fill="none" stroke="#1672ef"
-                    strokeWidth={3} strokeDasharray="8 5" opacity={.76} strokeLinejoin="round"/>
-                )}
                 {todayX != null && (
-                  <line x1={todayX} x2={todayX} y1={plot.top} y2={plot.bottom}
-                    stroke="#065f46" strokeDasharray="6 5" strokeWidth={1.6} opacity={.84}/>
+                  <>
+                    <rect x={todayX} y={plot.top} width={Math.max(0, plot.right - todayX)}
+                      height={plotHeight} fill="#f8fafc" opacity={.22}/>
+                    <line x1={todayX} x2={todayX} y1={plot.top} y2={plot.bottom}
+                      stroke="#065f46" strokeDasharray="6 5" strokeWidth={1.6} opacity={.84}/>
+                  </>
                 )}
                 {visible.kc && todayX != null && (
                   <circle cx={todayX} cy={pyKc(last.kc)} r={6}
@@ -541,7 +537,7 @@ export function CropDevelopmentPanel({
                     y={plot.top + 14} width={200} height={75} rx={8} fill="#0f2336" opacity={.96}/>
                   <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
                     y={plot.top + 32} fill="white" fontSize={12} fontWeight={800}>
-                    {activeDae > dae ? "Referência · " : "Histórico · "}{Math.round(activeDae)} DAE
+                    {activeDae > dae ? "Fenologia futura · " : "Histórico · "}{Math.round(activeDae)} DAE
                   </text>
                   <text x={Math.min(plot.right - 192, Math.max(plot.left + 18, px(activeDae) - 72))}
                     y={plot.top + 49} fill="#e2e8f0" fontSize={12}>
@@ -570,7 +566,6 @@ export function CropDevelopmentPanel({
         <div className="mt-2 flex flex-wrap items-center justify-center gap-x-5 gap-y-2 border-t border-slate-100 py-3 dark:border-white/10">
           {visible.kc && <GraphLegend color="#047857" name="Kc (direita)"/>}
           {visible.root && <GraphLegend color="#1672ef" name="Profundidade radicular efetiva (esquerda)"/>}
-          {visible.potential && <GraphLegend color="#64748b" name="Referência futura cadastrada" dashed/>}
           <div className="flex flex-wrap items-center justify-center gap-1.5" role="group"
             aria-label="Selecionar fases fenológicas">
             <span className="mr-1 text-[10px] font-semibold text-slate-500 dark:text-slate-400">
