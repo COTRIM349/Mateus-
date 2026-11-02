@@ -2,6 +2,8 @@ export interface NavItem {
   label: string;
   href: string;
   icon: string;
+  /** Agrupamento visual dentro de um dropdown. */
+  section?: string;
 }
 
 export interface NavGroup {
@@ -36,61 +38,80 @@ const ICON = {
   settings: "M12 9a3 3 0 100 6 3 3 0 000-6zm7.4 3a7.4 7.4 0 00-.1-1l2-1.6-2-3.5-2.4 1a7.3 7.3 0 00-1.7-1l-.4-2.6H9.2l-.4 2.6a7.3 7.3 0 00-1.7 1l-2.4-1-2 3.5 2 1.6a7.4 7.4 0 000 2l-2 1.6 2 3.5 2.4-1c.5.4 1.1.7 1.7 1l.4 2.6h5.6l.4-2.6c.6-.3 1.2-.6 1.7-1l2.4 1 2-3.5-2-1.6c.1-.3.1-.7.1-1z",
 } as const;
 
-// Menu só com telas que já operam. Rotas vazias (água, alertas, sensores,
-// reservatórios, Santa Colomba AI, OS, chuva manual) ficam fora até existirem.
+// Navegação principal enxuta: módulos de uso diário no topo e ações
+// operacionais agrupadas no dropdown de Manejo Diário.
+
+const dashboardItem: NavItem = { label: "Dashboard", href: "/", icon: ICON.home };
+const climateItem: NavItem = { label: "Clima", href: "/clima", icon: ICON.cloud };
+const reportsItem: NavItem = { label: "Relatórios", href: "/relatorios", icon: ICON.report };
+const historyItem: NavItem = { label: "Histórico", href: "/historico", icon: ICON.boletim };
+const settingsItem: NavItem = { label: "Configurações", href: "/configuracoes", icon: ICON.settings };
+
+const dailyManagementGroup: NavGroup = {
+  label: "Manejo Diário",
+  icon: ICON.decision,
+  items: [
+    { label: "Central de Manejo", href: "/central-manejo", icon: ICON.decision, section: "Operação" },
+    { label: "Balanço Hídrico", href: "/balanco-hidrico", icon: ICON.balance, section: "Operação" },
+    { label: "Programação de Irrigação", href: "/programacao", icon: ICON.schedule, section: "Operação" },
+    { label: "Irrigação Aplicada", href: "/lancamentos/irrigacao", icon: ICON.boletim, section: "Registros" },
+    { label: "Chuva Manual", href: "/lancamentos/chuvas", icon: ICON.cloud, section: "Registros" },
+    { label: "Correção de Irrigação", href: "/lancamentos/correcao-irrigacao", icon: ICON.alert, section: "Registros" },
+    { label: "Sensorial de Solo", href: "/lancamentos/sensorial-solo", icon: ICON.soil, section: "Registros" },
+  ],
+};
+
+const registrationGroup: NavGroup = {
+  label: "Cadastros",
+  icon: ICON.farm,
+  items: [
+    { label: "Fazendas", href: "/fazendas", icon: ICON.farm },
+    { label: "Pivôs (Equipamentos)", href: "/pivos", icon: ICON.pivot },
+    { label: "Solos", href: "/solos", icon: ICON.soil },
+    { label: "Culturas", href: "/culturas", icon: ICON.crop },
+    { label: "Parcelas", href: "/vinculacao", icon: ICON.parcel },
+  ],
+};
+
+const energyGroup: NavGroup = {
+  label: "Energia",
+  icon: ICON.energy,
+  items: [
+    { label: "Energia", href: "/energia", icon: ICON.energy },
+    { label: "Rateio", href: "/rateio", icon: ICON.cashflow },
+    { label: "Custos", href: "/custos", icon: ICON.cost },
+  ],
+};
 
 export const topLevelItems: NavItem[] = [
-  { label: "Dashboard", href: "/", icon: ICON.home },
-  { label: "Balanço Hídrico", href: "/balanco-hidrico", icon: ICON.balance },
-  { label: "Histórico", href: "/historico", icon: ICON.boletim },
-  { label: "Relatórios", href: "/relatorios", icon: ICON.report },
+  dashboardItem,
+  climateItem,
+  reportsItem,
+  historyItem,
 ];
 
 export const navGroups: NavGroup[] = [
-  {
-    label: "Cadastros",
-    icon: ICON.farm,
-    items: [
-      { label: "Fazendas", href: "/fazendas", icon: ICON.farm },
-      { label: "Pivôs (Equipamentos)", href: "/pivos", icon: ICON.pivot },
-      { label: "Solos", href: "/solos", icon: ICON.soil },
-      { label: "Culturas", href: "/culturas", icon: ICON.crop },
-      { label: "Parcelas", href: "/vinculacao", icon: ICON.parcel },
-    ],
-  },
-  {
-    label: "Manejo Diário",
-    icon: ICON.decision,
-    items: [
-      { label: "Central de Manejo", href: "/central-manejo", icon: ICON.decision },
-      { label: "Clima", href: "/clima", icon: ICON.cloud },
-      { label: "Decisão de Irrigação", href: "/operacao/decisao", icon: ICON.decision },
-      { label: "Programação de Irrigação", href: "/programacao", icon: ICON.schedule },
-    ],
-  },
-  {
-    label: "Lançamentos",
-    icon: ICON.boletim,
-    items: [
-      { label: "Irrigação Aplicada", href: "/lancamentos/irrigacao", icon: ICON.boletim },
-      { label: "Chuva Manual", href: "/lancamentos/chuvas", icon: ICON.cloud },
-      { label: "Correção de Irrigação", href: "/lancamentos/correcao-irrigacao", icon: ICON.alert },
-      { label: "Sensorial de Solo", href: "/lancamentos/sensorial-solo", icon: ICON.soil },
-    ],
-  },
-  {
-    label: "Energia & Custos",
-    icon: ICON.energy,
-    items: [
-      { label: "Energia", href: "/energia", icon: ICON.energy },
-      { label: "Rateio", href: "/rateio", icon: ICON.cashflow },
-      { label: "Custos", href: "/custos", icon: ICON.cost },
-    ],
-  },
+  dailyManagementGroup,
+  registrationGroup,
+  energyGroup,
 ];
 
-export const bottomItems: NavItem[] = [
-  { label: "Configurações", href: "/configuracoes", icon: ICON.settings },
+export const bottomItems: NavItem[] = [settingsItem];
+
+export type NavigationEntry =
+  | { type: "item"; item: NavItem }
+  | { type: "group"; group: NavGroup };
+
+/** Ordem visual do menu principal no desktop e mobile. */
+export const navigationEntries: NavigationEntry[] = [
+  { type: "item", item: dashboardItem },
+  { type: "group", group: dailyManagementGroup },
+  { type: "item", item: climateItem },
+  { type: "group", group: registrationGroup },
+  { type: "group", group: energyGroup },
+  { type: "item", item: reportsItem },
+  { type: "item", item: historyItem },
+  { type: "item", item: settingsItem },
 ];
 
 export const navItems: NavItem[] = [

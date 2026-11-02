@@ -3,21 +3,36 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { bottomItems, navGroups, topLevelItems } from "@/config/navigation";
-import type { NavItem } from "@/config/navigation";
+import { navigationEntries } from "@/config/navigation";
+import type { NavGroup, NavItem } from "@/config/navigation";
 import { cn } from "@/utils/cn";
 
 function NavIcon({ path, className }: { path: string; className?: string }) {
   return (
     <svg
-      className={cn("h-[18px] w-[18px] shrink-0", className)}
+      className={cn("h-[17px] w-[17px] shrink-0", className)}
       fill="none"
       stroke="currentColor"
-      strokeWidth={1.7}
+      strokeWidth={1.75}
       viewBox="0 0 24 24"
       aria-hidden="true"
     >
       <path strokeLinecap="round" strokeLinejoin="round" d={path} />
+    </svg>
+  );
+}
+
+function Chevron({ expanded }: { expanded: boolean }) {
+  return (
+    <svg
+      className={cn("h-3 w-3 transition-transform duration-150", expanded && "rotate-180")}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={2}
+      viewBox="0 0 24 24"
+      aria-hidden="true"
+    >
+      <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
     </svg>
   );
 }
@@ -71,15 +86,93 @@ export function TopNavigation() {
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[15px] font-semibold transition-colors",
+          "flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
           active
-            ? "bg-white/15 text-white ring-1 ring-white/10"
-            : "text-white/80 hover:bg-white/10 hover:text-white",
+            ? "bg-white/[0.14] text-white shadow-sm ring-1 ring-white/10"
+            : "text-white/78 hover:bg-white/[0.08] hover:text-white",
         )}
       >
         <NavIcon path={item.icon} />
         {item.label}
       </Link>
+    );
+  }
+
+  function GroupItems({ group, mobile = false }: { group: NavGroup; mobile?: boolean }) {
+    return (
+      <>
+        {group.items.map((item, index) => {
+          const selected = isActivePath(pathname, item.href);
+          const showSection = item.section && item.section !== group.items[index - 1]?.section;
+          return (
+            <div key={item.href}>
+              {showSection && (
+                <div className={cn(
+                  "px-3 pb-1 pt-2 text-[10px] font-bold uppercase tracking-[0.1em]",
+                  mobile ? "text-white/45" : "text-slate-400 dark:text-slate-500",
+                  index > 0 && "mt-1 border-t border-slate-100 dark:border-white/10",
+                )}>
+                  {item.section}
+                </div>
+              )}
+              <Link
+                href={item.href}
+                onClick={onNavigate}
+                aria-current={selected ? "page" : undefined}
+                className={cn(
+                  "flex items-center gap-2.5 rounded-lg px-3 transition-colors",
+                  mobile
+                    ? "min-h-10 text-[14px] font-medium"
+                    : "min-h-10 text-[14px] font-medium tracking-[-0.005em]",
+                  selected
+                    ? mobile
+                      ? "bg-white/10 text-white"
+                      : "bg-santa-50 text-santa-800 dark:bg-santa-900/30 dark:text-santa-200"
+                    : mobile
+                      ? "text-white/80 hover:bg-white/[0.08] hover:text-white"
+                      : "text-graphite-700 hover:bg-santa-50 dark:text-gray-200 dark:hover:bg-white/10",
+                )}
+              >
+                <NavIcon path={item.icon} className={mobile ? "text-white/70" : "text-slate-500"} />
+                {item.label}
+              </Link>
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+
+  function DesktopGroup({ group, index }: { group: NavGroup; index: number }) {
+    const active = group.items.some((item) => isActivePath(pathname, item.href));
+    const expanded = openGroup === group.label;
+    return (
+      <div className="relative">
+        <button
+          type="button"
+          aria-expanded={expanded}
+          aria-controls={"desktop-nav-group-" + index}
+          onClick={() => setOpenGroup(expanded ? null : group.label)}
+          className={cn(
+            "flex min-h-[40px] items-center gap-2 whitespace-nowrap rounded-md px-2.5 text-[14px] font-semibold tracking-[-0.01em] transition-colors",
+            active || expanded
+              ? "bg-white/[0.14] text-white shadow-sm ring-1 ring-white/10"
+              : "text-white/78 hover:bg-white/[0.08] hover:text-white",
+          )}
+        >
+          <NavIcon path={group.icon} />
+          {group.label}
+          <Chevron expanded={expanded} />
+        </button>
+        {expanded && (
+          <div
+            id={"desktop-nav-group-" + index}
+            className="absolute left-0 top-full z-[60] mt-2 min-w-[285px] rounded-xl border border-slate-200 bg-white p-2 shadow-[0_18px_45px_rgba(15,23,42,0.18)] dark:border-white/10 dark:bg-graphite-800"
+          >
+            <GroupItems group={group} />
+          </div>
+        )}
+      </div>
     );
   }
 
@@ -91,8 +184,8 @@ export function TopNavigation() {
         onClick={onNavigate}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[16px] font-medium",
-          active ? "bg-santa-700 text-white" : "text-white/85 hover:bg-white/10",
+          "flex min-h-11 items-center gap-3 rounded-lg px-3 text-[15px] font-semibold tracking-[-0.01em]",
+          active ? "bg-white/12 text-white" : "text-white/82 hover:bg-white/[0.08]",
         )}
       >
         <NavIcon path={item.icon} />
@@ -102,64 +195,20 @@ export function TopNavigation() {
   }
 
   return (
-    <div ref={navigationRef} data-irrigapro-topnav="true" className="relative border-t border-white/10 bg-santa-900">
+    <div
+      ref={navigationRef}
+      data-irrigapro-topnav="true"
+      className="relative border-t border-white/[0.08] bg-santa-900"
+    >
       <nav
         aria-label="Navegação principal"
-        className="hidden min-h-[55px] flex-wrap items-center gap-1.5 px-4 py-1.5 lg:flex lg:px-6"
+        className="hidden min-h-[49px] items-center gap-0.5 overflow-visible px-4 py-1 lg:flex lg:px-6"
       >
-        {topLevelItems.map((item) => <DesktopLink key={item.href} item={item} />)}
-        {navGroups.map((group, index) => {
-          const active = group.items.some((item) => isActivePath(pathname, item.href));
-          const expanded = openGroup === group.label;
-          return (
-            <div key={group.label} className="relative">
-              <button
-                type="button"
-                aria-expanded={expanded}
-                aria-controls={"desktop-nav-group-" + index}
-                onClick={() => setOpenGroup(expanded ? null : group.label)}
-                className={cn(
-                  "flex min-h-[44px] items-center gap-2 whitespace-nowrap rounded-lg px-3 text-[15px] font-semibold transition-colors",
-                  active || expanded ? "bg-white/15 text-white" : "text-white/80 hover:bg-white/10 hover:text-white",
-                )}
-              >
-                <NavIcon path={group.icon} />
-                {group.label}
-                <svg className={cn("h-3 w-3 transition-transform", expanded && "rotate-180")} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
-                </svg>
-              </button>
-              {expanded && (
-                <div
-                  id={"desktop-nav-group-" + index}
-                  className="absolute left-0 top-full z-[60] mt-2 min-w-[250px] rounded-xl border border-santa-100 bg-white p-2 shadow-modal dark:border-white/10 dark:bg-graphite-800"
-                >
-                  {group.items.map((item) => {
-                    const selected = isActivePath(pathname, item.href);
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        onClick={onNavigate}
-                        aria-current={selected ? "page" : undefined}
-                        className={cn(
-                          "flex min-h-11 items-center gap-2.5 rounded-lg px-3 text-[15px] font-medium transition-colors",
-                          selected
-                            ? "bg-santa-50 text-santa-800 dark:bg-santa-900/30 dark:text-santa-200"
-                            : "text-graphite-700 hover:bg-santa-50 dark:text-gray-200 dark:hover:bg-white/10",
-                        )}
-                      >
-                        <NavIcon path={item.icon} />
-                        {item.label}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
-        {bottomItems.map((item) => <DesktopLink key={item.href} item={item} />)}
+        {navigationEntries.map((entry, index) =>
+          entry.type === "item"
+            ? <DesktopLink key={entry.item.href} item={entry.item} />
+            : <DesktopGroup key={entry.group.label} group={entry.group} index={index} />,
+        )}
       </nav>
 
       <div className="px-4 py-2 lg:hidden">
@@ -168,7 +217,7 @@ export function TopNavigation() {
           onClick={() => setMobileOpen(!mobileOpen)}
           aria-expanded={mobileOpen}
           aria-controls="mobile-navigation"
-          className="flex min-h-11 w-full items-center justify-between rounded-lg bg-white/10 px-3 text-[16px] font-semibold text-white"
+          className="flex min-h-10 w-full items-center justify-between rounded-lg bg-white/[0.08] px-3 text-[15px] font-semibold text-white"
         >
           <span className="flex items-center gap-2">
             <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
@@ -176,19 +225,19 @@ export function TopNavigation() {
             </svg>
             Menu da plataforma
           </span>
-          <svg className={cn("h-4 w-4 transition-transform", mobileOpen && "rotate-180")} fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-            <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
-          </svg>
+          <Chevron expanded={mobileOpen} />
         </button>
       </div>
+
       {mobileOpen && (
         <nav
           id="mobile-navigation"
           aria-label="Navegação para telas menores"
           className="absolute inset-x-0 top-full z-[60] max-h-[72vh] overflow-y-auto border-t border-white/10 bg-santa-900 px-3 py-3 shadow-modal lg:hidden"
         >
-          {topLevelItems.map((item) => <MobileLink key={item.href} item={item} />)}
-          {navGroups.map((group, index) => {
+          {navigationEntries.map((entry, index) => {
+            if (entry.type === "item") return <MobileLink key={entry.item.href} item={entry.item} />;
+            const group = entry.group;
             const expanded = openGroup === group.label;
             const active = group.items.some((item) => isActivePath(pathname, item.href));
             return (
@@ -199,24 +248,21 @@ export function TopNavigation() {
                   aria-controls={"mobile-nav-group-" + index}
                   onClick={() => setOpenGroup(expanded ? null : group.label)}
                   className={cn(
-                    "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[16px] font-semibold",
-                    active || expanded ? "bg-white/10 text-white" : "text-white/85 hover:bg-white/10",
+                    "flex min-h-11 w-full items-center justify-between gap-3 rounded-lg px-3 text-left text-[15px] font-semibold tracking-[-0.01em]",
+                    active || expanded ? "bg-white/[0.1] text-white" : "text-white/82 hover:bg-white/[0.08]",
                   )}
                 >
                   <span className="flex items-center gap-3"><NavIcon path={group.icon} />{group.label}</span>
-                  <svg className={cn("h-4 w-4 transition-transform", expanded && "rotate-180")} fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="m6 9 6 6 6-6" />
-                  </svg>
+                  <Chevron expanded={expanded} />
                 </button>
                 {expanded && (
                   <div id={"mobile-nav-group-" + index} className="mb-2 ml-4 border-l border-white/15 pl-2">
-                    {group.items.map((item) => <MobileLink key={item.href} item={item} />)}
+                    <GroupItems group={group} mobile />
                   </div>
                 )}
               </div>
             );
           })}
-          {bottomItems.map((item) => <MobileLink key={item.href} item={item} />)}
         </nav>
       )}
     </div>

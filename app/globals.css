@@ -122,41 +122,41 @@ body {
  * que esticariam SVG, letras e interfaces interativas.
  */
 @media (min-width: 768px) {
-  .app-readable-ui [class~="text-[9px]"],
-  .app-readable-ui [class~="text-[9.5px]"] {
+  .app-readable-ui > main [class~="text-[9px]"],
+  .app-readable-ui > main [class~="text-[9.5px]"] {
     font-size: 12px;
     line-height: 1.5;
   }
 
-  .app-readable-ui [class~="text-[10px]"],
-  .app-readable-ui [class~="text-[10.5px]"] {
+  .app-readable-ui > main [class~="text-[10px]"],
+  .app-readable-ui > main [class~="text-[10.5px]"] {
     font-size: 13px;
     line-height: 1.45;
   }
 
-  .app-readable-ui [class~="text-[11px]"],
-  .app-readable-ui [class~="text-[11.5px]"],
-  .app-readable-ui .text-xs {
+  .app-readable-ui > main [class~="text-[11px]"],
+  .app-readable-ui > main [class~="text-[11.5px]"],
+  .app-readable-ui > main .text-xs {
     font-size: 14px;
     line-height: 1.5;
   }
 
-  .app-readable-ui [class~="text-[12px]"],
-  .app-readable-ui [class~="text-[12.5px]"],
-  .app-readable-ui [class~="text-[13px]"],
-  .app-readable-ui [class~="text-[13.5px]"],
-  .app-readable-ui .text-sm {
+  .app-readable-ui > main [class~="text-[12px]"],
+  .app-readable-ui > main [class~="text-[12.5px]"],
+  .app-readable-ui > main [class~="text-[13px]"],
+  .app-readable-ui > main [class~="text-[13.5px]"],
+  .app-readable-ui > main .text-sm {
     font-size: 16px;
     line-height: 1.5;
   }
 
-  .app-readable-ui [class~="text-[14px]"],
-  .app-readable-ui [class~="text-[14.5px]"] {
+  .app-readable-ui > main [class~="text-[14px]"],
+  .app-readable-ui > main [class~="text-[14.5px]"] {
     font-size: 17px;
     line-height: 1.45;
   }
 
-  .app-readable-ui [class~="text-[15px]"] {
+  .app-readable-ui > main [class~="text-[15px]"] {
     font-size: 18px;
     line-height: 1.4;
   }
@@ -164,12 +164,20 @@ body {
 
 /* Campos e tabelas em qualquer aba: os dados não se tornam ilegíveis.
    As tabelas continuam podendo rolar horizontalmente conforme a tela. */
-.app-readable-ui :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
+.app-readable-ui > main :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) {
   font-size: max(16px, 1em);
 }
 
 .app-readable-ui :is(button, a, input, select, textarea) {
   text-size-adjust: 100%;
+}
+
+[data-irrigapro-topnav="true"],
+[data-irrigapro-topnav="true"] button,
+[data-irrigapro-topnav="true"] a {
+  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-variant-numeric: tabular-nums;
+  text-rendering: optimizeLegibility;
 }
 
 /* Auditoria da safra, exclusiva de Decisão e Monitoramento.
