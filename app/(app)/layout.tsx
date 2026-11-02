@@ -2,9 +2,13 @@
 
 import { Topbar } from "@/components/layout/Topbar";
 import { useAuth } from "@/components/providers";
+import { usePathname, useSearchParams } from "next/navigation";
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const { loading } = useAuth();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const panelMode = pathname === "/" && searchParams.get("modo") === "painel";
 
   if (loading) {
     return (
@@ -19,8 +23,8 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="app-readable-ui flex min-h-screen min-w-0 flex-col bg-[#f3f7f6] dark:bg-graphite-950">
-      <Topbar />
-      <main className="min-w-0 flex-1 px-3 py-5 sm:px-4 sm:py-6 lg:px-5 lg:py-7">
+      {!panelMode && <Topbar />}
+      <main className={panelMode ? "min-w-0 flex-1 p-0" : "min-w-0 flex-1 px-3 py-5 sm:px-4 sm:py-6 lg:px-5 lg:py-7"}>
         <div className="mx-auto w-full min-w-0 max-w-none animate-in">{children}</div>
       </main>
     </div>
