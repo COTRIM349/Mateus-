@@ -20,7 +20,10 @@ import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
 import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricStateId, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
+  buildDecisionAudit,
   calculateManagementUrgency,
+  decisionDataQuality,
+  decisionSummary,
   MAP_HYDRIC_LEGEND_ORDER,
   MAP_HYDRIC_STATUS_CONFIG,
   type MapHydricStatus,
@@ -51,6 +54,12 @@ function autonomyDays(c: BalanceDay): number | null {
 }
 
 type Priority = { label: string; color: string; rank: number };
+
+const DATA_QUALITY_STYLE = {
+  completo: { color: "#047857", bg: "#ECFDF5", border: "#A7F3D0" },
+  atencao: { color: "#B45309", bg: "#FFFBEB", border: "#FDE68A" },
+  insuficiente: { color: "#64748B", bg: "#F8FAFC", border: "#CBD5E1" },
+} as const;
 function priorityOf(c: BalanceDay): Priority {
   const a = autonomyDays(c);
   if (c.status === "cinza") return { label: "Sem dado", color: "#94A3B8", rank: 5 };
@@ -66,6 +75,7 @@ export default function CentralDeManejoPage() {
   const activeFarm = farms.find((f) => f.id === activeFarmId);
   const { states, summary, loading, error, errorMessage, refresh } = useFarmHydricState();
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [auditStateId, setAuditStateId] = useState<string | null>(null);
 
   const dates = useMemo(() => hydricMapDates(states), [states]);
   // Se a data escolhida não existir no conjunto atual (ex.: troca de fazenda),
@@ -87,7 +97,14 @@ export default function CentralDeManejoPage() {
     const u = calculateManagementUrgency({ afd: c.afd, deficit: c.deficit, etcPotential: c.etcPotential ?? c.etc });
     return !u.atOrBeyondAfd && u.daysToAfd != null && u.daysToAfd < 1;
   }).map((s) => s.pivotId)).size;
-  const reliability = states.length > 0 ? Math.round((withData.length / states.length) * 100) : null;
+  const qualityByState = useMemo(
+    () => new Map(states.map((state) => [hydricStateId(state), decisionDataQuality(state)])),
+    [states],
+  );
+  const completeDataCount = states.filter(
+    (state) => qualityByState.get(hydricStateId(state))?.level === "completo",
+  ).length;
+  const reliability = states.length > 0 ? Math.round((completeDataCount / states.length) * 100) : null;
 
   // Fila de irrigação priorizada (regra do spec):
   // 1) abaixo do limite → 2) menor autonomia → 3) maior sensibilidade (Ky) →
@@ -110,6 +127,17 @@ export default function CentralDeManejoPage() {
       return cb.recommendedGrossDepth - ca.recommendedGrossDepth;
     });
   }, [states]);
+
+  const selectedAuditState = useMemo(() => {
+    const requested = auditStateId
+      ? states.find((state) => hydricStateId(state) === auditStateId)
+      : null;
+    return requested ?? fila.find((state) => state.current && state.current.status !== "cinza") ?? fila[0] ?? null;
+  }, [auditStateId, fila, states]);
+  const auditRows = useMemo(
+    () => selectedAuditState ? buildDecisionAudit(selectedAuditState, 7) : [],
+    [selectedAuditState],
+  );
 
   // Passa também o parcelId — em pivô setorizado, cada linha é uma parcela
   // distinta; sem isso o destino abriria a parcela mais recente do pivô.
@@ -139,6 +167,16 @@ export default function CentralDeManejoPage() {
     if (repro.length > 0) {
       out.push({ sev: "md", title: `${distinct(repro).size} pivô(s) em fase sensível`, desc: "Estádio de alta sensibilidade ao déficit (Ky ≥ 1)." });
     }
+    const qualityAttention = states.filter(
+      (state) => qualityByState.get(hydricStateId(state))?.level === "atencao",
+    );
+    if (qualityAttention.length > 0) {
+      out.push({
+        sev: "md",
+        title: `${qualityAttention.length} parcela(s) com qualidade de dados em atenção`,
+        desc: "Há cálculo disponível, mas existe dado assumido ou cadastro incompleto que merece validação.",
+      });
+    }
     // Parcelas ativas sem balanço = condição DESCONHECIDA, não "tudo certo".
     const noData = states.length - withData.length;
     if (noData > 0) {
@@ -150,7 +188,7 @@ export default function CentralDeManejoPage() {
         : { sev: "md", title: "Dados hídricos indisponíveis", desc: "Nenhuma parcela ativa com balanço calculado." });
     }
     return out;
-  }, [withData, states]);
+  }, [withData, states, qualityByState]);
 
   if (!activeFarmId) {
     return <PageHeader titulo="Central de Manejo" descricao="Selecione uma fazenda para continuar" />;
@@ -348,7 +386,7 @@ export default function CentralDeManejoPage() {
               </span>
             </div>
             <div className="max-h-[460px] overflow-auto">
-              <table className="w-full min-w-[980px] text-[12px]">
+              <table className="w-full min-w-[1280px] text-[12px]">
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-gray-100 bg-gray-50 text-left text-[10px] font-bold uppercase tracking-[0.06em] text-graphite-400 dark:border-[#162233] dark:bg-[#0D1827] dark:text-[#75839A]">
                     <th className="px-4 py-3">Pivô</th>
@@ -359,7 +397,8 @@ export default function CentralDeManejoPage() {
                     <th className="px-3 py-3 text-right">ETc</th>
                     <th className="px-3 py-3 text-right">Autonomia</th>
                     <th className="px-3 py-3 text-right">Lâmina</th>
-                    <th className="px-4 py-3">Prioridade</th>
+                    <th className="px-3 py-3">Qualidade</th>
+                    <th className="px-4 py-3">Decisão</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -367,6 +406,9 @@ export default function CentralDeManejoPage() {
                     const c = s.current;
                     const pr = c ? priorityOf(c) : { label: "Sem dado", color: "#9ca3af", rank: 5 };
                     const a = c ? autonomyDays(c) : null;
+                    const quality = qualityByState.get(hydricStateId(s)) ?? decisionDataQuality(s);
+                    const qualityStyle = DATA_QUALITY_STYLE[quality.level];
+                    const decision = decisionSummary(s);
                     return (
                       <tr
                         key={hydricStateId(s)}
@@ -393,10 +435,26 @@ export default function CentralDeManejoPage() {
                           {a == null ? "—" : a < 0.1 ? "0 d" : `${fmtNum(a)} d`}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums">{c && c.shouldIrrigate ? fmtNum(c.recommendedGrossDepth) : "—"}</td>
-                        <td className="px-4 py-3">
-                          <span className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-bold" style={{ color: pr.color, background: `${pr.color}14`, borderColor: `${pr.color}2e` }}>
-                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: pr.color }} />{pr.label}
+                        <td className="px-3 py-3">
+                          <span
+                            title={quality.reasons.length ? quality.reasons.join(" ") : "Dados operacionais completos para a decisão."}
+                            className="inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[10.5px] font-bold"
+                            style={{ color: qualityStyle.color, background: qualityStyle.bg, borderColor: qualityStyle.border }}
+                          >
+                            <span className="h-1.5 w-1.5 rounded-full" style={{ background: qualityStyle.color }} />
+                            {quality.label}
                           </span>
+                        </td>
+                        <td className="max-w-[340px] px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2 py-1 text-[10px] font-bold" style={{ color: pr.color, background: `${pr.color}14`, borderColor: `${pr.color}2e` }}>
+                              <span className="h-1.5 w-1.5 rounded-full" style={{ background: pr.color }} />{pr.label}
+                            </span>
+                            <span className="truncate text-[11px] font-bold text-graphite-800 dark:text-[#F3F7FF]">{decision.title}</span>
+                          </div>
+                          <p className="mt-1 truncate text-[10px] text-graphite-400 dark:text-[#738197]" title={decision.detail}>
+                            {decision.detail}
+                          </p>
                         </td>
                       </tr>
                     );
@@ -405,6 +463,75 @@ export default function CentralDeManejoPage() {
               </table>
             </div>
           </Card>
+
+          <details className="overflow-hidden rounded-2xl border border-gray-100 bg-white shadow-sm dark:border-[#1A2638] dark:bg-[#08111F]">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+              <div>
+                <p className="text-[13px] font-extrabold text-graphite-900 dark:text-[#F3F7FF]">Auditoria da decisão · últimos 7 dias</p>
+                <p className="mt-0.5 text-[10.5px] text-graphite-400 dark:text-[#718096]">
+                  Histórico calculado pelo mesmo motor usado na recomendação atual.
+                </p>
+              </div>
+              <span className="text-[12px] font-bold text-emerald-700 dark:text-emerald-300">Ver histórico</span>
+            </summary>
+            <div className="border-t border-gray-100 px-5 py-4 dark:border-[#162233]">
+              <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                <select
+                  aria-label="Selecionar parcela para auditoria"
+                  value={selectedAuditState ? hydricStateId(selectedAuditState) : ""}
+                  onChange={(event) => setAuditStateId(event.target.value)}
+                  className="h-10 min-w-[240px] rounded-lg border border-gray-200 bg-white px-3 text-[12px] font-semibold text-graphite-700 dark:border-[#26364B] dark:bg-[#0D1827] dark:text-white"
+                >
+                  {fila.map((state) => (
+                    <option key={hydricStateId(state)} value={hydricStateId(state)}>
+                      {state.pivotName}{state.parcelName ? ` · ${state.parcelName}` : ""}
+                    </option>
+                  ))}
+                </select>
+                {selectedAuditState && (
+                  <span className="text-[10.5px] text-graphite-400 dark:text-[#718096]">
+                    {selectedAuditState.cultureName}{selectedAuditState.varietyName ? ` · ${selectedAuditState.varietyName}` : ""}
+                  </span>
+                )}
+              </div>
+              {auditRows.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-[11px] text-graphite-400 dark:border-[#26364B] dark:text-[#8290A5]">
+                  Sem histórico calculado disponível para esta parcela.
+                </p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] text-[11px]">
+                    <thead>
+                      <tr className="border-b border-gray-100 bg-gray-50 text-left text-[9.5px] font-bold uppercase tracking-[0.06em] text-graphite-400 dark:border-[#162233] dark:bg-[#0D1827] dark:text-[#75839A]">
+                        <th className="px-3 py-2.5">Data</th>
+                        <th className="px-3 py-2.5">Estádio</th>
+                        <th className="px-3 py-2.5 text-right">Déficit</th>
+                        <th className="px-3 py-2.5 text-right">AFD usada</th>
+                        <th className="px-3 py-2.5 text-right">ETc</th>
+                        <th className="px-3 py-2.5 text-right">Irrigação</th>
+                        <th className="px-3 py-2.5 text-right">Lâmina rec.</th>
+                        <th className="px-3 py-2.5">Decisão</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditRows.map((row) => (
+                        <tr key={row.date} className="border-b border-gray-50 dark:border-[#142235]">
+                          <td className="px-3 py-2.5 font-semibold">{row.date.split("-").reverse().join("/")}</td>
+                          <td className="px-3 py-2.5 text-graphite-500 dark:text-[#9AA8BE]">{row.phase} · {row.dae} DAE</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(row.deficitMm)} mm</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(row.afdUsedPct, 0)}%</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(row.etcPotentialMm)} mm</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{fmtNum(row.irrigationAppliedMm)} mm</td>
+                          <td className="px-3 py-2.5 text-right tabular-nums">{row.recommendedGrossDepthMm > 0 ? `${fmtNum(row.recommendedGrossDepthMm)} mm` : "—"}</td>
+                          <td className="px-3 py-2.5 font-semibold text-graphite-700 dark:text-[#DCE6F2]">{row.decision}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </details>
         </>
       )}
     </div>
