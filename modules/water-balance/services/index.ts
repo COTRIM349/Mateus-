@@ -4,3 +4,4 @@ export * from "./crop-coefficients";
 export * from "./soil-water-balance";
 export * from "./map-hydric-status";
 export * from "./anticipatory-decision";
+export * from "./central-management-decision";
