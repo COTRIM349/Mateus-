@@ -238,26 +238,46 @@ function buildRecommendation(deficit: number, afd: number, status: HydricStatus,
   if (status === "cinza") return { shouldIrrigate: false, netDepth: 0, grossDepth: 0, volume: 0, time: 0, reason: "Dados insuficientes para cálculo confiável." };
   if (efficiency <= 0 || efficiency > 1) return { shouldIrrigate: false, netDepth: 0, grossDepth: 0, volume: 0, time: 0, reason: "Eficiência de aplicação ausente ou inválida." };
 
+  // AFD é limite de manejo/urgência, não gatilho para calcular a reposição.
+  // Sempre que houver déficit, a plataforma informa a lâmina necessária para
+  // retornar o armazenamento à capacidade de campo (CAD/CC).
   const shouldIrrigate = afd > 0 && deficit >= afd;
-  if (!shouldIrrigate) {
-    const ratio = afd > 0 ? Math.round((deficit / afd) * 100) : 0;
-    return { shouldIrrigate: false, netDepth: 0, grossDepth: 0, volume: 0, time: 0, reason: status === "amarelo" ? `Déficit em ${ratio}% da AFD. Preparar irrigação e monitorar.` : "Armazenamento adequado. Sem necessidade de irrigação hoje." };
-  }
-
-  // Reposição normal retorna à CAD. Em irrigação deficitária, repõe 80% do déficit
-  // como regra operacional conservadora até existir alvo específico por fase.
   const targetFraction = deficitIrrigation ? 0.8 : 1;
   const netDepth = roundTo(Math.max(deficit * targetFraction, 0), 2);
   const grossDepth = roundTo(netDepth / efficiency, 2);
   const volume = roundTo(grossDepth * area * 10, 2);
   const time = flowRate > 0 ? roundTo(volume / flowRate, 2) : 0;
+
+  if (deficit <= 0) {
+    return {
+      shouldIrrigate: false,
+      netDepth: 0,
+      grossDepth: 0,
+      volume: 0,
+      time: 0,
+      reason: "Solo em capacidade de campo. Sem reposição necessária.",
+    };
+  }
+
+  if (!shouldIrrigate) {
+    const ratio = afd > 0 ? Math.round((deficit / afd) * 100) : 0;
+    return {
+      shouldIrrigate: false,
+      netDepth,
+      grossDepth,
+      volume,
+      time,
+      reason: `Déficit atual de ${deficit.toFixed(1)} mm (${ratio}% da AFD). Para retornar à capacidade de campo, repor ${grossDepth.toFixed(1)} mm brutos com Ea ${(efficiency * 100).toFixed(0)}%.`,
+    };
+  }
+
   return {
     shouldIrrigate: true,
     netDepth,
     grossDepth,
     volume,
     time,
-    reason: `Déficit ${deficit.toFixed(1)} mm atingiu a AFD (${afd.toFixed(1)} mm). Recomendar ${grossDepth.toFixed(1)} mm brutos com Ea ${(efficiency * 100).toFixed(0)}%.`,
+    reason: `Déficit ${deficit.toFixed(1)} mm atingiu a AFD (${afd.toFixed(1)} mm). Para retornar à capacidade de campo, repor ${grossDepth.toFixed(1)} mm brutos com Ea ${(efficiency * 100).toFixed(0)}%.`,
   };
 }
 
