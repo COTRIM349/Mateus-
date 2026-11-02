@@ -190,7 +190,7 @@ function DashboardPanelMode({ states, farmName }: { states: PivotHydricState[]; 
           {mapPivots.length > 0 ? (
             <PivotMap
               pivots={mapPivots}
-              interactive={false}
+              interactive
               className="h-[48vh] min-h-[390px] w-full rounded-none border-0 sm:h-[52vh]"
             />
           ) : (
