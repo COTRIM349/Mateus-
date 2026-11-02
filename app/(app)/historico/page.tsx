@@ -13,7 +13,9 @@ import {
 import {
   EMPTY_HISTORY_FILTERS,
   HISTORY_COST_PENDING_NOTE,
-  filterHistoricParcels,
+  filterParcelRecords,
+  hasHistorySearchFilters,
+  parcelRecordState,
   summarizeClosedCycle,
   type HistoricParcelRow,
   type HistoryFilters,
@@ -170,16 +172,20 @@ export default function HistoricoOperacionalPage() {
     [assignments, pivotMap],
   );
 
+  const hasSearch = useMemo(() => hasHistorySearchFilters(filters), [filters]);
   const filtered = useMemo(
-    () => filterHistoricParcels(historicRows, filters),
-    [historicRows, filters],
+    () => hasSearch ? filterParcelRecords(historicRows, filters) : [],
+    [historicRows, filters, hasSearch],
   );
   const parcelOptions = useMemo(
-    () => filterHistoricParcels(historicRows, { ...filters, parcelId: "" }),
+    () => filterParcelRecords(historicRows, { ...filters, parcelId: "" }),
     [historicRows, filters],
   );
 
-  const selected = assignments.find((a) => a.id === selectedId) ?? null;
+  const selectedCandidate = assignments.find((a) => a.id === selectedId) ?? null;
+  const selected = selectedCandidate && parcelRecordState(selectedCandidate) === "historico"
+    ? selectedCandidate
+    : null;
   const selectedEvents = useMemo(
     () => events.filter((e) => e.parcel_id === selectedId),
     [events, selectedId],
@@ -198,31 +204,63 @@ export default function HistoricoOperacionalPage() {
     })
     : null;
 
-  const patchFilter = (changes: Partial<HistoryFilters>) =>
+  const patchFilter = (changes: Partial<HistoryFilters>) => {
+    setSelectedId(null);
     setFilters((f) => ({ ...f, ...changes }));
+  };
 
   const parcelColumns: Column<HistoricParcelRow>[] = [
     {
       header: "Parcela",
-      render: (r) => (
-        <button type="button" className="text-left" onClick={() => setSelectedId(r.id)}>
-          <span className="font-medium text-graphite-800 dark:text-white">{r.name || pivotMap.get(r.pivot_id)?.name || "—"}</span>
-          <span className="block text-xs text-graphite-400 dark:text-gray-500">{pivotMap.get(r.pivot_id)?.name ?? "—"}</span>
-        </button>
-      ),
+      render: (r) => {
+        const content = (
+          <>
+            <span className="font-medium text-graphite-800 dark:text-white">{r.name || pivotMap.get(r.pivot_id)?.name || "—"}</span>
+            <span className="block text-xs text-graphite-400 dark:text-gray-500">{pivotMap.get(r.pivot_id)?.name ?? "—"}</span>
+          </>
+        );
+        return parcelRecordState(r) === "historico" ? (
+          <button type="button" className="text-left" onClick={() => setSelectedId(r.id)}>
+            {content}
+          </button>
+        ) : (
+          <div className="text-left">{content}</div>
+        );
+      },
     },
     { header: "Safra", render: (r) => seasonMap.get(r.season_id) ?? "—" },
     { header: "Cultura", render: (r) => cultureMap.get(r.culture_id) ?? "—" },
     { header: "Módulo", render: (r) => (r.module_id ? moduleMap.get(r.module_id) ?? "—" : "—") },
     {
+      header: "Status",
+      render: (r) => {
+        const state = parcelRecordState(r);
+        return state === "ativa" ? (
+          <span className="inline-flex items-center rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-emerald-700 dark:border-emerald-800/60 dark:bg-emerald-950/40 dark:text-emerald-300">
+            Ativa
+          </span>
+        ) : (
+          <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-slate-600 dark:border-slate-700 dark:bg-slate-800/70 dark:text-slate-300">
+            Histórico
+          </span>
+        );
+      },
+    },
+    {
       header: "Período",
-      render: (r) => <span className="text-xs">{fmtDate(r.planting_date)} → {fmtDate(r.closed_at)}</span>,
+      render: (r) => (
+        <span className="text-xs">
+          {fmtDate(r.planting_date)} → {parcelRecordState(r) === "ativa" ? "Em andamento" : fmtDate(r.closed_at)}
+        </span>
+      ),
     },
     {
       header: "Ações",
       align: "right",
-      render: (r) => (
+      render: (r) => parcelRecordState(r) === "historico" ? (
         <Button variant="ghost" size="sm" onClick={() => setSelectedId(r.id)}>Ver ciclo</Button>
+      ) : (
+        <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Em andamento</span>
       ),
     },
   ];
@@ -262,7 +300,7 @@ export default function HistoricoOperacionalPage() {
     <div className="space-y-6">
       <PageHeader
         titulo="Histórico operacional"
-        descricao="Parcelas encerradas, irrigações, sensorial e consumo de água do ciclo. Nova cultura no mesmo pivô é outro registro."
+        descricao="Consulte as parcelas pelos filtros e veja se cada registro está ativo ou já faz parte do histórico operacional."
       />
 
       <Card className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -328,20 +366,22 @@ export default function HistoricoOperacionalPage() {
         </Button>
       </div>
 
-      <Card>
-        {loading ? (
-          <div className="flex items-center justify-center gap-3 py-8">
-            <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
-            <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
-          </div>
-        ) : filtered.length === 0 ? (
-          <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
-            Nenhuma parcela encerrada neste filtro. Encerrar um ciclo em Parcelas move o registro para cá — ele não é apagado.
-          </p>
-        ) : (
-          <Table columns={parcelColumns} data={filtered} getKey={(r) => r.id} />
-        )}
-      </Card>
+      {hasSearch && (
+        <Card>
+          {loading ? (
+            <div className="flex items-center justify-center gap-3 py-8">
+              <div className="h-5 w-5 animate-spin rounded-full border-[3px] border-brand-100 border-t-brand-600 dark:border-white/[0.08] dark:border-t-brand-500" />
+              <span className="text-sm text-graphite-400 dark:text-gray-500">Carregando...</span>
+            </div>
+          ) : filtered.length === 0 ? (
+            <p className="py-8 text-center text-sm text-graphite-400 dark:text-gray-500">
+              Nenhuma parcela encontrada para os dados informados.
+            </p>
+          ) : (
+            <Table columns={parcelColumns} data={filtered} getKey={(r) => r.id} />
+          )}
+        </Card>
+      )}
 
       {selected && summary && (
         <div className="space-y-4">
