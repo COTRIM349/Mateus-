@@ -16,14 +16,12 @@ import { PageHeader } from "@/components/layout/PageHeader";
 import { Card } from "@/components/ui";
 import { useAuth } from "@/components/providers";
 import { useFarmHydricState } from "@/lib/hooks";
-import { HydricMapLegend } from "@/components/maps/HydricMapLegend";
-import { countMapStatuses, hydricDemandSummary, hydricMapDates, hydricStateId, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
+import { countMapStatuses, hydricMapDates, hydricStateId, toHydricMapMarkers } from "@/components/maps/hydric-map-markers";
 import { formatParcelAngles } from "@/modules/assignment/services/parcel-geometry";
 import {
   buildDecisionAudit,
   calculateManagementUrgency,
   decisionDataQuality,
-  MAP_HYDRIC_LEGEND_ORDER,
   MAP_HYDRIC_STATUS_CONFIG,
   type MapHydricStatus,
   type PivotHydricState,
@@ -52,17 +50,6 @@ function autonomyDays(c: BalanceDay): number | null {
   return u.daysToAfd;
 }
 
-type Priority = { label: string; color: string; rank: number };
-
-function priorityOf(c: BalanceDay): Priority {
-  const a = autonomyDays(c);
-  if (c.status === "cinza") return { label: "Sem dado", color: "#94A3B8", rank: 5 };
-  if (c.shouldIrrigate && (a == null || a < 0.5)) return { label: "Crítico", color: "#FF5A5F", rank: 0 };
-  if (c.shouldIrrigate || (a != null && a < 1.5)) return { label: "Alto", color: "#F08A3C", rank: 1 };
-  if (c.status === "amarelo" || (a != null && a < 3)) return { label: "Médio", color: "#D8A928", rank: 2 };
-  return { label: "Sem necessidade", color: "#2196F3", rank: 3 };
-}
-
 export default function CentralDeManejoPage() {
   const router = useRouter();
   const { farms, activeFarmId } = useAuth();
@@ -77,7 +64,6 @@ export default function CentralDeManejoPage() {
   const activeDate = (selectedDate && dates.includes(selectedDate)) ? selectedDate : (dates[dates.length - 1] ?? null);
   const mapPivots = useMemo(() => toHydricMapMarkers(states, activeDate), [states, activeDate]);
   const mapCounts = countMapStatuses(states, activeDate);
-  const demand = hydricDemandSummary(states, activeDate);
 
   const withData = states.filter((s) => s.current && s.current.status !== "cinza");
   const distinctPivots = new Set(states.map((s) => s.pivotId)).size;
@@ -472,7 +458,6 @@ export default function CentralDeManejoPage() {
                 <tbody>
                   {fila.map((s) => {
                     const c = s.current;
-                    const pr = c ? priorityOf(c) : { label: "Sem dado", color: "#9ca3af", rank: 5 };
                     return (
                       <tr
                         key={hydricStateId(s)}
