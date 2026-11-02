@@ -45,7 +45,7 @@ export function Topbar() {
   });
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-santa-800 bg-santa-800 text-white shadow-soft">
+    <header className="sticky top-0 z-40 w-full border-b border-[#194747] bg-[#194747] text-white shadow-soft">
       <div className="flex min-h-[70px] items-center gap-3 px-4 py-2 sm:px-6 lg:px-7">
         <Link
           href="/"
@@ -53,7 +53,7 @@ export function Topbar() {
           aria-label="Irriga Pro — início"
           className="flex shrink-0 items-center gap-2.5 rounded-lg pr-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-santa-200"
         >
-          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/15" aria-hidden="true">
+          <span className="flex h-11 w-11 items-center justify-center rounded-xl bg-transparent ring-1 ring-white/15" aria-hidden="true">
             <svg viewBox="0 0 48 48" className="h-9 w-9" fill="none">
               <path d="M8 33h32M24 33V17M16 33l8-16 8 16" stroke="#e7f5e8" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M13 18c2-6 6-9 11-9s9 3 11 9M6 21c4-11 10-16 18-16s14 5 18 16" stroke="#a9d36b" strokeWidth="2.5" strokeLinecap="round"/>
