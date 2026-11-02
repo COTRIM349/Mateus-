@@ -171,6 +171,9 @@ export interface ClassifyWaterStatusInput {
   cadMm: number | null;
   afdMm: number | null;
   safetyMoistureMm?: number | null;
+  /** Percentual real da umidade volumétrica em relação à CC. Quando disponível,
+   *  esta é a referência visual usada no Dashboard e na Central de Manejo. */
+  moisturePctCc?: number | null;
   thresholds?: Partial<MapHydricThresholds>;
 }
 
@@ -188,6 +191,16 @@ export interface ClassifyWaterStatusInput {
  */
 export function classifyWaterStatus(input: ClassifyWaterStatusInput): MapHydricStatus {
   const t = { ...MAP_HYDRIC_THRESHOLDS, ...input.thresholds };
+
+  if (input.moisturePctCc != null && Number.isFinite(input.moisturePctCc)) {
+    const fill = input.moisturePctCc / 100;
+    if (fill >= t.blueCcRatio) return "capacidade_campo";
+    if (fill >= t.comfortableCcRatio) return "boa_umidade";
+    if (fill >= t.attentionCcRatio) return "atencao";
+    if (fill >= t.criticalCcRatio) return "deficit_hidrico";
+    return "critico";
+  }
+
   const arm = input.armMm;
   const cad = input.cadMm;
   if (
@@ -199,7 +212,6 @@ export function classifyWaterStatus(input: ClassifyWaterStatusInput): MapHydricS
   }
 
   const fill = arm / cad;
-
   if (fill >= t.blueCcRatio) return "capacidade_campo";
   if (fill >= t.comfortableCcRatio) return "boa_umidade";
   if (fill >= t.attentionCcRatio) return "atencao";
