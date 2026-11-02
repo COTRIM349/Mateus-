@@ -137,7 +137,7 @@ export function buildSoyLocalPhenologyMarkers(
   // A calibração local cadastrada na aba Fenologia prevalece sobre o modelo.
   const calibrated = calibratedByCode(input.registeredMarkers);
   const byCode = new Map(markers.map((marker) => [marker.code, marker]));
-  for (const [code, marker] of calibrated) byCode.set(code, marker);
+  for (const [code, marker] of Array.from(calibrated.entries())) byCode.set(code, marker);
 
   return Array.from(byCode.values())
     .filter((marker) => Number.isFinite(marker.dae) && marker.dae >= 0)
