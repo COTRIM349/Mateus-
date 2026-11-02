@@ -154,15 +154,6 @@ export function CropDevelopmentPanel({
   const completeKc = (kcCurve ?? []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0);
   const completeRoot = (rootCurve ?? []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0);
 
-  const futureKc = dae != null && completeKc.length >= 2
-    ? Array.from({ length: Math.max(0, Math.min(450, Math.floor(endDae - dae))) + 1 },
-        (_, i) => ({ dae: dae + i, value: calculateDailyKc(completeKc, dae + i) }))
-    : [];
-  const futureRoot = dae != null && completeRoot.length >= 2
-    ? Array.from({ length: Math.max(0, Math.min(450, Math.floor(endDae - dae))) + 1 },
-        (_, i) => ({ dae: dae + i, value: calculateRootDepthMeters(completeRoot, dae + i) }))
-    : [];
-
   const rootCeiling = Math.max(0.6, last.rootDepth,
     ...observed.map((r) => r.root));
   const kcCeiling = Math.max(1.1, last.kc,
