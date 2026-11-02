@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { navigationEntries } from "@/config/navigation";
 import type { NavGroup, NavItem } from "@/config/navigation";
 import { cn } from "@/utils/cn";
+import { useAuth } from "@/components/providers";
 
 function NavIcon({ path, className }: { path: string; className?: string }) {
   return (
@@ -43,6 +44,8 @@ function isActivePath(pathname: string, href: string) {
 
 export function TopNavigation() {
   const pathname = usePathname();
+  const { farms, activeFarmId, setActiveFarm, profile } = useAuth();
+  const activeFarm = farms.find((farm) => farm.id === activeFarmId);
   const [openGroup, setOpenGroup] = useState<string | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const navigationRef = useRef<HTMLDivElement>(null);
@@ -211,21 +214,20 @@ export function TopNavigation() {
         )}
       </nav>
 
-      <div className="py-1 xl:hidden">
+      <div className="flex items-center justify-end xl:hidden">
         <button
           type="button"
-          onClick={() => setMobileOpen(!mobileOpen)}
+          onClick={() => setMobileOpen((open) => !open)}
+          aria-label={mobileOpen ? "Fechar menu da plataforma" : "Abrir menu da plataforma"}
           aria-expanded={mobileOpen}
           aria-controls="mobile-navigation"
-          className="flex min-h-10 w-full items-center justify-between rounded-lg bg-transparent px-3 text-[15px] font-semibold text-white"
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-white hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/70"
         >
-          <span className="flex items-center gap-2">
-            <svg className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth={1.8} viewBox="0 0 24 24" aria-hidden="true">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-            Menu da plataforma
-          </span>
-          <Chevron expanded={mobileOpen} />
+          <svg className="h-6 w-6" fill="none" stroke="currentColor" strokeWidth={2} viewBox="0 0 24 24" aria-hidden="true">
+            {mobileOpen
+              ? <path strokeLinecap="round" strokeLinejoin="round" d="M6 6l12 12M18 6L6 18" />
+              : <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />}
+          </svg>
         </button>
       </div>
 
@@ -233,8 +235,28 @@ export function TopNavigation() {
         <nav
           id="mobile-navigation"
           aria-label="Navegação para telas menores"
-          className="absolute left-0 top-full z-[60] w-[min(90vw,340px)] max-h-[72vh] overflow-y-auto rounded-b-xl border border-white/10 bg-santa-900 px-3 py-3 shadow-modal xl:hidden"
+          className="absolute right-0 top-[calc(100%+12px)] z-[60] w-[min(360px,calc(100vw-24px))] max-h-[72vh] overflow-y-auto overscroll-contain rounded-xl border border-white/15 bg-[#194747] p-3 shadow-[0_16px_48px_rgba(0,0,0,0.35)] xl:hidden"
         >
+          <div className="mb-3 border-b border-white/15 px-2 pb-3">
+            <p className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-white/65">Fazenda ativa</p>
+            {farms.length > 1 ? (
+              <select
+                aria-label="Selecionar fazenda"
+                value={activeFarmId ?? ""}
+                onChange={(event) => {
+                  setActiveFarm(event.target.value);
+                  setMobileOpen(false);
+                }}
+                className="min-h-11 w-full min-w-0 rounded-lg border border-white/20 bg-white px-3 text-sm font-semibold text-[#194747]"
+              >
+                {farms.map((farm) => <option key={farm.id} value={farm.id}>{farm.name}</option>)}
+              </select>
+            ) : (
+              <p className="truncate text-sm font-semibold text-white">
+                {activeFarm?.name ?? profile?.companyName ?? "Fazenda"}
+              </p>
+            )}
+          </div>
           {navigationEntries.map((entry, index) => {
             if (entry.type === "item") return <MobileLink key={entry.item.href} item={entry.item} />;
             const group = entry.group;
