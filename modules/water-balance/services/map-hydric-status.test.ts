@@ -37,17 +37,17 @@ describe("classifyWaterStatus", () => {
       .toBe("boa_umidade");
   });
 
-  it("amarelo entre 82% e menos de 90% da CC", () => {
-    expect(classifyWaterStatus({ armMm: 82, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+  it("amarelo entre 85% e menos de 90% da CC", () => {
+    expect(classifyWaterStatus({ armMm: 85, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("atencao");
     expect(classifyWaterStatus({ armMm: 89.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("atencao");
   });
 
-  it("vermelho entre 70% e menos de 82% da CC", () => {
+  it("vermelho entre 70% e menos de 85% da CC", () => {
     expect(classifyWaterStatus({ armMm: 70, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("deficit_hidrico");
-    expect(classifyWaterStatus({ armMm: 81.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
+    expect(classifyWaterStatus({ armMm: 84.99, cadMm: cad, afdMm: afd, safetyMoistureMm: safety }))
       .toBe("deficit_hidrico");
   });
 
