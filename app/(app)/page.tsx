@@ -461,25 +461,25 @@ function DashboardPanelMode({
               </div>
             </div>
 
-            <div className="mt-3 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
+            <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
               {filteredCards.slice(0, 14).map((item) => {
                 const visual = panelVisual(item.moisture);
                 const pct = Math.max(0, Math.min(100, item.moisture));
                 return (
                   <div
                     key={hydricStateId(item.state)}
-                    className="rounded-xl border border-gray-100 bg-white p-2 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
+                    className="rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
                   >
                     <div className="text-center text-[11px] font-black truncate">
                       {item.state.parcelName?.trim() || item.state.pivotName}
                     </div>
-                    <div className="relative mx-auto mt-1 h-[40px] w-[58px]">
+                    <div className="relative mx-auto mt-0.5 h-[32px] w-[48px]">
                       <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
-                        <path d="M 12 62 A 48 48 0 0 1 108 62" fill="none" stroke="#e5e7eb" strokeWidth="6" strokeLinecap="round" pathLength="100" />
+                        <path d="M 12 62 A 48 48 0 0 1 108 62" fill="none" stroke="#e5e7eb" strokeWidth="4" strokeLinecap="round" pathLength="100" />
                         <path d="M 12 62 A 48 48 0 0 1 108 62" fill="none" stroke={visual.ring} strokeWidth="6" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />
                       </svg>
-                      <div className="absolute inset-x-0 bottom-0 text-center text-[12px] font-black">
-                        {pct.toFixed(0)}% <span className="text-[7px]">CC</span>
+                      <div className="absolute inset-x-0 bottom-0 text-center text-[10px] font-bold">
+                        {pct.toFixed(0)}% <span className="text-[6px]">CC</span>
                       </div>
                     </div>
                     <div className="mt-1 flex justify-center">
@@ -487,7 +487,7 @@ function DashboardPanelMode({
                         {visual.label}
                       </span>
                     </div>
-                    <div className="mt-1.5 border-t border-gray-100 pt-1.5 text-center text-[9px] font-bold">
+                    <div className="mt-1 border-t border-gray-100 pt-1 text-center text-[9px] font-bold">
                       💧 {formatNumber(item.depth, 1)} mm
                     </div>
                   </div>
