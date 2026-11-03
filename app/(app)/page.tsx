@@ -165,6 +165,7 @@ function DashboardPanelMode({
   const [modules, setModules] = useState<DashboardModule[]>([]);
   const [modulesLoading, setModulesLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState<"todos" | "deficit" | "atencao" | "manejo">("todos");
+  const [selectedPivotId, setSelectedPivotId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -245,6 +246,11 @@ function DashboardPanelMode({
     }
     return byPivot;
   }, [states]);
+
+  const selectedPivot = modulePivots.find((pivot) => pivot.id === selectedPivotId) ?? null;
+  const selectedState = states.find((state) => state.pivotId === selectedPivotId && state.current)
+    ?? states.find((state) => state.pivotId === selectedPivotId)
+    ?? null;
 
   const stateMetrics = useMemo(() => {
     return states
@@ -419,6 +425,7 @@ function DashboardPanelMode({
               ) : module.markers.length > 0 ? (
                 <PivotMap
                   pivots={module.markers}
+                  onSelect={(id) => setSelectedPivotId(id.startsWith("module-equipment-") ? id.slice("module-equipment-".length) : states.find((state) => hydricStateId(state) === id)?.pivotId ?? null)}
                   interactive
                   className="h-[250px] w-full rounded-none border-0 2xl:h-[275px]"
                 />
@@ -430,6 +437,26 @@ function DashboardPanelMode({
             </article>
           ))}
         </section>
+
+        {selectedPivotId && (
+          <div className="fixed inset-0 z-[1000] flex justify-end bg-black/40" onClick={() => setSelectedPivotId(null)}>
+            <aside role="dialog" aria-modal="true" aria-label="Dados do pivô" className="h-full w-full max-w-md overflow-y-auto bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="text-base font-bold text-[#164c7d]">Dados do pivô e da água</h2>
+                <button type="button" aria-label="Fechar detalhes" onClick={() => setSelectedPivotId(null)} className="rounded-lg border px-3 py-1 text-sm">Fechar ×</button>
+              </div>
+              {selectedState ? <PivotDetail state={selectedState} /> : (
+                <div className="space-y-3 rounded-xl border p-4 text-sm">
+                  <h3 className="font-bold">{selectedPivot?.name ?? "Pivô"}</h3>
+                  <p>Módulo: {modules.find((m) => m.id === selectedPivot?.module_id)?.name ?? "—"}</p>
+                  <p>Área: {selectedPivot?.area != null ? `${formatNumber(selectedPivot.area)} ha` : "—"}</p>
+                  <p className="text-amber-700">Sem manejo hídrico ativo. Não há dados de água disponíveis para este pivô.</p>
+                </div>
+              )}
+              <a href="/balanco-hidrico" className="mt-4 block rounded-lg bg-[#164c7d] px-4 py-3 text-center text-sm font-bold text-white">Abrir manejo hídrico</a>
+            </aside>
+          </div>
+        )}
 
         <section className="grid grid-cols-1 gap-3 2xl:grid-cols-[1.5fr_1fr]">
           <article className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
@@ -468,7 +495,11 @@ function DashboardPanelMode({
                 return (
                   <div
                     key={hydricStateId(item.state)}
-                    className="rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setSelectedPivotId(item.state.pivotId)}
+                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedPivotId(item.state.pivotId); } }}
+                    className="cursor-pointer rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
                   >
                     <div className="text-center text-[11px] font-black truncate">
                       {item.state.parcelName?.trim() || item.state.pivotName}
