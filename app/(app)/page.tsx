@@ -473,13 +473,13 @@ function DashboardPanelMode({
                     <div className="text-center text-[11px] font-black truncate">
                       {item.state.parcelName?.trim() || item.state.pivotName}
                     </div>
-                    <div className="relative mx-auto mt-0.5 h-[32px] w-[48px]">
-                      <svg viewBox="0 0 120 72" className="h-full w-full overflow-visible">
-                        <path d="M 12 62 A 48 48 0 0 1 108 62" fill="none" stroke="#e5e7eb" strokeWidth="4" strokeLinecap="round" pathLength="100" />
-                        <path d="M 12 62 A 48 48 0 0 1 108 62" fill="none" stroke={visual.ring} strokeWidth="6" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />
+                    <div className="mx-auto mt-1 flex flex-col items-center">
+                      <svg viewBox="0 0 120 52" className="h-[22px] w-[52px]" aria-hidden="true">
+                        <path d="M 12 50 A 48 48 0 0 1 108 50" fill="none" stroke="#e5e7eb" strokeWidth="6" strokeLinecap="round" pathLength="100" />
+                        <path d="M 12 50 A 48 48 0 0 1 108 50" fill="none" stroke={visual.ring} strokeWidth="6" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />
                       </svg>
-                      <div className="absolute inset-x-0 bottom-0 text-center text-[10px] font-bold">
-                        {pct.toFixed(0)}% <span className="text-[6px]">CC</span>
+                      <div className="mt-0.5 text-center text-[11px] font-bold leading-none">
+                        {pct.toFixed(0)}% <span className="text-[7px]">CC</span>
                       </div>
                     </div>
                     <div className="mt-1 flex justify-center">
