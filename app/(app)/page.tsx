@@ -458,120 +458,18 @@ function DashboardPanelMode({
           </div>
         )}
 
-        <section className="grid grid-cols-1 gap-3 2xl:grid-cols-[1.5fr_1fr]">
-          <article className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">▣</span>
-                <h2 className="text-sm font-black">Status dos pivôs <span className="font-semibold text-gray-500">(todos os módulos)</span></h2>
-              </div>
-              <div className="flex flex-wrap gap-1">
-                {[
-                  ["todos", `Todos (${stateMetrics.length})`],
-                  ["deficit", `Déficit (${stateMetrics.filter((item) => item.category === "deficit").length})`],
-                  ["atencao", `Atenção (${stateMetrics.filter((item) => item.category === "atencao").length})`],
-                  ["manejo", `Manejo (${stateMetrics.filter((item) => item.category === "manejo").length})`],
-                ].map(([id, label]) => (
-                  <button
-                    key={id}
-                    type="button"
-                    onClick={() => setStatusFilter(id as typeof statusFilter)}
-                    className={`rounded-full border px-3 py-1 text-[9px] font-bold transition ${
-                      statusFilter === id
-                        ? "border-[#164c7d] bg-[#164c7d] text-white"
-                        : "border-gray-200 bg-white text-gray-600 hover:bg-gray-50"
-                    }`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="mt-2.5 grid grid-cols-2 gap-1.5 sm:grid-cols-4 lg:grid-cols-7">
-              {filteredCards.slice(0, 14).map((item) => {
-                const visual = panelVisual(item.moisture);
-                const pct = Math.max(0, Math.min(100, item.moisture));
-                return (
-                  <div
-                    key={hydricStateId(item.state)}
-                    role="button"
-                    tabIndex={0}
-                    onClick={() => setSelectedPivotId(item.state.pivotId)}
-                    onKeyDown={(event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); setSelectedPivotId(item.state.pivotId); } }}
-                    className="cursor-pointer rounded-lg border border-gray-100 bg-white px-2 py-1.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
-                  >
-                    <div className="text-center text-[11px] font-black truncate">
-                      {item.state.parcelName?.trim() || item.state.pivotName}
-                    </div>
-                    <div className="mx-auto mt-1 flex flex-col items-center">
-                      <svg viewBox="0 0 120 52" className="h-[22px] w-[52px]" aria-hidden="true">
-                        <path d="M 12 50 A 48 48 0 0 1 108 50" fill="none" stroke="#e5e7eb" strokeWidth="6" strokeLinecap="round" pathLength="100" />
-                        <path d="M 12 50 A 48 48 0 0 1 108 50" fill="none" stroke={visual.ring} strokeWidth="6" strokeLinecap="round" pathLength="100" strokeDasharray={`${pct} 100`} />
-                      </svg>
-                      <div className="mt-0.5 text-center text-[11px] font-bold leading-none">
-                        {pct.toFixed(0)}% <span className="text-[7px]">CC</span>
-                      </div>
-                    </div>
-                    <div className="mt-1 flex justify-center">
-                      <span className={`rounded-full px-2 py-0.5 text-[7px] font-black ${visual.bg} ${visual.text}`}>
-                        {visual.label}
-                      </span>
-                    </div>
-                    <div className="mt-1 border-t border-gray-100 pt-1 text-center text-[9px] font-bold">
-                      💧 {formatNumber(item.depth, 1)} mm
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </article>
-
-          <article className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-lg">◎</span>
-                <h2 className="text-sm font-black">Prioridade de irrigação</h2>
-              </div>
-              <span className="text-[9px] font-semibold text-[#1b65a8]">Menor %CC primeiro</span>
-            </div>
-
-            <div className="mt-3 overflow-hidden rounded-xl border border-gray-100">
-              <table className="w-full table-fixed text-left text-[9px]">
-                <thead className="bg-gray-50 text-gray-500">
-                  <tr>
-                    <th className="w-[8%] px-2 py-2">Ordem</th>
-                    <th className="w-[18%] px-2 py-2">Pivô</th>
-                    <th className="w-[12%] px-2 py-2">Mód.</th>
-                    <th className="w-[11%] px-2 py-2">%CC</th>
-                    <th className="w-[18%] px-2 py-2">Status</th>
-                    <th className="w-[15%] px-2 py-2">Lâmina</th>
-                    <th className="w-[18%] px-2 py-2">Volume</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {priorities.map((item, index) => {
-                    const visual = panelVisual(item.moisture);
-                    return (
-                      <tr key={hydricStateId(item.state)} className="border-t border-gray-100">
-                        <td className="px-2 py-2 font-black">{index + 1}º</td>
-                        <td className="truncate px-2 py-2 font-black">{item.state.pivotName}</td>
-                        <td className="px-2 py-2">{item.moduleName}</td>
-                        <td className="px-2 py-2 font-black">{formatNumber(item.moisture)}%</td>
-                        <td className="px-2 py-2">
-                          <span className={`rounded-full px-2 py-0.5 text-[7px] font-black ${visual.bg} ${visual.text}`}>
-                            {visual.label}
-                          </span>
-                        </td>
-                        <td className="px-2 py-2 font-bold">{formatNumber(item.depth, 1)} mm</td>
-                        <td className="px-2 py-2 font-bold">{formatNumber(item.volume)} m³</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </article>
+        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+          <h2 className="mb-3 text-sm font-black">Pivôs – Prioridade de Irrigação</h2>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[520px] text-left text-xs">
+              <thead className="bg-gray-50"><tr><th className="p-2">#</th><th className="p-2">Pivô</th><th className="p-2">Módulo</th><th className="p-2">Área (ha)</th><th className="p-2">%CC</th><th className="p-2">Lâmina (mm)</th></tr></thead>
+              <tbody>{priorities.map((item, index) => (
+                <tr key={hydricStateId(item.state)} onClick={() => setSelectedPivotId(item.state.pivotId)} className="cursor-pointer border-t hover:bg-blue-50">
+                  <td className="p-2">{index + 1}º</td><td className="p-2 font-bold">{item.state.pivotName}</td><td className="p-2">{item.moduleName}</td><td className="p-2">{formatNumber(item.area, 1)}</td><td className="p-2">{formatNumber(item.moisture)}%</td><td className="p-2">{formatNumber(item.depth, 1)}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
         </section>
       </main>
     </div>
