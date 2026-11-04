@@ -166,7 +166,6 @@ function DashboardPanelMode({
   const [modulePivots, setModulePivots] = useState<DashboardModulePivot[]>([]);
   const [modules, setModules] = useState<DashboardModule[]>([]);
   const [modulesLoading, setModulesLoading] = useState(true);
-  const [statusFilter, setStatusFilter] = useState<"todos" | "deficit" | "atencao" | "manejo">("todos");
   const [selectedPivotId, setSelectedPivotId] = useState<string | null>(null);
   const [moduleFilter, setModuleFilter] = useState("Todos");
   const [viewMode, setViewMode] = useState<"painel" | "lista">("painel");
@@ -362,14 +361,6 @@ function DashboardPanelMode({
     });
   }, [modules, modulePivots, hydricByPivot, stateMetrics]);
 
-  const filteredCards = useMemo(
-    () =>
-      statusFilter === "todos"
-        ? stateMetrics
-        : stateMetrics.filter((item) => item.category === statusFilter),
-    [stateMetrics, statusFilter],
-  );
-
   const priorities = useMemo(
     () => stateMetrics.filter((item) => item.depth > 0 && (moduleFilter === "Todos" || item.moduleName === moduleFilter)).slice(0, 5),
     [stateMetrics, moduleFilter],
@@ -382,49 +373,52 @@ function DashboardPanelMode({
     });
 
   return (
-    <div className="min-h-screen bg-white text-[#163536]">
-      <main className="space-y-4 p-2 sm:p-3 lg:p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-[#d7e7e2] bg-[#f6faf8] px-4 py-3">
-          <div className="flex items-end gap-3">
-            <label className="flex flex-col gap-1 text-[11px] font-bold text-[#075c59]">Módulo
-              <select aria-label="Filtrar módulo" value={moduleFilter} onChange={e=>setModuleFilter(e.target.value)} className="min-w-[150px] rounded-lg border border-[#cbded8] bg-white px-3 py-2 text-sm font-semibold text-[#142033]">
-                <option value="Todos">Todos</option><option value="M1">M1</option><option value="M2">M2</option><option value="M3">M3</option>
-              </select>
-            </label>
+    <div className="w-full min-w-0 bg-white text-[#163536]">
+      <main className="space-y-4 rounded-2xl border border-[#d7e7e2] bg-white p-3 sm:p-4 lg:p-5">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e0ebe6] pb-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-[#e8f3ed] p-2 text-[#064b32]"><span aria-hidden="true" className="text-2xl">▧</span></div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight text-[#064b32] sm:text-2xl">Mapa Hídrico</h1>
+              <p className="text-xs text-[#405a55] sm:text-sm">Gestão da umidade do solo e prioridade de irrigação por pivô</p>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex overflow-hidden rounded-xl border border-[#bcd8d1] text-xs font-bold">
-              <button type="button" onClick={()=>setViewMode("painel")} className={`px-4 py-2 ${viewMode==="painel"?"bg-[#075c59] text-white":"bg-white text-[#075c59]"}`}>Modo Painel</button>
-              <button type="button" onClick={()=>setViewMode("lista")} className={`px-4 py-2 ${viewMode==="lista"?"bg-[#075c59] text-white":"bg-white text-[#075c59]"}`}>Modo Lista</button>
+            <div className="flex overflow-hidden rounded-lg border border-[#bcd8d1] text-xs font-bold">
+              <button type="button" onClick={()=>setViewMode("painel")} className={`px-4 py-2.5 ${viewMode==="painel"?"bg-[#065c38] text-white":"bg-white text-[#075c40]"}`}>▣ Modo Painel</button>
+              <button type="button" onClick={()=>setViewMode("lista")} className={`px-4 py-2.5 ${viewMode==="lista"?"bg-[#065c38] text-white":"bg-white text-[#075c40]"}`}>☷ Modo Lista</button>
             </div>
-            <button type="button" onClick={onExit} className="rounded-lg border border-[#075c59] px-3 py-2 text-xs font-bold text-[#075c59]">Sair do painel</button>
+            <label className="sr-only" htmlFor="map-module-filter">Módulo</label>
+            <select id="map-module-filter" value={moduleFilter} onChange={e=>setModuleFilter(e.target.value)} className="rounded-lg border border-[#cbded8] bg-white px-2 py-2 text-xs font-semibold text-[#075c40]">
+              <option value="Todos">Todos os módulos</option><option value="M1">M1</option><option value="M2">M2</option><option value="M3">M3</option>
+            </select>
           </div>
-        </div>
+        </header>
         {viewMode === "painel" && <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(205px,0.7fr)]">
           {moduleCards.filter(module=>moduleFilter==="Todos"||module.name===moduleFilter).map((module) => (
             <article
               key={module.name}
               className="min-w-0 overflow-hidden rounded-xl border border-[#d7e7e2] bg-white shadow-[0_3px_12px_rgba(4,74,65,0.07)]"
             >
-              <div className="border-b border-[#e4efeb] px-3 py-3">
+              <div className="bg-[#065c38] px-3 py-2.5 text-white">
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-md bg-[#075c59] px-3 py-1.5 text-sm font-black text-white">
+                    <span className="rounded-md bg-white/10 px-2 py-1 text-lg font-black text-white">
                       {module.name}
                     </span>
-                    <span className="text-[11px] font-semibold text-[#405a55]">
+                    <span className="text-[11px] font-semibold text-white/90">
                       {module.pivots.length} pivôs
                     </span>
-                    <span className="h-4 w-px bg-gray-200" />
-                    <span className="text-[11px] font-bold text-gray-600">
+                    <span className="h-4 w-px bg-white/40" />
+                    <span className="text-[11px] font-bold text-white/90">
                       {formatNumber(module.totalArea)} ha
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-1.5">
-                    <span className="inline-block h-8 w-8 rounded-full border-[5px] border-[#159e79] border-r-[#e4efeb]" />
+                  <div className="flex items-center gap-1.5 text-white">
+                    <span className="inline-block h-7 w-7 rounded-full border-[5px] border-[#57d67e] border-r-white/30" />
                     <span className="text-sm font-black">{formatNumber(module.weightedCc)}%</span>
-                    <span className="text-[8px] font-bold text-gray-500">CC</span>
+                    <span className="text-[8px] font-bold text-white/80">CC</span>
                   </div>
                 </div>
 
@@ -440,7 +434,7 @@ function DashboardPanelMode({
                   pivots={module.markers}
                   onSelect={(id) => setSelectedPivotId(id.startsWith("module-equipment-") ? id.slice("module-equipment-".length) : states.find((state) => hydricStateId(state) === id)?.pivotId ?? null)}
                   interactive
-                  className="h-[240px] w-full rounded-none border-0 xl:h-[270px]"
+                  className="h-[230px] w-full rounded-none border-0 xl:h-[260px]"
                 />
               ) : (
                 <div className="flex h-[250px] items-center justify-center text-xs text-gray-400">
@@ -450,7 +444,7 @@ function DashboardPanelMode({
             </article>
           ))}
           <article className="rounded-xl border border-[#d7e7e2] bg-white p-3 shadow-sm md:col-span-2 xl:col-span-1">
-            <h2 className="mb-4 text-sm font-bold text-[#123f3e]">Situação dos Pivôs (%CC)</h2>
+            <h2 className="-mx-1 mb-4 rounded-lg bg-[#065c38] px-3 py-2 text-sm font-bold text-white">Situação dos Pivôs (%CC)</h2>
             <div className="space-y-3">{[
               { label: "≥ 95%", min: 95, max: Infinity, color: "#1877d3" },
               { label: "90–95%", min: 90, max: 95, color: "#16a34a" },
@@ -464,6 +458,7 @@ function DashboardPanelMode({
           </article>
         </section>}
 
+        {viewMode === "lista" && <section className="rounded-xl border border-[#d7e7e2] bg-white p-4"><h2 className="mb-3 text-sm font-bold text-[#064b32]">Pivôs por condição hídrica</h2><div className="space-y-2">{stateMetrics.filter(item=>moduleFilter==="Todos"||item.moduleName===moduleFilter).map(item=><button key={hydricStateId(item.state)} type="button" onClick={()=>setSelectedPivotId(item.state.pivotId)} className="flex w-full items-center justify-between rounded-lg border border-[#e0ebe6] p-3 text-left text-sm hover:bg-[#f0f8f3]"><span className="font-semibold">{item.state.pivotName} · {item.moduleName}</span><span>{formatNumber(item.moisture)}% CC · {formatNumber(item.depth,1)} mm</span></button>)}</div></section>}
         {selectedPivotId && (
           <div className="fixed inset-0 z-[1000] flex justify-end bg-black/40" onClick={() => setSelectedPivotId(null)}>
             <aside role="dialog" aria-modal="true" aria-label="Dados do pivô" className="h-full w-full max-w-md overflow-y-auto bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
@@ -484,9 +479,9 @@ function DashboardPanelMode({
           </div>
         )}
 
-        <section className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.8fr)]">
+        {viewMode === "painel" && <section className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.8fr)]">
           <article className="min-w-0 rounded-xl border border-[#d7e7e2] bg-white p-4 shadow-sm">
-            <h2 className="mb-4 text-sm font-black">Situação da Área ({formatNumber(farmSummary.totalArea)} ha)</h2>
+            <h2 className="mb-4 text-base font-black text-[#064b32]">Situação da Área ({formatNumber(farmSummary.totalArea)} ha)</h2>
             <div className="flex flex-wrap items-center justify-center gap-4">
               <div className="relative h-36 w-36 shrink-0 rounded-full" style={{ background: (() => {
                 const bands = [
@@ -519,10 +514,10 @@ function DashboardPanelMode({
             </div>
           </article>
           <article className="rounded-xl border border-[#d7e7e2] bg-white p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#e4efeb] pb-3"><h2 className="text-sm font-black">Pivôs – Prioridade de Irrigação</h2><a href="/programacao-irrigacao" className="text-xs font-bold text-[#075c59]">Ver programação →</a></div>
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#e4efeb] pb-3"><h2 className="text-base font-black text-[#064b32]">Pivôs – Prioridade de Irrigação</h2><a href="/programacao-irrigacao" className="rounded-lg border border-[#065c38] px-3 py-2 text-xs font-bold text-[#065c38]">Ver programação →</a></div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-xs">
-              <thead className="bg-[#f1f7f5]"><tr><th className="p-2">#</th><th className="p-2">Pivô</th><th className="p-2">Módulo</th><th className="p-2">Área (ha)</th><th className="p-2">%CC</th><th className="p-2">Lâmina (mm)</th></tr></thead>
+              <thead className="bg-[#065c38] text-white"><tr><th className="p-2">#</th><th className="p-2">Pivô</th><th className="p-2">Módulo</th><th className="p-2">Área (ha)</th><th className="p-2">%CC</th><th className="p-2">Lâmina (mm)</th></tr></thead>
               <tbody>{priorities.map((item, index) => (
                 <tr key={hydricStateId(item.state)} onClick={() => setSelectedPivotId(item.state.pivotId)} className="cursor-pointer border-t border-[#e7efec] hover:bg-[#f0f8f5]">
                   <td className="p-2">{index + 1}º</td><td className="p-2 font-bold">{item.state.pivotName}</td><td className="p-2">{item.moduleName}</td><td className="p-2">{formatNumber(item.area, 1)}</td><td className="p-2">{formatNumber(item.moisture)}%</td><td className="p-2">{formatNumber(item.depth, 1)}</td>
@@ -531,7 +526,7 @@ function DashboardPanelMode({
             </table>
           </div>
           </article>
-        </section>
+        </section>}
       </main>
     </div>
   );
