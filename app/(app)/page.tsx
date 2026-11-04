@@ -382,37 +382,37 @@ function DashboardPanelMode({
     });
 
   return (
-    <div className="min-h-screen bg-[#f5f7fa] text-[#142033]">
-      <main className="space-y-4 p-3 lg:p-4">
-        <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-gray-200 bg-white px-4 py-3 shadow-sm">
+    <div className="min-h-screen bg-white text-[#163536]">
+      <main className="space-y-4 p-2 sm:p-3 lg:p-4">
+        <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-[#d7e7e2] bg-[#f6faf8] px-4 py-3">
           <div className="flex items-end gap-3">
-            <label className="flex flex-col gap-1 text-[11px] font-bold text-[#164c7d]">Módulo
-              <select aria-label="Filtrar módulo" value={moduleFilter} onChange={e=>setModuleFilter(e.target.value)} className="min-w-[150px] rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm font-semibold text-[#142033]">
+            <label className="flex flex-col gap-1 text-[11px] font-bold text-[#075c59]">Módulo
+              <select aria-label="Filtrar módulo" value={moduleFilter} onChange={e=>setModuleFilter(e.target.value)} className="min-w-[150px] rounded-lg border border-[#cbded8] bg-white px-3 py-2 text-sm font-semibold text-[#142033]">
                 <option value="Todos">Todos</option><option value="M1">M1</option><option value="M2">M2</option><option value="M3">M3</option>
               </select>
             </label>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex overflow-hidden rounded-xl border border-blue-200 text-xs font-bold">
-              <button type="button" onClick={()=>setViewMode("painel")} className={`px-4 py-2 ${viewMode==="painel"?"bg-[#0755b3] text-white":"bg-white text-[#164c7d]"}`}>Modo Painel</button>
-              <button type="button" onClick={()=>setViewMode("lista")} className={`px-4 py-2 ${viewMode==="lista"?"bg-[#0755b3] text-white":"bg-white text-[#164c7d]"}`}>Modo Lista</button>
+            <div className="flex overflow-hidden rounded-xl border border-[#bcd8d1] text-xs font-bold">
+              <button type="button" onClick={()=>setViewMode("painel")} className={`px-4 py-2 ${viewMode==="painel"?"bg-[#075c59] text-white":"bg-white text-[#075c59]"}`}>Modo Painel</button>
+              <button type="button" onClick={()=>setViewMode("lista")} className={`px-4 py-2 ${viewMode==="lista"?"bg-[#075c59] text-white":"bg-white text-[#075c59]"}`}>Modo Lista</button>
             </div>
-            <button type="button" onClick={onExit} className="rounded-lg border border-[#164c7d] px-3 py-2 text-xs font-bold text-[#164c7d]">Sair do painel</button>
+            <button type="button" onClick={onExit} className="rounded-lg border border-[#075c59] px-3 py-2 text-xs font-bold text-[#075c59]">Sair do painel</button>
           </div>
         </div>
         {viewMode === "painel" && <section className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(205px,0.7fr)]">
           {moduleCards.filter(module=>moduleFilter==="Todos"||module.name===moduleFilter).map((module) => (
             <article
               key={module.name}
-              className="min-w-0 overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-[0_4px_14px_rgba(15,23,42,0.06)]"
+              className="min-w-0 overflow-hidden rounded-xl border border-[#d7e7e2] bg-white shadow-[0_3px_12px_rgba(4,74,65,0.07)]"
             >
-              <div className="border-b border-gray-100 px-2 py-3">
+              <div className="border-b border-[#e4efeb] px-3 py-3">
                 <div className="flex min-w-0 flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <span className="rounded-lg bg-[#164c7d] px-3 py-1.5 text-sm font-black text-white">
+                    <span className="rounded-md bg-[#075c59] px-3 py-1.5 text-sm font-black text-white">
                       {module.name}
                     </span>
-                    <span className="text-[11px] font-bold text-gray-600">
+                    <span className="text-[11px] font-semibold text-[#405a55]">
                       {module.pivots.length} pivôs
                     </span>
                     <span className="h-4 w-px bg-gray-200" />
@@ -422,7 +422,7 @@ function DashboardPanelMode({
                   </div>
 
                   <div className="flex items-center gap-1.5">
-                    <span className="inline-block h-8 w-8 rounded-full border-[5px] border-green-500 border-r-gray-200" />
+                    <span className="inline-block h-8 w-8 rounded-full border-[5px] border-[#159e79] border-r-[#e4efeb]" />
                     <span className="text-sm font-black">{formatNumber(module.weightedCc)}%</span>
                     <span className="text-[8px] font-bold text-gray-500">CC</span>
                   </div>
@@ -449,8 +449,8 @@ function DashboardPanelMode({
               )}
             </article>
           ))}
-          <article className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm md:col-span-2 xl:col-span-1">
-            <h2 className="mb-4 text-sm font-black">Situação dos Pivôs (%CC)</h2>
+          <article className="rounded-xl border border-[#d7e7e2] bg-white p-3 shadow-sm md:col-span-2 xl:col-span-1">
+            <h2 className="mb-4 text-sm font-bold text-[#123f3e]">Situação dos Pivôs (%CC)</h2>
             <div className="space-y-3">{[
               { label: "≥ 95%", min: 95, max: Infinity, color: "#1877d3" },
               { label: "90–95%", min: 90, max: 95, color: "#16a34a" },
@@ -468,7 +468,7 @@ function DashboardPanelMode({
           <div className="fixed inset-0 z-[1000] flex justify-end bg-black/40" onClick={() => setSelectedPivotId(null)}>
             <aside role="dialog" aria-modal="true" aria-label="Dados do pivô" className="h-full w-full max-w-md overflow-y-auto bg-white p-4 shadow-2xl" onClick={(event) => event.stopPropagation()}>
               <div className="mb-4 flex items-center justify-between">
-                <h2 className="text-base font-bold text-[#164c7d]">Dados do pivô e da água</h2>
+                <h2 className="text-base font-bold text-[#075c59]">Dados do pivô e da água</h2>
                 <button type="button" aria-label="Fechar detalhes" onClick={() => setSelectedPivotId(null)} className="rounded-lg border px-3 py-1 text-sm">Fechar ×</button>
               </div>
               {selectedState ? <PivotDetail state={selectedState} /> : (
@@ -479,13 +479,13 @@ function DashboardPanelMode({
                   <p className="text-amber-700">Sem manejo hídrico ativo. Não há dados de água disponíveis para este pivô.</p>
                 </div>
               )}
-              <a href="/balanco-hidrico" className="mt-4 block rounded-lg bg-[#164c7d] px-4 py-3 text-center text-sm font-bold text-white">Abrir manejo hídrico</a>
+              <a href="/balanco-hidrico" className="mt-4 block rounded-lg bg-[#075c59] px-4 py-3 text-center text-sm font-bold text-white">Abrir manejo hídrico</a>
             </aside>
           </div>
         )}
 
-        <section className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(310px,0.85fr)_minmax(0,1.7fr)]">
-          <article className="min-w-0 rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-[minmax(320px,0.9fr)_minmax(0,1.8fr)]">
+          <article className="min-w-0 rounded-xl border border-[#d7e7e2] bg-white p-4 shadow-sm">
             <h2 className="mb-4 text-sm font-black">Situação da Área ({formatNumber(farmSummary.totalArea)} ha)</h2>
             <div className="flex flex-wrap items-center justify-center gap-4">
               <div className="relative h-36 w-36 shrink-0 rounded-full" style={{ background: (() => {
@@ -518,13 +518,13 @@ function DashboardPanelMode({
               </div>
             </div>
           </article>
-          <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex flex-wrap items-center justify-between gap-2"><h2 className="text-sm font-black">Pivôs – Prioridade de Irrigação</h2><a href="/programacao-irrigacao" className="text-xs font-bold text-blue-700">Ver programação →</a></div>
+          <article className="rounded-xl border border-[#d7e7e2] bg-white p-4 shadow-sm">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2 border-b border-[#e4efeb] pb-3"><h2 className="text-sm font-black">Pivôs – Prioridade de Irrigação</h2><a href="/programacao-irrigacao" className="text-xs font-bold text-[#075c59]">Ver programação →</a></div>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-xs">
-              <thead className="bg-gray-50"><tr><th className="p-2">#</th><th className="p-2">Pivô</th><th className="p-2">Módulo</th><th className="p-2">Área (ha)</th><th className="p-2">%CC</th><th className="p-2">Lâmina (mm)</th></tr></thead>
+              <thead className="bg-[#f1f7f5]"><tr><th className="p-2">#</th><th className="p-2">Pivô</th><th className="p-2">Módulo</th><th className="p-2">Área (ha)</th><th className="p-2">%CC</th><th className="p-2">Lâmina (mm)</th></tr></thead>
               <tbody>{priorities.map((item, index) => (
-                <tr key={hydricStateId(item.state)} onClick={() => setSelectedPivotId(item.state.pivotId)} className="cursor-pointer border-t hover:bg-blue-50">
+                <tr key={hydricStateId(item.state)} onClick={() => setSelectedPivotId(item.state.pivotId)} className="cursor-pointer border-t border-[#e7efec] hover:bg-[#f0f8f5]">
                   <td className="p-2">{index + 1}º</td><td className="p-2 font-bold">{item.state.pivotName}</td><td className="p-2">{item.moduleName}</td><td className="p-2">{formatNumber(item.area, 1)}</td><td className="p-2">{formatNumber(item.moisture)}%</td><td className="p-2">{formatNumber(item.depth, 1)}</td>
                 </tr>
               ))}</tbody>
@@ -539,7 +539,7 @@ function DashboardPanelMode({
 
 function KpiTile({ icon, value, label }: { icon: string; value: string; label: string }) {
   return (
-    <div className="flex min-h-[72px] items-center gap-2.5 rounded-2xl border border-gray-200 bg-white px-3.5 shadow-sm">
+    <div className="flex min-h-[72px] items-center gap-2.5 rounded-xl border border-[#d7e7e2] bg-white px-3.5 shadow-sm">
       <span className="text-2xl">{icon}</span>
       <div className="min-w-0">
         <div className="truncate text-base font-black tracking-tight lg:text-lg">{value}</div>
