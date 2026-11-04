@@ -160,6 +160,13 @@ export function CropDevelopmentPanel({
     [culturePhases, daeOffsetFromPlanting],
   );
   const phaseEnd = Math.max(0, ...phaseBands.map((b) => b.end));
+  // O gráfico não deve extrapolar Kc/raiz após o fim da maturação.
+  // Usa os limites cadastrados da cultura, sem estimar a duração de estádios.
+  const maturityEnd = Math.max(0, ...phaseBands
+    .filter((b) => /matur|colheit|fase final/i.test(
+      b.label.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase(),
+    ))
+    .map((b) => b.end));
   // Legenda e seletor exibem as mesmas fases; nomes repetidos no cadastro
   // compartilham um único controle e nenhum filtro modifica o balanço.
   const phaseChoices = phaseBands.length
@@ -175,10 +182,26 @@ export function CropDevelopmentPanel({
     ...(kcCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
     ...(rootCurve ?? []).filter((p) => Number.isFinite(p.x)).map((p) => p.x),
   );
-  // Só expande a linha do tempo se o calendário/curva aprovados contiverem pontos futuros.
-  // Sem referência, não inventa duração para os estádios não cadastrados.
-  const endDae = Math.max(1, dae ?? 0, r8Dae ?? 0, curveEnd, phaseEnd,
+  // Prioridade: fim da maturação cadastrada; na falta dela, fim da última
+  // macrofase ou R8 registrado. Só recorre ao alcance das curvas sem esses dados.
+  const cropFinishDae = maturityEnd > 0 ? maturityEnd : phaseEnd > 0 ? phaseEnd : r8Dae;
+  const fallbackEndDae = Math.max(1, dae ?? 0, r8Dae ?? 0, curveEnd, phaseEnd,
     ...stageDated.map((s) => s.dae ?? 0));
+  // Preserva HOJE caso já tenha passado do encerramento do ciclo, mas não
+  // estende as curvas além da maturação.
+  const endDae = cropFinishDae != null && cropFinishDae > 0
+    ? Math.max(1, dae ?? 0, cropFinishDae)
+    : fallbackEndDae;
+  const curveStopDae = cropFinishDae != null && cropFinishDae > 0
+    ? cropFinishDae
+    : endDae;
+  const plottedObserved = observed.filter((row) => row.dae <= curveStopDae);
+  const referenceDaes = Array.from(
+    { length: Math.min(451, Math.floor(curveStopDae) + 1) }, (_, i) => i,
+  );
+  if (curveStopDae < 450 && curveStopDae > Math.floor(curveStopDae)) {
+    referenceDaes.push(curveStopDae);
+  }
   const effectiveCm = Number.isFinite(last.rootDepth) ? last.rootDepth * 100 : null;
   const estimatedCm = last.rootDepthEstimated != null && Number.isFinite(last.rootDepthEstimated)
     ? last.rootDepthEstimated * 100 : null;
@@ -186,19 +209,23 @@ export function CropDevelopmentPanel({
   const completeKc = (kcCurve ?? []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0);
   const completeRoot = (rootCurve ?? []).filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y) && p.x >= 0);
 
-  const futureKc = dae != null && completeKc.length >= 2
-    ? Array.from({ length: Math.max(0, Math.min(450, Math.floor(endDae - dae))) + 1 },
-        (_, i) => ({ dae: dae + i, value: calculateDailyKc(completeKc, dae + i) }))
+  const forecastDaes = dae != null && dae <= curveStopDae
+    ? Array.from({ length: Math.min(451, Math.floor(curveStopDae - dae) + 1) },
+        (_, i) => dae + i)
     : [];
-  const futureRoot = dae != null && completeRoot.length >= 2
-    ? Array.from({ length: Math.max(0, Math.min(450, Math.floor(endDae - dae))) + 1 },
-        (_, i) => ({ dae: dae + i, value: calculateRootDepthMeters(completeRoot, dae + i) }))
+  if (forecastDaes.length > 0 && forecastDaes.at(-1)! < curveStopDae
+      && curveStopDae - dae <= 450) forecastDaes.push(curveStopDae);
+  const futureKc = completeKc.length >= 2
+    ? forecastDaes.map((d) => ({ dae: d, value: calculateDailyKc(completeKc, d) }))
+    : [];
+  const futureRoot = completeRoot.length >= 2
+    ? forecastDaes.map((d) => ({ dae: d, value: calculateRootDepthMeters(completeRoot, d) }))
     : [];
 
-  const rootCeiling = Math.max(0.6, last.rootDepth,
-    ...observed.map((r) => r.root), ...futureRoot.map((r) => r.value));
-  const kcCeiling = Math.max(1.1, last.kc,
-    ...observed.map((r) => r.kc), ...futureKc.map((r) => r.value));
+  const rootCeiling = Math.max(0.6, ...plottedObserved.map((r) => r.root),
+    ...futureRoot.map((r) => r.value));
+  const kcCeiling = Math.max(1.1, ...plottedObserved.map((r) => r.kc),
+    ...futureKc.map((r) => r.value));
   const rootAxisMax = Math.ceil(rootCeiling * 5.2) / 5;
   const kcAxisMax = Math.ceil(kcCeiling * 5.2) / 5;
 
@@ -210,9 +237,9 @@ export function CropDevelopmentPanel({
   const pyKc = (v: number) => plot.bottom - Math.max(0, Math.min(kcAxisMax, v)) / kcAxisMax * plotHeight;
   const trace = (arr: Array<{ dae: number; value: number }>, fn: (n: number) => number) =>
     arr.map((v) => px(v.dae).toFixed(1) + "," + fn(v.value).toFixed(1)).join(" ");
-  const kcObserved = observed.map((r) => ({ dae: r.dae, value: r.kc }));
-  const rootObserved = observed.map((r) => ({ dae: r.dae, value: r.root }));
-  const rootAvailable = observed.length > 0;
+  const kcObserved = plottedObserved.map((r) => ({ dae: r.dae, value: r.kc }));
+  const rootObserved = plottedObserved.map((r) => ({ dae: r.dae, value: r.root }));
+  const rootAvailable = plottedObserved.length > 0;
   const visibleStages = stageDated.filter((s) => (s.dae ?? 0) <= endDae);
 
   // Se R5.1–R5.5 compartilham DAE, mantemos os marcos mas NÃO sobrepomos faixas.
@@ -231,7 +258,7 @@ export function CropDevelopmentPanel({
   const todayX = dae != null ? px(dae) : null;
   const activeDae = hoverDae;
   const hoverRow = activeDae != null
-    ? [...observed].reverse().find((row) => row.dae <= activeDae)
+    ? [...plottedObserved].reverse().find((row) => row.dae <= activeDae)
     : null;
   const hoverStage = activeDae != null
     ? [...visibleStages].reverse().find((s) => (s.dae ?? 0) <= activeDae)
@@ -260,10 +287,10 @@ export function CropDevelopmentPanel({
     }
   });
   const observedAtDae=fieldStage?.observation.dae ?? null;
-  const tooltipKc = activeDae == null ? null : activeDae <= (dae ?? 0)
+  const tooltipKc = activeDae == null || activeDae > curveStopDae ? null : activeDae <= (dae ?? 0)
     ? hoverRow?.kc ?? null
     : completeKc.length >= 2 ? calculateDailyKc(completeKc, activeDae) : null;
-  const tooltipRoot = activeDae == null ? null : activeDae <= (dae ?? 0)
+  const tooltipRoot = activeDae == null || activeDae > curveStopDae ? null : activeDae <= (dae ?? 0)
     ? hoverRow?.root ?? null
     : completeRoot.length >= 2 ? calculateRootDepthMeters(completeRoot, activeDae) : null;
   const hoverPhaseKy = hoverPhase
@@ -518,15 +545,15 @@ export function CropDevelopmentPanel({
                     Traços históricos mantêm os dados efetivos em primeiro plano. */}
                 {visible.kc && visible.potential && completeKc.length>=2 && (
                   <polyline points={trace(
-                    Array.from({length:Math.min(451,Math.floor(endDae)+1)},(_,i)=>({
-                      dae:i, value:calculateDailyKc(completeKc,i),
+                    referenceDaes.map((d)=>({
+                      dae:d, value:calculateDailyKc(completeKc,d),
                     })),pyKc)} fill="none" stroke="#10b981" opacity={.32}
                     strokeWidth={2.6} strokeLinejoin="round"/>
                 )}
                 {visible.root && visible.potential && completeRoot.length>=2 && (
                   <polyline points={trace(
-                    Array.from({length:Math.min(451,Math.floor(endDae)+1)},(_,i)=>({
-                      dae:i,value:calculateRootDepthMeters(completeRoot,i),
+                    referenceDaes.map((d)=>({
+                      dae:d,value:calculateRootDepthMeters(completeRoot,d),
                     })),pyRoot)} fill="none" stroke="#3b82f6" opacity={.28}
                     strokeWidth={2.6} strokeLinejoin="round"/>
                 )}
@@ -550,11 +577,11 @@ export function CropDevelopmentPanel({
                   <line x1={todayX} x2={todayX} y1={plot.top} y2={plot.bottom}
                     stroke="#065f46" strokeDasharray="6 5" strokeWidth={1.6} opacity={.84}/>
                 )}
-                {visible.kc && todayX != null && (
+                {visible.kc && todayX != null && dae != null && dae <= curveStopDae && (
                   <circle cx={todayX} cy={pyKc(last.kc)} r={6}
                     fill="#047857" stroke="white" strokeWidth={2} />
                 )}
-                {visible.root && todayX != null && (
+                {visible.root && todayX != null && dae != null && dae <= curveStopDae && (
                   <circle cx={todayX} cy={pyRoot(last.rootDepth)} r={6}
                     fill="#1672ef" stroke="white" strokeWidth={2} />
                 )}
