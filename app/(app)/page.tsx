@@ -556,8 +556,8 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
   const kpis = [
     { id: "total", title: "Total de Pivôs", value: String(summary.totalPivots), description: "Com cálculo de balanço" },
     { id: "irrigar", title: "Irrigar Hoje", value: String(summary.needIrrigationToday), description: "Déficit ≥ AFD", trend: summary.needIrrigationToday > 0 ? "negative" as const : "positive" as const },
-    { id: "atencao", title: "Em Atenção", value: String(summary.attention), description: "70–100% da AFD", trend: summary.attention > 0 ? "neutral" as const : "positive" as const },
-    { id: "adequado", title: "Sem Necessidade", value: String(summary.adequate), description: "Armazenamento adequado", trend: "positive" as const },
+    { id: "atencao", title: "Em Atenção", value: String(summary.attention), description: "Próximo do limite de ação (AFD)", trend: summary.attention > 0 ? "neutral" as const : "positive" as const },
+    { id: "adequado", title: "Abaixo do nível de ação", value: String(summary.adequate), description: "Sem acionamento pela AFD; não significa solo na CC", trend: "neutral" as const },
     { id: "area_irrig", title: "Área Total", value: `${summary.totalIrrigatedArea.toFixed(0)} ha`, description: "Sob balanço hídrico" },
     { id: "area_def", title: "Área em Déficit", value: `${summary.areaInDeficit.toFixed(0)} ha`, description: "Fora da condição adequada" },
     { id: "lamina", title: "Lâmina Média", value: `${summary.avgRecommendedDepth.toFixed(1)} mm`, description: "Recomendada (bruta)" },
@@ -575,7 +575,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-5 text-[13px] font-bold tracking-tight text-graphite-900 dark:text-white">Pivôs mais críticos</h3>
+          <h3 className="mb-2 text-[13px] font-bold tracking-tight text-[#075c59] dark:text-white">Condição hídrica dos pivôs</h3><p className="mb-4 text-xs text-gray-500">Cor e %CC indicam umidade do solo; necessidade de irrigação depende do limite de manejo (AFD).</p>
           {summary.ranking.length > 0 ? (
             <div className="space-y-2">
               {summary.ranking.slice(0, 8).map((s, i) => (
@@ -588,7 +588,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
         </Card>
 
         <Card>
-          <h3 className="mb-5 text-[13px] font-bold tracking-tight text-graphite-900 dark:text-white">Prioridade de irrigação</h3>
+          <h3 className="mb-2 text-[13px] font-bold tracking-tight text-[#075c59] dark:text-white">Prioridade de irrigação pelo limite de manejo</h3><p className="mb-4 text-xs text-gray-500">Pivôs que atingiram o nível de ação pela AFD. Um pivô vermelho no mapa pode ainda não ter atingido esse limite.</p>
           {summary.priorityList.length > 0 ? (
             <div className="space-y-2">
               {summary.priorityList.map((s, i) => (
@@ -610,7 +610,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô precisa de irrigação hoje.</p>
+            <p className="text-sm text-graphite-400 dark:text-gray-500">Nenhum pivô atingiu o nível de ação pela AFD hoje. Confira também a condição de %CC no mapa.</p>
           )}
         </Card>
       </div>
@@ -621,18 +621,21 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
 function RankRow({ rank, state }: { rank: number; state: PivotHydricState }) {
   const c = state.current!;
   const conf = HYDRIC_STATUS_CONFIG[c.status];
+  const cc = c.moisturePctCc;
+  const moistureVisual = cc != null && Number.isFinite(cc) ? panelVisual(cc) : null;
   return (
     <div className="flex items-center justify-between rounded-xl bg-gray-50/80 p-3.5 transition-colors duration-100 hover:bg-gray-100/60 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
       <div className="flex items-center gap-3">
         <span className="w-5 text-center text-xs font-bold text-graphite-300 dark:text-graphite-600">{rank}</span>
-        <div className="h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-graphite-900" style={{ backgroundColor: conf.color }} />
+        <div className="h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-graphite-900" style={{ backgroundColor: moistureVisual?.color ?? "#9ca3af" }} />
         <div>
           <span className="text-sm font-medium text-graphite-900 dark:text-white">{state.pivotName}</span>
           <p className="text-xs text-graphite-400 dark:text-gray-500">{state.cultureName} · {c.phase}</p>
         </div>
       </div>
       <div className="text-right">
-        <span className={`rounded-lg px-2 py-0.5 text-[10px] font-semibold ${conf.bgClass}`}>{conf.label}</span>
+        <span className="block text-xs font-bold" style={{color: moistureVisual?.color ?? "#6b7280"}}>{cc != null && Number.isFinite(cc) ? `${cc.toFixed(0)}% CC · ${moistureVisual?.label}` : "Sem %CC"}</span>
+        <span className={`mt-1 inline-block rounded-lg px-2 py-0.5 text-[10px] font-semibold ${conf.bgClass}`}>Manejo: {conf.label}</span>
         <p className="mt-0.5 text-xs text-graphite-400 dark:text-gray-500">depleção {(c.depletion * 100).toFixed(0)}%</p>
       </div>
     </div>
