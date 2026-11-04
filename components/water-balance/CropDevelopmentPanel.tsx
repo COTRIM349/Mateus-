@@ -107,7 +107,7 @@ export function CropDevelopmentPanel({
   const [axisMode, setAxisMode] = useState<AxisMode>("dae");
   const [showPicker, setShowPicker] = useState(false);
   const [visible, setVisible] = useState<ChartVisibility>({
-    kc: true, root: true, potential: true, stages: false,
+    kc: true, root: true, potential: true, stages: true,
   });
   const [hoverDae, setHoverDae] = useState<number | null>(null);
   const [hiddenPhases, setHiddenPhases] = useState<string[]>([]);
@@ -370,6 +370,7 @@ export function CropDevelopmentPanel({
                     ["kc", "Kc da cultura"],
                     ["root", "Raiz efetiva (histórico)"],
                     ["potential", "Curvas futuras aprovadas"],
+                    ["stages", "Faixas fenológicas"],
                   ] as const).map(([key, label]) => (
                     <label key={key} className="flex cursor-pointer items-center gap-2 py-1.5 text-[12px] text-slate-700 dark:text-slate-200">
                       <input type="checkbox" checked={visible[key]}
@@ -396,7 +397,7 @@ export function CropDevelopmentPanel({
                     ))}
                   </div>
                   <button type="button" onClick={() => {
-                    setVisible({ kc: true, root: true, potential: true, stages: false });
+                    setVisible({ kc: true, root: true, potential: true, stages: true });
                     setHiddenPhases([]);
                   }} className="mt-2 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                     Mostrar todas
@@ -421,6 +422,67 @@ export function CropDevelopmentPanel({
                 </clipPath>
               </defs>
 
+              {/* Faixas reais cadastradas voltam a compor o fundo e o cabeçalho do gráfico.
+                  A legenda controla apenas a visibilidade, sem alterar Kc, raiz ou fenologia. */}
+              {visible.stages && (
+                <g aria-label="Fases do desenvolvimento da cultura">
+                  {phaseBands.map((band) => {
+                    if (!phaseIsVisible(band.label)) return null;
+                    const bx = px(band.start);
+                    const bw = Math.max(0, px(band.end) - bx);
+                    if (bw <= 0) return null;
+                    const labels = band.label.length > 15 && bw < 155
+                      ? band.label.split(" ").reduce<string[]>((lines, word) => {
+                          if (lines.length === 0) return [word];
+                          const lastLine = lines.length - 1;
+                          if ((lines[lastLine] + " " + word).length <= 12) lines[lastLine] += " " + word;
+                          else lines.push(word);
+                          return lines;
+                        }, [])
+                      : [band.label];
+                    const displayLines = labels.length > 2 ? [labels[0], labels.slice(1).join(" ")] : labels;
+                    return (
+                      <g key={band.key}>
+                        <rect x={bx} y={plot.top} width={bw} height={plotHeight}
+                          fill={band.fill} opacity={0.42}/>
+                        <rect x={bx} y={22} width={bw} height={42}
+                          fill={band.stripe} opacity={0.96}/>
+                        <line x1={bx} x2={bx} y1={22} y2={plot.bottom}
+                          stroke={band.text} strokeOpacity={0.22}/>
+                        {bw >= 34 && (
+                          <text x={bx + bw / 2} y={displayLines.length > 1 ? 39 : 46}
+                            textAnchor="middle" fontSize={bw >= 100 ? 12 : 10}
+                            fontWeight={750} fill={band.text}>
+                            {displayLines.map((line, index) => (
+                              <tspan key={index} x={bx + bw / 2} dy={index === 0 ? 0 : 14}>{line}</tspan>
+                            ))}
+                          </text>
+                        )}
+                        <title>{band.label} · {Math.round(band.start)} a {Math.round(band.end)} DAE</title>
+                      </g>
+                    );
+                  })}
+                  {/* Sem fases macro cadastradas, usa apenas marcos da cultivar com DAE conhecido. */}
+                  {phaseBands.length === 0 && groupBands.map((group, i) => {
+                    if (!phaseIsVisible(group.group)) return null;
+                    const palette = stagePalette[group.group] ?? stagePalette["Estádios vegetativos"];
+                    const bx = px(group.start), bw = Math.max(0, px(group.end) - bx);
+                    return (
+                      <g key={group.group + i}>
+                        <rect x={bx} y={plot.top} width={bw} height={plotHeight}
+                          fill={palette.fill} opacity={0.42}/>
+                        <rect x={bx} y={22} width={bw} height={42}
+                          fill={palette.header}/>
+                        {bw >= 68 && <text x={bx + bw / 2} y={47} textAnchor="middle"
+                          fontSize={bw >= 140 ? 12 : 10} fontWeight={750} fill="#334155">
+                          {group.group}
+                        </text>}
+                        <title>{group.group} · {Math.round(group.start)} a {Math.round(group.end)} DAE</title>
+                      </g>
+                    );
+                  })}
+                </g>
+              )}
 
               {[0,.25,.5,.75,1].map((part) => (
                 <g key={part}>
