@@ -213,7 +213,7 @@ export function CropDevelopmentPanel({
     ? Array.from({ length: Math.min(451, Math.floor(curveStopDae - dae) + 1) },
         (_, i) => dae + i)
     : [];
-  if (forecastDaes.length > 0 && forecastDaes.at(-1)! < curveStopDae
+  if (dae != null && forecastDaes.length > 0 && forecastDaes.at(-1)! < curveStopDae
       && curveStopDae - dae <= 450) forecastDaes.push(curveStopDae);
   const futureKc = completeKc.length >= 2
     ? forecastDaes.map((d) => ({ dae: d, value: calculateDailyKc(completeKc, d) }))
