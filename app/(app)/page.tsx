@@ -471,7 +471,23 @@ function DashboardPanelMode({
           <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
             <h2 className="mb-4 text-sm font-black">Situação da Área ({formatNumber(farmSummary.totalArea)} ha)</h2>
             <div className="flex flex-wrap items-center justify-center gap-4">
-              <div className="relative h-36 w-36 shrink-0 rounded-full" style={{background: `conic-gradient(#1877d3 0% ${farmSummary.totalArea ? stateMetrics.filter(i=>i.moisture>=95).reduce((a,i)=>a+i.area,0)/farmSummary.totalArea*100 : 0}%, #16a34a ${farmSummary.totalArea ? stateMetrics.filter(i=>i.moisture>=95).reduce((a,i)=>a+i.area,0)/farmSummary.totalArea*100 : 0}% 100%)`}}>
+              <div className="relative h-36 w-36 shrink-0 rounded-full" style={{ background: (() => {
+                const bands = [
+                  { min: 95, max: Infinity, color: "#1877d3" },
+                  { min: 90, max: 95, color: "#16a34a" },
+                  { min: 82, max: 90, color: "#facc15" },
+                  { min: 70, max: 82, color: "#ef4444" },
+                  { min: -Infinity, max: 70, color: "#111827" },
+                ];
+                const area = stateMetrics.reduce((sum, item) => sum + item.area, 0);
+                let cumulative = 0;
+                const stops = bands.map((band) => {
+                  const start = cumulative;
+                  cumulative += area > 0 ? stateMetrics.filter(item => item.moisture >= band.min && item.moisture < band.max).reduce((sum, item) => sum + item.area, 0) / area * 100 : 0;
+                  return `${band.color} ${start}% ${cumulative}%`;
+                });
+                return area > 0 ? `conic-gradient(${stops.join(", ")})` : "#e5e7eb";
+              })() }}>
                 <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-white"><strong className="text-2xl">{formatNumber(farmSummary.weightedCc)}%</strong><span className="text-[10px]">%CC médio</span></div>
               </div>
               <div className="min-w-[150px] flex-1 space-y-2 text-xs">
