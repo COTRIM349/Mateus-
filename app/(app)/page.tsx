@@ -575,7 +575,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
 
       <div className="grid gap-6 lg:grid-cols-2">
         <Card>
-          <h3 className="mb-2 text-[13px] font-bold tracking-tight text-[#075c59] dark:text-white">Condição hídrica dos pivôs</h3><p className="mb-4 text-xs text-gray-500">Cor e %CC indicam umidade do solo; necessidade de irrigação depende do limite de manejo (AFD).</p>
+          <h3 className="mb-2 text-[13px] font-bold tracking-tight text-[#075c59] dark:text-white">Situação dos pivôs</h3><p className="mb-4 text-xs text-gray-500">Uma orientação por pivô, baseada no limite de manejo. O %CC informa a umidade atual.</p>
           {summary.ranking.length > 0 ? (
             <div className="space-y-2">
               {summary.ranking.slice(0, 8).map((s, i) => (
@@ -588,7 +588,7 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
         </Card>
 
         <Card>
-          <h3 className="mb-2 text-[13px] font-bold tracking-tight text-[#075c59] dark:text-white">Prioridade de irrigação pelo limite de manejo</h3><p className="mb-4 text-xs text-gray-500">Pivôs que atingiram o nível de ação pela AFD. Um pivô vermelho no mapa pode ainda não ter atingido esse limite.</p>
+          <h3 className="mb-2 text-[13px] font-bold tracking-tight text-[#075c59] dark:text-white">Irrigação prioritária</h3><p className="mb-4 text-xs text-gray-500">Pivôs que atingiram o limite de manejo e precisam de ação.</p>
           {summary.priorityList.length > 0 ? (
             <div className="space-y-2">
               {summary.priorityList.map((s, i) => (
@@ -620,23 +620,29 @@ function PainelTab({ summary }: { summary: FarmHydricSummary }) {
 
 function RankRow({ rank, state }: { rank: number; state: PivotHydricState }) {
   const c = state.current!;
-  const conf = HYDRIC_STATUS_CONFIG[c.status];
   const cc = c.moisturePctCc;
-  const moistureVisual = cc != null && Number.isFinite(cc) ? panelVisual(cc) : null;
+  const ccValid = cc != null && Number.isFinite(cc);
+  const needsIrrigation = c.status === "vermelho";
+  const attention = c.status === "amarelo";
+  const lowMoisture = ccValid && cc < 90;
+  const action = needsIrrigation
+    ? { label: "IRRIGAR", color: "#b91c1c", background: "#fee2e2" }
+    : attention || lowMoisture
+      ? { label: "MONITORAR", color: "#92400e", background: "#fef3c7" }
+      : { label: "ADEQUADO", color: "#166534", background: "#dcfce7" };
   return (
-    <div className="flex items-center justify-between rounded-xl bg-gray-50/80 p-3.5 transition-colors duration-100 hover:bg-gray-100/60 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
-      <div className="flex items-center gap-3">
+    <div className="flex items-center justify-between gap-3 rounded-xl bg-gray-50/80 p-3.5 transition-colors duration-100 hover:bg-gray-100/60 dark:bg-white/[0.03] dark:hover:bg-white/[0.06]">
+      <div className="flex min-w-0 items-center gap-3">
         <span className="w-5 text-center text-xs font-bold text-graphite-300 dark:text-graphite-600">{rank}</span>
-        <div className="h-2.5 w-2.5 rounded-full ring-2 ring-white dark:ring-graphite-900" style={{ backgroundColor: moistureVisual?.color ?? "#9ca3af" }} />
+        <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: action.color }} />
         <div>
           <span className="text-sm font-medium text-graphite-900 dark:text-white">{state.pivotName}</span>
           <p className="text-xs text-graphite-400 dark:text-gray-500">{state.cultureName} · {c.phase}</p>
         </div>
       </div>
       <div className="text-right">
-        <span className="block text-xs font-bold" style={{color: moistureVisual?.color ?? "#6b7280"}}>{cc != null && Number.isFinite(cc) ? `${cc.toFixed(0)}% CC · ${moistureVisual?.label}` : "Sem %CC"}</span>
-        <span className={`mt-1 inline-block rounded-lg px-2 py-0.5 text-[10px] font-semibold ${conf.bgClass}`}>Manejo: {conf.label}</span>
-        <p className="mt-0.5 text-xs text-graphite-400 dark:text-gray-500">depleção {(c.depletion * 100).toFixed(0)}%</p>
+        <span className="inline-block rounded-lg px-2.5 py-1 text-[11px] font-bold" style={{ color: action.color, backgroundColor: action.background }}>{action.label}</span>
+        <p className="mt-1 text-xs text-gray-600">{ccValid ? `${cc.toFixed(0)}% CC` : "CC indisponível"} · depleção {(c.depletion * 100).toFixed(0)}%</p>
       </div>
     </div>
   );
