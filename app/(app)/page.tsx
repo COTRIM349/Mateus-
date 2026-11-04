@@ -467,7 +467,25 @@ function DashboardPanelMode({
           </div>
         )}
 
-        <section className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+        <section className="grid grid-cols-1 gap-3 xl:grid-cols-[minmax(290px,0.9fr)_minmax(0,1.8fr)]">
+          <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
+            <h2 className="mb-4 text-sm font-black">Situação da Área ({formatNumber(farmSummary.totalArea)} ha)</h2>
+            <div className="flex flex-wrap items-center justify-center gap-4">
+              <div className="relative h-36 w-36 shrink-0 rounded-full" style={{background: `conic-gradient(#1877d3 0% ${farmSummary.totalArea ? stateMetrics.filter(i=>i.moisture>=95).reduce((a,i)=>a+i.area,0)/farmSummary.totalArea*100 : 0}%, #16a34a ${farmSummary.totalArea ? stateMetrics.filter(i=>i.moisture>=95).reduce((a,i)=>a+i.area,0)/farmSummary.totalArea*100 : 0}% 100%)`}}>
+                <div className="absolute inset-5 flex flex-col items-center justify-center rounded-full bg-white"><strong className="text-2xl">{formatNumber(farmSummary.weightedCc)}%</strong><span className="text-[10px]">%CC médio</span></div>
+              </div>
+              <div className="min-w-[150px] flex-1 space-y-2 text-xs">
+                {[
+                  {label:"Capacidade de campo (≥95%)",min:95,max:Infinity,color:"#1877d3"},
+                  {label:"Ideal (90–95%)",min:90,max:95,color:"#16a34a"},
+                  {label:"Atenção (82–90%)",min:82,max:90,color:"#facc15"},
+                  {label:"Déficit (70–82%)",min:70,max:82,color:"#ef4444"},
+                  {label:"Crítico (<70%)",min:-Infinity,max:70,color:"#111827"},
+                ].map(band=><div key={band.label} className="flex items-center gap-2"><span className="h-3 w-3 shrink-0 rounded" style={{backgroundColor:band.color}}/><span className="flex-1">{band.label}</span><strong>{formatNumber(stateMetrics.filter(i=>i.moisture>=band.min&&i.moisture<band.max).reduce((a,i)=>a+i.area,0))} ha</strong></div>)}
+              </div>
+            </div>
+          </article>
+          <article className="rounded-2xl border border-gray-200 bg-white p-4 shadow-sm">
           <h2 className="mb-3 text-sm font-black">Pivôs – Prioridade de Irrigação</h2>
           <div className="overflow-x-auto">
             <table className="w-full min-w-[520px] text-left text-xs">
@@ -479,6 +497,7 @@ function DashboardPanelMode({
               ))}</tbody>
             </table>
           </div>
+          </article>
         </section>
       </main>
     </div>
