@@ -69,7 +69,7 @@ export default function DashboardPage() {
   }
 
   if (panelMode && summary && summary.totalPivots > 0) {
-    return <DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} activeFarmId={activeFarmId} />;
+    return <DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} activeFarmId={activeFarmId} onExit={() => { setPanelMode(false); window.history.replaceState(null, "", "/"); }} />;
   }
 
   return (
@@ -156,10 +156,12 @@ function DashboardPanelMode({
   states,
   farmName,
   activeFarmId,
+  onExit,
 }: {
   states: PivotHydricState[];
   farmName: string;
   activeFarmId: string | null;
+  onExit: () => void;
 }) {
   const [modulePivots, setModulePivots] = useState<DashboardModulePivot[]>([]);
   const [modules, setModules] = useState<DashboardModule[]>([]);
@@ -380,7 +382,8 @@ function DashboardPanelMode({
   return (
     <div className="min-h-screen bg-[#f5f7fa] text-[#142033]">
       <main className="space-y-3 p-3 lg:p-4">
-        <section className="grid grid-cols-1 gap-3 xl:grid-cols-3">
+        <div className="flex items-center justify-between gap-3 rounded-xl border bg-white px-4 py-2"><span className="text-sm font-bold text-[#164c7d]">Gestão hídrica · {farmName}</span><button type="button" onClick={onExit} className="rounded-lg bg-[#164c7d] px-3 py-2 text-xs font-bold text-white">Sair do Modo Painel</button></div>
+        <section className="grid grid-cols-1 gap-3 lg:grid-cols-2 2xl:grid-cols-[repeat(3,minmax(0,1fr))_minmax(220px,0.65fr)]">
           {moduleCards.map((module) => (
             <article
               key={module.name}
@@ -408,14 +411,7 @@ function DashboardPanelMode({
                   </div>
                 </div>
 
-                <div className="mt-2 grid grid-cols-3 gap-x-2 gap-y-1.5 rounded-xl border border-gray-100 bg-gray-50/70 p-2 text-[9px] font-semibold">
-                  <span>🔴 {module.deficit} em déficit</span>
-                  <span>🟡 {module.attention} em atenção</span>
-                  <span>🟢 {module.managed} em manejo</span>
-                  <span>🌱 {formatNumber(module.irrigatingArea)} ha a irrigar</span>
-                  <span>💧 {formatNumber(module.totalVolume)} m³</span>
-                  <span>▰ {formatNumber(module.meanDepth, 1)} mm</span>
-                </div>
+
               </div>
 
               {modulesLoading ? (
@@ -436,6 +432,19 @@ function DashboardPanelMode({
               )}
             </article>
           ))}
+          <article className="rounded-2xl border border-gray-200 bg-white p-3 shadow-sm lg:col-span-2 2xl:col-span-1">
+            <h2 className="mb-4 text-sm font-black">Situação dos Pivôs (%CC)</h2>
+            <div className="space-y-3">{[
+              { label: "≥ 95%", min: 95, max: Infinity, color: "#1877d3" },
+              { label: "90–95%", min: 90, max: 95, color: "#16a34a" },
+              { label: "82–90%", min: 82, max: 90, color: "#facc15" },
+              { label: "70–82%", min: 70, max: 82, color: "#ef4444" },
+              { label: "< 70%", min: -Infinity, max: 70, color: "#111827" },
+            ].map((band) => {
+              const count = stateMetrics.filter((item) => item.moisture >= band.min && item.moisture < band.max).length;
+              return <div key={band.label} className="flex items-center gap-2 text-xs"><span className="h-3.5 w-3.5 rounded-full" style={{backgroundColor:band.color}}/><span className="flex-1">{band.label}</span><strong>{count}</strong></div>;
+            })}</div>
+          </article>
         </section>
 
         {selectedPivotId && (
