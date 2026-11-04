@@ -50,12 +50,15 @@ type DashboardModule = {
 
 export default function DashboardPage() {
   const { profile, farms, activeFarmId } = useAuth();
-  const [panelMode, setPanelMode] = useState(false);
-  useEffect(() => {
-    setPanelMode(new URLSearchParams(window.location.search).get("modo") === "painel");
-  }, []);
+
   const activeFarm = farms.find((f) => f.id === activeFarmId);
   const [activeTab, setActiveTab] = useState("painel");
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("modo") === "painel") {
+      setActiveTab("mapa");
+      window.history.replaceState(null, "", "/");
+    }
+  }, []);
 
   const implantation = useImplantationStatus();
   const { states, summary, loading } = useFarmHydricState();
@@ -68,9 +71,6 @@ export default function DashboardPage() {
     );
   }
 
-  if (panelMode && summary && summary.totalPivots > 0) {
-    return <DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} activeFarmId={activeFarmId} onExit={() => { setPanelMode(false); window.history.replaceState(null, "", "/"); }} />;
-  }
 
   return (
     <div className="space-y-8">
@@ -81,7 +81,7 @@ export default function DashboardPage() {
         />
         <button
           type="button"
-          onClick={() => { window.location.href = "/?modo=painel"; }}
+          onClick={() => setActiveTab("mapa")}
           className="inline-flex h-10 items-center justify-center gap-2 rounded-xl border border-brand-200 bg-white px-4 text-sm font-semibold text-brand-700 shadow-sm transition hover:bg-brand-50 dark:border-brand-500/30 dark:bg-graphite-900 dark:text-brand-300"
         >
           <span className="text-base">⛶</span>
@@ -135,7 +135,7 @@ export default function DashboardPage() {
           <Tabs tabs={TABS} activeTab={activeTab} onChange={setActiveTab} />
 
           {activeTab === "painel" && <div className="animate-in"><PainelTab summary={summary} /></div>}
-          {activeTab === "mapa" && <div className="animate-in"><MapaHidricoTab states={states} /></div>}
+          {activeTab === "mapa" && <div className="animate-in"><DashboardPanelMode states={states} farmName={activeFarm?.name ?? "Fazenda"} activeFarmId={activeFarmId} onExit={() => setActiveTab("painel")} /></div>}
         </>
       )}
     </div>
